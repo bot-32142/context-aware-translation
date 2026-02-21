@@ -336,6 +336,70 @@ def build_translation_prompt(
     return system_prompt, user_prompt
 
 
+def build_polish_prompt(
+    translated_blocks: list[str],
+    target_language: str,
+) -> tuple[str, str]:
+    """Build standalone system and user prompts for polishing a translation.
+
+    Unlike the translation prompt, this does NOT include the original source
+    text or glossary terms. The LLM only sees the translation to polish.
+
+    Args:
+        translated_blocks: The translated text blocks to polish.
+        target_language: Target language of the translation.
+
+    Returns:
+        Tuple of (system_prompt, user_prompt)
+    """
+    system_prompt = f"""--角色--
+    你是{target_language}母语的资深润色编辑。
+
+    --任务--
+    对输入JSON中的"翻译文本"数组逐元素进行润色改写（每个元素视为一个独立段落/句群），使其更符合{target_language}母语表达习惯与文体一致性。
+    允许在单个元素内部：拆句/合句、调整信息顺序、补足省略主语、替换连接词、改写措辞、调整标点与断句。
+
+    --核心原则（通用流畅性）--
+    在不改变含义与逻辑关系的前提下，优先采用{target_language}自然语序、常见搭配与段落组织方式；避免照搬源语言句法骨架（避免“翻译腔”）。
+    改写强度自适应：原句已自然则轻改；存在生硬/拗口/翻译腔则可大幅重组，但不得引入推断性新增信息。
+
+    --禁止（语义保真）--
+    不得改变任何事实、条件、约束、因果/转折/并列/递进/条件等逻辑关系、语气强度（例如可能/必须/建议等强弱）、立场与叙述视角。
+    不得新增原文未包含的事实、解释、评价或结论；不得删去关键信息点。
+    不得改变术语译法与专名写法：专有名词、作品名、人名地名、怪物/技能/道具名、带括号的别名（如 X(Y)）、引号/书名号/特殊括号内的专名，均视为术语，除非明显是普通叙述用语。
+
+    --数组结构约束（仅跨元素）--
+    必须保持输入数组结构不变：
+    1) 输出数组长度必须与输入数组长度完全相同，索引一一对应。
+    2) 不得删除、合并、重排任何元素。
+    3) 即使某些元素为空字符串或与其他元素完全相同，也必须在对应索引保留（可为空字符串）。
+    4) 禁止“把多条内容压成一条并清空后续索引”的行为，除非输入明确指示允许压缩。
+
+    --格式与标记（必须严格遵守）--
+    必须保留所有原始格式，包括 Markdown、换行符、空格数量（除非为提升可读性在元素内部做极小调整且不影响标记位置）、以及所有特殊字符。
+    任何形如 ⟪...⟫ 的标记都是结构控制符，不是可翻译内容：不得翻译、不得改名、不得改数字、不得拆分、不得跨元素移动；必须保持逐字符一致。
+
+    若出现EPUB内联标记，按以下规则：
+    1) 非样式内联标记（如 a/abbr/img 等）：⟪tag:n⟫ 与 ⟪/tag:n⟫ 必须成对保留、顺序不变，不得删除/改写/移动。
+    2) 样式内联标记（b,big,code,del,dfn,em,i,ins,kbd,mark,q,s,samp,small,strong,sub,sup,u,var）：
+    只允许“整对保留”或“整对删除”，不得新增；不得只保留一半；不得改变其包裹范围导致标记跨越到别的元素。
+    3) ⟪RUBY:n⟫ ... ⟪/RUBY:n⟫：只允许“整对保留”或“整对删除”，不得新增；n 必须保持为原来的数字；不得只留一半。
+    4) ⟪BR:n⟫：可按语义需要保留或删除，但不得改写其中的n，不得跨元素移动。
+
+    --不确定处理（安全阀）--
+    若某处指代/关系不清，任何“为了更顺而改写”可能改变含义时：优先保持原译文或做最小改动，不得擅自补全推断。
+
+    --输出--
+    只输出一个JSON对象，且仅包含字段："翻译文本"。
+    "翻译文本"必须是字符串数组，数组长度必须与输入完全一致。
+    不得输出任何额外说明、前后缀文本或代码块围栏。"""
+
+    user_payload = {"翻译文本": translated_blocks}
+    user_prompt = json.dumps(user_payload, ensure_ascii=False, indent=2)
+
+    return system_prompt, user_prompt
+
+
 async def _validated_chat(
     messages: list[dict[str, str]],
     expected_count: int,
@@ -491,19 +555,12 @@ async def translate_chunk(
                     label="translation",
                 )
 
-                # -- Optional polish (with conversation-based correction) -----
+                # -- Optional polish (standalone, no original text or terms) ---
                 if translator_config.enable_polish:
-                    response_json = json.dumps({"翻译文本": translated_text}, ensure_ascii=False)
-                    polish_prompt = (
-                        f"请以段落为单位重写，使其符合{target_language}母语表达；允许拆句/合句、调整信息顺序、补足省略主语、替换连接词，但不得改变任何事实、条件、语气强度、立场与术语译法。严禁去除重复内容。"
-                        f"按照相同json格式输出。"
-                        f'注意：输出的"翻译文本"列表的元素数量必须与输入译文数量一致。之前翻译过程中针对EPUB内联标记，Markdown，latex等特殊字符的要求不变。'
-                    )
+                    polish_sys, polish_usr = build_polish_prompt(translated_text, target_language)
                     polish_messages: list[dict[str, str]] = [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                        {"role": "assistant", "content": response_json},
-                        {"role": "user", "content": polish_prompt},
+                        {"role": "system", "content": polish_sys},
+                        {"role": "user", "content": polish_usr},
                     ]
                     try:
                         translated_blocks = await _validated_chat(

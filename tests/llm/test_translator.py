@@ -125,13 +125,14 @@ async def test_translate_chunk_uses_block_lists_and_reconstructs(temp_config: Co
 
     assert result == ["A translated\n\n---\n\nB translated"]
 
-    call_args = llm_client.chat.call_args
-    messages = call_args[0][0]
+    # First call is the translation (with 原文); polish may follow
+    translate_call = llm_client.chat.call_args_list[0]
+    messages = translate_call[0][0]
     user_payload = json.loads(messages[1]["content"])
 
     assert user_payload["原文"] == ["A", "---", "B"]
     assert isinstance(user_payload["原文"], list)
-    assert call_args[1]["response_format"] == {"type": "json_object"}
+    assert translate_call[1]["response_format"] == {"type": "json_object"}
 
 
 @pytest.mark.asyncio
@@ -609,9 +610,9 @@ async def test_translate_chunk_multiple_chunks(temp_config: Config):
     assert result[0] == "Chunk1 translated\n\n---\n\nPart1 translated"
     assert result[1] == "Chunk2 translated\n\n***\n\nPart2 translated"
 
-    # Verify all blocks were sent together
-    call_args = llm_client.chat.call_args
-    messages = call_args[0][0]
+    # Verify all blocks were sent together (first call is translation)
+    translate_call = llm_client.chat.call_args_list[0]
+    messages = translate_call[0][0]
     user_payload = json.loads(messages[1]["content"])
     assert user_payload["原文"] == ["Chunk1", "---", "Part1", "Chunk2", "***", "Part2"]
 
