@@ -1,0 +1,1183 @@
+"""Glossary editor view for managing translation terms."""
+
+from pathlib import Path
+
+from PySide6.QtCore import QEvent, QPoint, QSize, Qt, Signal
+from PySide6.QtGui import QCloseEvent
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QMenu,
+    QMessageBox,
+    QPushButton,
+    QStyledItemDelegate,
+    QTableView,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
+
+from context_aware_translation.glossary_io import import_glossary
+from context_aware_translation.storage.book_db import SQLiteBookDB
+from context_aware_translation.storage.book_manager import BookManager
+from context_aware_translation.storage.context_tree_db import ContextTreeDB
+from context_aware_translation.storage.document_repository import DocumentRepository
+
+from ..i18n import qarg, translate_progress_message
+from ..models.term_model import TermTableModel
+from ..utils import create_tip_label, translate_document_type
+from ..widgets import ProgressWidget
+from ..workers.glossary_worker import (
+    BuildGlossaryWorker,
+    ExportGlossaryWorker,
+    ReviewTermsWorker,
+    TranslateGlossaryWorker,
+)
+
+
+class _TranslationDelegate(QStyledItemDelegate):
+    """Delegate that provides a larger text editor for the Translation column."""
+
+    _EDITOR_MIN_HEIGHT = 80
+
+    def createEditor(self, parent, _option, _index):
+        editor = QTextEdit(parent)
+        editor.setAcceptRichText(False)
+        editor.setMinimumHeight(self._EDITOR_MIN_HEIGHT)
+        return editor
+
+    def setEditorData(self, editor, index):
+        text = index.data(Qt.ItemDataRole.EditRole) or ""
+        editor.setPlainText(text)
+
+    def setModelData(self, editor, model, index):
+        model.setData(index, editor.toPlainText(), Qt.ItemDataRole.EditRole)
+
+    def sizeHint(self, option, index):
+        size = super().sizeHint(option, index)
+        return QSize(size.width(), max(size.height(), self._EDITOR_MIN_HEIGHT))
+
+    def updateEditorGeometry(self, editor, option, _index):
+        rect = option.rect
+        editor.setGeometry(rect.x(), rect.y(), rect.width(), max(rect.height(), self._EDITOR_MIN_HEIGHT))
+
+
+class GlossaryView(QWidget):
+    """Glossary editor view with filtering, sorting, and bulk operations."""
+
+    glossary_changed = Signal()
+
+    def __init__(self, book_manager: BookManager, book_id: str, parent: QWidget | None = None) -> None:
+        """Initialize the glossary view.
+
+        Args:
+            book_manager: Book manager instance
+            book_id: Book ID to manage glossary for
+            parent: Parent widget
+        """
+        super().__init__(parent)
+        self.book_manager = book_manager
+        self.book_id = book_id
+
+        # Get database and repository
+        db_path = self.book_manager.get_book_db_path(book_id)
+        self.term_db = SQLiteBookDB(db_path)
+        self.document_repo = DocumentRepository(self.term_db)
+
+        # Workers
+        self._build_worker: BuildGlossaryWorker | None = None
+        self._translate_worker: TranslateGlossaryWorker | None = None
+        self._review_worker: ReviewTermsWorker | None = None
+        self._export_worker: ExportGlossaryWorker | None = None
+
+        self._setup_ui()
+        self._update_stats()
+
+    def _setup_ui(self) -> None:
+        """Set up the user interface."""
+        layout = QVBoxLayout(self)
+
+        self.tip_label = create_tip_label(self._tip_text())
+        layout.addWidget(self.tip_label)
+
+        # Toolbar row 1: Search, filter, build
+        toolbar_layout = QHBoxLayout()
+
+        # Search box
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText(self.tr("Search terms..."))
+        self.search_input.textChanged.connect(self._on_search_changed)
+        toolbar_layout.addWidget(self.search_input)
+
+        # Filter dropdown - use data-based approach for i18n safety
+        self.filter_combo = QComboBox()
+        self.filter_combo.addItem(self.tr("All"), "all")
+        self.filter_combo.addItem(self.tr("Unreviewed"), "unreviewed")
+        self.filter_combo.addItem(self.tr("Ignored"), "ignored")
+        self.filter_combo.addItem(self.tr("Translated"), "translated")
+        self.filter_combo.addItem(self.tr("Untranslated"), "untranslated")
+        self.filter_combo.currentIndexChanged.connect(self._on_filter_changed)
+        toolbar_layout.addWidget(self.filter_combo)
+
+        # Document selector for Build Glossary
+        self.build_until_label = QLabel(self.tr("Build until:"))
+        toolbar_layout.addWidget(self.build_until_label)
+        self.doc_combo = QComboBox()
+        self.doc_combo.addItem(self.tr("All Documents"), None)
+        self._populate_documents()
+        self.doc_combo.currentIndexChanged.connect(self._on_build_selection_changed)
+        toolbar_layout.addWidget(self.doc_combo)
+
+        # Build Glossary button
+        self.build_button = QPushButton(self.tr("Build Glossary"))
+        self.build_button.clicked.connect(self._on_build_glossary)
+        toolbar_layout.addWidget(self.build_button)
+
+        # Update build button state based on pending documents
+        self._update_build_button_state()
+
+        toolbar_layout.addStretch()
+        layout.addLayout(toolbar_layout)
+
+        # Toolbar row 2: Actions
+        actions_layout = QHBoxLayout()
+
+        # Translate untranslated terms button
+        self.translate_button = QPushButton(self.tr("Translate Untranslated"))
+        self.translate_button.clicked.connect(self._on_translate_glossary)
+        actions_layout.addWidget(self.translate_button)
+
+        # Review terms button
+        self.review_button = QPushButton(self.tr("Review Terms"))
+        self.review_button.clicked.connect(self._on_review_terms)
+        actions_layout.addWidget(self.review_button)
+
+        # Filter rare terms button
+        self.filter_rare_button = QPushButton(self.tr("Filter Rare"))
+        self.filter_rare_button.clicked.connect(self._on_filter_rare)
+        actions_layout.addWidget(self.filter_rare_button)
+
+        # Bulk Actions menu
+        self.bulk_menu = QMenu(self.tr("Bulk Actions"), self)
+        self.bulk_mark_reviewed_action = self.bulk_menu.addAction(self.tr("Mark Reviewed"), self._on_mark_reviewed)
+        self.bulk_unmark_reviewed_action = self.bulk_menu.addAction(
+            self.tr("Unmark Reviewed"), self._on_unmark_reviewed
+        )
+        self.bulk_mark_ignored_action = self.bulk_menu.addAction(self.tr("Mark Ignored"), self._on_mark_ignored)
+        self.bulk_unmark_ignored_action = self.bulk_menu.addAction(self.tr("Unmark Ignored"), self._on_unmark_ignored)
+        self.bulk_delete_action = self.bulk_menu.addAction(self.tr("Delete Selected"), self._on_delete_selected)
+
+        # Refresh button
+        self.refresh_button = QPushButton(self.tr("Refresh"))
+        self.refresh_button.clicked.connect(self._on_refresh)
+        actions_layout.addWidget(self.refresh_button)
+
+        # Export Glossary button
+        self.export_button = QPushButton(self.tr("Export Glossary"))
+        self.export_button.clicked.connect(self._on_export_glossary)
+        actions_layout.addWidget(self.export_button)
+
+        # Import Glossary button
+        self.import_button = QPushButton(self.tr("Import Glossary"))
+        self.import_button.clicked.connect(self._on_import_glossary)
+        actions_layout.addWidget(self.import_button)
+        self._apply_button_tooltips()
+
+        actions_layout.addStretch()
+        layout.addLayout(actions_layout)
+
+        # Progress widget (hidden by default)
+        self.progress_widget = ProgressWidget()
+        self.progress_widget.cancelled.connect(self._on_cancel_operation)
+        self.progress_widget.hide()
+        layout.addWidget(self.progress_widget)
+
+        # Table view
+        self.table_view = QTableView()
+        self.table_model = TermTableModel(self.term_db)
+        self.table_view.setModel(self.table_model)
+
+        # Table settings
+        self.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table_view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.table_view.setSortingEnabled(True)
+        self.table_view.horizontalHeader().setStretchLastSection(True)
+        # Columns: Term, Translation, Description, Created, Occurrences, Votes, Ignored, Reviewed
+        self.table_view.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # Term
+        self.table_view.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)  # Translation
+        self.table_view.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)  # Description
+
+        # Use a larger text editor for the Translation column
+        self.table_view.setItemDelegateForColumn(1, _TranslationDelegate(self.table_view))
+
+        # Connect sorting signal
+        self.table_view.horizontalHeader().sortIndicatorChanged.connect(self._on_sort_changed)
+
+        # Context menu
+        self.table_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table_view.customContextMenuRequested.connect(self._on_context_menu)
+
+        layout.addWidget(self.table_view)
+
+        # Status bar
+        self.status_label = QLabel()
+        layout.addWidget(self.status_label)
+
+    def _update_stats(self) -> None:
+        """Update the status bar with term statistics."""
+        stats = self.term_db.get_term_stats()
+        status_text = qarg(
+            self.tr(
+                "Showing %1 terms | Total: %2 | Unignored: %3 | Unignored+Reviewed: %4 | Reviewed: %5 | Translated: %6"
+            ),
+            self.table_model.rowCount(),
+            stats["total"],
+            stats["unignored"],
+            stats["unignored_reviewed"],
+            stats["reviewed"],
+            stats["translated"],
+        )
+        self.status_label.setText(status_text)
+        self._update_action_button_states()
+
+    def _update_action_button_states(self) -> None:
+        """Keep glossary term-table actions available whenever controls are enabled."""
+        self.translate_button.setEnabled(True)
+        self.review_button.setEnabled(True)
+        self.filter_rare_button.setEnabled(True)
+
+    def _on_search_changed(self, text: str) -> None:
+        """Handle search text change.
+
+        Args:
+            text: Search text
+        """
+        self.table_model.set_search(text)
+        self._update_stats()
+
+    def _on_filter_changed(self, _index: int) -> None:
+        """Handle filter change.
+
+        Args:
+            _index: Combo box index (unused, we use currentData)
+        """
+        filter_value = self.filter_combo.currentData()
+        self.table_model.set_filter(filter_value or "all")
+        self._update_stats()
+
+    def _on_sort_changed(self, column: int, order: Qt.SortOrder) -> None:
+        """Handle sort order change.
+
+        Args:
+            column: Column index
+            order: Sort order
+        """
+        descending = order == Qt.SortOrder.DescendingOrder
+        self.table_model.set_sort(column, descending)
+
+    def _on_refresh(self) -> None:
+        """Handle refresh button click."""
+        self.table_model.refresh()
+        self._update_stats()
+
+    def _confirm_export_glossary(self) -> bool | None:
+        """Return skip_context selection, or None if user cancelled."""
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle(self.tr("Export Glossary"))
+        msg_box.setText(
+            self.tr(
+                "By default, this export will summarize glossary descriptions before writing the file.\n"
+                "For large glossaries, this may take some time.\n\n"
+                'Enable "Skip context" below to use only the first description per term.\n\n'
+                "Continue?"
+            )
+        )
+        msg_box.setIcon(QMessageBox.Icon.Warning)
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+
+        skip_context_cb = QCheckBox(self.tr("Skip context (use first description only)"))
+        skip_context_cb.setChecked(False)
+        msg_box.setCheckBox(skip_context_cb)
+
+        if msg_box.exec() != QMessageBox.StandardButton.Yes:
+            return None
+        return skip_context_cb.isChecked()
+
+    def _on_export_glossary(self) -> None:
+        if self._export_worker and self._export_worker.isRunning():
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            self.tr("Export Glossary"),
+            "",
+            self.tr("JSON Files (*.json)"),
+        )
+        if not file_path:
+            return
+
+        skip_context = self._confirm_export_glossary()
+        if skip_context is None:
+            return
+
+        self._export_worker = ExportGlossaryWorker(
+            self.book_manager,
+            self.book_id,
+            Path(file_path),
+            skip_context=skip_context,
+        )
+        self._export_worker.progress.connect(self._on_progress)
+        self._export_worker.finished_success.connect(self._on_export_finished)
+        self._export_worker.cancelled.connect(self._on_operation_cancelled)
+        self._export_worker.error.connect(self._on_operation_error)
+        self._export_worker.finished.connect(self._on_export_worker_finished)
+
+        self.progress_widget.reset()
+        self.progress_widget.set_cancellable(True)
+        self.progress_widget.show()
+        self._set_controls_enabled(False)
+
+        self._export_worker.start()
+
+    def _on_import_glossary(self) -> None:
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            self.tr("Import Glossary"),
+            "",
+            self.tr("JSON Files (*.json)"),
+        )
+        if not file_path:
+            return
+
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle(self.tr("Import Glossary"))
+        msg_box.setText(
+            self.tr(
+                "This will REPLACE all existing glossary terms with the imported data.\n\n"
+                "This action cannot be undone. Continue?"
+            )
+        )
+        msg_box.setIcon(QMessageBox.Icon.Warning)
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+
+        include_translations_cb = QCheckBox(self.tr("Include translations"))
+        include_translations_cb.setChecked(True)
+        msg_box.setCheckBox(include_translations_cb)
+
+        if msg_box.exec() != QMessageBox.StandardButton.Yes:
+            return
+
+        include_translations = include_translations_cb.isChecked()
+
+        try:
+            context_tree_db_path = self.book_manager.get_book_context_tree_path(self.book_id)
+            context_tree_db = ContextTreeDB(context_tree_db_path)
+            try:
+                count = import_glossary(
+                    self.term_db,
+                    context_tree_db,
+                    Path(file_path),
+                    include_translations=include_translations,
+                )
+            finally:
+                context_tree_db.close()
+
+            self.term_db.refresh()
+            self.table_model.refresh()
+            self._update_stats()
+            self.glossary_changed.emit()
+
+            QMessageBox.information(
+                self,
+                self.tr("Import Complete"),
+                qarg(self.tr("Imported %1 term(s)."), count),
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                self.tr("Import Failed"),
+                qarg(self.tr("An error occurred:\n\n%1"), str(e)),
+            )
+
+    def _populate_documents(self) -> None:
+        """Populate document selector with documents pending glossary building."""
+        documents = self.document_repo.list_documents_pending_glossary()
+        documents.sort(key=lambda d: d["document_id"])
+        for doc in documents:
+            doc_id = doc["document_id"]
+            doc_type = translate_document_type(doc.get("document_type", "unknown"))
+            self.doc_combo.addItem(qarg(self.tr("Document %1 (%2)"), doc_id, doc_type), doc_id)
+
+    def _update_build_button_state(self) -> None:
+        """Enable/disable build button based on pending documents."""
+        has_pending = self.doc_combo.count() > 1
+        if not has_pending:
+            self.build_button.setEnabled(False)
+            self.doc_combo.setEnabled(False)
+            return
+
+        blocking_doc_ids = self._get_selected_build_blocking_ocr_document_ids()
+        is_blocked = len(blocking_doc_ids) > 0
+        self.build_button.setEnabled(not is_blocked)
+        if is_blocked:
+            joined_ids = ", ".join(str(doc_id) for doc_id in blocking_doc_ids)
+            self.build_button.setToolTip(
+                qarg(
+                    self.tr("Blocked: earlier OCR-required document(s) pending OCR: %1"),
+                    joined_ids,
+                )
+            )
+        else:
+            self.build_button.setToolTip(
+                self.tr("Build glossary terms from pending documents up to the selected document.")
+            )
+        self.doc_combo.setEnabled(has_pending)
+
+    def _on_build_selection_changed(self, _index: int) -> None:
+        """Re-evaluate glossary build availability when build target changes."""
+        self._update_build_button_state()
+
+    def _get_pending_document_ids(self) -> list[int]:
+        """Return pending glossary document IDs currently shown in the selector."""
+        pending_ids: list[int] = []
+        for i in range(1, self.doc_combo.count()):  # skip index 0 ("All Documents")
+            did = self.doc_combo.itemData(i)
+            if did is not None:
+                pending_ids.append(int(did))
+        pending_ids.sort()
+        return pending_ids
+
+    def _get_selected_document_ids(self) -> list[int]:
+        """Get pending document IDs up to and including the selected document (stack ordering)."""
+        pending_ids = self._get_pending_document_ids()
+        selected_id = self.doc_combo.currentData()
+        if selected_id is None:
+            return pending_ids
+        return [doc_id for doc_id in pending_ids if doc_id <= int(selected_id)]
+
+    def _get_build_cutoff_document_id(self, selected_document_ids: list[int]) -> int | None:
+        """Resolve highest document_id affected by the current build selection."""
+        selected_id = self.doc_combo.currentData()
+        if selected_id is not None:
+            return int(selected_id)
+        if selected_document_ids:
+            return max(selected_document_ids)
+        return None
+
+    def _get_build_preflight_document_ids(self, selected_document_ids: list[int]) -> list[int]:
+        """Return all document IDs in stack order up to the selected build cutoff."""
+        all_docs = self.document_repo.list_documents() if hasattr(self, "document_repo") else []
+        all_ids = sorted(int(doc["document_id"]) for doc in all_docs)
+        if not all_ids:
+            return []
+
+        cutoff_document_id = self._get_build_cutoff_document_id(selected_document_ids)
+        if cutoff_document_id is None:
+            return all_ids
+
+        return [doc_id for doc_id in all_ids if doc_id <= cutoff_document_id]
+
+    def _get_blocking_ocr_document_ids(self, preflight_document_ids: list[int]) -> list[int]:
+        """Return OCR-required preflight document IDs that still have pending OCR."""
+        from context_aware_translation.documents.base import is_ocr_required_for_type
+
+        if not preflight_document_ids:
+            return []
+
+        docs_with_status = self.document_repo.get_documents_with_status() if hasattr(self, "document_repo") else []
+        docs_by_id = {int(doc["document_id"]): doc for doc in docs_with_status}
+        blocking_doc_ids: list[int] = []
+        for doc_id in preflight_document_ids:
+            doc = docs_by_id.get(doc_id)
+            if doc is None:
+                continue
+            if not is_ocr_required_for_type(doc.get("document_type", "")):
+                continue
+            if int(doc.get("ocr_pending", 0) or 0) > 0:
+                blocking_doc_ids.append(doc_id)
+        return blocking_doc_ids
+
+    def _should_enforce_ocr_block_for_selection(self, selected_document_ids: list[int]) -> bool:
+        """Return True unless all selected target types allow skipping prior OCR blockers."""
+        from context_aware_translation.documents.base import can_build_glossary_without_prior_ocr_for_type
+
+        if not selected_document_ids:
+            return False
+
+        all_docs = self.document_repo.list_documents() if hasattr(self, "document_repo") else []
+        docs_by_id = {int(doc["document_id"]): doc for doc in all_docs}
+
+        selected_types = []
+        for doc_id in selected_document_ids:
+            doc = docs_by_id.get(int(doc_id))
+            if doc is None:
+                continue
+            selected_types.append(str(doc.get("document_type", "")))
+
+        if not selected_types:
+            return True
+        return not all(can_build_glossary_without_prior_ocr_for_type(doc_type) for doc_type in selected_types)
+
+    def _get_selected_build_blocking_ocr_document_ids(self) -> list[int]:
+        """Return blocking OCR-required docs for current build selection."""
+        selected_document_ids = self._get_selected_document_ids()
+        if not self._should_enforce_ocr_block_for_selection(selected_document_ids):
+            return []
+
+        preflight_document_ids = self._get_build_preflight_document_ids(selected_document_ids)
+        return self._get_blocking_ocr_document_ids(preflight_document_ids)
+
+    def _on_build_glossary(self) -> None:
+        """Handle build glossary button click."""
+        if self._build_worker and self._build_worker.isRunning():
+            return
+
+        document_ids = self._get_selected_document_ids()
+        if not document_ids:
+            QMessageBox.information(
+                self,
+                self.tr("No Pending Documents"),
+                self.tr("No documents are pending glossary build."),
+            )
+            return
+
+        selected_id = self.doc_combo.currentData()
+        if selected_id is None:
+            doc_label = self.tr("all pending documents")
+        else:
+            doc_label = qarg(self.tr("all pending documents up to and including document %1"), selected_id)
+
+        blocking_doc_ids = self._get_selected_build_blocking_ocr_document_ids()
+        if blocking_doc_ids:
+            joined_ids = ", ".join(str(doc_id) for doc_id in blocking_doc_ids)
+            QMessageBox.warning(
+                self,
+                self.tr("OCR Not Complete"),
+                qarg(
+                    self.tr(
+                        "Cannot build glossary yet because earlier OCR-required document(s) are still pending OCR: %1.\n\n"
+                        "Please complete OCR in import order before building later documents."
+                    ),
+                    joined_ids,
+                ),
+            )
+            return
+
+        reply = QMessageBox.question(
+            self,
+            self.tr("Build Glossary"),
+            qarg(
+                self.tr(
+                    "This will extract terms and build occurrence mapping from %1.\n"
+                    'It will not translate glossary terms; use "Translate Untranslated" afterwards.\n\n'
+                    "Continue?"
+                ),
+                doc_label,
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # Check if there are images needing OCR and warn user
+        # Skip documents where OCR is not required for translation (e.g. EPUB)
+        from context_aware_translation.documents.base import is_ocr_required_for_type
+
+        total_sources_needing_ocr = 0
+        doc_id_set = set(document_ids)
+        docs_to_check = [d for d in self.document_repo.list_documents() if int(d["document_id"]) in doc_id_set]
+
+        for doc in docs_to_check:
+            if not is_ocr_required_for_type(doc.get("document_type", "")):
+                continue
+            sources_needing_ocr = self.document_repo.get_document_sources_needing_ocr(doc["document_id"])
+            total_sources_needing_ocr += len(sources_needing_ocr)
+
+        if total_sources_needing_ocr > 0:
+            # Warn user that OCR is not complete
+            QMessageBox.warning(
+                self,
+                self.tr("OCR Not Complete"),
+                qarg(
+                    self.tr(
+                        "Found %1 page(s) that have not been OCR'd.\n\n"
+                        "Please run OCR from the OCR Review tab before building the glossary.\n\n"
+                        "Building glossary without OCR may result in missing text."
+                    ),
+                    total_sources_needing_ocr,
+                ),
+            )
+            return
+
+        # Start worker
+        self._build_worker = BuildGlossaryWorker(self.book_manager, self.book_id, document_ids)
+        self._build_worker.progress.connect(self._on_progress)
+        self._build_worker.finished_success.connect(self._on_build_finished)
+        self._build_worker.cancelled.connect(self._on_operation_cancelled)
+        self._build_worker.error.connect(self._on_operation_error)
+        self._build_worker.finished.connect(self._on_build_worker_finished)
+
+        # Show progress
+        self.progress_widget.reset()
+        self.progress_widget.set_cancellable(True)
+        self.progress_widget.show()
+
+        # Disable controls
+        self._set_controls_enabled(False)
+
+        self._build_worker.start()
+
+    def _on_translate_glossary(self) -> None:
+        """Handle re-translate button click."""
+        if self._translate_worker and self._translate_worker.isRunning():
+            return
+
+        reply = QMessageBox.question(
+            self,
+            self.tr("Translate Untranslated"),
+            self.tr("This will translate all untranslated terms.\nIgnored terms will be skipped.\n\nContinue?"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # Start worker
+        self._translate_worker = TranslateGlossaryWorker(self.book_manager, self.book_id)
+        self._translate_worker.progress.connect(self._on_progress)
+        self._translate_worker.finished_success.connect(self._on_translate_finished)
+        self._translate_worker.cancelled.connect(self._on_operation_cancelled)
+        self._translate_worker.error.connect(self._on_operation_error)
+        self._translate_worker.finished.connect(self._on_translate_worker_finished)
+
+        # Show progress
+        self.progress_widget.reset()
+        self.progress_widget.set_cancellable(True)
+        self.progress_widget.show()
+
+        # Disable controls
+        self._set_controls_enabled(False)
+
+        self._translate_worker.start()
+
+    def _on_progress(self, current: int, total: int, message: str) -> None:
+        """Handle progress update.
+
+        Args:
+            current: Current progress
+            total: Total items
+            message: Progress message
+        """
+        translated_message = translate_progress_message(message)
+        self.progress_widget.set_progress(current, total, translated_message)
+
+    def _on_build_finished(self, _result) -> None:
+        """Handle build glossary completion."""
+        self.progress_widget.hide()
+        self._set_controls_enabled(True)
+
+        self.term_db.refresh()
+        self.table_model.refresh()
+        self._update_stats()
+        self._refresh_document_selector()
+        self.glossary_changed.emit()
+
+        QMessageBox.information(self, self.tr("Build Complete"), self.tr("Glossary has been built successfully."))
+
+    def _refresh_document_selector(self) -> None:
+        """Refresh the document selector with current pending documents."""
+        current_data = self.doc_combo.currentData()
+        self.doc_combo.blockSignals(True)
+        self.doc_combo.clear()
+        self.doc_combo.addItem(self.tr("All Documents"), None)
+        self._populate_documents()
+        # Try to restore previous selection
+        if current_data is not None:
+            for i in range(self.doc_combo.count()):
+                if self.doc_combo.itemData(i) == current_data:
+                    self.doc_combo.setCurrentIndex(i)
+                    break
+        self.doc_combo.blockSignals(False)
+        self._update_build_button_state()
+
+    def refresh(self) -> None:
+        """Refresh the view with current data.
+
+        Called when switching to this tab to ensure document list and stats are up-to-date.
+        """
+        self.term_db.refresh()
+        self._refresh_document_selector()
+        self.table_model.refresh()
+        self._update_stats()
+
+    def _on_translate_finished(self, _result) -> None:
+        """Handle translate glossary completion."""
+        self.progress_widget.hide()
+        self._set_controls_enabled(True)
+
+        self.table_model.refresh()
+        self._update_stats()
+        self.glossary_changed.emit()
+
+        QMessageBox.information(
+            self,
+            self.tr("Translation Complete"),
+            self.tr("Untranslated terms have been translated successfully."),
+        )
+
+    def _on_review_terms(self) -> None:
+        """Handle review terms button click."""
+        if self._review_worker and self._review_worker.isRunning():
+            return
+
+        reply = QMessageBox.question(
+            self,
+            self.tr("Review Terms"),
+            self.tr("This will review all unreviewed terms using LLM. Continue?"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # Start worker
+        self._review_worker = ReviewTermsWorker(self.book_manager, self.book_id)
+        self._review_worker.progress.connect(self._on_progress)
+        self._review_worker.finished_success.connect(self._on_review_finished)
+        self._review_worker.cancelled.connect(self._on_operation_cancelled)
+        self._review_worker.error.connect(self._on_operation_error)
+        self._review_worker.finished.connect(self._on_review_worker_finished)
+
+        # Show progress
+        self.progress_widget.reset()
+        self.progress_widget.set_cancellable(True)
+        self.progress_widget.show()
+
+        # Disable controls
+        self._set_controls_enabled(False)
+
+        self._review_worker.start()
+
+    def _on_review_finished(self, _result) -> None:
+        """Handle review terms completion."""
+        self.progress_widget.hide()
+        self._set_controls_enabled(True)
+
+        self.table_model.refresh()
+        self._update_stats()
+        self.glossary_changed.emit()
+
+        QMessageBox.information(self, self.tr("Review Complete"), self.tr("Terms have been reviewed successfully."))
+
+    def _on_export_finished(self, result: object) -> None:
+        """Handle glossary export completion."""
+        self.progress_widget.hide()
+        self._set_controls_enabled(True)
+
+        count = result["count"] if isinstance(result, dict) and "count" in result else 0
+        QMessageBox.information(
+            self,
+            self.tr("Export Complete"),
+            qarg(self.tr("Exported %1 term(s) to file."), count),
+        )
+
+    def _on_operation_error(self, error_message: str) -> None:
+        """Handle operation error.
+
+        Args:
+            error_message: Error message
+        """
+        self.progress_widget.hide()
+        self._set_controls_enabled(True)
+
+        QMessageBox.critical(
+            self,
+            self.tr("Operation Failed"),
+            qarg(self.tr("An error occurred:\n\n%1"), error_message),
+        )
+
+    def _on_cancel_operation(self) -> None:
+        """Handle operation cancellation."""
+        # Try to cancel any running worker
+        if self._build_worker and self._build_worker.isRunning():
+            self._build_worker.requestInterruption()
+        if self._translate_worker and self._translate_worker.isRunning():
+            self._translate_worker.requestInterruption()
+        if self._review_worker and self._review_worker.isRunning():
+            self._review_worker.requestInterruption()
+        if self._export_worker and self._export_worker.isRunning():
+            self._export_worker.requestInterruption()
+        self.progress_widget.message_label.setText(self.tr("Cancelling..."))
+        self.progress_widget.set_cancellable(False)
+
+    def _on_operation_cancelled(self) -> None:
+        """Handle user cancellation."""
+        self.progress_widget.hide()
+        self._set_controls_enabled(True)
+        QMessageBox.information(self, self.tr("Cancelled"), self.tr("Operation cancelled."))
+
+    def _on_build_worker_finished(self) -> None:
+        """Reset build worker pointer."""
+        self.progress_widget.set_cancellable(True)
+        self._build_worker = None
+
+    def _on_translate_worker_finished(self) -> None:
+        """Reset translate worker pointer."""
+        self.progress_widget.set_cancellable(True)
+        self._translate_worker = None
+
+    def _on_review_worker_finished(self) -> None:
+        """Reset review worker pointer."""
+        self.progress_widget.set_cancellable(True)
+        self._review_worker = None
+
+    def _on_export_worker_finished(self) -> None:
+        """Reset export worker pointer."""
+        self.progress_widget.set_cancellable(True)
+        self._export_worker = None
+
+    def _set_controls_enabled(self, enabled: bool) -> None:
+        """Enable or disable controls.
+
+        Args:
+            enabled: Enable controls if True
+        """
+        self.search_input.setEnabled(enabled)
+        self.filter_combo.setEnabled(enabled)
+        self.translate_button.setEnabled(enabled)
+        self.review_button.setEnabled(enabled)
+        self.filter_rare_button.setEnabled(enabled)
+        self.refresh_button.setEnabled(enabled)
+        self.export_button.setEnabled(enabled)
+        self.import_button.setEnabled(enabled)
+        self.table_view.setEnabled(enabled)
+        if enabled:
+            self._update_build_button_state()
+            self._update_action_button_states()
+        else:
+            self.build_button.setEnabled(False)
+            self.doc_combo.setEnabled(False)
+            self.translate_button.setEnabled(False)
+            self.review_button.setEnabled(False)
+            self.filter_rare_button.setEnabled(False)
+
+    def _get_selected_keys(self) -> list[str]:
+        """Get keys of selected terms.
+
+        Returns:
+            List of term keys
+        """
+        selection_model = self.table_view.selectionModel()
+        if not selection_model:
+            return []
+
+        selected_rows = [index.row() for index in selection_model.selectedRows()]
+        return self.table_model.get_selected_keys(selected_rows)
+
+    def _on_mark_reviewed(self) -> None:
+        """Mark selected terms as reviewed."""
+        keys = self._get_selected_keys()
+        if not keys:
+            QMessageBox.warning(self, self.tr("No Selection"), self.tr("Please select terms to mark as reviewed."))
+            return
+
+        count = self.term_db.update_terms_bulk(keys, is_reviewed=True)
+        self.table_model.refresh()
+        self._update_stats()
+        self.glossary_changed.emit()
+
+        QMessageBox.information(
+            self,
+            self.tr("Success"),
+            qarg(self.tr("Marked %1 term(s) as reviewed."), count),
+        )
+
+    def _on_unmark_reviewed(self) -> None:
+        """Unmark selected terms as reviewed."""
+        keys = self._get_selected_keys()
+        if not keys:
+            QMessageBox.warning(self, self.tr("No Selection"), self.tr("Please select terms to unmark as reviewed."))
+            return
+
+        count = self.term_db.update_terms_bulk(keys, is_reviewed=False)
+        self.table_model.refresh()
+        self._update_stats()
+        self.glossary_changed.emit()
+
+        QMessageBox.information(
+            self,
+            self.tr("Success"),
+            qarg(self.tr("Unmarked %1 term(s) as reviewed."), count),
+        )
+
+    def _on_mark_ignored(self) -> None:
+        """Mark selected terms as ignored."""
+        keys = self._get_selected_keys()
+        if not keys:
+            QMessageBox.warning(self, self.tr("No Selection"), self.tr("Please select terms to mark as ignored."))
+            return
+
+        count = self.term_db.update_terms_bulk(keys, ignored=True)
+        self.table_model.refresh()
+        self._update_stats()
+        self.glossary_changed.emit()
+
+        QMessageBox.information(
+            self,
+            self.tr("Success"),
+            qarg(self.tr("Marked %1 term(s) as ignored."), count),
+        )
+
+    def _on_unmark_ignored(self) -> None:
+        """Unmark selected terms as ignored."""
+        keys = self._get_selected_keys()
+        if not keys:
+            QMessageBox.warning(self, self.tr("No Selection"), self.tr("Please select terms to unmark as ignored."))
+            return
+
+        count = self.term_db.update_terms_bulk(keys, ignored=False)
+        self.table_model.refresh()
+        self._update_stats()
+        self.glossary_changed.emit()
+
+        QMessageBox.information(
+            self,
+            self.tr("Success"),
+            qarg(self.tr("Unmarked %1 term(s) as ignored."), count),
+        )
+
+    def _occurrence_label(self) -> str:
+        """Return localized glossary occurrence column label."""
+        return self.tr("Occurrences")
+
+    def _votes_label(self) -> str:
+        """Return localized glossary votes column label."""
+        return self.tr("Votes")
+
+    def _occurrence_votes_label(self, separator: str = "/") -> str:
+        """Return localized combined occurrence/votes label."""
+        return f"{self._occurrence_label()}{separator}{self._votes_label()}"
+
+    def _on_filter_rare(self) -> None:
+        """Ignore terms that occurred only once or were recognized in only one chunk."""
+        reply = QMessageBox.question(
+            self,
+            self.tr("Filter Rare Terms"),
+            self.tr(
+                "This will mark terms as ignored when:\n\n"
+                "- The term occurred only once across all chunks, OR\n"
+                "- The term was recognized by the LLM in only one chunk.\n\n"
+                "Why:\n"
+                "Terms appearing only once are likely not significant enough "
+                "to warrant a glossary entry.\n\n"
+                "Continue?"
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        rare_keys = self._get_rare_term_keys()
+        if not rare_keys:
+            QMessageBox.information(
+                self,
+                self.tr("No Rare Terms Found"),
+                self.tr("No terms matched the rare-term criteria."),
+            )
+            return
+
+        count = self.term_db.update_terms_bulk(rare_keys, ignored=True, is_reviewed=True)
+        self.table_model.refresh()
+        self._update_stats()
+        self.glossary_changed.emit()
+
+        QMessageBox.information(
+            self,
+            self.tr("Success"),
+            qarg(self.tr("Ignored %1 rare term(s)."), count),
+        )
+
+    def _get_rare_term_keys(self) -> list[str]:
+        """Return non-ignored, non-reviewed term keys that occurred only once or were recognized in one chunk."""
+        rare_keys: list[str] = []
+        for term in self.term_db.list_terms():
+            if term.ignored or term.is_reviewed:
+                continue
+
+            total_occurrences = sum((term.occurrence or {}).values())
+            if total_occurrences <= 1:
+                rare_keys.append(term.key)
+                continue
+
+            # Count chunk-id description keys (numeric strings = extracted from chunks)
+            chunk_desc_count = sum(1 for k in (term.descriptions or {}) if str(k).lstrip("-").isdigit())
+            if chunk_desc_count <= 1:
+                rare_keys.append(term.key)
+
+        return rare_keys
+
+    def _on_delete_selected(self) -> None:
+        """Delete selected terms."""
+        keys = self._get_selected_keys()
+        if not keys:
+            QMessageBox.warning(self, self.tr("No Selection"), self.tr("Please select terms to delete."))
+            return
+
+        reply = QMessageBox.question(
+            self,
+            self.tr("Confirm Delete"),
+            qarg(self.tr("Are you sure you want to delete %1 term(s)?"), len(keys)),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        count = self.term_db.delete_terms(keys)
+        self.table_model.refresh()
+        self._update_stats()
+        self.glossary_changed.emit()
+
+        QMessageBox.information(
+            self,
+            self.tr("Success"),
+            qarg(self.tr("Deleted %1 term(s)."), count),
+        )
+
+    def _on_context_menu(self, pos: QPoint) -> None:
+        """Show context menu at position.
+
+        Args:
+            pos: Position to show menu
+        """
+        index = self.table_view.indexAt(pos)
+        row = index.row() if index.isValid() else self.table_view.rowAt(pos.y())
+        if row < 0:
+            # Be lenient when callers pass table-relative coordinates instead of viewport-relative ones.
+            viewport_pos = self.table_view.viewport().mapFrom(self.table_view, pos)
+            row = self.table_view.rowAt(viewport_pos.y())
+        if row < 0:
+            return
+
+        model = self.table_view.model()
+        if model is not None:
+            current = model.index(row, 0)
+            if current.isValid():
+                self.table_view.setCurrentIndex(current)
+        self.table_view.selectRow(row)
+
+        menu = QMenu(self)
+
+        # Copy Description action
+        term = self.table_model.get_term(row)
+        if term and term.descriptions:
+            copy_desc_action = menu.addAction(self.tr("Copy Description"))
+            copy_desc_action.triggered.connect(lambda: self._copy_description(term.descriptions))
+            menu.addSeparator()
+
+        # Add bulk actions
+        menu.addAction(self.bulk_mark_reviewed_action)
+        menu.addAction(self.bulk_unmark_reviewed_action)
+        menu.addAction(self.bulk_mark_ignored_action)
+        menu.addAction(self.bulk_unmark_ignored_action)
+        menu.addAction(self.bulk_delete_action)
+
+        menu.exec(self.table_view.viewport().mapToGlobal(pos))
+
+    def _copy_description(self, descriptions: dict[str, str]) -> None:
+        """Copy full description text to clipboard."""
+        text = "\n".join(descriptions.values())
+        clipboard = QApplication.clipboard()
+        if clipboard:
+            clipboard.setText(text)
+
+    def cleanup(self) -> None:
+        """Clean up resources."""
+        if self._build_worker and self._build_worker.isRunning():
+            self._build_worker.requestInterruption()
+            self._build_worker.wait()
+
+        if self._translate_worker and self._translate_worker.isRunning():
+            self._translate_worker.requestInterruption()
+            self._translate_worker.wait()
+
+        if self._review_worker and self._review_worker.isRunning():
+            self._review_worker.requestInterruption()
+            self._review_worker.wait()
+
+        if self._export_worker and self._export_worker.isRunning():
+            self._export_worker.requestInterruption()
+            self._export_worker.wait()
+
+        if hasattr(self, "term_db"):
+            self.term_db.close()
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """Handle widget close event."""
+        self.cleanup()
+        super().closeEvent(event)
+
+    def changeEvent(self, event: QEvent) -> None:
+        if event.type() == QEvent.Type.LanguageChange:
+            self.retranslateUi()
+        super().changeEvent(event)
+
+    def _apply_button_tooltips(self) -> None:
+        """Apply hover explanations for toolbar buttons."""
+        self.build_button.setToolTip(
+            self.tr("Build glossary terms from pending documents up to the selected document.")
+        )
+        self.translate_button.setToolTip(self.tr("Translate all currently untranslated glossary terms."))
+        self.review_button.setToolTip(self.tr("Run an LLM review pass on unreviewed glossary terms."))
+        self.filter_rare_button.setToolTip(
+            self.tr(
+                "Automatically ignore terms that occurred only once or were recognized by the LLM in only one chunk."
+            )
+        )
+        self.refresh_button.setToolTip(self.tr("Reload glossary table data and refresh statistics."))
+        self.export_button.setToolTip(self.tr("Export glossary terms to a JSON file."))
+        self.import_button.setToolTip(self.tr("Import glossary terms from a JSON file and replace current glossary."))
+
+    def retranslateUi(self) -> None:
+        self.tip_label.setText(self._tip_text())
+        self.search_input.setPlaceholderText(self.tr("Search terms..."))
+        # Re-set filter combo item texts
+        self.filter_combo.setItemText(0, self.tr("All"))
+        self.filter_combo.setItemText(1, self.tr("Unreviewed"))
+        self.filter_combo.setItemText(2, self.tr("Ignored"))
+        self.filter_combo.setItemText(3, self.tr("Translated"))
+        self.filter_combo.setItemText(4, self.tr("Untranslated"))
+        self.build_until_label.setText(self.tr("Build until:"))
+        self.build_button.setText(self.tr("Build Glossary"))
+        self.translate_button.setText(self.tr("Translate Untranslated"))
+        self.review_button.setText(self.tr("Review Terms"))
+        self.filter_rare_button.setText(self.tr("Filter Rare"))
+        self.refresh_button.setText(self.tr("Refresh"))
+        self.bulk_menu.setTitle(self.tr("Bulk Actions"))
+        self.bulk_mark_reviewed_action.setText(self.tr("Mark Reviewed"))
+        self.bulk_unmark_reviewed_action.setText(self.tr("Unmark Reviewed"))
+        self.bulk_mark_ignored_action.setText(self.tr("Mark Ignored"))
+        self.bulk_unmark_ignored_action.setText(self.tr("Unmark Ignored"))
+        self.bulk_delete_action.setText(self.tr("Delete Selected"))
+        self.export_button.setText(self.tr("Export Glossary"))
+        self.import_button.setText(self.tr("Import Glossary"))
+        self._apply_button_tooltips()
+        self.table_model.retranslate()
+        self._update_stats()
+
+    def _tip_text(self) -> str:
+        return self.tr(
+            "Glossary is optional: build it after OCR if you want auto-extracted terms, or import your own glossary.\n"
+            "Review/ignore/translate glossary terms before main translation for best consistency.\n"
+            "During translation, relevant terms are selected per chunk via normalized substring matching "
+            "and sent alongside the source text. Each term includes its name, translation, and a "
+            "summarized description to guide the translator for consistent output."
+        )

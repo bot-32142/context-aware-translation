@@ -1,0 +1,58 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.pyo
+*.so
+*.dylib
+*.dll
+
+# Virtual environments
+.venv/
+venv/
+.env
+.env.local
+.python-version
+
+# Packaging
+build/
+dist/
+release/
+wheels/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Caches and tooling
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.nox/
+.cache/
+*.log
+*.pid
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# Editors/IDE
+.idea/
+.vscode/
+
+# macOS / system
+.DS_Store
+
+# uv
+.uv/
+
+.config.yaml
+output
+output.txt
+output.epub
+delete-me/
+delete-me-output/
+.sisyphus/*
+.omc
+.claude
+evaluation/output/
