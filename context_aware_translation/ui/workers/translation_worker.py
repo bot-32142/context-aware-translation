@@ -44,3 +44,37 @@ class TranslationWorker(BaseWorker):
                 )
             )
         self.finished_success.emit(None)
+
+
+class RetranslateChunkWorker(BaseWorker):
+    """Worker for retranslating a single chunk."""
+
+    def __init__(
+        self,
+        book_manager: BookManager,
+        book_id: str,
+        chunk_id: int,
+        document_id: int,
+        skip_context: bool = False,
+    ) -> None:
+        super().__init__()
+        self.book_manager = book_manager
+        self.book_id = book_id
+        self.chunk_id = chunk_id
+        self.document_id = document_id
+        self.skip_context = skip_context
+
+    def _execute(self) -> None:
+        """Retranslate a single chunk."""
+        self._raise_if_cancelled()
+        translator = WorkflowSession.from_book(self.book_manager, self.book_id)
+        with translator as session:
+            new_translation = asyncio.run(
+                session.retranslate_chunk(
+                    chunk_id=self.chunk_id,
+                    document_id=self.document_id,
+                    skip_context=self.skip_context,
+                    cancel_check=self._is_cancelled,
+                )
+            )
+        self.finished_success.emit(new_translation)

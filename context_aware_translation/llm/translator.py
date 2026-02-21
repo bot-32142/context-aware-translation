@@ -495,9 +495,9 @@ async def translate_chunk(
                 if translator_config.enable_polish:
                     response_json = json.dumps({"翻译文本": translated_text}, ensure_ascii=False)
                     polish_prompt = (
-                        f"改写成符合{target_language}习惯的写法，并修复语病和表达不清的句子。"
+                        f"请以段落为单位重写，使其符合{target_language}母语表达；允许拆句/合句、调整信息顺序、补足省略主语、替换连接词，但不得改变任何事实、条件、语气强度、立场与术语译法。严禁去除重复内容。"
                         f"按照相同json格式输出。"
-                        f'注意：输出的"翻译文本"列表必须包含恰好{expected}个元素，与输入原文数量一致。'
+                        f'注意：输出的"翻译文本"列表的元素数量必须与输入译文数量一致。之前翻译过程中针对EPUB内联标记，Markdown，latex等特殊字符的要求不变。'
                     )
                     polish_messages: list[dict[str, str]] = [
                         {"role": "system", "content": system_prompt},

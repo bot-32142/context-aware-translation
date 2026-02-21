@@ -27,7 +27,7 @@ from context_aware_translation.storage.document_repository import DocumentReposi
 from ..i18n import qarg, translate_progress_message
 from ..utils import create_tip_label, translate_document_type
 from ..widgets import ProgressWidget
-from ..workers.translation_worker import TranslationWorker
+from ..workers.translation_worker import RetranslateChunkWorker, TranslationWorker
 from .manga_review_widget import MangaReviewWidget
 
 PREVIEW_TRUNCATION_LENGTH = 50
@@ -48,6 +48,7 @@ class TranslationView(QWidget):
         self.book_manager = book_manager
         self.book_id = book_id
         self.worker: TranslationWorker | None = None
+        self.retranslate_worker: RetranslateChunkWorker | None = None
 
         # Initialize database
         db_path = book_manager.get_book_db_path(book_id)
@@ -250,10 +251,17 @@ class TranslationView(QWidget):
         self.translation_text = QTextEdit()
         right_layout.addWidget(self.translation_text)
 
-        # Save button
+        # Save and Retranslate buttons
+        action_layout = QHBoxLayout()
         self.save_chunk_btn = QPushButton(self.tr("Save Changes"))
         self.save_chunk_btn.clicked.connect(self._save_chunk_translation)
-        right_layout.addWidget(self.save_chunk_btn)
+        action_layout.addWidget(self.save_chunk_btn)
+
+        self.retranslate_chunk_btn = QPushButton(self.tr("Retranslate"))
+        self.retranslate_chunk_btn.clicked.connect(self._retranslate_current_chunk)
+        action_layout.addWidget(self.retranslate_chunk_btn)
+
+        right_layout.addLayout(action_layout)
 
         # Navigation buttons
         nav_layout = QHBoxLayout()
@@ -760,6 +768,85 @@ class TranslationView(QWidget):
         # Show confirmation
         QMessageBox.information(self, self.tr("Saved"), self.tr("Translation saved successfully!"))
 
+    def _retranslate_current_chunk(self) -> None:
+        """Retranslate the currently selected chunk using the LLM."""
+        if not self._current_chunk:
+            return
+
+        if self.retranslate_worker and self.retranslate_worker.isRunning():
+            return
+
+        chunk = self._current_chunk
+        if chunk.document_id is None:
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Chunk has no associated document."))
+            return
+
+        reply = QMessageBox.question(
+            self,
+            self.tr("Retranslate Chunk"),
+            qarg(
+                self.tr("This will retranslate chunk #%1 using the LLM.\nLLM API costs will be incurred.\n\nContinue?"),
+                chunk.chunk_id,
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        self.retranslate_chunk_btn.setEnabled(False)
+        self.retranslate_chunk_btn.setText(self.tr("Retranslating..."))
+
+        self.retranslate_worker = RetranslateChunkWorker(
+            self.book_manager,
+            self.book_id,
+            chunk_id=chunk.chunk_id,
+            document_id=chunk.document_id,
+            skip_context=self.skip_context_cb.isChecked(),
+        )
+        self.retranslate_worker.finished_success.connect(self._on_retranslate_success)
+        self.retranslate_worker.error.connect(self._on_retranslate_error)
+        self.retranslate_worker.cancelled.connect(self._on_retranslate_finished)
+        self.retranslate_worker.finished.connect(self._on_retranslate_finished)
+        self.retranslate_worker.start()
+
+    def _on_retranslate_success(self, new_translation: object) -> None:
+        """Handle successful chunk retranslation."""
+        if isinstance(new_translation, str):
+            self.translation_text.setPlainText(new_translation)
+
+            # Update the current chunk reference
+            if self._current_chunk:
+                self._current_chunk = self._build_chunk_record(self._current_chunk, new_translation)
+                # Refresh list item
+                current_row = self.chunk_list.currentRow()
+                if current_row >= 0:
+                    item = self.chunk_list.item(current_row)
+                    if item:
+                        text = self._current_chunk.text or ""
+                        preview = (
+                            text[:PREVIEW_TRUNCATION_LENGTH] + "..." if len(text) > PREVIEW_TRUNCATION_LENGTH else text
+                        )
+                        status = "\u2713" if self._current_chunk.is_translated else "\u25cb"
+                        item.setText(f"{status} #{self._current_chunk.chunk_id}: {preview}")
+                        item.setData(Qt.ItemDataRole.UserRole, self._current_chunk)
+
+                # Update original line count for validation
+                self._original_line_count = len(new_translation.splitlines()) if new_translation.strip() else 0
+
+    def _on_retranslate_error(self, error_msg: str) -> None:
+        """Handle retranslation error."""
+        QMessageBox.critical(
+            self,
+            self.tr("Retranslation Error"),
+            qarg(self.tr("Failed to retranslate chunk:\n%1"), error_msg),
+        )
+
+    def _on_retranslate_finished(self) -> None:
+        """Clean up after retranslation worker finishes."""
+        self.retranslate_chunk_btn.setEnabled(True)
+        self.retranslate_chunk_btn.setText(self.tr("Retranslate"))
+        self.retranslate_worker = None
+
     def _build_chunk_record(self, chunk: TranslationChunkRecord, translation_text: str) -> TranslationChunkRecord:
         """Build a TranslationChunkRecord with updated translation.
 
@@ -936,6 +1023,9 @@ class TranslationView(QWidget):
         if self.worker and self.worker.isRunning():
             self.worker.requestInterruption()
             self.worker.wait()
+        if self.retranslate_worker and self.retranslate_worker.isRunning():
+            self.retranslate_worker.requestInterruption()
+            self.retranslate_worker.wait()
         if self.term_db:
             self.term_db.close()
 
@@ -962,6 +1052,9 @@ class TranslationView(QWidget):
         self.review_btn.setToolTip(self.tr("Open review mode to inspect and edit translated chunks."))
         self.back_btn.setToolTip(self.tr("Return to progress mode and translation controls."))
         self.save_chunk_btn.setToolTip(self.tr("Save edits for the currently selected chunk translation."))
+        self.retranslate_chunk_btn.setToolTip(
+            self.tr("Retranslate the selected chunk using the LLM (incurs API cost).")
+        )
         self.prev_btn.setToolTip(self.tr("Go to the previous chunk in the review list."))
         self.next_btn.setToolTip(self.tr("Go to the next chunk in the review list."))
 
@@ -988,6 +1081,7 @@ class TranslationView(QWidget):
         self.replace_btn.setText(self.tr("Replace"))
         self.replace_all_btn.setText(self.tr("Replace All"))
         self.save_chunk_btn.setText(self.tr("Save Changes"))
+        self.retranslate_chunk_btn.setText(self.tr("Retranslate"))
         self.prev_btn.setText("\u2190 " + self.tr("Previous"))
         self.next_btn.setText(self.tr("Next") + " \u2192")
         self._apply_button_tooltips()

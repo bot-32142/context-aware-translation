@@ -110,6 +110,7 @@ def test_apply_button_tooltips_sets_hover_explanations():
     view.review_btn = QPushButton()
     view.back_btn = QPushButton()
     view.save_chunk_btn = QPushButton()
+    view.retranslate_chunk_btn = QPushButton()
     view.prev_btn = QPushButton()
     view.next_btn = QPushButton()
 
@@ -121,6 +122,7 @@ def test_apply_button_tooltips_sets_hover_explanations():
         ("review", view.review_btn),
         ("back", view.back_btn),
         ("save", view.save_chunk_btn),
+        ("retranslate", view.retranslate_chunk_btn),
         ("prev", view.prev_btn),
         ("next", view.next_btn),
     ]

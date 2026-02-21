@@ -619,6 +619,16 @@ class SQLiteBookDB:
             return count
         return 0
 
+    def get_chunk_by_id(self, chunk_id: int) -> TranslationChunkRecord | None:
+        """Get a single chunk by its chunk_id.
+
+        Returns None if no chunk with that ID exists.
+        """
+        row = self.conn.execute("SELECT * FROM chunks WHERE chunk_id = ?", (chunk_id,)).fetchone()
+        if row is None:
+            return None
+        return self._row_to_translation_chunk(row)
+
     def get_chunks_to_extract(self) -> list[TranslationChunkRecord]:
         """Get all chunks where is_extracted = 0."""
         rows = self.conn.execute("SELECT * FROM chunks WHERE is_extracted = 0").fetchall()

@@ -496,6 +496,68 @@ class WorkflowService:
             progress_callback=progress_callback,
         )
 
+    async def retranslate_chunk(
+        self,
+        chunk_id: int,
+        document_id: int,
+        skip_context: bool = False,
+        cancel_check: Callable[[], bool] | None = None,
+    ) -> str:
+        """Retranslate a single chunk by ID using the LLM.
+
+        Args:
+            chunk_id: The chunk to retranslate.
+            document_id: The document the chunk belongs to.
+            skip_context: If True, use only earliest description per term.
+            cancel_check: Optional cancellation callback.
+
+        Returns:
+            The new translation text.
+        """
+        translator_config = self.config.translator_config
+        assert translator_config is not None
+
+        # Ensure prerequisites (text added, source language detected)
+        preflight_document_ids = self._resolve_preflight_document_ids([document_id])
+        await self._prepare_llm_prerequisites(preflight_document_ids, cancel_check=cancel_check)
+
+        if not skip_context:
+            self._check_cancel(cancel_check)
+            self.manager.build_context_tree(cancel_check=cancel_check)
+
+        self._check_cancel(cancel_check)
+
+        # Fetch the chunk record
+        chunk = self.db.get_chunk_by_id(chunk_id)
+        if chunk is None:
+            raise ValueError(f"Chunk {chunk_id} not found")
+
+        source_language = self.db.get_source_language()
+        if not source_language:
+            raise ValueError("Source language not found in the database")
+
+        # Build terms for this single chunk
+        all_terms = [term for term in self.manager.term_repo.list_keyed_context() if not term.ignored]
+        batch = [chunk]
+        max_chunk_id = chunk.chunk_id
+        batch_terms = self.manager._build_batch_terms(all_terms, batch, max_chunk_id, skip_context=skip_context)
+
+        self._check_cancel(cancel_check)
+
+        # Translate the single chunk
+        translated_texts = await self.manager.chunk_translator.translate(
+            [chunk.text], batch_terms, source_language, cancel_check=cancel_check
+        )
+
+        new_translation: str = translated_texts[0]
+        chunk.translation = new_translation
+        chunk.is_translated = True
+
+        # Persist
+        self.manager._state_update([], [chunk])
+
+        return new_translation
+
     async def export(
         self,
         file_path: Path,

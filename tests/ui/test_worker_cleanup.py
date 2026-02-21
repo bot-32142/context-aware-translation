@@ -78,6 +78,7 @@ def test_translation_view_cleanup_waits_without_timeout():
 
     worker = _FakeWorker()
     view.worker = worker
+    view.retranslate_worker = None
     view.term_db = MagicMock()
     view.cleanup()
 
