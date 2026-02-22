@@ -38,6 +38,9 @@ class BaseWorker(QThread):
 
         Subclasses should override _execute() instead of run().
         """
+        from context_aware_translation.ui.sleep_inhibitor import SleepInhibitor
+
+        SleepInhibitor.acquire()
         try:
             self._raise_if_cancelled()
             self._execute()
@@ -47,6 +50,8 @@ class BaseWorker(QThread):
         except Exception as e:
             logger.exception(f"{self.__class__.__name__} failed")
             self.error.emit(f"{type(e).__name__}: {e}")
+        finally:
+            SleepInhibitor.release()
 
     def _execute(self) -> None:
         """Execute the worker's main task.
