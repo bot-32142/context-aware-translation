@@ -258,12 +258,10 @@ jobs:
         shell: cmd
         run: |
           if not exist release mkdir release
-          echo Listing dist directory:
-          dir dist\${{ env.APP_NAME }} /B 2>nul || (echo ERROR: dist\${{ env.APP_NAME }} not found && dir dist /B 2>nul && exit /b 1)
           "C:\Program Files (x86)\NSIS\makensis.exe" ^
             /DAPP_VERSION=${{ steps.version.outputs.version_number }} ^
-            /DSOURCE_DIR=dist\${{ env.APP_NAME }} ^
-            /DOUTPUT_FILE=release\${{ env.APP_NAME }}-${{ steps.version.outputs.version }}-${{ matrix.platform_name }}-setup.exe ^
+            /DSOURCE_DIR=%CD%\dist\${{ env.APP_NAME }} ^
+            /DOUTPUT_FILE=%CD%\release\${{ env.APP_NAME }}-${{ steps.version.outputs.version }}-${{ matrix.platform_name }}-setup.exe ^
             installer\windows\cat-ui.nsi
 
       - name: Sign installer (Windows)
