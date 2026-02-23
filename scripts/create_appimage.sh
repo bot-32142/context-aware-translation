@@ -27,13 +27,16 @@ if [[ ! -f "$APPIMAGETOOL" ]]; then
 fi
 
 # --- Build AppDir structure ---
+echo "Building AppDir structure..."
 rm -rf "$APPDIR"
 mkdir -p "$APPDIR/usr/bin"
 mkdir -p "$APPDIR/usr/share/applications"
 mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 
 # Copy PyInstaller output
+echo "Copying PyInstaller output to AppDir (this may take a while)..."
 cp -r "$DIST_DIR"/* "$APPDIR/usr/bin/"
+echo "Copy complete ($(du -sh "$APPDIR/usr/bin" | cut -f1))"
 
 # Desktop entry
 cat > "$APPDIR/cat-ui.desktop" << 'DESKTOP'
@@ -49,11 +52,13 @@ cp "$APPDIR/cat-ui.desktop" "$APPDIR/usr/share/applications/"
 
 # Icon (placeholder - replace with a real icon later)
 # Generate a simple 256x256 icon via Python/Pillow if available, otherwise use a 1px fallback
-python3 -c "
+echo "Generating application icon..."
+timeout 30 python3 -c "
+import sys
+sys.modules['torch'] = None  # prevent heavy imports
 from PIL import Image, ImageDraw, ImageFont
 img = Image.new('RGBA', (256, 256), (52, 120, 246, 255))
 draw = ImageDraw.Draw(img)
-# Draw 'CAT' text centered
 try:
     font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 72)
 except OSError:
@@ -86,6 +91,7 @@ chmod +x "$APPDIR/AppRun"
 
 # --- Build the AppImage ---
 # APPIMAGE_EXTRACT_AND_RUN avoids the FUSE requirement in CI environments
+echo "Building AppImage (compressing $(du -sh "$APPDIR" | cut -f1) AppDir)..."
 export APPIMAGE_EXTRACT_AND_RUN=1
 ARCH=x86_64 "$APPIMAGETOOL" "$APPDIR" \
     "$RELEASE_DIR/${APP_NAME}-${VERSION}-${PLATFORM}.AppImage"
