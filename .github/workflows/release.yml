@@ -210,34 +210,29 @@ jobs:
         shell: powershell
         run: |
           if (-not $env:WINDOWS_CERTIFICATE_BASE64) {
-            Write-Host "::notice::No Windows certificate configured — skipping code signing"
+            Write-Host '::notice::No Windows certificate configured - skipping code signing'
             exit 0
           }
 
-          # Decode certificate
-          $certPath = "$env:RUNNER_TEMP\certificate.pfx"
+          $certPath = Join-Path $env:RUNNER_TEMP 'certificate.pfx'
           [IO.File]::WriteAllBytes($certPath,
             [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
 
-          # Find signtool
-          $signtool = (Resolve-Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" |
+          $signtool = (Resolve-Path 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' |
             Sort-Object -Descending | Select-Object -First 1).Path
           Write-Host "Using signtool: $signtool"
 
-          # Sign the main executable
-          & $signtool sign /f $certPath /p $env:WINDOWS_CERTIFICATE_PASSWORD `
-            /tr http://timestamp.digicert.com /td sha256 /fd sha256 `
-            "dist\${{ env.APP_NAME }}\${{ env.APP_NAME }}.exe"
+          $signArgs = @('sign', '/f', $certPath, '/p', $env:WINDOWS_CERTIFICATE_PASSWORD,
+            '/tr', 'http://timestamp.digicert.com', '/td', 'sha256', '/fd', 'sha256')
 
-          # Sign all bundled DLLs
+          & $signtool @signArgs "dist\${{ env.APP_NAME }}\${{ env.APP_NAME }}.exe"
+
           Get-ChildItem "dist\${{ env.APP_NAME }}" -Recurse -Include *.dll,*.pyd | ForEach-Object {
-            & $signtool sign /f $certPath /p $env:WINDOWS_CERTIFICATE_PASSWORD `
-              /tr http://timestamp.digicert.com /td sha256 /fd sha256 `
-              $_.FullName 2>$null
+            & $signtool @signArgs $_.FullName 2>$null
           }
 
           Remove-Item $certPath -Force
-          Write-Host "Code signing complete"
+          Write-Host 'Code signing complete'
 
       - name: Create installer (Windows)
         if: runner.os == 'Windows'
@@ -258,24 +253,25 @@ jobs:
         shell: powershell
         run: |
           if (-not $env:WINDOWS_CERTIFICATE_BASE64) {
-            Write-Host "::notice::No Windows certificate configured — skipping installer signing"
+            Write-Host '::notice::No Windows certificate configured - skipping installer signing'
             exit 0
           }
 
-          $certPath = "$env:RUNNER_TEMP\certificate.pfx"
+          $certPath = Join-Path $env:RUNNER_TEMP 'certificate.pfx'
           [IO.File]::WriteAllBytes($certPath,
             [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
 
-          $signtool = (Resolve-Path "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" |
+          $signtool = (Resolve-Path 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' |
             Sort-Object -Descending | Select-Object -First 1).Path
 
+          $signArgs = @('sign', '/f', $certPath, '/p', $env:WINDOWS_CERTIFICATE_PASSWORD,
+            '/tr', 'http://timestamp.digicert.com', '/td', 'sha256', '/fd', 'sha256')
+
           $installer = (Get-ChildItem release\*-setup.exe).FullName
-          & $signtool sign /f $certPath /p $env:WINDOWS_CERTIFICATE_PASSWORD `
-            /tr http://timestamp.digicert.com /td sha256 /fd sha256 `
-            $installer
+          & $signtool @signArgs $installer
 
           Remove-Item $certPath -Force
-          Write-Host "Installer signing complete"
+          Write-Host 'Installer signing complete'
 
       # ============================================================
       # Linux: Create AppImage

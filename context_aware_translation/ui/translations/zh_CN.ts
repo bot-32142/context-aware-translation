@@ -3144,70 +3144,70 @@ This will permanently remove all book data including documents, translations, an
     <name>MainWindow</name>
     <message>
         <location filename="../main_window.py" line="39"/>
-        <location filename="../main_window.py" line="400"/>
+        <location filename="../main_window.py" line="401"/>
         <source>Context-Aware Translation</source>
         <translation>上下文感知翻译</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="106"/>
-        <location filename="../main_window.py" line="404"/>
+        <location filename="../main_window.py" line="107"/>
+        <location filename="../main_window.py" line="405"/>
         <source>Library</source>
         <translation>书库</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="110"/>
-        <location filename="../main_window.py" line="406"/>
+        <location filename="../main_window.py" line="111"/>
+        <location filename="../main_window.py" line="407"/>
         <source>Profiles</source>
         <translation>配置</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="138"/>
-        <location filename="../main_window.py" line="411"/>
+        <location filename="../main_window.py" line="139"/>
+        <location filename="../main_window.py" line="412"/>
         <source>&amp;File</source>
         <translation>文件(&amp;F)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="140"/>
-        <location filename="../main_window.py" line="416"/>
+        <location filename="../main_window.py" line="141"/>
+        <location filename="../main_window.py" line="417"/>
         <source>Open &amp;Data Folder</source>
         <translation>打开数据文件夹(&amp;D)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="145"/>
-        <location filename="../main_window.py" line="412"/>
+        <location filename="../main_window.py" line="146"/>
+        <location filename="../main_window.py" line="413"/>
         <source>&amp;Language</source>
         <translation>语言(&amp;L)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="161"/>
-        <location filename="../main_window.py" line="413"/>
+        <location filename="../main_window.py" line="162"/>
+        <location filename="../main_window.py" line="414"/>
         <source>&amp;Help</source>
         <translation>帮助(&amp;H)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="163"/>
-        <location filename="../main_window.py" line="417"/>
+        <location filename="../main_window.py" line="164"/>
+        <location filename="../main_window.py" line="418"/>
         <source>&amp;About</source>
         <translation>关于(&amp;A)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="171"/>
-        <location filename="../main_window.py" line="422"/>
+        <location filename="../main_window.py" line="172"/>
+        <location filename="../main_window.py" line="423"/>
         <source>Ready</source>
         <translation>就绪</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="201"/>
+        <location filename="../main_window.py" line="202"/>
         <source>Translation</source>
         <translation>翻译</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="212"/>
+        <location filename="../main_window.py" line="213"/>
         <source>Operation in Progress</source>
         <translation>操作进行中</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="215"/>
+        <location filename="../main_window.py" line="216"/>
         <source>The following operations are currently running: %1.
 
 Leaving the book will cancel them.
@@ -3232,33 +3232,33 @@ All completed translations are already saved and won&apos;t be lost.</source>
 已完成的翻译内容均已保存，不会丢失。</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="268"/>
+        <location filename="../main_window.py" line="269"/>
         <source>About Context-Aware Translation</source>
         <translation>关于上下文感知翻译</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="271"/>
+        <location filename="../main_window.py" line="272"/>
         <source>&lt;h3&gt;Context-Aware Translation&lt;/h3&gt;&lt;p&gt;Version %1&lt;/p&gt;&lt;p&gt;A desktop application for context-aware document translation with glossary management and OCR support.&lt;/p&gt;&lt;p&gt;Built with PySide6 (Qt for Python)&lt;/p&gt;</source>
         <translation>&lt;h3&gt;上下文感知翻译&lt;/h3&gt;&lt;p&gt;版本 %1&lt;/p&gt;&lt;p&gt;一款支持术语表管理和OCR的上下文感知文档翻译桌面应用。&lt;/p&gt;&lt;p&gt;基于 PySide6（Qt for Python）构建&lt;/p&gt;</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="312"/>
+        <location filename="../main_window.py" line="313"/>
         <source>View &apos;%1&apos; not found</source>
         <translation>未找到视图“%1”</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="334"/>
-        <location filename="../main_window.py" line="408"/>
+        <location filename="../main_window.py" line="335"/>
+        <location filename="../main_window.py" line="409"/>
         <source>Book: %1</source>
         <translation>书籍：%1</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="346"/>
+        <location filename="../main_window.py" line="347"/>
         <source>Opened book: %1</source>
         <translation>已打开书籍：%1</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="379"/>
+        <location filename="../main_window.py" line="380"/>
         <source>Closed book: %1</source>
         <translation>已关闭书籍：%1</translation>
     </message>
