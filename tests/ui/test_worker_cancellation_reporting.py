@@ -52,10 +52,16 @@ def _capture_signals(worker):  # noqa: ANN001
     return success, cancelled, errors
 
 
-def test_translation_worker_late_interrupt_still_emits_success(monkeypatch: pytest.MonkeyPatch):
+def _book_manager_with_db(tmp_path: Path) -> MagicMock:
+    manager = MagicMock()
+    manager.get_book_db_path.return_value = tmp_path / "book.db"
+    return manager
+
+
+def test_translation_worker_late_interrupt_still_emits_success(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     from context_aware_translation.ui.workers.translation_worker import TranslationWorker
 
-    worker = TranslationWorker(MagicMock(), "book-id")
+    worker = TranslationWorker(_book_manager_with_db(tmp_path), "book-id")
 
     class _Session:
         async def translate(self, **kwargs) -> None:  # noqa: ANN003
@@ -146,10 +152,12 @@ def test_export_worker_late_interrupt_still_emits_success(monkeypatch: pytest.Mo
     assert errors == []
 
 
-def test_translation_worker_does_not_emit_success_when_session_exit_fails(monkeypatch: pytest.MonkeyPatch):
+def test_translation_worker_does_not_emit_success_when_session_exit_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
     from context_aware_translation.ui.workers.translation_worker import TranslationWorker
 
-    worker = TranslationWorker(MagicMock(), "book-id")
+    worker = TranslationWorker(_book_manager_with_db(tmp_path), "book-id")
 
     class _Session:
         async def translate(self, **kwargs) -> None:  # noqa: ANN003
@@ -169,10 +177,10 @@ def test_translation_worker_does_not_emit_success_when_session_exit_fails(monkey
     assert "RuntimeError: close failed" in errors[0]
 
 
-def test_translation_worker_forwards_skip_context(monkeypatch: pytest.MonkeyPatch):
+def test_translation_worker_forwards_skip_context(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     from context_aware_translation.ui.workers.translation_worker import TranslationWorker
 
-    worker = TranslationWorker(MagicMock(), "book-id", skip_context=True)
+    worker = TranslationWorker(_book_manager_with_db(tmp_path), "book-id", skip_context=True)
     captured: dict[str, object] = {}
 
     class _Session:

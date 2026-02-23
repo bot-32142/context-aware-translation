@@ -40,7 +40,9 @@ from .constants import (
 from .i18n import qarg
 from .sleep_inhibitor import SleepInhibitor
 from .views import BookWorkspace, LibraryView, ProfileView
+from .workers.batch_task_overlap_guard import has_any_batch_task_overlap
 from .workers.batch_translation_task_worker import BatchTranslationTaskWorker
+from .workers.operation_tracker import DocumentOperationTracker
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +70,7 @@ class MainWindow(QMainWindow):
         # Navigation items (store for retranslation)
         self._library_nav_item: QListWidgetItem | None = None
         self._profiles_nav_item: QListWidgetItem | None = None
-        self._global_batch_workers: dict[str, BatchTranslationTaskWorker] = {}
+        self._global_batch_workers: dict[str, dict[str, BatchTranslationTaskWorker]] = {}
         self._global_batch_retry_after: dict[str, float] = {}
         self._global_batch_timer: QTimer | None = None
         self._global_batch_task_stores: dict[str, TranslationBatchTaskStore] = {}
@@ -225,11 +227,12 @@ class MainWindow(QMainWindow):
         if timer is not None:
             timer.stop()
             self._global_batch_timer = None
-        for worker in list(self._global_batch_workers.values()):
-            if worker.isRunning():
-                worker.requestInterruption()
-                if not worker.wait(1500):
-                    logger.warning("Timed out while stopping global batch worker during shutdown")
+        for task_workers in list(self._global_batch_workers.values()):
+            for worker in list(task_workers.values()):
+                if worker.isRunning():
+                    worker.requestInterruption()
+                    if not worker.wait(1500):
+                        logger.warning("Timed out while stopping global batch worker during shutdown")
         self._global_batch_workers.clear()
         self._global_batch_retry_after.clear()
         for store in self._global_batch_task_stores.values():
@@ -239,7 +242,7 @@ class MainWindow(QMainWindow):
 
     def _update_sleep_inhibitor(self) -> None:
         """Acquire or release sleep inhibition based on whether any work is active."""
-        if self._global_batch_workers:
+        if any(task_workers for task_workers in self._global_batch_workers.values()):
             self._sleep_inhibitor.acquire()
             return
 
@@ -291,23 +294,31 @@ class MainWindow(QMainWindow):
                 if now < retry_after:
                     continue
                 self._global_batch_retry_after.pop(book_id, None)
-            if book_id in self._global_batch_workers:
-                continue
-            if BatchTranslationTaskWorker.is_run_active_for_book(book_id):
-                continue
             if self._is_workspace_translation_worker_running(book_id):
                 continue
-            task_id = self._next_auto_batch_task_id(book_id)
-            if task_id is None:
+            candidate = self._next_auto_batch_candidate(book_id)
+            if candidate is None:
                 continue
-            self._start_global_batch_worker(book_id, task_id)
+            task_id, doc_ids = candidate
+            if DocumentOperationTracker.has_document_overlap(book_id, doc_ids):
+                continue
+            if has_any_batch_task_overlap(
+                self.book_manager,
+                book_id,
+                doc_ids,
+                exclude_task_ids={task_id},
+            ):
+                continue
+            self._start_global_batch_worker(book_id, task_id, doc_ids)
 
     def _cleanup_finished_global_batch_workers(self) -> None:
-        finished_book_ids = [
-            book_id for book_id, worker in self._global_batch_workers.items() if not worker.isRunning()
-        ]
-        for book_id in finished_book_ids:
-            self._global_batch_workers.pop(book_id, None)
+        for book_id in list(self._global_batch_workers.keys()):
+            task_workers = self._global_batch_workers[book_id]
+            finished_task_ids = [tid for tid, worker in task_workers.items() if not worker.isRunning()]
+            for tid in finished_task_ids:
+                task_workers.pop(tid, None)
+            if not task_workers:
+                self._global_batch_workers.pop(book_id, None)
 
     def _get_batch_task_store(self, book_id: str) -> TranslationBatchTaskStore:
         """Return a cached ``TranslationBatchTaskStore`` for *book_id*."""
@@ -318,13 +329,31 @@ class MainWindow(QMainWindow):
             self._global_batch_task_stores[book_id] = store
         return store
 
-    def _next_auto_batch_task_id(self, book_id: str) -> str | None:
+    def _next_auto_batch_candidate(self, book_id: str) -> tuple[str, list[int] | None] | None:
+        """Return (task_id, document_ids) for the next auto-runnable task, or None."""
         store = self._get_batch_task_store(book_id)
         tasks = store.list_tasks(book_id)
         task = select_next_auto_run_task(tasks)
         if task is None:
             return None
-        return task.task_id
+        doc_ids = self._parse_task_doc_ids(task)
+        return task.task_id, doc_ids
+
+    @staticmethod
+    def _parse_task_doc_ids(task: object) -> list[int] | None:
+        """Parse document_ids_json from a task record."""
+        import json
+
+        raw = getattr(task, "document_ids_json", None)
+        if raw is None or raw == "" or raw == "null":
+            return None
+        try:
+            parsed = json.loads(raw)
+            if parsed is None:
+                return None
+            return [int(doc_id) for doc_id in parsed]
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return None
 
     def _is_workspace_translation_worker_running(self, book_id: str) -> bool:
         workspace = self._view_registry.get(f"book_{book_id}")
@@ -339,17 +368,22 @@ class MainWindow(QMainWindow):
             return True
         return translation_view.batch_task_worker is not None and translation_view.batch_task_worker.isRunning()
 
-    def _start_global_batch_worker(self, book_id: str, task_id: str) -> None:
+    def _start_global_batch_worker(self, book_id: str, task_id: str, doc_ids: list[int] | None = None) -> None:
         worker = BatchTranslationTaskWorker(
             self.book_manager,
             book_id,
             action="run",
             task_id=task_id,
+            document_ids=doc_ids,
         )
-        worker.finished_success.connect(lambda payload, bid=book_id: self._on_global_batch_worker_success(bid, payload))
-        worker.error.connect(lambda error_msg, bid=book_id: self._on_global_batch_worker_error(bid, error_msg))
-        worker.finished.connect(lambda bid=book_id: self._on_global_batch_worker_finished(bid))
-        self._global_batch_workers[book_id] = worker
+        worker.finished_success.connect(
+            lambda payload, bid=book_id, _tid=task_id: self._on_global_batch_worker_success(bid, payload)
+        )
+        worker.error.connect(
+            lambda error_msg, bid=book_id, tid=task_id: self._on_global_batch_worker_error(bid, tid, error_msg)
+        )
+        worker.finished.connect(lambda bid=book_id, tid=task_id: self._on_global_batch_worker_finished(bid, tid))
+        self._global_batch_workers.setdefault(book_id, {})[task_id] = worker
         worker.start()
 
     def _on_global_batch_worker_success(self, book_id: str, payload: object) -> None:
@@ -375,14 +409,12 @@ class MainWindow(QMainWindow):
 
         self._global_batch_retry_after.pop(book_id, None)
 
-    def _on_global_batch_worker_error(self, book_id: str, error_msg: str) -> None:
+    def _on_global_batch_worker_error(self, book_id: str, task_id: str, error_msg: str) -> None:
         self._global_batch_retry_after[book_id] = time.monotonic() + self._GLOBAL_BATCH_AUTORUN_RETRY_BACKOFF_SEC
-        logger.warning("Global batch worker failed for book %s: %s", book_id, error_msg)
-        self._pause_global_task_after_worker_error(book_id, error_msg)
+        logger.warning("Global batch worker failed for book %s task %s: %s", book_id, task_id, error_msg)
+        self._pause_global_task_after_worker_error(book_id, task_id, error_msg)
 
-    def _pause_global_task_after_worker_error(self, book_id: str, error_msg: str) -> None:
-        worker = self._global_batch_workers.get(book_id)
-        task_id = getattr(worker, "task_id", None) if worker is not None else None
+    def _pause_global_task_after_worker_error(self, book_id: str, task_id: str, error_msg: str) -> None:
         if not isinstance(task_id, str) or not task_id:
             return
         try:
@@ -398,11 +430,15 @@ class MainWindow(QMainWindow):
         except Exception:
             logger.exception("Failed to pause task %s after global worker error", task_id)
 
-    def _on_global_batch_worker_finished(self, book_id: str) -> None:
-        worker = self._global_batch_workers.get(book_id)
-        if worker is not None and worker.isRunning():
-            return
-        self._global_batch_workers.pop(book_id, None)
+    def _on_global_batch_worker_finished(self, book_id: str, task_id: str) -> None:
+        task_workers = self._global_batch_workers.get(book_id)
+        if task_workers is not None:
+            worker = task_workers.get(task_id)
+            if worker is not None and worker.isRunning():
+                return
+            task_workers.pop(task_id, None)
+            if not task_workers:
+                self._global_batch_workers.pop(book_id, None)
         self._refresh_translation_view_if_open(book_id)
         QTimer.singleShot(0, self._on_global_batch_autorun_tick)
 

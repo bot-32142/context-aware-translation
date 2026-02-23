@@ -3,25 +3,25 @@
 from __future__ import annotations
 
 import asyncio
-import threading
+import json
+import logging
 from dataclasses import asdict
 from typing import Any
 
 from context_aware_translation.storage.book_manager import BookManager
+from context_aware_translation.storage.translation_batch_task_store import TranslationBatchTaskStore
 from context_aware_translation.workflow.batch_translation_task_service import BatchTranslationTaskService
 from context_aware_translation.workflow.session import WorkflowSession
 
 from .base_worker import BaseWorker
+from .batch_task_overlap_guard import has_any_batch_task_overlap
+from .operation_tracker import DocumentOperationTracker
+
+logger = logging.getLogger(__name__)
 
 
 class BatchTranslationTaskWorker(BaseWorker):
     """Worker to create/list/run/cancel/delete persistent translation batch tasks."""
-
-    # Class-level shared state: intentionally shared across all instances so the
-    # application can globally track which books have an active "run" worker,
-    # preventing duplicate concurrent runs for the same book.
-    _run_lock = threading.Lock()
-    _active_run_counts: dict[str, int] = {}
 
     def __init__(
         self,
@@ -46,33 +46,65 @@ class BatchTranslationTaskWorker(BaseWorker):
         self.auto_run_after_create = auto_run_after_create
 
     @classmethod
-    def _mark_run_started(cls, book_id: str) -> None:
-        with cls._run_lock:
-            cls._active_run_counts[book_id] = cls._active_run_counts.get(book_id, 0) + 1
-
-    @classmethod
-    def _mark_run_finished(cls, book_id: str) -> None:
-        with cls._run_lock:
-            count = cls._active_run_counts.get(book_id, 0) - 1
-            if count > 0:
-                cls._active_run_counts[book_id] = count
-            else:
-                cls._active_run_counts.pop(book_id, None)
-
-    @classmethod
     def is_run_active_for_book(cls, book_id: str) -> bool:
-        with cls._run_lock:
-            return cls._active_run_counts.get(book_id, 0) > 0
+        return DocumentOperationTracker.is_any_active_for_book(book_id)
+
+    def _resolve_run_document_ids(self) -> list[int] | None:
+        """Resolve document IDs for a 'run' action from the task record."""
+        if self.document_ids is not None:
+            return self.document_ids
+        if self.task_id:
+            store_path = self.book_manager.get_book_db_path(self.book_id).parent / "translation_batch_tasks.db"
+            store = TranslationBatchTaskStore(store_path)
+            try:
+                task = store.get(self.task_id)
+            finally:
+                store.close()
+            if task and task.document_ids_json:
+                try:
+                    parsed = json.loads(task.document_ids_json)
+                    if isinstance(parsed, list):
+                        return [int(doc_id) for doc_id in parsed]
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    pass
+        return None  # fallback: assume all docs (conservative)
 
     def run(self) -> None:
-        is_run_action = self.action == "run"
-        if is_run_action:
-            self._mark_run_started(self.book_id)
+        op_id = None
+        doc_ids = None
+        if self.action in {"create", "run"}:
+            doc_ids = self.document_ids if self.action == "create" else self._resolve_run_document_ids()
+            op_id = DocumentOperationTracker.try_start_operation(self.book_id, doc_ids)
+            if op_id is None:
+                logger.info(
+                    "Skipping batch %s for %s due to active selected-doc overlap",
+                    self.action,
+                    self.book_id,
+                )
+                self.error.emit("Selected documents have active operations. Please wait for them to complete.")
+                return
         try:
+            if op_id is not None:
+                exclude = {self.task_id} if self.action == "run" and self.task_id else set()
+                if has_any_batch_task_overlap(
+                    self.book_manager,
+                    self.book_id,
+                    doc_ids,
+                    exclude_task_ids=exclude or None,
+                ):
+                    logger.info(
+                        "Skipping batch %s for %s due to existing batch-task reservation",
+                        self.action,
+                        self.book_id,
+                    )
+                    self.error.emit(
+                        "Selected documents are reserved by existing batch tasks. Delete overlapping task(s) first."
+                    )
+                    return
             super().run()
         finally:
-            if is_run_action:
-                self._mark_run_finished(self.book_id)
+            if op_id is not None:
+                DocumentOperationTracker.finish_operation(self.book_id, op_id)
 
     @staticmethod
     def _record_to_payload(record: Any) -> dict[str, Any]:

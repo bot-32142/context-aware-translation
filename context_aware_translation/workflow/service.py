@@ -1,3 +1,4 @@
+import threading
 from collections.abc import Callable
 from pathlib import Path
 
@@ -14,6 +15,19 @@ from context_aware_translation.storage.document_repository import DocumentReposi
 
 class WorkflowService:
     """Application workflow orchestrator for translation use-cases."""
+
+    # Per-book bootstrap lock: serializes _prepare_llm_prerequisites for the same book_id
+    _bootstrap_registry_lock = threading.Lock()
+    _bootstrap_locks: dict[str, threading.Lock] = {}
+
+    @classmethod
+    def _get_bootstrap_lock(cls, book_id: str | None) -> threading.Lock:
+        """Return a per-book lock for serializing bootstrap operations."""
+        key = book_id or "__unknown__"
+        with cls._bootstrap_registry_lock:
+            if key not in cls._bootstrap_locks:
+                cls._bootstrap_locks[key] = threading.Lock()
+            return cls._bootstrap_locks[key]
 
     def __init__(
         self,
@@ -60,10 +74,12 @@ class WorkflowService:
         cancel_check: Callable[[], bool] | None = None,
     ) -> None:
         """Prepare document text/chunks and source language for LLM-driven steps."""
-        self._check_cancel(cancel_check)
-        await self._process_document(document_ids, cancel_check=cancel_check)
-        self._check_cancel(cancel_check)
-        await self._ensure_source_language(cancel_check=cancel_check)
+        lock = self._get_bootstrap_lock(self.book_id)
+        with lock:
+            self._check_cancel(cancel_check)
+            await self._process_document(document_ids, cancel_check=cancel_check)
+            self._check_cancel(cancel_check)
+            await self._ensure_source_language(cancel_check=cancel_check)
 
     async def _ensure_glossary_source_language(
         self,

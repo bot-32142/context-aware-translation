@@ -162,6 +162,57 @@ def _extract_response_text(response: Any) -> str:
     raise ValueError("Gemini batch response did not include text content.")
 
 
+def _sdk_request_to_api_format(request: dict[str, Any]) -> dict[str, Any]:
+    """Convert an SDK-format request to Gemini Batch API proto format.
+
+    The SDK uses a convenience ``config`` wrapper with snake_case field names,
+    but the Batch API JSONL file format expects proto-compatible camelCase
+    fields (``generationConfig``, ``systemInstruction``, etc.) as siblings
+    of ``contents``.
+    """
+    result: dict[str, Any] = {}
+    if "model" in request:
+        model = request["model"]
+        if not model.startswith("models/"):
+            model = f"models/{model}"
+        result["model"] = model
+    if "contents" in request:
+        result["contents"] = request["contents"]
+
+    config = request.get("config")
+    if not config:
+        return result
+
+    generation_config: dict[str, Any] = {}
+    if "temperature" in config:
+        generation_config["temperature"] = config["temperature"]
+    if "response_mime_type" in config:
+        generation_config["responseMimeType"] = config["response_mime_type"]
+    if "thinking_config" in config:
+        tc = config["thinking_config"]
+        api_tc: dict[str, Any] = {}
+        if "thinking_budget" in tc:
+            api_tc["thinkingBudget"] = tc["thinking_budget"]
+        if "include_thoughts" in tc:
+            api_tc["includeThoughts"] = tc["include_thoughts"]
+        if api_tc:
+            generation_config["thinkingConfig"] = api_tc
+    if generation_config:
+        result["generationConfig"] = generation_config
+
+    if "system_instruction" in config:
+        text = config["system_instruction"]
+        result["systemInstruction"] = {"parts": [{"text": text}]}
+
+    # Warn about unmapped config keys so future additions aren't silently lost.
+    _mapped_keys = {"temperature", "response_mime_type", "thinking_config", "system_instruction"}
+    unknown = set(config) - _mapped_keys
+    if unknown:
+        logger.debug("_sdk_request_to_api_format: unmapped config keys ignored: %s", unknown)
+
+    return result
+
+
 def _extract_output_row(payload: dict[str, Any]) -> tuple[str, Any, Any]:
     request_hash = payload[_OUTPUT_KEY]
     response = payload.get(_OUTPUT_RESPONSE)
@@ -348,6 +399,7 @@ class GeminiBatchJobGateway(BatchJobGateway):
                         request_hash = _stable_request_hash(inlined_request)
                     request_payload = dict(inlined_request)
                     request_payload.pop("metadata", None)
+                    request_payload = _sdk_request_to_api_format(request_payload)
                     fp.write(
                         json.dumps(
                             {"key": request_hash, "request": request_payload},

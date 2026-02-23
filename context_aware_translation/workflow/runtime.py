@@ -19,8 +19,10 @@ class WorkflowRuntime:
     db: SQLiteBookDB
     document_repo: DocumentRepository
     book_id: str | None = None
+    owns_context_tree: bool = True
 
     def close(self) -> None:
         self.manager.close()
-        self.context_tree.close()
+        if self.owns_context_tree:
+            self.context_tree.close()
         self.db.close()

@@ -56,6 +56,8 @@ def _build_manager(
     context_tree: ContextTree,
     db: SQLiteBookDB,
     document_repo: DocumentRepository,
+    *,
+    owns_context_tree: bool = True,
 ) -> TranslationContextManagerAdapter:
     term_repo = TermRepository(db)
 
@@ -90,6 +92,7 @@ def _build_manager(
         glossary_translator=glossary_translator,
         chunk_translator=chunk_translator,
         term_reviewer=term_reviewer,
+        owns_context_tree=owns_context_tree,
     )
     manager = TranslationContextManagerAdapter(base_manager)
 
@@ -116,13 +119,18 @@ def build_workflow_runtime(
     runtime_config: WorkflowRuntimeConfig,
     *,
     book_id: str | None = None,
+    context_tree: ContextTree | None = None,
 ) -> WorkflowRuntime:
     """Build all runtime dependencies required for workflow execution."""
     llm_client = _build_llm_client(runtime_config)
-    context_tree = _build_context_tree(runtime_config, llm_client)
+    owns_context_tree = context_tree is None
+    if context_tree is None:
+        context_tree = _build_context_tree(runtime_config, llm_client)
     db = SQLiteBookDB(runtime_config.sqlite_path)
     document_repo = DocumentRepository(db)
-    manager = _build_manager(runtime_config, llm_client, context_tree, db, document_repo)
+    manager = _build_manager(
+        runtime_config, llm_client, context_tree, db, document_repo, owns_context_tree=owns_context_tree
+    )
 
     return WorkflowRuntime(
         config=config,
@@ -132,4 +140,5 @@ def build_workflow_runtime(
         db=db,
         document_repo=document_repo,
         book_id=book_id,
+        owns_context_tree=owns_context_tree,
     )

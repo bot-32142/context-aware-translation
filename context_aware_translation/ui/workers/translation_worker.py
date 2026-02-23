@@ -7,6 +7,8 @@ from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.workflow.session import WorkflowSession
 
 from .base_worker import BaseWorker
+from .batch_task_overlap_guard import has_any_batch_task_overlap
+from .operation_tracker import DocumentOperationTracker
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,23 @@ class TranslationWorker(BaseWorker):
         self.document_ids = document_ids
         self.force = force
         self.skip_context = skip_context
+
+    def run(self) -> None:
+        op_id = DocumentOperationTracker.try_start_operation(self.book_id, self.document_ids)
+        if op_id is None:
+            logger.info("Skipping translation for %s due to active selected-doc overlap", self.book_id)
+            self.error.emit("Selected documents have active operations. Please wait for them to complete.")
+            return
+        try:
+            if has_any_batch_task_overlap(self.book_manager, self.book_id, self.document_ids):
+                logger.info("Skipping translation for %s due to existing batch-task reservation", self.book_id)
+                self.error.emit(
+                    "Selected documents are reserved by existing batch tasks. Delete overlapping task(s) first."
+                )
+                return
+            super().run()
+        finally:
+            DocumentOperationTracker.finish_operation(self.book_id, op_id)
 
     def _execute(self) -> None:
         """Execute translation."""
@@ -63,6 +82,16 @@ class RetranslateChunkWorker(BaseWorker):
         self.chunk_id = chunk_id
         self.document_id = document_id
         self.skip_context = skip_context
+
+    def run(self) -> None:
+        op_id = DocumentOperationTracker.try_start_operation(self.book_id, [self.document_id])
+        if op_id is None:
+            logger.info("Skipping retranslation for %s due to active selected-doc overlap", self.book_id)
+            return
+        try:
+            super().run()
+        finally:
+            DocumentOperationTracker.finish_operation(self.book_id, op_id)
 
     def _execute(self) -> None:
         """Retranslate a single chunk."""

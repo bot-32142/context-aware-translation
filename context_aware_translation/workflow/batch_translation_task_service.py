@@ -369,6 +369,7 @@ class BatchTranslationTaskService:
                 self,
                 task_id,
                 payload,
+                force=task.force,
                 cancel_check=cancel_check,
                 progress_callback=progress_callback,
             )
@@ -377,6 +378,7 @@ class BatchTranslationTaskService:
                 self,
                 task_id,
                 payload,
+                force=task.force,
                 cancel_check=cancel_check,
                 progress_callback=progress_callback,
             )

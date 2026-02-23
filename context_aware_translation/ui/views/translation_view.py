@@ -42,7 +42,9 @@ from context_aware_translation.storage.translation_batch_task_store import (
 from ..i18n import qarg, translate_progress_message
 from ..utils import create_tip_label, translate_document_type
 from ..widgets import ProgressWidget
+from ..workers.batch_task_overlap_guard import has_any_batch_task_overlap
 from ..workers.batch_translation_task_worker import BatchTranslationTaskWorker
+from ..workers.operation_tracker import DocumentOperationTracker
 from ..workers.translation_worker import RetranslateChunkWorker, TranslationWorker
 from .manga_review_widget import MangaReviewWidget
 
@@ -405,20 +407,49 @@ class TranslationView(QWidget):
         """Enable/disable start button and update label based on document state."""
         if self._is_cleaned_up:
             return
-        if (self.worker and self.worker.isRunning()) or self._is_batch_task_worker_running():
+
+        batch_worker_busy = self._is_batch_task_worker_running()
+
+        # Single sync worker slot guard
+        if self.worker and self.worker.isRunning():
             self.start_btn.setEnabled(False)
             self.doc_combo.setEnabled(False)
             self.skip_context_cb.setEnabled(False)
+            if not batch_worker_busy:
+                self.submit_batch_btn.setEnabled(False)
+                self.submit_batch_btn.setToolTip("")
             return
+
         self.skip_context_cb.setEnabled(True)
         has_documents = self.doc_combo.count() > 1
-        self.start_btn.setEnabled(has_documents)
         self.doc_combo.setEnabled(has_documents)
 
         if not has_documents:
+            self.start_btn.setEnabled(False)
             self.start_btn.setText(self.tr("Start Translation"))
             self.start_btn.setStyleSheet("")
             self.start_btn.setToolTip("")
+            if not batch_worker_busy:
+                self.submit_batch_btn.setEnabled(False)
+                self.submit_batch_btn.setToolTip("")
+            return
+
+        # Check per-document reservation for selected docs
+        selected_doc_ids = self._get_selected_document_ids()
+        has_reservation = self._has_document_reservation(selected_doc_ids)
+        if has_reservation:
+            self.start_btn.setEnabled(False)
+            self.start_btn.setText(self.tr("Start Translation"))
+            self.start_btn.setStyleSheet("")
+            self.start_btn.setToolTip(
+                self.tr("Selected document(s) already have task history; delete overlapping task(s) to unblock.")
+            )
+            if not batch_worker_busy:
+                self.submit_batch_btn.setEnabled(False)
+                self.submit_batch_btn.setToolTip(
+                    self.tr("Selected document(s) already have task history; delete overlapping task(s) to unblock.")
+                )
+            self._update_retranslate_chunk_button_state()
             return
 
         pending_ocr_doc_ids = self._get_preflight_docs_with_pending_ocr()
@@ -435,23 +466,17 @@ class TranslationView(QWidget):
             return
 
         is_retranslation = self._is_retranslation()
-        if is_retranslation and self._has_uncancelled_batch_tasks():
-            self.start_btn.setEnabled(False)
-            self.start_btn.setText(self.tr("Retranslate"))
-            self.start_btn.setStyleSheet("background-color: #e67e22; color: white; font-weight: bold;")
-            self.start_btn.setToolTip(
-                self.tr("Retranslate is unavailable while async batch tasks are active for this book.")
-            )
-            self._update_retranslate_chunk_button_state()
-            return
-
         if is_retranslation:
             self.start_btn.setText(self.tr("Retranslate"))
             self.start_btn.setStyleSheet("background-color: #e67e22; color: white; font-weight: bold;")
         else:
             self.start_btn.setText(self.tr("Start Translation"))
             self.start_btn.setStyleSheet("")
+        self.start_btn.setEnabled(True)
         self.start_btn.setToolTip("")
+        if not batch_worker_busy:
+            self.submit_batch_btn.setEnabled(True)
+            self.submit_batch_btn.setToolTip("")
         self._update_retranslate_chunk_button_state()
 
     def _has_uncancelled_batch_tasks(self) -> bool:
@@ -467,12 +492,27 @@ class TranslationView(QWidget):
         if retranslate_worker and retranslate_worker.isRunning():
             return
 
-        has_selected_chunk = getattr(self, "_current_chunk", None) is not None
+        current_chunk = getattr(self, "_current_chunk", None)
+        has_selected_chunk = current_chunk is not None
         blocked_by_batch_tasks = self._has_uncancelled_batch_tasks()
-        self.retranslate_chunk_btn.setEnabled(has_selected_chunk and not blocked_by_batch_tasks)
+        blocked_by_active_operation = False
+        if has_selected_chunk:
+            current_doc_id = getattr(current_chunk, "document_id", None)
+            if current_doc_id is not None:
+                blocked_by_active_operation = DocumentOperationTracker.has_document_overlap(
+                    self.book_id,
+                    [current_doc_id],
+                )
+        self.retranslate_chunk_btn.setEnabled(
+            has_selected_chunk and not blocked_by_batch_tasks and not blocked_by_active_operation
+        )
         if blocked_by_batch_tasks:
             self.retranslate_chunk_btn.setToolTip(
                 self.tr("Retranslate is unavailable while async batch tasks are active for this book.")
+            )
+        elif blocked_by_active_operation:
+            self.retranslate_chunk_btn.setToolTip(
+                self.tr("Retranslate is unavailable while the selected document has an active operation.")
             )
         else:
             self.retranslate_chunk_btn.setToolTip(
@@ -694,14 +734,18 @@ class TranslationView(QWidget):
 
     def _start_translation(self) -> None:
         """Start translation in background."""
-        # M40: Guard against double-start
         if self.worker and self.worker.isRunning():
             return
-        if self._is_batch_task_worker_running():
+
+        selected_doc_ids = self._get_selected_document_ids()
+        if self._has_document_reservation(selected_doc_ids):
             QMessageBox.information(
                 self,
-                self.tr("Batch Task Running"),
-                self.tr("A batch task operation is running. Please wait for it to finish first."),
+                self.tr("Documents Reserved"),
+                self.tr(
+                    "Selected document(s) have active operations or existing batch task history. "
+                    "Delete overlapping task(s) to unblock."
+                ),
             )
             return
 
@@ -873,15 +917,58 @@ class TranslationView(QWidget):
     def _is_batch_task_worker_running(self) -> bool:
         return self.batch_task_worker is not None and self.batch_task_worker.isRunning()
 
+    @staticmethod
+    def _parse_task_doc_ids(document_ids_json: str | None) -> list[int] | None:
+        """Parse document IDs from a batch task's JSON string."""
+        if not document_ids_json:
+            return None
+        import json
+
+        try:
+            parsed = json.loads(document_ids_json)
+            if isinstance(parsed, list):
+                return [int(doc_id) for doc_id in parsed]
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+        return None
+
+    def _resolve_worker_document_ids(self, worker: BatchTranslationTaskWorker) -> list[int] | None:
+        """Resolve document IDs from a batch task worker for reservation checks."""
+        if worker.action == "create":
+            return worker.document_ids
+        if worker.action == "run" and worker.task_id:
+            task = self._batch_task_store.get(worker.task_id)
+            if task:
+                return self._parse_task_doc_ids(task.document_ids_json)
+        return None
+
+    def _has_document_reservation(
+        self,
+        document_ids: list[int] | None,
+        *,
+        exclude_task_ids: set[str] | None = None,
+    ) -> bool:
+        """Check if documents are reserved by active ops or existing batch tasks."""
+        if DocumentOperationTracker.has_document_overlap(self.book_id, document_ids):
+            return True
+        return has_any_batch_task_overlap(
+            self.book_manager,
+            self.book_id,
+            document_ids,
+            exclude_task_ids=exclude_task_ids,
+        )
+
     def _start_batch_task_worker(self, worker: BatchTranslationTaskWorker) -> None:
         if self._is_batch_task_worker_running():
             return
-        if worker.action == "run" and BatchTranslationTaskWorker.is_run_active_for_book(self.book_id):
-            if hasattr(self, "batch_status_label"):
-                self.batch_status_label.setStyleSheet("color: #b45309;")
-                self.batch_status_label.setText(self.tr("A batch run is already active for this book."))
-                self.batch_status_label.show()
-            return
+        if worker.action in {"create", "run"}:
+            doc_ids = self._resolve_worker_document_ids(worker)
+            if DocumentOperationTracker.has_document_overlap(self.book_id, doc_ids):
+                if hasattr(self, "batch_status_label"):
+                    self.batch_status_label.setStyleSheet("color: #b45309;")
+                    self.batch_status_label.setText(self.tr("Selected documents have active operations."))
+                    self.batch_status_label.show()
+                return
         self.batch_task_worker = worker
         self._active_batch_task_id = worker.task_id if worker.action == "run" else None
         self.submit_batch_btn.setEnabled(False)
@@ -908,6 +995,16 @@ class TranslationView(QWidget):
             return
         document_ids, force = resolved
 
+        # Check document reservation before submitting
+        if self._has_document_reservation(document_ids):
+            if hasattr(self, "batch_status_label"):
+                self.batch_status_label.setStyleSheet("color: #b45309;")
+                self.batch_status_label.setText(
+                    self.tr("Selected document(s) are reserved by existing tasks. Delete overlapping task(s) first.")
+                )
+                self.batch_status_label.show()
+            return
+
         worker = BatchTranslationTaskWorker(
             self.book_manager,
             self.book_id,
@@ -925,6 +1022,20 @@ class TranslationView(QWidget):
         task_id = self._selected_batch_task_id()
         if not task_id:
             return
+
+        # Check document reservation for this task's docs (excluding self)
+        task = self._batch_task_store.get(task_id)
+        if task is not None:
+            task_doc_ids = self._parse_task_doc_ids(task.document_ids_json)
+            if self._has_document_reservation(task_doc_ids, exclude_task_ids={task_id}):
+                if hasattr(self, "batch_status_label"):
+                    self.batch_status_label.setStyleSheet("color: #b45309;")
+                    self.batch_status_label.setText(
+                        self.tr("Selected task's documents are reserved by active operations or overlapping tasks.")
+                    )
+                    self.batch_status_label.show()
+                return
+
         worker = BatchTranslationTaskWorker(
             self.book_manager,
             self.book_id,
@@ -1075,7 +1186,6 @@ class TranslationView(QWidget):
             return
         self.batch_task_worker = None
         self._active_batch_task_id = None
-        self.submit_batch_btn.setEnabled(True)
         self._refresh_batch_tasks()
         self._on_batch_task_selected(self.batch_task_list.currentRow())
         self._update_start_button_state()

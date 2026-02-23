@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -34,6 +35,12 @@ def _noop_init(self, *_args, **_kwargs):  # noqa: ANN001
     """No-op replacement for TranslationView.__init__."""
 
 
+def _make_book_manager() -> MagicMock:
+    manager = MagicMock()
+    manager.get_book_db_path.return_value = Path("/tmp/context-aware-translation-tests/book.db")
+    return manager
+
+
 def _make_view():
     from context_aware_translation.ui.views.translation_view import TranslationView
 
@@ -48,6 +55,8 @@ def _make_view():
     view.batch_task_worker = None
     view._active_batch_task_id = None
     view._batch_auto_timer = None
+    view.book_id = "test-book"
+    view.book_manager = _make_book_manager()
     return view
 
 
@@ -149,7 +158,7 @@ def test_apply_button_tooltips_sets_hover_explanations():
 def test_start_translation_forwards_skip_context_to_worker():
     view = _make_view()
     view.worker = None
-    view.book_manager = MagicMock()
+    view.book_manager = _make_book_manager()
     view.book_id = "book-id"
     view._resolve_trigger_conditions = MagicMock(return_value=([1], False))
     view.start_btn = QPushButton()
@@ -202,7 +211,7 @@ def test_submit_batch_task_does_not_require_translated_glossary_terms():
     view.skip_context_cb = QCheckBox()
     view.skip_context_cb.setChecked(False)
     view._start_batch_task_worker = MagicMock()
-    view.book_manager = MagicMock()
+    view.book_manager = _make_book_manager()
     view.book_id = "book-id"
 
     worker_instance = MagicMock()
@@ -224,7 +233,7 @@ def test_submit_batch_task_returns_when_trigger_conditions_fail():
     view.batch_task_worker = None
     view._resolve_trigger_conditions = MagicMock(return_value=None)
     view._start_batch_task_worker = MagicMock()
-    view.book_manager = MagicMock()
+    view.book_manager = _make_book_manager()
     view.book_id = "book-id"
 
     with patch("context_aware_translation.ui.views.translation_view.BatchTranslationTaskWorker") as worker_cls:
@@ -252,23 +261,53 @@ def test_run_selected_batch_task_returns_when_translation_worker_running():
     view._start_batch_task_worker.assert_not_called()
 
 
+def test_run_selected_batch_task_blocks_when_docs_overlap_other_task_reservation():
+    view = _make_view()
+    view.worker = None
+    view.batch_task_worker = None
+    view._selected_batch_task_id = MagicMock(return_value="task-1")
+    view._start_batch_task_worker = MagicMock()
+    view.batch_status_label = MagicMock()
+    view._batch_task_store.get.return_value = MagicMock(document_ids_json="[1]")
+
+    with (
+        patch(
+            "context_aware_translation.ui.views.translation_view.DocumentOperationTracker.has_document_overlap",
+            return_value=False,
+        ),
+        patch("context_aware_translation.ui.views.translation_view.has_any_batch_task_overlap", return_value=True),
+    ):
+        view._run_selected_batch_task()
+
+    view._start_batch_task_worker.assert_not_called()
+    view.batch_status_label.setText.assert_called_once_with(
+        "Selected task's documents are reserved by active operations or overlapping tasks."
+    )
+
+
 def test_start_batch_task_worker_blocks_duplicate_run_worker_for_same_book():
     view = _make_view()
     view.book_id = "book-1"
     view.batch_status_label = MagicMock()
+    view.submit_batch_btn = MagicMock()
+    view.run_batch_task_btn = MagicMock()
+    view.cancel_batch_task_btn = MagicMock()
+    view.delete_batch_task_btn = MagicMock()
+    view.start_btn = MagicMock()
     worker = MagicMock()
     worker.action = "run"
     worker.task_id = "task-1"
+    worker.document_ids = None
 
     with patch(
-        "context_aware_translation.ui.views.translation_view.BatchTranslationTaskWorker.is_run_active_for_book",
+        "context_aware_translation.ui.views.translation_view.DocumentOperationTracker.has_document_overlap",
         return_value=True,
     ):
         view._start_batch_task_worker(worker)
 
     assert view.batch_task_worker is None
     worker.start.assert_not_called()
-    view.batch_status_label.setText.assert_called_once_with("A batch run is already active for this book.")
+    view.batch_status_label.setText.assert_called_once_with(view.tr("Selected documents have active operations."))
 
 
 def test_cancel_selected_batch_task_returns_when_translation_worker_running():
@@ -356,12 +395,30 @@ def test_update_retranslate_chunk_button_state_enables_retranslate_when_only_ter
     assert view.retranslate_chunk_btn.isEnabled()
 
 
+def test_update_retranslate_chunk_button_state_disables_when_selected_doc_has_active_operation():
+    view = _make_view()
+    view.book_id = "book-1"
+    view.retranslate_chunk_btn = QPushButton()
+    view._current_chunk = MagicMock(document_id=1)
+    view._batch_tasks_cache = []
+    view.retranslate_worker = None
+
+    with patch(
+        "context_aware_translation.ui.views.translation_view.DocumentOperationTracker.has_document_overlap",
+        return_value=True,
+    ):
+        view._update_retranslate_chunk_button_state()
+
+    assert not view.retranslate_chunk_btn.isEnabled()
+    assert "selected document has an active operation" in view.retranslate_chunk_btn.toolTip()
+
+
 def test_retranslate_current_chunk_blocks_when_batch_tasks_active():
     view = _make_view()
     view._batch_tasks_cache = [MagicMock(status="running")]
     view._current_chunk = MagicMock()
     view.retranslate_worker = None
-    view.book_manager = MagicMock()
+    view.book_manager = _make_book_manager()
     view.book_id = "book-id"
 
     with (
@@ -455,7 +512,7 @@ def test_delete_selected_batch_task_starts_worker_after_confirmation():
     view.batch_task_worker = None
     view._selected_batch_task_id = MagicMock(return_value="task-1")
     view._start_batch_task_worker = MagicMock()
-    view.book_manager = MagicMock()
+    view.book_manager = _make_book_manager()
     view.book_id = "book-id"
 
     worker_instance = MagicMock()
@@ -480,6 +537,10 @@ def test_delete_selected_batch_task_starts_worker_after_confirmation():
 def test_update_start_button_state_disables_retranslate_when_batch_tasks_active():
     view = _make_view()
     view.worker = None
+    view.book_id = "book-1"
+    view.book_manager = _make_book_manager()
+    view.book_manager.get_book_config.return_value = {}
+    view.submit_batch_btn = QPushButton()
     view.doc_combo = QComboBox()
     view.doc_combo.addItem("All Documents", None)
     view.doc_combo.addItem("Document 1", 1)
@@ -489,11 +550,20 @@ def test_update_start_button_state_disables_retranslate_when_batch_tasks_active(
     view._is_retranslation = MagicMock(return_value=True)
     view._batch_tasks_cache = [MagicMock(status="running")]
 
-    view._update_start_button_state()
+    with (
+        patch(
+            "context_aware_translation.ui.views.translation_view.DocumentOperationTracker.has_document_overlap",
+            return_value=False,
+        ),
+        patch(
+            "context_aware_translation.ui.views.translation_view.has_any_batch_task_overlap",
+            return_value=True,
+        ),
+    ):
+        view._update_start_button_state()
 
     assert not view.start_btn.isEnabled()
-    assert view.start_btn.text() == "Retranslate"
-    assert "async batch tasks are active" in view.start_btn.toolTip()
+    assert "delete overlapping task(s) to unblock" in view.start_btn.toolTip()
 
 
 def test_resolve_trigger_conditions_blocks_retranslate_when_batch_tasks_active():
@@ -501,7 +571,7 @@ def test_resolve_trigger_conditions_blocks_retranslate_when_batch_tasks_active()
     view._get_preflight_docs_with_pending_ocr = MagicMock(return_value=[])
     view._get_selected_document_ids = MagicMock(return_value=[1])
     view._has_manga_documents = MagicMock(return_value=False)
-    view.book_manager = MagicMock()
+    view.book_manager = _make_book_manager()
     view.book_manager.get_book_config.return_value = {}
     view.book_id = "book-id"
     view._is_retranslation = MagicMock(return_value=True)
@@ -529,7 +599,17 @@ def test_update_start_button_state_disables_start_when_ocr_pending():
     view._get_preflight_docs_with_pending_ocr = MagicMock(return_value=[1])
     view._is_retranslation = MagicMock(return_value=False)
 
-    view._update_start_button_state()
+    with (
+        patch(
+            "context_aware_translation.ui.views.translation_view.DocumentOperationTracker.has_document_overlap",
+            return_value=False,
+        ),
+        patch(
+            "context_aware_translation.ui.views.translation_view.has_any_batch_task_overlap",
+            return_value=False,
+        ),
+    ):
+        view._update_start_button_state()
 
     assert not view.start_btn.isEnabled()
     assert "OCR is pending" in view.start_btn.toolTip()

@@ -224,6 +224,7 @@ async def run_translation_stage(
     task_id: str,
     payload: dict[str, Any],
     *,
+    force: bool = False,
     cancel_check: Callable[[], bool] | None,
     progress_callback: ProgressCallback | None,
 ) -> dict[str, Any]:
@@ -249,6 +250,10 @@ async def run_translation_stage(
         sd["request_hash"] = request_hash
         sd["inlined_request"] = inlined_request
 
+    # When force-retranslating, clear cached LLM responses so items are re-submitted.
+    if force:
+        _clear_cached_stage_responses(service, items, stage="translation")
+
     return await _execute_stage(
         service,
         task_id,
@@ -265,6 +270,7 @@ async def run_polish_stage(
     task_id: str,
     payload: dict[str, Any],
     *,
+    force: bool = False,
     cancel_check: Callable[[], bool] | None,
     progress_callback: ProgressCallback | None,
 ) -> dict[str, Any]:
@@ -305,6 +311,10 @@ async def run_polish_stage(
         sd["messages"] = polish_messages
         sd["request_hash"] = request_hash
         sd["inlined_request"] = inlined_request
+
+    # When force-retranslating, clear cached LLM responses so items are re-submitted.
+    if force:
+        _clear_cached_stage_responses(service, items, stage="polish")
 
     return await _execute_stage(
         service,
@@ -702,6 +712,22 @@ def _merge_job_warnings(job: dict[str, Any], warnings: list[str]) -> None:
     deduped = list(dict.fromkeys(merged))
     if deduped:
         job["warnings"] = deduped
+
+
+def _clear_cached_stage_responses(
+    service: BatchTranslationTaskService,
+    items: list[dict[str, Any]],
+    *,
+    stage: str,
+) -> None:
+    """Delete cached LLM batch store entries for a stage so items are re-submitted."""
+    for item in items:
+        sd = item.get(stage)
+        if sd is None:
+            continue
+        request_hash = sd.get("request_hash")
+        if request_hash:
+            service.llm_batch_store.delete(request_hash)
 
 
 def _ordered_pending_stage_hashes(

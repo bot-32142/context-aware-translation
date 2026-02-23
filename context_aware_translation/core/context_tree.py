@@ -68,6 +68,7 @@ class ContextTree:
         self.lock = threading.RLock()
         self._init_condition = threading.Condition(self.lock)
         self._initialization_complete = False
+        self._closed = False
         # Load from database and resume summarization
         self._load_from_db()
         self._resume_summarization()
@@ -499,6 +500,9 @@ class ContextTree:
 
     def close(self) -> None:
         """Close database connection and stop event loop."""
+        if self._closed:
+            return
+        self._closed = True
         if self._event_loop is not None:
             self._event_loop.call_soon_threadsafe(self._event_loop.stop)
             if self._event_loop_thread is not None:

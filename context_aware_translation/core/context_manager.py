@@ -114,7 +114,7 @@ class ContextManager:
         """
         Close all services. Should only be called during application shutdown.
         """
-        if hasattr(self.context_tree, "close"):
+        if hasattr(self.context_tree, "close") and getattr(self, "_owns_context_tree", True):
             self.context_tree.close()
         if hasattr(self.term_repo, "close"):
             self.term_repo.close()
@@ -419,6 +419,7 @@ class TranslationContextManager(ContextManager):
         glossary_translator: GlossaryTranslationStrategy,
         chunk_translator: ChunkTranslationStrategy,
         term_reviewer: TermReviewer | None = None,
+        owns_context_tree: bool = True,
     ) -> None:
         """
         Initialize the TranslationContextManager.
@@ -428,7 +429,10 @@ class TranslationContextManager(ContextManager):
             context_tree: The context tree for managing context
             context_extractor: The context extractor for extracting terms from chunks
             tokenizer: Tokenizer for text processing
+            owns_context_tree: If False, close() will not close the context_tree
         """
+        # Store BEFORE super().__init__ which doesn't know about this param
+        self._owns_context_tree = owns_context_tree
         self.term_repo = term_repo
         self.source_language_detector: SourceLanguageDetector = source_language_detector
         self.glossary_translator: GlossaryTranslationStrategy = glossary_translator
