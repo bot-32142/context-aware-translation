@@ -53,6 +53,7 @@ class MainWindow(QMainWindow):
 
         # Initialize book manager
         self.book_manager = BookManager()
+        self.book_manager.seed_system_defaults()
 
         # Initialize TokenTracker
         TokenTracker.initialize(self.book_manager.registry)

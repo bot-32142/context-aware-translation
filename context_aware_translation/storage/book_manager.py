@@ -202,6 +202,78 @@ class BookManager:
         self.registry.set_default_profile(profile_id)
 
     # =========================================================================
+    # System Default Seeding
+    # =========================================================================
+
+    def seed_system_defaults(self) -> None:
+        """Seed system-default endpoint and config profiles for first-time users.
+
+        Only seeds if both endpoint_profiles and config_profiles tables are empty.
+        Creates three endpoint profiles (Gemini Pro, Gemini Flash, DeepSeek) and one
+        config profile following recommended practices from the README.
+        """
+        if self.registry.has_any_endpoint_profile() or self.registry.has_any_profile():
+            return
+
+        now = time.time()
+
+        # --- Endpoint Profiles ---
+        gemini = EndpointProfile(
+            profile_id="system-default-gemini-pro",
+            name="system-default-gemini-pro",
+            created_at=now,
+            updated_at=now,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            model="gemini-2.5-pro",
+            description="Google AI Studio - Gemini 2.5 Pro",
+            kwargs={"reasoning_effort": "low"},
+        )
+        self.registry.insert_endpoint_profile(gemini)
+
+        gemini_flash = EndpointProfile(
+            profile_id="system-default-gemini-flash",
+            name="system-default-gemini-flash",
+            created_at=now,
+            updated_at=now,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            model="gemini-3-flash-preview",
+            description="Google AI Studio - Gemini 3 Flash Preview",
+        )
+        self.registry.insert_endpoint_profile(gemini_flash)
+
+        deepseek = EndpointProfile(
+            profile_id="system-default-deepseek",
+            name="system-default-deepseek",
+            created_at=now,
+            updated_at=now,
+            base_url="https://api.deepseek.com",
+            model="deepseek-chat",
+            description="DeepSeek Chat",
+        )
+        self.registry.insert_endpoint_profile(deepseek)
+
+        # --- Config Profile (follows README best practices) ---
+        # DeepSeek for extraction/summarization (low-cost caching model)
+        # Gemini for translation (high-quality translation model)
+        default_config = ConfigProfile(
+            profile_id="system-default-profile",
+            name="system-default-profile",
+            created_at=now,
+            updated_at=now,
+            description="Default profile: DeepSeek for extraction/summarization, Gemini for translation",
+            config={
+                "translation_target_language": "Simplified Chinese",
+                "extractor_config": {"endpoint_profile": "system-default-deepseek"},
+                "summarizor_config": {"endpoint_profile": "system-default-deepseek"},
+                "glossary_config": {"endpoint_profile": "system-default-gemini-flash"},
+                "translator_config": {"endpoint_profile": "system-default-gemini-pro"},
+                "review_config": {"endpoint_profile": "system-default-gemini-flash"},
+                "ocr_config": {"endpoint_profile": "system-default-gemini-flash"},
+            },
+        )
+        self.registry.insert_profile(default_config)
+
+    # =========================================================================
     # Endpoint Profile Management
     # =========================================================================
 
