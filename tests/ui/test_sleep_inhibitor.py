@@ -97,14 +97,14 @@ def test_reference_counting(mock_subprocess):
 
 
 @patch(f"{_MODULE}._SYSTEM", "Darwin")
-def test_release_without_acquire_warns(caplog):
-    """Release without prior acquire logs a warning and doesn't crash."""
+def test_release_without_acquire_is_noop(caplog):
+    """Release without prior acquire is a silent no-op."""
     from context_aware_translation.ui.sleep_inhibitor import SleepInhibitor
 
     with caplog.at_level("WARNING"):
         SleepInhibitor.release()
 
-    assert "without matching acquire" in caplog.text
+    assert "without matching acquire" not in caplog.text
     assert SleepInhibitor._count == 0
 
 

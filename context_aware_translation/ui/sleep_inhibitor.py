@@ -47,7 +47,7 @@ class SleepInhibitor:
             return
         with cls._lock:
             if cls._count <= 0:
-                logger.warning("SleepInhibitor.release() called without matching acquire()")
+                # Idempotent no-op for defensive callers.
                 cls._count = 0
                 return
             cls._count -= 1
