@@ -17,13 +17,24 @@ APPDIR="$BUILD_DIR/${APP_NAME}.AppDir"
 
 mkdir -p "$RELEASE_DIR" "$BUILD_DIR"
 
-# --- Download appimagetool ---
-APPIMAGETOOL="$BUILD_DIR/appimagetool"
+# --- Download and extract appimagetool ---
+APPIMAGETOOL_APPIMAGE="$BUILD_DIR/appimagetool.AppImage"
+APPIMAGETOOL_DIR="$BUILD_DIR/appimagetool-extracted"
+APPIMAGETOOL="$APPIMAGETOOL_DIR/AppRun"
+
 if [[ ! -f "$APPIMAGETOOL" ]]; then
     echo "Downloading appimagetool..."
-    curl -fSL -o "$APPIMAGETOOL" \
+    curl -fSL -o "$APPIMAGETOOL_APPIMAGE" \
         "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
-    chmod +x "$APPIMAGETOOL"
+    chmod +x "$APPIMAGETOOL_APPIMAGE"
+
+    # Extract appimagetool to avoid FUSE dependency in CI
+    echo "Extracting appimagetool..."
+    cd "$BUILD_DIR"
+    "$APPIMAGETOOL_APPIMAGE" --appimage-extract > /dev/null 2>&1
+    mv squashfs-root "$APPIMAGETOOL_DIR"
+    rm -f "$APPIMAGETOOL_APPIMAGE"
+    cd "$PROJECT_DIR"
 fi
 
 # --- Build AppDir structure ---
@@ -33,10 +44,10 @@ mkdir -p "$APPDIR/usr/bin"
 mkdir -p "$APPDIR/usr/share/applications"
 mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 
-# Copy PyInstaller output
-echo "Copying PyInstaller output to AppDir (this may take a while)..."
-cp -r "$DIST_DIR"/* "$APPDIR/usr/bin/"
-echo "Copy complete ($(du -sh "$APPDIR/usr/bin" | cut -f1))"
+# Move PyInstaller output (move instead of copy to save disk space)
+echo "Moving PyInstaller output to AppDir..."
+mv "$DIST_DIR"/* "$APPDIR/usr/bin/"
+echo "Move complete ($(du -sh "$APPDIR/usr/bin" | cut -f1))"
 
 # Desktop entry
 cat > "$APPDIR/cat-ui.desktop" << 'DESKTOP'
@@ -90,9 +101,7 @@ APPRUN
 chmod +x "$APPDIR/AppRun"
 
 # --- Build the AppImage ---
-# APPIMAGE_EXTRACT_AND_RUN avoids the FUSE requirement in CI environments
 echo "Building AppImage (compressing $(du -sh "$APPDIR" | cut -f1) AppDir)..."
-export APPIMAGE_EXTRACT_AND_RUN=1
 ARCH=x86_64 "$APPIMAGETOOL" "$APPDIR" \
     "$RELEASE_DIR/${APP_NAME}-${VERSION}-${PLATFORM}.AppImage"
 

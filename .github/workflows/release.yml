@@ -111,6 +111,22 @@ jobs:
       - name: Build with PyInstaller
         run: uv run pyinstaller cat-ui.spec --clean --noconfirm
 
+      - name: Verify build output
+        shell: bash
+        run: |
+          echo "Working directory: $(pwd)"
+          echo "Contents of dist/:"
+          ls -la dist/ 2>/dev/null || { echo "::error::dist/ directory does not exist"; exit 1; }
+          if [ -d "dist/${{ env.APP_NAME }}" ]; then
+            echo "dist/${{ env.APP_NAME }}/ contents (first 20):"
+            ls dist/${{ env.APP_NAME }}/ | head -20
+          elif [ -d "dist/${{ env.APP_NAME }}.app" ]; then
+            echo "dist/${{ env.APP_NAME }}.app/ found (macOS bundle)"
+          else
+            echo "::error::Expected dist/${{ env.APP_NAME }} or dist/${{ env.APP_NAME }}.app not found"
+            exit 1
+          fi
+
       # ============================================================
       # macOS: Sign, package as DMG, notarize
       # ============================================================
@@ -232,11 +248,18 @@ jobs:
           Remove-Item $certPath -Force
           Write-Host 'Code signing complete'
 
+      - name: Install NSIS (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: choco install nsis -y
+
       - name: Create installer (Windows)
         if: runner.os == 'Windows'
         shell: cmd
         run: |
           if not exist release mkdir release
+          echo Listing dist directory:
+          dir dist\${{ env.APP_NAME }} /B 2>nul || (echo ERROR: dist\${{ env.APP_NAME }} not found && dir dist /B 2>nul && exit /b 1)
           "C:\Program Files (x86)\NSIS\makensis.exe" ^
             /DAPP_VERSION=${{ steps.version.outputs.version_number }} ^
             /DSOURCE_DIR=dist\${{ env.APP_NAME }} ^

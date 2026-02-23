@@ -87,6 +87,12 @@ a = Analysis(
     noarchive=False,
 )
 
+# Strip NVIDIA/CUDA libraries on non-macOS platforms where CPU-only PyTorch is used.
+# These libraries are ~5-8 GB and unnecessary for CPU-only builds.
+if sys.platform != 'darwin':
+    a.binaries = [b for b in a.binaries if not b[0].startswith(('nvidia', 'nvidia/'))]
+    a.datas = [d for d in a.datas if not d[0].startswith(('nvidia', 'nvidia/'))]
+
 pyz = PYZ(a.pure, a.zipped_data)
 
 exe = EXE(
