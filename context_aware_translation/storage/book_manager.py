@@ -260,7 +260,7 @@ class BookManager:
             name="system-default-profile",
             created_at=now,
             updated_at=now,
-            description="Default profile: DeepSeek for extraction/summarization, Gemini for translation",
+            description="Default profile: DeepSeek for extraction/summarization, Gemini for translation/OCR/manga",
             config={
                 "translation_target_language": "Simplified Chinese",
                 "extractor_config": {"endpoint_profile": "system-default-deepseek"},
@@ -269,6 +269,7 @@ class BookManager:
                 "translator_config": {"endpoint_profile": "system-default-gemini-pro"},
                 "review_config": {"endpoint_profile": "system-default-gemini-flash"},
                 "ocr_config": {"endpoint_profile": "system-default-gemini-flash"},
+                "manga_translator_config": {"endpoint_profile": "system-default-gemini-pro"},
             },
         )
         self.registry.insert_profile(default_config)

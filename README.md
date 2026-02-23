@@ -55,7 +55,7 @@ You can bind different endpoints/models to different steps to balance cost, spee
 | **Body Translation** | Execute the main document translation | This is the most quality-sensitive step. Prefer models with high translation quality, stable style, and strong long-text performance. Gemini 2.5 Pro with low thinking is strongly recommended. Gemini 3 or other strong reasoning models tend to produce overly stilted translations. |
 | **OCR** (optional) | Recognize text in images and output editable text | Requires a vision model (multimodal). Prefer models with high OCR accuracy and good adaptation to mixed layouts, vertical text, and noisy images, such as Gemini 3 Flash. |
 | **Term Review** (optional) | Automated term quality review | Suited for models with strong reasoning and stable instruction-following; can be separated from body translation to control cost. |
-| **Comic Translation** (optional) | Page-level comic translation (with image context) | Requires a multimodal model with strong visual comprehension and conversational tone handling. |
+| **Manga Translation** (optional) | Page-level comic translation (with image context) | Requires a multimodal model with strong visual comprehension and conversational tone handling. |
 | **Image Text Embedding** (optional) | Re-embed translated text into images | Requires a backend supporting image editing/inpainting. Prefer models with stable layout preservation. |
 
 Recommended practices:
@@ -64,6 +64,9 @@ Recommended practices:
 2. Use a "high-quality translation model" for **Body Translation** (and optionally for **Term Translation**).
 3. Bind vision-related steps (**OCR** / **Comic Translation** / **Image Text Embedding**) to separate multimodal endpoints to avoid quota and performance interference.
 
+These recommendations are already pre-configured in the default endpoint and config profiles (except **Image Text Embedding**, which requires separate setup). You only need to fill in the API keys to get started.
+
 ## Notes
 * OCR cannot handle overly complex layouts.
 * If a single sentence in the source text spans multiple paragraphs, formatting may occasionally break.
+* All llm responses are cached and persisted at the earliest possible time so cancellation won't result in data loss if you want to stop and resume from where you left out.
