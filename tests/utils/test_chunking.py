@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-
 import pytest
 
 from context_aware_translation.utils.chunking import chunk_text_by_tokens, get_tokenizer
@@ -133,10 +131,8 @@ def test_chunk_different_overlap_values():
 
 
 def test_chunk_overlap_content_verification():
-    """Test that overlapping chunks actually contain overlapping content."""
-    # Use a text with unique markers to verify overlap
-    sentences = [f"This is sentence number {i} with unique content." for i in range(50)]
-    text = " ".join(sentences)
+    """Test that overlapping chunks contain an ordered token overlap window."""
+    text = " ".join([f"This is sentence number {i} with unique content." for i in range(50)])
 
     tokenizer = get_tokenizer()
     tokens = tokenizer.encode(text, add_special_tokens=False)
@@ -148,18 +144,29 @@ def test_chunk_overlap_content_verification():
 
     assert len(chunks) >= 2
 
-    # Check that consecutive chunks share some sentence content
+    def _longest_common_contiguous_run(left: list[int], right: list[int]) -> int:
+        # Longest common contiguous token run (not just set intersection).
+        previous = [0] * (len(right) + 1)
+        best = 0
+        for left_token in left:
+            current = [0] * (len(right) + 1)
+            for j, right_token in enumerate(right, start=1):
+                if left_token == right_token:
+                    current[j] = previous[j - 1] + 1
+                    if current[j] > best:
+                        best = current[j]
+            previous = current
+        return best
+
+    expected_min_overlap = max(5, overlap_tokens // 2)
     for i in range(len(chunks) - 1):
-        chunk1 = chunks[i]
-        chunk2 = chunks[i + 1]
-
-        # Extract sentence numbers from each chunk
-        nums1 = set(re.findall(r"sentence number (\d+)", chunk1))
-        nums2 = set(re.findall(r"sentence number (\d+)", chunk2))
-
-        # With overlap, there should be shared sentence numbers
-        shared = nums1.intersection(nums2)
-        assert len(shared) > 0, f"Chunks {i} and {i + 1} should share sentences due to overlap"
+        tokens1 = tokenizer.encode(chunks[i], add_special_tokens=False)
+        tokens2 = tokenizer.encode(chunks[i + 1], add_special_tokens=False)
+        overlap_run = _longest_common_contiguous_run(tokens1, tokens2)
+        assert overlap_run >= expected_min_overlap, (
+            f"Chunks {i} and {i + 1} should share an ordered overlap run of at least "
+            f"{expected_min_overlap} tokens, got {overlap_run}"
+        )
 
 
 def test_chunk_tokenizer_caching():

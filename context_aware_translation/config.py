@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field, fields
-from dataclasses import fields as dataclass_fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -189,7 +188,6 @@ class TranslatorConfig(LLMConfig):
 
     # Translation-specific settings
     enable_polish: bool = True
-    prompt_only: bool = False  # If True, return full prompts instead of actual translations
     num_of_chunks_per_llm_call: int = 5
     chunk_size: int = 1000  # Max token size per chunk for text processing
 
@@ -199,7 +197,6 @@ class TranslatorConfig(LLMConfig):
         base.update(
             {
                 "enable_polish": self.enable_polish,
-                "prompt_only": self.prompt_only,
                 "num_of_chunks_per_llm_call": self.num_of_chunks_per_llm_call,
                 "chunk_size": self.chunk_size,
             }
@@ -221,9 +218,72 @@ class TranslatorConfig(LLMConfig):
             endpoint_profile=data.get("endpoint_profile"),
             kwargs=data.get("kwargs", {}),
             enable_polish=data.get("enable_polish", True),
-            prompt_only=data.get("prompt_only", False),
             num_of_chunks_per_llm_call=data.get("num_of_chunks_per_llm_call", 5),
             chunk_size=data.get("chunk_size", 1000),
+        )
+
+
+@dataclass
+class TranslatorBatchConfig:
+    """Dedicated configuration for async translator batch jobs."""
+
+    provider: str
+    api_key: str
+    model: str
+    batch_size: int = 500
+    thinking_mode: str = "auto"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dictionary for JSON storage."""
+        return {
+            "provider": self.provider,
+            "api_key": self.api_key,
+            "model": self.model,
+            "batch_size": self.batch_size,
+            "thinking_mode": self.thinking_mode,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> TranslatorBatchConfig:
+        """Create from dictionary."""
+        return cls(
+            provider=str(data.get("provider") or ""),
+            api_key=str(data.get("api_key") or ""),
+            model=str(data.get("model") or ""),
+            batch_size=int(data.get("batch_size", 500)),
+            thinking_mode=str(data.get("thinking_mode", "auto")),
+        )
+
+
+_SUPPORTED_BATCH_PROVIDERS = {"gemini_ai_studio"}
+_SUPPORTED_THINKING_MODES = {"auto", "off", "low", "medium", "high"}
+
+
+def _validate_translator_batch_config(config: TranslatorBatchConfig, *, config_name: str) -> None:
+    provider = str(config.provider or "").strip().lower()
+    if not provider:
+        raise ValueError(f"{config_name}.provider is required")
+    if provider not in _SUPPORTED_BATCH_PROVIDERS:
+        raise ValueError(
+            f"{config_name}.provider '{config.provider}' is unsupported; supported values: "
+            + ", ".join(sorted(_SUPPORTED_BATCH_PROVIDERS))
+        )
+
+    if not str(config.api_key or "").strip():
+        raise ValueError(f"{config_name}.api_key is required")
+    if not str(config.model or "").strip():
+        raise ValueError(f"{config_name}.model is required")
+
+    if int(config.batch_size) <= 0:
+        raise ValueError(f"{config_name}.batch_size must be greater than 0")
+    if int(config.batch_size) > 5000:
+        raise ValueError(f"{config_name}.batch_size must not exceed 5000")
+
+    thinking_mode = str(config.thinking_mode or "").strip().lower()
+    if thinking_mode not in _SUPPORTED_THINKING_MODES:
+        raise ValueError(
+            f"{config_name}.thinking_mode '{config.thinking_mode}' is invalid; allowed values: "
+            + ", ".join(sorted(_SUPPORTED_THINKING_MODES))
         )
 
 
@@ -370,12 +430,17 @@ REQUIRED_STEP_CONFIGS = (
 )
 
 # Step configs that are only resolved if provided
-OPTIONAL_STEP_CONFIGS = ("review_config", "ocr_config", "image_reembedding_config", "manga_translator_config")
+OPTIONAL_STEP_CONFIGS = (
+    "review_config",
+    "ocr_config",
+    "image_reembedding_config",
+    "manga_translator_config",
+)
 
 
 def _step_config_from_payload(config_class: type[T], payload: dict[str, Any]) -> T:
     """Build a step config from persisted payload while ignoring unknown keys."""
-    valid_field_names = {f.name for f in dataclass_fields(config_class)}
+    valid_field_names = {f.name for f in fields(config_class)}
     filtered_payload = {k: v for k, v in payload.items() if k in valid_field_names}
     return config_class(**filtered_payload)
 
@@ -391,6 +456,7 @@ class WorkflowRuntimeConfig:
     extractor_config: ExtractorConfig
     summarizor_config: SummarizorConfig
     translator_config: TranslatorConfig
+    translator_batch_config: TranslatorBatchConfig | None
     glossary_config: GlossaryTranslationConfig
     review_config: ReviewConfig | None
     ocr_config: OCRConfig | None
@@ -416,11 +482,11 @@ def _get_extra_fields(config_class: type[LLMConfig], override: LLMConfig | None)
         return None
 
     # Get field names from LLMConfig base class
-    llm_field_names = {f.name for f in dataclass_fields(LLMConfig)}
+    llm_field_names = {f.name for f in fields(LLMConfig)}
 
     # Get extra fields (fields in config_class but not in LLMConfig)
     extra_fields = {}
-    for f in dataclass_fields(config_class):
+    for f in fields(config_class):
         if f.name not in llm_field_names:
             extra_fields[f.name] = getattr(override, f.name)
 
@@ -593,6 +659,7 @@ class Config:
     glossary_config: GlossaryTranslationConfig | None = None
     summarizor_config: SummarizorConfig | None = None
     translator_config: TranslatorConfig | None = None
+    translator_batch_config: TranslatorBatchConfig | None = None
     review_config: ReviewConfig | None = None
     ocr_config: OCRConfig | None = None
     image_reembedding_config: ImageReembeddingConfig | None = None
@@ -628,6 +695,8 @@ class Config:
             result["summarizor_config"] = self.summarizor_config.to_dict()
         if self.translator_config:
             result["translator_config"] = self.translator_config.to_dict()
+        if self.translator_batch_config:
+            result["translator_batch_config"] = self.translator_batch_config.to_dict()
         if self.review_config:
             result["review_config"] = self.review_config.to_dict()
         if self.ocr_config:
@@ -675,6 +744,10 @@ class Config:
         if "translator_config" in data and data["translator_config"]:
             translator_config = TranslatorConfig.from_dict(data["translator_config"])
 
+        translator_batch_config = None
+        if "translator_batch_config" in data and data["translator_batch_config"]:
+            translator_batch_config = TranslatorBatchConfig.from_dict(data["translator_batch_config"])
+
         review_config = None
         if "review_config" in data and data["review_config"]:
             review_config = ReviewConfig.from_dict(data["review_config"])
@@ -707,6 +780,7 @@ class Config:
             glossary_config=glossary_config,
             summarizor_config=summarizor_config,
             translator_config=translator_config,
+            translator_batch_config=translator_batch_config,
             review_config=review_config,
             ocr_config=ocr_config,
             image_reembedding_config=image_reembedding_config,
@@ -782,6 +856,7 @@ class Config:
             extractor_config=self.extractor_config,  # type: ignore[arg-type]
             summarizor_config=self.summarizor_config,  # type: ignore[arg-type]
             translator_config=self.translator_config,  # type: ignore[arg-type]
+            translator_batch_config=self.translator_batch_config,
             glossary_config=self.glossary_config,  # type: ignore[arg-type]
             review_config=self.review_config,
             ocr_config=self.ocr_config,
@@ -822,6 +897,11 @@ class Config:
                     current_value, config_name, self.endpoint_profiles, self.llm_concurrency
                 )
                 setattr(self, config_name, resolved)
+
+        if self.translator_batch_config is not None:
+            _validate_translator_batch_config(self.translator_batch_config, config_name="translator_batch_config")
+            self.translator_batch_config.provider = self.translator_batch_config.provider.strip().lower()
+            self.translator_batch_config.thinking_mode = self.translator_batch_config.thinking_mode.strip().lower()
 
         # Ensure directories exist and configure logging
         ensure_dirs(self)
@@ -869,14 +949,18 @@ class Config:
                 raise ValueError(f"No custom config found for book: {book.book_id}")
             config_dict = custom_config
 
-        # Build step configs if present using registry
-        # Each step config must be self-contained with complete API settings
+        # Build endpoint-profile step configs if present using registry.
         step_configs: dict[str, LLMConfig | None] = {}
         for config_name, config_class in STEP_CONFIG_REGISTRY.items():
             if config_name in config_dict:
                 step_configs[config_name] = _step_config_from_payload(config_class, config_dict[config_name])
             else:
                 step_configs[config_name] = None
+
+        translator_batch_payload = config_dict.get("translator_batch_config")
+        translator_batch_config = None
+        if isinstance(translator_batch_payload, dict):
+            translator_batch_config = TranslatorBatchConfig.from_dict(translator_batch_payload)
 
         # Build endpoint profiles from config_dict or by resolving profile IDs from registry.
         endpoint_profiles_dict = config_dict.get("endpoint_profiles", {})
@@ -924,6 +1008,7 @@ class Config:
             glossary_config=step_configs.get("glossary_config"),  # type: ignore[arg-type]
             summarizor_config=step_configs.get("summarizor_config"),  # type: ignore[arg-type]
             translator_config=step_configs.get("translator_config"),  # type: ignore[arg-type]
+            translator_batch_config=translator_batch_config,
             review_config=step_configs.get("review_config"),  # type: ignore[arg-type]
             ocr_config=step_configs.get("ocr_config"),  # type: ignore[arg-type]
             image_reembedding_config=step_configs.get("image_reembedding_config"),  # type: ignore[arg-type]
@@ -973,6 +1058,42 @@ def validate_persisted_config_payload(
         if not step_cfg.get("model"):
             errors.append(f"{config_name}.model is required when endpoint_profile is not set")
 
+    translator_batch_cfg = config.get("translator_batch_config")
+    if translator_batch_cfg is not None:
+        if not isinstance(translator_batch_cfg, dict):
+            errors.append("translator_batch_config must be a dictionary")
+        else:
+            provider = str(translator_batch_cfg.get("provider") or "").strip().lower()
+            if not provider:
+                errors.append("translator_batch_config.provider is required")
+            elif provider not in _SUPPORTED_BATCH_PROVIDERS:
+                errors.append(
+                    "translator_batch_config.provider must be one of: " + ", ".join(sorted(_SUPPORTED_BATCH_PROVIDERS))
+                )
+
+            if not str(translator_batch_cfg.get("api_key") or "").strip():
+                errors.append("translator_batch_config.api_key is required")
+            if not str(translator_batch_cfg.get("model") or "").strip():
+                errors.append("translator_batch_config.model is required")
+
+            batch_size_value = translator_batch_cfg.get("batch_size", 500)
+            try:
+                batch_size = int(batch_size_value)
+            except (TypeError, ValueError):
+                errors.append("translator_batch_config.batch_size must be an integer greater than 0")
+            else:
+                if batch_size <= 0:
+                    errors.append("translator_batch_config.batch_size must be greater than 0")
+                elif batch_size > 5000:
+                    errors.append("translator_batch_config.batch_size must not exceed 5000")
+
+            thinking_mode = str(translator_batch_cfg.get("thinking_mode", "auto") or "").strip().lower()
+            if thinking_mode not in _SUPPORTED_THINKING_MODES:
+                errors.append(
+                    "translator_batch_config.thinking_mode must be one of: "
+                    + ", ".join(sorted(_SUPPORTED_THINKING_MODES))
+                )
+
     return errors
 
 
@@ -995,15 +1116,13 @@ def load_config_from_yaml(
     Load Config from a YAML file, merging with command-line arguments.
 
     Note: Fields configurable from command line (translation_target_language,
-    output_dir, prompt_only) should not be in the YAML file and will be ignored if present.
+    output_dir) should not be in the YAML file and will be ignored if present.
     These must be provided as function arguments.
 
     Args:
         yaml_path: Path to the YAML configuration file
         translation_target_language: Target language (from --language)
         output_dir: Output directory (from --output_dir)
-        prompt_only: Prompt-only mode (from --only-glossary) - outputs prompts instead of translations
-
     Returns:
         Config instance loaded from YAML with command-line values merged
 
@@ -1062,6 +1181,7 @@ def load_config_from_yaml(
         "image_reembedding_config": llm_data.pop("image_reembedding_config", None),
         "manga_translator_config": llm_data.pop("manga_translator_config", None),
     }
+    translator_batch_payload = llm_data.pop("translator_batch_config", None)
 
     # Build step configs using registry
     step_configs: dict[str, LLMConfig | None] = {}
@@ -1071,6 +1191,12 @@ def load_config_from_yaml(
             step_configs[config_name] = _step_config_from_payload(config_class, config_data)
         else:
             step_configs[config_name] = None
+
+    translator_batch_config = (
+        TranslatorBatchConfig.from_dict(translator_batch_payload)
+        if isinstance(translator_batch_payload, dict)
+        else None
+    )
 
     # Convert path strings to Path objects
     for key in ["working_dir", "sqlite_path", "log_dir"]:
@@ -1086,6 +1212,7 @@ def load_config_from_yaml(
         glossary_config=step_configs.get("glossary_config"),  # type: ignore[arg-type]
         summarizor_config=step_configs.get("summarizor_config"),  # type: ignore[arg-type]
         translator_config=step_configs.get("translator_config"),  # type: ignore[arg-type]
+        translator_batch_config=translator_batch_config,
         review_config=step_configs.get("review_config"),  # type: ignore[arg-type]
         ocr_config=step_configs.get("ocr_config"),  # type: ignore[arg-type]
         image_reembedding_config=step_configs.get("image_reembedding_config"),  # type: ignore[arg-type]

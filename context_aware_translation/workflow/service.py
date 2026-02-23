@@ -268,6 +268,32 @@ class WorkflowService:
         cutoff = max(selected_ids)
         return [int(doc["document_id"]) for doc in all_documents if int(doc["document_id"]) <= cutoff]
 
+    # ------------------------------------------------------------------
+    # Public wrappers for cross-module callers (batch_translation_task_ops)
+    # ------------------------------------------------------------------
+
+    def resolve_preflight_document_ids(self, document_ids: list[int] | None) -> list[int] | None:
+        """Public wrapper for ``_resolve_preflight_document_ids``."""
+        return self._resolve_preflight_document_ids(document_ids)
+
+    async def prepare_llm_prerequisites(
+        self,
+        document_ids: list[int] | None,
+        *,
+        cancel_check: Callable[[], bool] | None = None,
+    ) -> None:
+        """Public wrapper for ``_prepare_llm_prerequisites``."""
+        await self._prepare_llm_prerequisites(document_ids, cancel_check=cancel_check)
+
+    @staticmethod
+    def check_cancel(cancel_check: Callable[[], bool] | None) -> None:
+        """Public wrapper for ``_check_cancel``."""
+        raise_if_cancelled(cancel_check)
+
+    def update_chunk_records(self, chunk_records: list) -> None:
+        """Persist translated chunk records via the context manager."""
+        self.manager._state_update([], chunk_records)
+
     def _build_doc_type_by_id(self, document_ids: list[int] | None) -> dict[int, str]:
         """Build document_id -> document_type mapping for selected translation targets."""
         all_docs = self.document_repo.list_documents()
@@ -538,9 +564,11 @@ class WorkflowService:
 
         # Build terms for this single chunk
         all_terms = [term for term in self.manager.term_repo.list_keyed_context() if not term.ignored]
-        batch = [chunk]
-        max_chunk_id = chunk.chunk_id
-        batch_terms = self.manager._build_batch_terms(all_terms, batch, max_chunk_id, skip_context=skip_context)
+        _, batch_terms = self.manager.build_batch_request_payload(
+            [chunk],
+            all_terms,
+            skip_context=skip_context,
+        )
 
         self._check_cancel(cancel_check)
 

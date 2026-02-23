@@ -31,6 +31,7 @@ class BookWorkspace(QWidget):
     """Container view for working with an open book."""
 
     _TOKEN_REFRESH_INTERVAL_MS = 1500
+    TRANSLATION_TAB_INDEX = 3
 
     close_requested = Signal()
 
@@ -179,6 +180,11 @@ class BookWorkspace(QWidget):
         ):
             worker.requestInterruption()
 
+    def get_translation_view(self) -> TranslationView | None:
+        """Return the translation view if it has been created, else None."""
+        view = self._view_cache.get(self.TRANSLATION_TAB_INDEX)
+        return view if isinstance(view, TranslationView) else None
+
     def get_running_operations(self) -> list[str]:
         """Return human-readable names of running operations in this workspace."""
         running: list[str] = []
@@ -243,6 +249,7 @@ class BookWorkspace(QWidget):
         translation_view = self._view_cache.get(3)
         if translation_view is not None:
             self._request_worker_interruption(getattr(translation_view, "worker", None))
+            self._request_worker_interruption(getattr(translation_view, "batch_task_worker", None))
 
         # Export tab (index 4)
         export_view = self._view_cache.get(4)
@@ -260,7 +267,8 @@ class BookWorkspace(QWidget):
                 qarg(
                     self.tr(
                         "The following operations are currently running: %1.\n\n"
-                        "Returning to the library will cancel them.\n\n"
+                        "Returning to the library will stop local processing.\n\n"
+                        "Submitted async batch tasks will continue at the provider and can be resumed later.\n\n"
                         "All completed results are already saved and won't be lost."
                     ),
                     operations_text,

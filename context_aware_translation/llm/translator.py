@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from context_aware_translation.config import TranslatorConfig
 from context_aware_translation.core.cancellation import OperationCancelledError, raise_if_cancelled
@@ -232,6 +233,69 @@ def postprocess_translated_blocks(
     return "\n".join(result_lines)
 
 
+@dataclass(frozen=True)
+class PreparedChunkTranslation:
+    chunks: list[str]
+    all_blocks: list[str]
+    chunk_boundaries: list[int]
+    chunk_separators: list[list[list[str]]]
+    translate_messages: list[dict[str, str]]
+
+
+def prepare_chunk_translation(
+    chunks: list[str],
+    terms: list[tuple[str, str, str]],
+    source_language: str,
+    target_language: str,
+) -> PreparedChunkTranslation:
+    all_blocks: list[str] = []
+    chunk_boundaries: list[int] = [0]
+    chunk_separators: list[list[list[str]]] = []
+
+    for chunk_text in chunks:
+        chunk_blocks, empty_separators = preprocess_chunk_text(chunk_text)
+        all_blocks.extend(chunk_blocks)
+        chunk_boundaries.append(len(all_blocks))
+        chunk_separators.append(empty_separators)
+
+    system_prompt, user_prompt = build_translation_prompt(
+        all_blocks,
+        terms,
+        source_language,
+        target_language,
+    )
+    translate_messages: list[dict[str, str]] = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+    return PreparedChunkTranslation(
+        chunks=chunks,
+        all_blocks=all_blocks,
+        chunk_boundaries=chunk_boundaries,
+        chunk_separators=chunk_separators,
+        translate_messages=translate_messages,
+    )
+
+
+def reconstruct_chunk_translations(
+    *,
+    chunks: list[str],
+    translated_blocks: list[str],
+    chunk_boundaries: list[int],
+    chunk_separators: list[list[list[str]]],
+) -> list[str]:
+    results: list[str] = []
+    for i in range(len(chunks)):
+        start, end = chunk_boundaries[i], chunk_boundaries[i + 1]
+        results.append(
+            postprocess_translated_blocks(
+                translated_blocks[start:end],
+                chunk_separators[i],
+            )
+        )
+    return results
+
+
 def build_translation_prompt(
     chunk_blocks: list[str],
     terms: list[tuple[str, str, str]],
@@ -400,7 +464,7 @@ def build_polish_prompt(
     return system_prompt, user_prompt
 
 
-async def _validated_chat(
+async def validated_chat(
     messages: list[dict[str, str]],
     expected_count: int,
     source_blocks: list[str],
@@ -409,6 +473,7 @@ async def _validated_chat(
     cancel_check: Callable[[], bool] | None,
     max_corrections: int = 2,
     label: str = "translation",
+    initial_raw: str | None = None,
 ) -> list[str]:
     """Call the LLM and validate that '翻译文本' has exactly *expected_count* items.
 
@@ -426,12 +491,15 @@ async def _validated_chat(
 
     for attempt in range(total):
         raise_if_cancelled(cancel_check)
-        raw = await llm_client.chat(
-            messages,
-            config,
-            response_format={"type": "json_object"},
-            cancel_check=cancel_check,
-        )
+        if attempt == 0 and initial_raw is not None:
+            raw = initial_raw
+        else:
+            raw = await llm_client.chat(
+                messages,
+                config,
+                response_format={"type": "json_object"},
+                cancel_check=cancel_check,
+            )
         raw = clean_llm_response(raw)
         try:
             parsed = json.loads(raw)
@@ -496,39 +564,14 @@ async def translate_chunk(
     target_language: str,
     cancel_check: Callable[[], bool] | None = None,
 ) -> list[str]:
-    """Translate multiple chunks with term context.
-
-    Returns one translated text per input chunk, or a single prompt string in
-    *prompt_only* mode.
-    """
+    """Translate multiple chunks with term context."""
     with llm_session_scope() as session_id:
-        # -- Preprocessing ----------------------------------------------------
-        all_blocks: list[str] = []
-        chunk_boundaries: list[int] = [0]
-        chunk_separators: list[list[list[str]]] = []
-
-        for chunk_text in chunks:
-            chunk_blocks, empty_separators = preprocess_chunk_text(chunk_text)
-            all_blocks.extend(chunk_blocks)
-            chunk_boundaries.append(len(all_blocks))
-            chunk_separators.append(empty_separators)
-
-        if not all_blocks:
-            return [postprocess_translated_blocks([], separators) for separators in chunk_separators]
-
-        system_prompt, user_prompt = build_translation_prompt(
-            all_blocks,
-            terms,
-            source_language,
-            target_language,
-        )
-
-        if translator_config.prompt_only:
-            full_prompt = f"=== SYSTEM PROMPT ===\n\n{system_prompt}\n\n=== USER PROMPT ===\n\n{user_prompt}"
-            return [full_prompt]
+        prepared = prepare_chunk_translation(chunks, terms, source_language, target_language)
+        if not prepared.all_blocks:
+            return [postprocess_translated_blocks([], separators) for separators in prepared.chunk_separators]
 
         # -- Translation (with conversation-based correction) -----------------
-        expected = len(all_blocks)
+        expected = len(prepared.all_blocks)
         attempts = translator_config.max_retries + 1
         logger.debug(
             "[llm_session=%s] Translating %s chunk(s), %s block(s), attempts=%s, polish=%s",
@@ -541,14 +584,11 @@ async def translate_chunk(
 
         for attempt in range(attempts):
             try:
-                translate_messages: list[dict[str, str]] = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ]
-                translated_text = await _validated_chat(
+                translate_messages = list(prepared.translate_messages)
+                translated_text = await validated_chat(
                     translate_messages,
                     expected,
-                    all_blocks,
+                    prepared.all_blocks,
                     llm_client,
                     translator_config,
                     cancel_check,
@@ -563,10 +603,10 @@ async def translate_chunk(
                         {"role": "user", "content": polish_usr},
                     ]
                     try:
-                        translated_blocks = await _validated_chat(
+                        translated_blocks = await validated_chat(
                             polish_messages,
                             expected,
-                            all_blocks,
+                            prepared.all_blocks,
                             llm_client,
                             translator_config,
                             cancel_check,
@@ -582,16 +622,12 @@ async def translate_chunk(
                     translated_blocks = translated_text
 
                 # -- Reconstruct per-chunk results ----------------------------
-                results: list[str] = []
-                for i in range(len(chunks)):
-                    start, end = chunk_boundaries[i], chunk_boundaries[i + 1]
-                    results.append(
-                        postprocess_translated_blocks(
-                            translated_blocks[start:end],
-                            chunk_separators[i],
-                        )
-                    )
-                return results
+                return reconstruct_chunk_translations(
+                    chunks=prepared.chunks,
+                    translated_blocks=translated_blocks,
+                    chunk_boundaries=prepared.chunk_boundaries,
+                    chunk_separators=prepared.chunk_separators,
+                )
 
             except OperationCancelledError:
                 raise

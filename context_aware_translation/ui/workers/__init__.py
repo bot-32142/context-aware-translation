@@ -1,6 +1,7 @@
 """Workers for background operations."""
 
 from .base_worker import BaseWorker
+from .batch_translation_task_worker import BatchTranslationTaskWorker
 from .export_worker import ExportWorker
 from .glossary_worker import BuildGlossaryWorker, ReviewTermsWorker, TranslateGlossaryWorker
 from .import_worker import ImportWorker
@@ -9,6 +10,7 @@ from .translation_worker import TranslationWorker
 
 __all__ = [
     "BaseWorker",
+    "BatchTranslationTaskWorker",
     "BuildGlossaryWorker",
     "ExportWorker",
     "ImportWorker",

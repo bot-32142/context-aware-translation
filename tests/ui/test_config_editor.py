@@ -122,6 +122,24 @@ class TestGetConfig:
         assert "ocr_config" in config
         assert config["ocr_config"]["enable_image_reembedding"] is True
 
+    def test_get_config_saves_translator_batch_fields(self, widget):
+        """get_config should include translator batch settings."""
+        widget.translator_batch_provider.setCurrentIndex(1)  # Gemini AI Studio
+        widget.translator_batch_api_key.setText("test-key")
+        widget.translator_batch_model.setText("gemini-2.5-flash")
+        widget.translator_batch_size_spin.setValue(256)
+        widget.translator_batch_thinking_mode.setCurrentIndex(3)  # medium
+
+        config = widget.get_config()
+
+        assert "translator_batch_config" in config
+        translator_batch = config["translator_batch_config"]
+        assert translator_batch["provider"] == "gemini_ai_studio"
+        assert translator_batch["api_key"] == "test-key"
+        assert translator_batch["model"] == "gemini-2.5-flash"
+        assert translator_batch["batch_size"] == 256
+        assert translator_batch["thinking_mode"] == "medium"
+
 
 class TestSetConfig:
     """Tests for set_config() method."""
@@ -175,6 +193,27 @@ class TestSetConfig:
         # Values should remain unchanged (still at index 1)
         assert widget.reembedding_backend_combo.currentIndex() == 1
 
+    def test_set_config_loads_translator_batch_fields(self, widget):
+        """set_config should load translator batch fields."""
+        config = {
+            "translation_target_language": "Korean",
+            "translator_batch_config": {
+                "provider": "gemini_ai_studio",
+                "api_key": "batch-key",
+                "model": "gemini-2.5-pro",
+                "batch_size": 999,
+                "thinking_mode": "high",
+            },
+        }
+
+        widget.set_config(config)
+
+        assert widget.translator_batch_provider.currentData() == "gemini_ai_studio"
+        assert widget.translator_batch_api_key.text() == "batch-key"
+        assert widget.translator_batch_model.text() == "gemini-2.5-pro"
+        assert widget.translator_batch_size_spin.value() == 999
+        assert widget.translator_batch_thinking_mode.currentData() == "high"
+
 
 class TestValidate:
     """Tests for validate() method."""
@@ -198,6 +237,26 @@ class TestValidate:
         result = widget.validate()
 
         assert result == "Image reembedding is enabled but no endpoint profile is selected."
+
+    def test_validate_requires_batch_api_key_when_provider_enabled(self, widget):
+        widget.language_dropdown.set_value("英语")
+        widget.translator_batch_provider.setCurrentIndex(1)
+        widget.translator_batch_api_key.setText("")
+        widget.translator_batch_model.setText("gemini-2.5-flash")
+
+        result = widget.validate()
+
+        assert result == "Translator batch API key is required when provider is enabled."
+
+    def test_validate_requires_batch_model_when_provider_enabled(self, widget):
+        widget.language_dropdown.set_value("英语")
+        widget.translator_batch_provider.setCurrentIndex(1)
+        widget.translator_batch_api_key.setText("k")
+        widget.translator_batch_model.setText("")
+
+        result = widget.validate()
+
+        assert result == "Translator batch model is required when provider is enabled."
 
     def test_validate_passes_when_reembedding_enabled_with_endpoint(self, widget):
         """validate should pass if reembedding enabled and endpoint selected."""
@@ -268,6 +327,11 @@ class TestFieldTooltips:
             ("Enable Polish", widget.enable_polish_check),
             ("Chunks per Call", widget.chunks_per_call_spin),
             ("Chunk Size", widget.chunk_size_spin),
+            ("Translator Batch Provider", widget.translator_batch_provider),
+            ("Translator Batch API Key", widget.translator_batch_api_key),
+            ("Translator Batch Model", widget.translator_batch_model),
+            ("Translator Batch Size", widget.translator_batch_size_spin),
+            ("Translator Batch Thinking", widget.translator_batch_thinking_mode),
             ("Review Endpoint", widget.review_endpoint),
             ("OCR Endpoint", widget.ocr_endpoint),
             ("OCR DPI", widget.ocr_dpi_spin),

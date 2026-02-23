@@ -8,11 +8,16 @@ import pytest
 
 try:
     from PySide6.QtCore import QCoreApplication
-    from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QPushButton
+    from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QMessageBox, QPushButton
 
     HAS_PYSIDE6 = True
 except ImportError:
     HAS_PYSIDE6 = False
+
+from context_aware_translation.storage.translation_batch_task_store import (
+    STATUS_CANCELLED,
+    STATUS_COMPLETED,
+)
 
 pytestmark = pytest.mark.skipif(not HAS_PYSIDE6, reason="PySide6 not available")
 
@@ -34,6 +39,15 @@ def _make_view():
 
     with patch.object(TranslationView, "__init__", _noop_init):
         view = TranslationView(None, "")
+    # Set attributes normally created in __init__ that production code accesses directly.
+    view._is_cleaned_up = False
+    view._batch_tasks_cache = []
+    view._batch_task_store = MagicMock()
+    view.worker = None
+    view.retranslate_worker = None
+    view.batch_task_worker = None
+    view._active_batch_task_id = None
+    view._batch_auto_timer = None
     return view
 
 
@@ -45,9 +59,11 @@ def test_refresh_reloads_review_content_when_review_page_is_active():
     view.stack.currentWidget.return_value = review_page
     view.review_doc_combo = MagicMock()
     view.review_doc_combo.currentIndex.return_value = 2
+    view._is_cleaned_up = False
     view._document_type_cache = {123: "manga"}
     view._refresh_document_selector = MagicMock()
     view._refresh_review_document_selector = MagicMock()
+    view._refresh_batch_tasks = MagicMock()
     view._update_stats = MagicMock()
     view._on_review_document_changed = MagicMock()
 
@@ -135,12 +151,7 @@ def test_start_translation_forwards_skip_context_to_worker():
     view.worker = None
     view.book_manager = MagicMock()
     view.book_id = "book-id"
-    view.term_db = MagicMock()
-    view.term_db.list_terms.return_value = []
-    view._get_preflight_docs_with_pending_ocr = MagicMock(return_value=[])
-    view._get_selected_document_ids = MagicMock(return_value=[1])
-    view._has_manga_documents = MagicMock(return_value=False)
-    view._is_retranslation = MagicMock(return_value=False)
+    view._resolve_trigger_conditions = MagicMock(return_value=([1], False))
     view.start_btn = QPushButton()
     view.doc_combo = QComboBox()
     view.skip_context_cb = QCheckBox()
@@ -160,9 +171,351 @@ def test_start_translation_forwards_skip_context_to_worker():
     ) as cls:
         view._start_translation()
 
+    view._resolve_trigger_conditions.assert_called_once_with(for_batch_submit=False)
     assert cls.call_count == 1
     assert cls.call_args.kwargs.get("skip_context") is True
     worker_instance.start.assert_called_once()
+
+
+def test_submit_batch_task_returns_when_translation_worker_running():
+    class _RunningWorker:
+        def isRunning(self) -> bool:  # noqa: N802
+            return True
+
+    view = _make_view()
+    view.worker = _RunningWorker()
+    view.batch_task_worker = None
+    view._get_preflight_docs_with_pending_ocr = MagicMock(return_value=[])
+
+    view._submit_batch_task()
+
+    view._get_preflight_docs_with_pending_ocr.assert_not_called()
+
+
+def test_submit_batch_task_does_not_require_translated_glossary_terms():
+    view = _make_view()
+    view.worker = None
+    view.batch_task_worker = None
+    view.term_db = MagicMock()
+    view.term_db.list_terms.return_value = [MagicMock()]
+    view._resolve_trigger_conditions = MagicMock(return_value=([1], False))
+    view.skip_context_cb = QCheckBox()
+    view.skip_context_cb.setChecked(False)
+    view._start_batch_task_worker = MagicMock()
+    view.book_manager = MagicMock()
+    view.book_id = "book-id"
+
+    worker_instance = MagicMock()
+    with patch(
+        "context_aware_translation.ui.views.translation_view.BatchTranslationTaskWorker",
+        return_value=worker_instance,
+    ) as worker_cls:
+        view._submit_batch_task()
+
+    view._resolve_trigger_conditions.assert_called_once_with(for_batch_submit=True)
+    worker_cls.assert_called_once()
+    view._start_batch_task_worker.assert_called_once_with(worker_instance)
+    view.term_db.list_terms.assert_not_called()
+
+
+def test_submit_batch_task_returns_when_trigger_conditions_fail():
+    view = _make_view()
+    view.worker = None
+    view.batch_task_worker = None
+    view._resolve_trigger_conditions = MagicMock(return_value=None)
+    view._start_batch_task_worker = MagicMock()
+    view.book_manager = MagicMock()
+    view.book_id = "book-id"
+
+    with patch("context_aware_translation.ui.views.translation_view.BatchTranslationTaskWorker") as worker_cls:
+        view._submit_batch_task()
+
+    view._resolve_trigger_conditions.assert_called_once_with(for_batch_submit=True)
+    worker_cls.assert_not_called()
+    view._start_batch_task_worker.assert_not_called()
+
+
+def test_run_selected_batch_task_returns_when_translation_worker_running():
+    class _RunningWorker:
+        def isRunning(self) -> bool:  # noqa: N802
+            return True
+
+    view = _make_view()
+    view.worker = _RunningWorker()
+    view.batch_task_worker = None
+    view._selected_batch_task_id = MagicMock(return_value="task-1")
+    view._start_batch_task_worker = MagicMock()
+
+    view._run_selected_batch_task()
+
+    view._selected_batch_task_id.assert_not_called()
+    view._start_batch_task_worker.assert_not_called()
+
+
+def test_start_batch_task_worker_blocks_duplicate_run_worker_for_same_book():
+    view = _make_view()
+    view.book_id = "book-1"
+    view.batch_status_label = MagicMock()
+    worker = MagicMock()
+    worker.action = "run"
+    worker.task_id = "task-1"
+
+    with patch(
+        "context_aware_translation.ui.views.translation_view.BatchTranslationTaskWorker.is_run_active_for_book",
+        return_value=True,
+    ):
+        view._start_batch_task_worker(worker)
+
+    assert view.batch_task_worker is None
+    worker.start.assert_not_called()
+    view.batch_status_label.setText.assert_called_once_with("A batch run is already active for this book.")
+
+
+def test_cancel_selected_batch_task_returns_when_translation_worker_running():
+    class _RunningWorker:
+        def isRunning(self) -> bool:  # noqa: N802
+            return True
+
+    view = _make_view()
+    view.worker = _RunningWorker()
+    view.batch_task_worker = None
+    view._selected_batch_task_id = MagicMock(return_value="task-1")
+    view._start_batch_task_worker = MagicMock()
+
+    view._cancel_selected_batch_task()
+
+    view._selected_batch_task_id.assert_not_called()
+    view._start_batch_task_worker.assert_not_called()
+
+
+def test_cancel_selected_batch_task_marks_cancel_requested_for_active_run_worker():
+    class _RunningWorker:
+        def isRunning(self) -> bool:  # noqa: N802
+            return True
+
+    view = _make_view()
+    view.worker = None
+    view.batch_task_worker = _RunningWorker()
+    view._active_batch_task_id = "task-1"
+    view._selected_batch_task_id = MagicMock(return_value="task-1")
+    view.batch_status_label = MagicMock()
+    view._refresh_batch_tasks = MagicMock()
+    view._start_batch_task_worker = MagicMock()
+
+    view._cancel_selected_batch_task()
+
+    view._batch_task_store.mark_cancel_requested.assert_called_once_with("task-1")
+    view._start_batch_task_worker.assert_not_called()
+
+
+def test_cancel_selected_batch_task_skips_terminal_task_for_active_run_worker():
+    class _RunningWorker:
+        def isRunning(self) -> bool:  # noqa: N802
+            return True
+
+    view = _make_view()
+    view.worker = None
+    view.batch_task_worker = _RunningWorker()
+    view._active_batch_task_id = "task-1"
+    view._selected_batch_task_id = MagicMock(return_value="task-1")
+    view.batch_status_label = MagicMock()
+    view._refresh_batch_tasks = MagicMock()
+    view._start_batch_task_worker = MagicMock()
+    view._batch_task_store.get.return_value = MagicMock(status=STATUS_COMPLETED)
+
+    view._cancel_selected_batch_task()
+
+    view._batch_task_store.get.assert_called_once_with("task-1")
+    view._batch_task_store.mark_cancel_requested.assert_not_called()
+    view._refresh_batch_tasks.assert_called_once()
+    view._start_batch_task_worker.assert_not_called()
+
+
+def test_update_retranslate_chunk_button_state_disables_retranslate_when_batch_tasks_active():
+    view = _make_view()
+    view.retranslate_chunk_btn = QPushButton()
+    view._current_chunk = MagicMock()
+    view._batch_tasks_cache = [MagicMock(status="running")]
+    view.retranslate_worker = None
+
+    view._update_retranslate_chunk_button_state()
+
+    assert not view.retranslate_chunk_btn.isEnabled()
+    assert "async batch tasks are active" in view.retranslate_chunk_btn.toolTip()
+
+
+def test_update_retranslate_chunk_button_state_enables_retranslate_when_only_terminal_tasks():
+    view = _make_view()
+    view.retranslate_chunk_btn = QPushButton()
+    view._current_chunk = MagicMock()
+    view._batch_tasks_cache = [MagicMock(status=STATUS_COMPLETED), MagicMock(status=STATUS_CANCELLED)]
+    view.retranslate_worker = None
+
+    view._update_retranslate_chunk_button_state()
+
+    assert view.retranslate_chunk_btn.isEnabled()
+
+
+def test_retranslate_current_chunk_blocks_when_batch_tasks_active():
+    view = _make_view()
+    view._batch_tasks_cache = [MagicMock(status="running")]
+    view._current_chunk = MagicMock()
+    view.retranslate_worker = None
+    view.book_manager = MagicMock()
+    view.book_id = "book-id"
+
+    with (
+        patch("context_aware_translation.ui.views.translation_view.QMessageBox.information") as info_mock,
+        patch("context_aware_translation.ui.views.translation_view.RetranslateChunkWorker") as worker_cls,
+        patch("context_aware_translation.ui.views.translation_view.QMessageBox.question") as question_mock,
+    ):
+        view._retranslate_current_chunk()
+
+    info_mock.assert_called_once()
+    worker_cls.assert_not_called()
+    question_mock.assert_not_called()
+
+
+def test_batch_task_success_callback_noops_after_cleanup():
+    view = _make_view()
+    view._is_cleaned_up = True
+    view.batch_status_label = MagicMock()
+    view._refresh_batch_tasks = MagicMock()
+    view._update_stats = MagicMock()
+    view._refresh_document_selector = MagicMock()
+    view._refresh_review_document_selector = MagicMock()
+
+    view._on_batch_task_success({"action": "run", "task": {"status": "failed"}})
+
+    view.batch_status_label.setText.assert_not_called()
+    view._refresh_batch_tasks.assert_not_called()
+    view._update_stats.assert_not_called()
+
+
+def test_batch_task_delete_success_shows_remote_cleanup_warning():
+    view = _make_view()
+    view._is_cleaned_up = False
+    view.batch_status_label = MagicMock()
+    view._refresh_batch_tasks = MagicMock()
+    view._update_stats = MagicMock()
+    view._refresh_document_selector = MagicMock()
+    view._refresh_review_document_selector = MagicMock()
+
+    view._on_batch_task_success(
+        {
+            "action": "delete",
+            "cleanup_warnings": ["Failed to delete remote batch 'batches/1': RuntimeError: boom"],
+        }
+    )
+
+    view.batch_status_label.setText.assert_called_once_with(
+        "Batch task deleted locally; remote cleanup completed with warnings."
+    )
+
+
+def test_batch_task_finished_callback_noops_after_cleanup():
+    view = _make_view()
+    view._is_cleaned_up = True
+    view.batch_task_worker = MagicMock()
+    view._active_batch_task_id = "task-1"
+    view._refresh_batch_tasks = MagicMock()
+    view._on_batch_task_selected = MagicMock()
+    view._update_start_button_state = MagicMock()
+    view.submit_batch_btn = MagicMock()
+    view.batch_task_list = MagicMock()
+
+    view._on_batch_task_finished()
+
+    assert view.batch_task_worker is None
+    assert view._active_batch_task_id is None
+    view._refresh_batch_tasks.assert_not_called()
+    view._update_start_button_state.assert_not_called()
+
+
+def test_delete_selected_batch_task_returns_when_translation_worker_running():
+    class _RunningWorker:
+        def isRunning(self) -> bool:  # noqa: N802
+            return True
+
+    view = _make_view()
+    view.worker = _RunningWorker()
+    view.batch_task_worker = None
+    view._selected_batch_task_id = MagicMock(return_value="task-1")
+    view._start_batch_task_worker = MagicMock()
+
+    view._delete_selected_batch_task()
+
+    view._selected_batch_task_id.assert_not_called()
+    view._start_batch_task_worker.assert_not_called()
+
+
+def test_delete_selected_batch_task_starts_worker_after_confirmation():
+    view = _make_view()
+    view.worker = None
+    view.batch_task_worker = None
+    view._selected_batch_task_id = MagicMock(return_value="task-1")
+    view._start_batch_task_worker = MagicMock()
+    view.book_manager = MagicMock()
+    view.book_id = "book-id"
+
+    worker_instance = MagicMock()
+    with (
+        patch(
+            "context_aware_translation.ui.views.translation_view.BatchTranslationTaskWorker",
+            return_value=worker_instance,
+        ) as worker_cls,
+        patch(
+            "context_aware_translation.ui.views.translation_view.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Yes,
+        ),
+    ):
+        view._delete_selected_batch_task()
+
+    worker_cls.assert_called_once()
+    assert worker_cls.call_args.kwargs["action"] == "delete"
+    assert worker_cls.call_args.kwargs["task_id"] == "task-1"
+    view._start_batch_task_worker.assert_called_once_with(worker_instance)
+
+
+def test_update_start_button_state_disables_retranslate_when_batch_tasks_active():
+    view = _make_view()
+    view.worker = None
+    view.doc_combo = QComboBox()
+    view.doc_combo.addItem("All Documents", None)
+    view.doc_combo.addItem("Document 1", 1)
+    view.start_btn = QPushButton()
+    view.skip_context_cb = QCheckBox()
+    view._get_preflight_docs_with_pending_ocr = MagicMock(return_value=[])
+    view._is_retranslation = MagicMock(return_value=True)
+    view._batch_tasks_cache = [MagicMock(status="running")]
+
+    view._update_start_button_state()
+
+    assert not view.start_btn.isEnabled()
+    assert view.start_btn.text() == "Retranslate"
+    assert "async batch tasks are active" in view.start_btn.toolTip()
+
+
+def test_resolve_trigger_conditions_blocks_retranslate_when_batch_tasks_active():
+    view = _make_view()
+    view._get_preflight_docs_with_pending_ocr = MagicMock(return_value=[])
+    view._get_selected_document_ids = MagicMock(return_value=[1])
+    view._has_manga_documents = MagicMock(return_value=False)
+    view.book_manager = MagicMock()
+    view.book_manager.get_book_config.return_value = {}
+    view.book_id = "book-id"
+    view._is_retranslation = MagicMock(return_value=True)
+    view._batch_tasks_cache = [MagicMock(status="running")]
+
+    with (
+        patch("context_aware_translation.ui.views.translation_view.QMessageBox.information") as info_mock,
+        patch("context_aware_translation.ui.views.translation_view.QMessageBox.question") as question_mock,
+    ):
+        resolved = view._resolve_trigger_conditions(for_batch_submit=False)
+
+    assert resolved is None
+    info_mock.assert_called_once()
+    question_mock.assert_not_called()
 
 
 def test_update_start_button_state_disables_start_when_ocr_pending():

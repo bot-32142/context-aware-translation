@@ -68,6 +68,15 @@ def test_get_running_operations_detects_all_supported_views():
     ]
 
 
+def test_get_running_operations_ignores_async_batch_only_translation_worker():
+    workspace = _make_workspace()
+    workspace._view_cache = {
+        3: SimpleNamespace(worker=_Worker(False), batch_task_worker=_Worker(True)),
+    }
+
+    assert workspace.get_running_operations() == []
+
+
 def test_close_requested_without_running_operations_emits_without_warning():
     workspace = _make_workspace()
     workspace._view_cache = {0: SimpleNamespace(worker=_Worker(False))}

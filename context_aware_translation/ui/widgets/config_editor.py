@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFormLayout,
+    QLineEdit,
     QScrollArea,
     QSpinBox,
     QVBoxLayout,
@@ -29,6 +30,7 @@ class ConfigEditorWidget(QWidget):
     - Summarizer settings
     - Glossary translation settings
     - Translator settings
+    - Translator batch settings (optional, Gemini-only)
     - Review settings
     - OCR settings
     - Image reembedding settings
@@ -173,6 +175,44 @@ class ConfigEditorWidget(QWidget):
         self._translator_section.set_content(translator_widget)
         layout.addWidget(self._translator_section)
 
+        # === Translator Batch Section ===
+        self._translator_batch_section = CollapsibleSection(self.tr("Translator Batch (Optional)"))
+        self._translator_batch_layout = QFormLayout()
+        style_form(self._translator_batch_layout)
+        translator_batch_widget = QWidget()
+        translator_batch_widget.setLayout(self._translator_batch_layout)
+
+        self._translator_batch_hint = add_hint(self._translator_batch_layout, self._translator_batch_hint_text())
+        self.translator_batch_provider = QComboBox()
+        self.translator_batch_provider.addItem(self.tr("Disabled"), "")
+        self.translator_batch_provider.addItem(self.tr("Gemini AI Studio"), "gemini_ai_studio")
+        self._translator_batch_layout.addRow(self.tr("Provider:"), self.translator_batch_provider)
+
+        self.translator_batch_api_key = QLineEdit()
+        self.translator_batch_api_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self.translator_batch_api_key.setPlaceholderText(self.tr("AIza..."))
+        self._translator_batch_layout.addRow(self.tr("API Key:"), self.translator_batch_api_key)
+
+        self.translator_batch_model = QLineEdit()
+        self.translator_batch_model.setPlaceholderText(self.tr("gemini-2.5-flash"))
+        self._translator_batch_layout.addRow(self.tr("Model:"), self.translator_batch_model)
+
+        self.translator_batch_size_spin = QSpinBox()
+        self.translator_batch_size_spin.setRange(1, 5000)
+        self.translator_batch_size_spin.setValue(500)
+        self._translator_batch_layout.addRow(self.tr("Batch Size:"), self.translator_batch_size_spin)
+
+        self.translator_batch_thinking_mode = QComboBox()
+        self.translator_batch_thinking_mode.addItem(self.tr("Auto"), "auto")
+        self.translator_batch_thinking_mode.addItem(self.tr("Off"), "off")
+        self.translator_batch_thinking_mode.addItem(self.tr("Low"), "low")
+        self.translator_batch_thinking_mode.addItem(self.tr("Medium"), "medium")
+        self.translator_batch_thinking_mode.addItem(self.tr("High"), "high")
+        self._translator_batch_layout.addRow(self.tr("Thinking Mode:"), self.translator_batch_thinking_mode)
+
+        self._translator_batch_section.set_content(translator_batch_widget)
+        layout.addWidget(self._translator_batch_section)
+
         # === Review Section ===
         self._review_section = CollapsibleSection(self.tr("Review (Optional)"))
         self._review_layout = QFormLayout()
@@ -278,6 +318,7 @@ class ConfigEditorWidget(QWidget):
         self._summarizer_section.toggle_button.setText(self.tr("Summarizer (Term Description)"))
         self._glossary_section.toggle_button.setText(self.tr("Glossary Translation"))
         self._translator_section.toggle_button.setText(self.tr("Translator (Main Translation)"))
+        self._translator_batch_section.toggle_button.setText(self.tr("Translator Batch (Optional)"))
         self._review_section.toggle_button.setText(self.tr("Review (Optional)"))
         self._ocr_section.toggle_button.setText(self.tr("OCR (Optional)"))
         self._reembedding_section.toggle_button.setText(self.tr("Image Reembedding (Optional)"))
@@ -288,6 +329,7 @@ class ConfigEditorWidget(QWidget):
         self._summarizer_hint.setText(self._summarizer_hint_text())
         self._glossary_hint.setText(self._glossary_hint_text())
         self._translator_hint.setText(self._translator_hint_text())
+        self._translator_batch_hint.setText(self._translator_batch_hint_text())
         self._review_hint.setText(self._review_hint_text())
         self._ocr_hint.setText(self._ocr_hint_text())
         self._reembedding_hint.setText(self._reembedding_hint_text())
@@ -318,6 +360,20 @@ class ConfigEditorWidget(QWidget):
         _set_label(self._translator_layout, self.enable_polish_check, self.tr("Enable Polish:"))
         _set_label(self._translator_layout, self.chunks_per_call_spin, self.tr("Chunks per Call:"))
         _set_label(self._translator_layout, self.chunk_size_spin, self.tr("Chunk Size:"))
+
+        # Translator batch form labels
+        _set_label(self._translator_batch_layout, self.translator_batch_provider, self.tr("Provider:"))
+        _set_label(self._translator_batch_layout, self.translator_batch_api_key, self.tr("API Key:"))
+        _set_label(self._translator_batch_layout, self.translator_batch_model, self.tr("Model:"))
+        _set_label(self._translator_batch_layout, self.translator_batch_size_spin, self.tr("Batch Size:"))
+        _set_label(self._translator_batch_layout, self.translator_batch_thinking_mode, self.tr("Thinking Mode:"))
+        self.translator_batch_provider.setItemText(0, self.tr("Disabled"))
+        self.translator_batch_provider.setItemText(1, self.tr("Gemini AI Studio"))
+        self.translator_batch_thinking_mode.setItemText(0, self.tr("Auto"))
+        self.translator_batch_thinking_mode.setItemText(1, self.tr("Off"))
+        self.translator_batch_thinking_mode.setItemText(2, self.tr("Low"))
+        self.translator_batch_thinking_mode.setItemText(3, self.tr("Medium"))
+        self.translator_batch_thinking_mode.setItemText(4, self.tr("High"))
 
         # Review form labels
         _set_label(self._review_layout, self.review_endpoint, self.tr("Endpoint Profile:"))
@@ -361,6 +417,12 @@ class ConfigEditorWidget(QWidget):
     def _translator_hint_text(self) -> str:
         return self.tr(
             "Main document translation. Uses glossary plus accumulated context from earlier imported content."
+        )
+
+    def _translator_batch_hint_text(self) -> str:
+        return self.tr(
+            "Optional Gemini AI Studio config for async batch translation tasks. "
+            "Initial translation and polish calls are sent through provider batch jobs."
         )
 
     def _review_hint_text(self) -> str:
@@ -437,6 +499,32 @@ class ConfigEditorWidget(QWidget):
             self._translator_layout,
             self.chunk_size_spin,
             self.tr("Maximum token size for each translation chunk."),
+        )
+
+        self._set_field_tooltip(
+            self._translator_batch_layout,
+            self.translator_batch_provider,
+            self.tr("Batch provider used for async translation/polish tasks. Leave disabled to turn off batch tasks."),
+        )
+        self._set_field_tooltip(
+            self._translator_batch_layout,
+            self.translator_batch_api_key,
+            self.tr("API key used for provider batch submission."),
+        )
+        self._set_field_tooltip(
+            self._translator_batch_layout,
+            self.translator_batch_model,
+            self.tr("Model used for async translation and polish batch jobs."),
+        )
+        self._set_field_tooltip(
+            self._translator_batch_layout,
+            self.translator_batch_size_spin,
+            self.tr("Maximum number of requests submitted per provider batch job."),
+        )
+        self._set_field_tooltip(
+            self._translator_batch_layout,
+            self.translator_batch_thinking_mode,
+            self.tr("Thinking policy for Gemini batch jobs."),
         )
 
         self._set_field_tooltip(
@@ -549,6 +637,16 @@ class ConfigEditorWidget(QWidget):
                 "chunk_size": self.chunk_size_spin.value(),
             }
 
+        translator_batch_provider = str(self.translator_batch_provider.currentData() or "")
+        if translator_batch_provider:
+            config["translator_batch_config"] = {
+                "provider": translator_batch_provider,
+                "api_key": self.translator_batch_api_key.text().strip(),
+                "model": self.translator_batch_model.text().strip(),
+                "batch_size": self.translator_batch_size_spin.value(),
+                "thinking_mode": str(self.translator_batch_thinking_mode.currentData() or "auto"),
+            }
+
         # Review config
         review_endpoint = self._get_endpoint_name(self.review_endpoint)
         if review_endpoint:
@@ -622,6 +720,26 @@ class ConfigEditorWidget(QWidget):
             self.chunks_per_call_spin.setValue(translator.get("num_of_chunks_per_llm_call", 5))
             self.chunk_size_spin.setValue(translator.get("chunk_size", 1000))
 
+        translator_batch = config.get("translator_batch_config", {})
+        if isinstance(translator_batch, dict) and translator_batch:
+            provider_value = str(translator_batch.get("provider") or "")
+            provider_index = 0
+            for i in range(self.translator_batch_provider.count()):
+                if str(self.translator_batch_provider.itemData(i) or "") == provider_value:
+                    provider_index = i
+                    break
+            self.translator_batch_provider.setCurrentIndex(provider_index)
+
+            self.translator_batch_api_key.setText(str(translator_batch.get("api_key") or ""))
+            self.translator_batch_model.setText(str(translator_batch.get("model") or ""))
+            self.translator_batch_size_spin.setValue(int(translator_batch.get("batch_size", 500)))
+
+            thinking_value = str(translator_batch.get("thinking_mode") or "auto")
+            for i in range(self.translator_batch_thinking_mode.count()):
+                if str(self.translator_batch_thinking_mode.itemData(i) or "") == thinking_value:
+                    self.translator_batch_thinking_mode.setCurrentIndex(i)
+                    break
+
         # Review config
         review = config.get("review_config", {})
         if review:
@@ -661,6 +779,13 @@ class ConfigEditorWidget(QWidget):
         """
         if not self.language_dropdown.get_value():
             return self.tr("Target language is required.")
+
+        translator_batch_provider = str(self.translator_batch_provider.currentData() or "")
+        if translator_batch_provider:
+            if not self.translator_batch_api_key.text().strip():
+                return self.tr("Translator batch API key is required when provider is enabled.")
+            if not self.translator_batch_model.text().strip():
+                return self.tr("Translator batch model is required when provider is enabled.")
 
         # Validate image reembedding requires endpoint when enabled
         if self.enable_reembedding_check.isChecked() and not self._get_endpoint_name(self.reembedding_endpoint):

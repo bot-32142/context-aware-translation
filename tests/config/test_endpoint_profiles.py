@@ -13,6 +13,7 @@ from context_aware_translation.config import (
     LLMConfig,
     ReviewConfig,
     SummarizorConfig,
+    TranslatorBatchConfig,
     TranslatorConfig,
     _resolve_with_profile,
     ensure_valid_persisted_config_payload,
@@ -153,6 +154,24 @@ class TestResolveWithProfile:
         result = _resolve_with_profile(config, profiles)
 
         assert result.kwargs == {}
+
+    def test_translator_batch_config_round_trip(self):
+        translator_batch = TranslatorBatchConfig(
+            provider="gemini_ai_studio",
+            api_key="k",
+            model="gemini-2.5-flash",
+            batch_size=321,
+            thinking_mode="high",
+        )
+
+        payload = translator_batch.to_dict()
+        restored = TranslatorBatchConfig.from_dict(payload)
+
+        assert restored.provider == "gemini_ai_studio"
+        assert restored.api_key == "k"
+        assert restored.model == "gemini-2.5-flash"
+        assert restored.batch_size == 321
+        assert restored.thinking_mode == "high"
 
 
 class TestConfigWithProfiles:
@@ -461,3 +480,25 @@ class TestPersistedPayloadValidation:
     def test_ensure_valid_persisted_config_payload_raises(self):
         with pytest.raises(ValueError, match="Invalid config payload"):
             ensure_valid_persisted_config_payload({"translation_target_language": "zh-CN"})
+
+    def test_validate_persisted_payload_accepts_translator_batch_without_base_url(self):
+        config_payload = {
+            "translation_target_language": "zh-CN",
+            "extractor_config": {"endpoint_profile": "shared"},
+            "summarizor_config": {"endpoint_profile": "shared"},
+            "translator_config": {"endpoint_profile": "shared"},
+            "glossary_config": {"endpoint_profile": "shared"},
+            "translator_batch_config": {
+                "provider": "gemini_ai_studio",
+                "api_key": "k",
+                "model": "gemini-2.5-flash",
+                "batch_size": 500,
+                "thinking_mode": "auto",
+            },
+        }
+
+        errors = validate_persisted_config_payload(
+            config_payload,
+            endpoint_profile_exists=lambda name: name == "shared",
+        )
+        assert errors == []

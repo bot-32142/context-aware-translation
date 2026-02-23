@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from context_aware_translation.config import TranslatorBatchConfig
 from context_aware_translation.workflow.service import WorkflowService
 
 
@@ -40,6 +41,38 @@ async def test_translate_late_cancel_after_completion_reports_success():
 
     await service.translate(cancel_check=cancel_check)
     manager.detect_language.assert_awaited_once()
+    manager.translate_chunks.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_translate_uses_regular_chunk_path_even_when_batch_config_present():
+    config = MagicMock()
+    config.translator_config = SimpleNamespace(concurrency=2, num_of_chunks_per_llm_call=4)
+    config.translator_batch_config = TranslatorBatchConfig(
+        provider="gemini_ai_studio",
+        api_key="k",
+        model="gemini-2.5-flash",
+    )
+
+    manager = MagicMock()
+    manager.detect_language = AsyncMock()
+    manager.translate_chunks = AsyncMock()
+
+    document_repo = MagicMock()
+    document_repo.list_documents.return_value = [{"document_id": 1, "document_type": "text"}]
+
+    service = WorkflowService(
+        config=config,
+        llm_client=MagicMock(),
+        context_tree=MagicMock(),
+        manager=manager,
+        db=MagicMock(),
+        document_repo=document_repo,
+    )
+    service._process_document = AsyncMock()
+
+    await service.translate()
+
     manager.translate_chunks.assert_awaited_once()
 
 

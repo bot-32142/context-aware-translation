@@ -5,6 +5,7 @@ import logging
 import threading
 from collections import deque
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from typing import Any, Protocol, TypeVar
 
 from transformers import PreTrainedTokenizer
@@ -84,6 +85,13 @@ class _TermLike(Protocol):
 
 
 _TL = TypeVar("_TL", bound=_TermLike)
+
+
+@dataclass(frozen=True)
+class ChunkTranslationInputs:
+    source_language: str
+    all_terms: list[Term]
+    batches: list[list[TranslationChunkRecord]]
 
 
 class ContextManager:
@@ -1245,6 +1253,49 @@ class TranslationContextManager(ContextManager):
         ]
         return _dedup_batch_terms(raw)
 
+    def collect_chunk_translation_inputs(
+        self,
+        *,
+        batch_size: int,
+        document_ids: list[int] | None,
+        force: bool,
+        cancel_check: Callable[[], bool] | None,
+        source_language: str | None = None,
+    ) -> ChunkTranslationInputs | None:
+        """Collect shared chunk-translation planning inputs for translation flows."""
+        raise_if_cancelled(cancel_check)
+        untranslated_chunks = sorted(
+            self.term_repo.get_chunks_to_translate(document_ids, force=force),
+            key=lambda c: c.chunk_id,
+        )
+        if not untranslated_chunks:
+            return None
+
+        resolved_source_language = source_language or self.term_repo.get_source_language()
+        if not resolved_source_language:
+            raise ValueError("Source language not found in the database")
+
+        all_terms = [term for term in self.term_repo.list_keyed_context() if not term.ignored]
+        batches = self._group_consecutive_batches(untranslated_chunks, batch_size)
+        return ChunkTranslationInputs(
+            source_language=resolved_source_language,
+            all_terms=all_terms,
+            batches=batches,
+        )
+
+    def build_batch_request_payload(
+        self,
+        batch: list[TranslationChunkRecord],
+        all_terms: list[Term],
+        *,
+        skip_context: bool = False,
+    ) -> tuple[list[str], list[tuple[str, str, str]]]:
+        """Build request chunk-text and glossary payload for one translation batch."""
+        batch_texts = [chunk.text for chunk in batch]
+        max_chunk_id = max(chunk.chunk_id for chunk in batch)
+        batch_terms = self._build_batch_terms(all_terms, batch, max_chunk_id, skip_context=skip_context)
+        return batch_texts, batch_terms
+
     async def translate_chunks(
         self,
         concurrency: int,
@@ -1262,20 +1313,18 @@ class TranslationContextManager(ContextManager):
             batch_size: Number of chunks per translation batch
             document_ids: Specific document IDs to translate, or None for all
         """
-        raise_if_cancelled(cancel_check)
-        untranslated_chunks = sorted(
-            self.term_repo.get_chunks_to_translate(document_ids, force=force), key=lambda c: c.chunk_id
+        inputs = self.collect_chunk_translation_inputs(
+            batch_size=batch_size,
+            document_ids=document_ids,
+            force=force,
+            cancel_check=cancel_check,
         )
-        if not untranslated_chunks:
+        if inputs is None:
             return
-        source_language = self.term_repo.get_source_language()
-        if not source_language:
-            raise ValueError("Source language not found in the database")
-
-        all_terms = [term for term in self.term_repo.list_keyed_context() if not term.ignored]
+        source_language = inputs.source_language
+        all_terms = inputs.all_terms
         semaphore = asyncio.Semaphore(concurrency)
-
-        batches = self._group_consecutive_batches(untranslated_chunks, batch_size)
+        batches = inputs.batches
         total = len(batches)
         completed = 0
         progress_lock = asyncio.Lock()
@@ -1288,9 +1337,11 @@ class TranslationContextManager(ContextManager):
                 raise_if_cancelled(cancel_check)
                 async with semaphore:
                     raise_if_cancelled(cancel_check)
-                    batch_texts = [chunk.text for chunk in batch]
-                    max_chunk_id = max(chunk.chunk_id for chunk in batch)
-                    batch_terms = self._build_batch_terms(all_terms, batch, max_chunk_id, skip_context=skip_context)
+                    batch_texts, batch_terms = self.build_batch_request_payload(
+                        batch,
+                        all_terms,
+                        skip_context=skip_context,
+                    )
 
                     translated_texts = await self.chunk_translator.translate(
                         batch_texts, batch_terms, source_language, cancel_check=cancel_check

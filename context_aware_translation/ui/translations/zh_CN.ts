@@ -249,96 +249,112 @@
 <context>
     <name>BookWorkspace</name>
     <message>
-        <location filename="../views/book_workspace.py" line="62"/>
-        <location filename="../views/book_workspace.py" line="307"/>
+        <location filename="../views/book_workspace.py" line="63"/>
+        <location filename="../views/book_workspace.py" line="315"/>
         <source>Back to Library</source>
         <translation>返回书库</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="63"/>
-        <location filename="../views/book_workspace.py" line="308"/>
+        <location filename="../views/book_workspace.py" line="64"/>
+        <location filename="../views/book_workspace.py" line="316"/>
         <source>Close this book and return to library</source>
         <translation>关闭此书籍并返回书库</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="90"/>
-        <location filename="../views/book_workspace.py" line="189"/>
-        <location filename="../views/book_workspace.py" line="311"/>
+        <location filename="../views/book_workspace.py" line="91"/>
+        <location filename="../views/book_workspace.py" line="195"/>
+        <location filename="../views/book_workspace.py" line="319"/>
         <source>Import</source>
         <translation>导入</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="91"/>
-        <location filename="../views/book_workspace.py" line="312"/>
+        <location filename="../views/book_workspace.py" line="92"/>
+        <location filename="../views/book_workspace.py" line="320"/>
         <source>OCR Review</source>
         <translation>OCR审核</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="92"/>
-        <location filename="../views/book_workspace.py" line="203"/>
-        <location filename="../views/book_workspace.py" line="313"/>
+        <location filename="../views/book_workspace.py" line="93"/>
+        <location filename="../views/book_workspace.py" line="209"/>
+        <location filename="../views/book_workspace.py" line="321"/>
         <source>Glossary</source>
         <translation>术语表</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="93"/>
-        <location filename="../views/book_workspace.py" line="314"/>
+        <location filename="../views/book_workspace.py" line="94"/>
+        <location filename="../views/book_workspace.py" line="322"/>
         <source>Translate</source>
         <translation>翻译</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="94"/>
-        <location filename="../views/book_workspace.py" line="213"/>
-        <location filename="../views/book_workspace.py" line="315"/>
+        <location filename="../views/book_workspace.py" line="95"/>
+        <location filename="../views/book_workspace.py" line="219"/>
+        <location filename="../views/book_workspace.py" line="323"/>
         <source>Export</source>
         <translation>导出</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="194"/>
+        <location filename="../views/book_workspace.py" line="200"/>
         <source>OCR</source>
         <translation>OCR</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="208"/>
-        <location filename="../views/book_workspace.py" line="220"/>
+        <location filename="../views/book_workspace.py" line="214"/>
+        <location filename="../views/book_workspace.py" line="226"/>
         <source>Translation</source>
         <translation>翻译</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="259"/>
+        <location filename="../views/book_workspace.py" line="266"/>
         <source>Operation in Progress</source>
         <translation>操作进行中</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="262"/>
+        <location filename="../views/book_workspace.py" line="269"/>
+        <source>The following operations are currently running: %1.
+
+Returning to the library will stop local processing.
+
+Submitted async batch tasks will continue at the provider and can be resumed later.
+
+All completed results are already saved and won&apos;t be lost.</source>
+        <translation>以下操作正在运行：%1。
+
+返回书库将停止本地处理。
+
+已提交的异步批量任务将在服务端继续运行，稍后可恢复。
+
+所有已完成的结果已保存，不会丢失。</translation>
+    </message>
+    <message>
         <source>The following operations are currently running: %1.
 
 Returning to the library will cancel them.
 
 All completed results are already saved and won&apos;t be lost.</source>
-        <translation>以下操作正在进行：%1。
+        <translation type="vanished">以下操作正在进行：%1。
 
 返回书库将取消它们。
 
 已完成的结果均已保存，不会丢失。</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="320"/>
+        <location filename="../views/book_workspace.py" line="328"/>
         <source>Suggested flow: Import → OCR Review (if needed) → Glossary (optional) → Translate → Export.</source>
         <translation>建议流程：导入 → OCR审阅（如需）→ 术语表（可选）→ 翻译 → 导出。</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="324"/>
+        <location filename="../views/book_workspace.py" line="332"/>
         <source>Live aggregate token usage across all endpoint profiles.</source>
         <translation>所有端点配置的实时汇总 token 用量。</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="351"/>
+        <location filename="../views/book_workspace.py" line="359"/>
         <source>Token usage: Total %1 | Input %2 (cached %3 / uncached %4) | Output %5 | Active endpoints %6</source>
         <translation>Token 用量：总计 %1 | 输入 %2（缓存 %3 / 非缓存 %4）| 输出 %5 | 活跃端点 %6</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="369"/>
+        <location filename="../views/book_workspace.py" line="377"/>
         <source>Token usage unavailable</source>
         <translation>Token 用量暂不可用</translation>
     </message>
@@ -397,73 +413,73 @@ All completed translations are already saved and won&apos;t be lost.</source>
 <context>
     <name>ConfigEditorWidget</name>
     <message>
-        <location filename="../widgets/config_editor.py" line="45"/>
+        <location filename="../widgets/config_editor.py" line="47"/>
         <source>(None)</source>
         <translation>（无）</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="77"/>
-        <location filename="../widgets/config_editor.py" line="276"/>
+        <location filename="../widgets/config_editor.py" line="79"/>
+        <location filename="../widgets/config_editor.py" line="316"/>
         <source>Target Language</source>
         <translation>目标语言</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="85"/>
-        <location filename="../widgets/config_editor.py" line="303"/>
+        <location filename="../widgets/config_editor.py" line="87"/>
+        <location filename="../widgets/config_editor.py" line="345"/>
         <source>Target Language*:</source>
         <translation>目标语言*：</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="92"/>
-        <location filename="../widgets/config_editor.py" line="277"/>
+        <location filename="../widgets/config_editor.py" line="94"/>
+        <location filename="../widgets/config_editor.py" line="317"/>
         <source>Extractor (Term Extraction)</source>
         <translation>提取器（术语提取）</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="100"/>
-        <location filename="../widgets/config_editor.py" line="126"/>
-        <location filename="../widgets/config_editor.py" line="140"/>
-        <location filename="../widgets/config_editor.py" line="154"/>
-        <location filename="../widgets/config_editor.py" line="185"/>
-        <location filename="../widgets/config_editor.py" line="199"/>
-        <location filename="../widgets/config_editor.py" line="236"/>
-        <location filename="../widgets/config_editor.py" line="250"/>
-        <location filename="../widgets/config_editor.py" line="306"/>
-        <location filename="../widgets/config_editor.py" line="311"/>
-        <location filename="../widgets/config_editor.py" line="314"/>
-        <location filename="../widgets/config_editor.py" line="317"/>
-        <location filename="../widgets/config_editor.py" line="323"/>
-        <location filename="../widgets/config_editor.py" line="326"/>
-        <location filename="../widgets/config_editor.py" line="333"/>
-        <location filename="../widgets/config_editor.py" line="336"/>
+        <location filename="../widgets/config_editor.py" line="102"/>
+        <location filename="../widgets/config_editor.py" line="128"/>
+        <location filename="../widgets/config_editor.py" line="142"/>
+        <location filename="../widgets/config_editor.py" line="156"/>
+        <location filename="../widgets/config_editor.py" line="225"/>
+        <location filename="../widgets/config_editor.py" line="239"/>
+        <location filename="../widgets/config_editor.py" line="276"/>
+        <location filename="../widgets/config_editor.py" line="290"/>
+        <location filename="../widgets/config_editor.py" line="348"/>
+        <location filename="../widgets/config_editor.py" line="353"/>
+        <location filename="../widgets/config_editor.py" line="356"/>
+        <location filename="../widgets/config_editor.py" line="359"/>
+        <location filename="../widgets/config_editor.py" line="379"/>
+        <location filename="../widgets/config_editor.py" line="382"/>
+        <location filename="../widgets/config_editor.py" line="389"/>
+        <location filename="../widgets/config_editor.py" line="392"/>
         <source>Endpoint Profile:</source>
         <translation>端点配置：</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="105"/>
+        <location filename="../widgets/config_editor.py" line="107"/>
         <source>Number of extraction passes to find more terms</source>
         <translation>提取轮次数，用于发现更多术语</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="106"/>
-        <location filename="../widgets/config_editor.py" line="307"/>
+        <location filename="../widgets/config_editor.py" line="108"/>
+        <location filename="../widgets/config_editor.py" line="349"/>
         <source>Max Gleaning:</source>
         <translation>最大采集轮次：</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="111"/>
+        <location filename="../widgets/config_editor.py" line="113"/>
         <source>Maximum character length for term names</source>
         <translation>术语名称的最大字符长度</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="112"/>
-        <location filename="../widgets/config_editor.py" line="308"/>
+        <location filename="../widgets/config_editor.py" line="114"/>
+        <location filename="../widgets/config_editor.py" line="350"/>
         <source>Max Term Name Length:</source>
         <translation>术语名称最大长度：</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="118"/>
-        <location filename="../widgets/config_editor.py" line="278"/>
+        <location filename="../widgets/config_editor.py" line="120"/>
+        <location filename="../widgets/config_editor.py" line="318"/>
         <source>Summarizer (Term Description)</source>
         <translation>摘要器（术语描述）</translation>
     </message>
@@ -476,141 +492,233 @@ All completed translations are already saved and won&apos;t be lost.</source>
         <translation type="vanished">噪声过滤阈值：</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="132"/>
-        <location filename="../widgets/config_editor.py" line="279"/>
+        <location filename="../widgets/config_editor.py" line="134"/>
+        <location filename="../widgets/config_editor.py" line="319"/>
         <source>Glossary Translation</source>
         <translation>术语表翻译</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="146"/>
-        <location filename="../widgets/config_editor.py" line="280"/>
+        <location filename="../widgets/config_editor.py" line="148"/>
+        <location filename="../widgets/config_editor.py" line="320"/>
         <source>Translator (Main Translation)</source>
         <translation>翻译器（主翻译）</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="158"/>
+        <location filename="../widgets/config_editor.py" line="160"/>
         <source>Enable post-translation polishing pass</source>
         <translation>启用翻译后润色</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="159"/>
-        <location filename="../widgets/config_editor.py" line="318"/>
+        <location filename="../widgets/config_editor.py" line="161"/>
+        <location filename="../widgets/config_editor.py" line="360"/>
         <source>Enable Polish:</source>
         <translation>启用润色：</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="164"/>
+        <location filename="../widgets/config_editor.py" line="166"/>
         <source>Number of chunks to translate per LLM call</source>
         <translation>每次LLM调用翻译的文本块数</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="165"/>
-        <location filename="../widgets/config_editor.py" line="319"/>
+        <location filename="../widgets/config_editor.py" line="167"/>
+        <location filename="../widgets/config_editor.py" line="361"/>
         <source>Chunks per Call:</source>
         <translation>每次调用文本块数：</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="170"/>
+        <location filename="../widgets/config_editor.py" line="172"/>
         <source>Maximum token size per chunk</source>
         <translation>每个文本块的最大Token数</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="171"/>
-        <location filename="../widgets/config_editor.py" line="320"/>
+        <location filename="../widgets/config_editor.py" line="173"/>
+        <location filename="../widgets/config_editor.py" line="362"/>
         <source>Chunk Size:</source>
         <translation>文本块大小：</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="177"/>
-        <location filename="../widgets/config_editor.py" line="281"/>
+        <location filename="../widgets/config_editor.py" line="179"/>
+        <location filename="../widgets/config_editor.py" line="321"/>
+        <source>Translator Batch (Optional)</source>
+        <translation>翻译批量任务（可选）</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="189"/>
+        <location filename="../widgets/config_editor.py" line="365"/>
+        <source>Provider:</source>
+        <translation>提供商：</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="187"/>
+        <location filename="../widgets/config_editor.py" line="370"/>
+        <source>Disabled</source>
+        <translation>禁用</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="188"/>
+        <location filename="../widgets/config_editor.py" line="371"/>
+        <source>Gemini AI Studio</source>
+        <translation>Gemini AI Studio</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="193"/>
+        <source>AIza...</source>
+        <translation>AIza...</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="194"/>
+        <location filename="../widgets/config_editor.py" line="366"/>
+        <source>API Key:</source>
+        <translation>API Key：</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="197"/>
+        <source>gemini-2.5-flash</source>
+        <translation>gemini-2.5-flash</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="198"/>
+        <location filename="../widgets/config_editor.py" line="367"/>
+        <source>Model:</source>
+        <translation>模型：</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="203"/>
+        <location filename="../widgets/config_editor.py" line="368"/>
+        <source>Batch Size:</source>
+        <translation>批次大小：</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="211"/>
+        <location filename="../widgets/config_editor.py" line="369"/>
+        <source>Thinking Mode:</source>
+        <translation>思考模式：</translation>
+    </message>
+    <message>
+        <source>Advanced kwargs (JSON):</source>
+        <translation type="vanished">高级参数（JSON）：</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="206"/>
+        <location filename="../widgets/config_editor.py" line="372"/>
+        <source>Auto</source>
+        <translation>自动</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="207"/>
+        <location filename="../widgets/config_editor.py" line="373"/>
+        <source>Off</source>
+        <translation>关闭</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="208"/>
+        <location filename="../widgets/config_editor.py" line="374"/>
+        <source>Low</source>
+        <translation>低</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="209"/>
+        <location filename="../widgets/config_editor.py" line="375"/>
+        <source>Medium</source>
+        <translation>中</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="210"/>
+        <location filename="../widgets/config_editor.py" line="376"/>
+        <source>High</source>
+        <translation>高</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="217"/>
+        <location filename="../widgets/config_editor.py" line="322"/>
         <source>Review (Optional)</source>
         <translation>审校（可选）</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="191"/>
-        <location filename="../widgets/config_editor.py" line="282"/>
+        <location filename="../widgets/config_editor.py" line="231"/>
+        <location filename="../widgets/config_editor.py" line="323"/>
         <source>OCR (Optional)</source>
         <translation>OCR（可选）</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="204"/>
+        <location filename="../widgets/config_editor.py" line="244"/>
         <source>DPI for image compression before OCR</source>
         <translation>OCR前图片压缩的DPI</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="205"/>
-        <location filename="../widgets/config_editor.py" line="327"/>
+        <location filename="../widgets/config_editor.py" line="245"/>
+        <location filename="../widgets/config_editor.py" line="383"/>
         <source>OCR DPI:</source>
         <translation>OCR DPI：</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="209"/>
+        <location filename="../widgets/config_editor.py" line="249"/>
         <source>Remove LLM artifacts from OCR output</source>
         <translation>从OCR输出中移除LLM伪影</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="210"/>
-        <location filename="../widgets/config_editor.py" line="328"/>
+        <location filename="../widgets/config_editor.py" line="250"/>
+        <location filename="../widgets/config_editor.py" line="384"/>
         <source>Strip Artifacts:</source>
         <translation>去除伪影：</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="214"/>
+        <location filename="../widgets/config_editor.py" line="254"/>
         <source>Re-embed images in translated output</source>
         <translation>在翻译输出中重新嵌入图片</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="215"/>
-        <location filename="../widgets/config_editor.py" line="329"/>
+        <location filename="../widgets/config_editor.py" line="255"/>
+        <location filename="../widgets/config_editor.py" line="385"/>
         <source>Enable Image Re-embedding:</source>
         <translation>启用图片重嵌入：</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="221"/>
-        <location filename="../widgets/config_editor.py" line="283"/>
+        <location filename="../widgets/config_editor.py" line="261"/>
+        <location filename="../widgets/config_editor.py" line="324"/>
         <source>Image Reembedding (Optional)</source>
         <translation>图片重嵌入（可选）</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="232"/>
+        <location filename="../widgets/config_editor.py" line="272"/>
         <source>Backend service for image text replacement</source>
         <translation>图片文字替换的后端服务</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="233"/>
-        <location filename="../widgets/config_editor.py" line="332"/>
+        <location filename="../widgets/config_editor.py" line="273"/>
+        <location filename="../widgets/config_editor.py" line="388"/>
         <source>Backend:</source>
         <translation>后端：</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="242"/>
-        <location filename="../widgets/config_editor.py" line="284"/>
+        <location filename="../widgets/config_editor.py" line="282"/>
+        <location filename="../widgets/config_editor.py" line="325"/>
         <source>Manga Translator (Optional)</source>
         <translation>漫画翻译器（可选）</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="255"/>
+        <location filename="../widgets/config_editor.py" line="295"/>
         <source>Number of manga pages to send per LLM call</source>
         <translation>每次LLM调用发送的漫画页数</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="256"/>
-        <location filename="../widgets/config_editor.py" line="337"/>
+        <location filename="../widgets/config_editor.py" line="296"/>
+        <location filename="../widgets/config_editor.py" line="393"/>
         <source>Pages per Call:</source>
         <translation>每次调用页数：</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="342"/>
+        <location filename="../widgets/config_editor.py" line="398"/>
         <source>Output language used by glossary translation and final translation.</source>
         <translation>术语翻译与正文翻译统一使用该输出语言。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="346"/>
+        <location filename="../widgets/config_editor.py" line="402"/>
         <source>Extracts candidate terms from imported text. We strongly recommend using the cheapest model with input caching (e.g. DeepSeek) as this step processes large volumes of text repeatedly.</source>
         <translation>从已导入文本中提取候选术语。强烈建议使用支持输入缓存的低成本模型（如 DeepSeek），因为此步骤会反复处理大量文本。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="353"/>
+        <location filename="../widgets/config_editor.py" line="409"/>
         <source>Builds term descriptions from accumulated context. Earlier imports influence later summaries. We strongly recommend using the cheapest model with input caching (e.g. DeepSeek) as this step re-reads all accumulated context for each term.</source>
         <translation>基于累计上下文生成术语描述。较早导入的内容会影响后续摘要结果。强烈建议使用支持输入缓存的低成本模型（如 DeepSeek），因为此步骤会为每个术语重新读取所有累计上下文。</translation>
     </message>
@@ -623,37 +731,42 @@ All completed translations are already saved and won&apos;t be lost.</source>
         <translation type="vanished">基于累计上下文生成术语描述。较早导入的内容会影响后续摘要结果。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="359"/>
+        <location filename="../widgets/config_editor.py" line="415"/>
         <source>Translates extracted terms into the target language before main translation.</source>
         <translation>在正文翻译前，将已提取术语翻译为目标语言。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="363"/>
+        <location filename="../widgets/config_editor.py" line="419"/>
         <source>Main document translation. Uses glossary plus accumulated context from earlier imported content.</source>
         <translation>正文翻译步骤：使用术语表，并结合此前导入内容形成的累计上下文。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="367"/>
+        <location filename="../widgets/config_editor.py" line="424"/>
+        <source>Optional Gemini AI Studio config for async batch translation tasks. Initial translation and polish calls are sent through provider batch jobs.</source>
+        <translation>可选：为异步批量翻译任务配置 Gemini AI Studio。初始翻译与润色会通过提供商批处理任务提交。</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="429"/>
         <source>Optional LLM review pass for glossary quality before translation.</source>
         <translation>可选：在翻译前使用LLM进行一轮术语质量审校。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="370"/>
+        <location filename="../widgets/config_editor.py" line="432"/>
         <source>For image-based documents. Run OCR before glossary build.</source>
         <translation>用于图片类文档。请先完成OCR，再构建术语表。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="373"/>
+        <location filename="../widgets/config_editor.py" line="435"/>
         <source>Optional: write translated text back into images.</source>
         <translation>可选：将翻译后的文字回写到图片中。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="376"/>
+        <location filename="../widgets/config_editor.py" line="438"/>
         <source>Optional manga-specific translation path for image pages.</source>
         <translation>可选：用于漫画图片页的专用翻译路径。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="390"/>
+        <location filename="../widgets/config_editor.py" line="452"/>
         <source>Target language used for glossary and final translation output.</source>
         <translation>章</translation>
     </message>
@@ -738,102 +851,149 @@ All completed translations are already saved and won&apos;t be lost.</source>
         <translation type="vanished">正在翻译分块 %1/%2</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="396"/>
+        <location filename="../widgets/config_editor.py" line="458"/>
         <source>Endpoint profile used for term extraction.</source>
         <translation>Endpoint profile used for term extraction.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="401"/>
+        <location filename="../widgets/config_editor.py" line="463"/>
         <source>Number of extraction passes to find more terms.</source>
         <translation>Number of extraction passes to find more terms.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="406"/>
+        <location filename="../widgets/config_editor.py" line="468"/>
         <source>Maximum character length for extracted term names.</source>
         <translation>Maximum character length for extracted term names.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="412"/>
+        <location filename="../widgets/config_editor.py" line="474"/>
         <source>Endpoint profile used to build term descriptions from context.</source>
         <translation>Endpoint profile used to build term descriptions from context.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="418"/>
+        <location filename="../widgets/config_editor.py" line="480"/>
         <source>Endpoint profile used to translate glossary terms.</source>
         <translation>Endpoint profile used to translate glossary terms.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="424"/>
+        <location filename="../widgets/config_editor.py" line="486"/>
         <source>Endpoint profile used for main text translation.</source>
         <translation>Endpoint profile used for main text translation.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="429"/>
+        <location filename="../widgets/config_editor.py" line="491"/>
         <source>Run an additional polishing pass after translation.</source>
         <translation>Run an additional polishing pass after translation.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="434"/>
+        <location filename="../widgets/config_editor.py" line="496"/>
         <source>Number of text chunks sent per translation request.</source>
         <translation>Number of text chunks sent per translation request.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="439"/>
+        <location filename="../widgets/config_editor.py" line="501"/>
         <source>Maximum token size for each translation chunk.</source>
         <translation>Maximum token size for each translation chunk.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="445"/>
+        <location filename="../widgets/config_editor.py" line="507"/>
+        <source>Batch provider used for async translation/polish tasks. Leave disabled to turn off batch tasks.</source>
+        <translation>用于异步翻译/润色任务的批处理提供商。设为“禁用”可关闭批任务。</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="512"/>
+        <source>API key used for provider batch submission.</source>
+        <translation>用于提供商批任务提交的 API Key。</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="517"/>
+        <source>Model used for async translation and polish batch jobs.</source>
+        <translation>异步翻译与润色批任务使用的模型。</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="522"/>
+        <source>Maximum number of requests submitted per provider batch job.</source>
+        <translation>每个提供商批任务提交的最大请求数。</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="527"/>
+        <source>Thinking policy for Gemini batch jobs.</source>
+        <translation>Gemini 批任务的思考策略。</translation>
+    </message>
+    <message>
+        <source>Optional JSON object merged into Gemini request config.</source>
+        <translation type="vanished">可选 JSON 对象，会合并到 Gemini 请求配置中。</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="786"/>
+        <source>Translator batch API key is required when provider is enabled.</source>
+        <translation>启用批处理提供商时必须填写 Translator Batch API Key。</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="788"/>
+        <source>Translator batch model is required when provider is enabled.</source>
+        <translation>启用批处理提供商时必须填写 Translator Batch 模型。</translation>
+    </message>
+    <message>
+        <source>Translator batch advanced kwargs must be valid JSON.</source>
+        <translation type="vanished">Translator Batch 高级参数必须是有效 JSON。</translation>
+    </message>
+    <message>
+        <source>Translator batch advanced kwargs must be a JSON object.</source>
+        <translation type="vanished">Translator Batch 高级参数必须是 JSON 对象。</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="533"/>
         <source>Endpoint profile used for optional glossary review.</source>
         <translation>Endpoint profile used for optional glossary review.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="451"/>
+        <location filename="../widgets/config_editor.py" line="539"/>
         <source>Endpoint profile used for OCR on image-based content.</source>
         <translation>Endpoint profile used for OCR on image-based content.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="456"/>
+        <location filename="../widgets/config_editor.py" line="544"/>
         <source>DPI used when compressing images before OCR.</source>
         <translation>DPI used when compressing images before OCR.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="461"/>
+        <location filename="../widgets/config_editor.py" line="549"/>
         <source>Remove common LLM artifact patterns from OCR text.</source>
         <translation>Remove common LLM artifact patterns from OCR text.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="466"/>
+        <location filename="../widgets/config_editor.py" line="554"/>
         <source>Enable writing translated text back into images.</source>
         <translation>Enable writing translated text back into images.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="472"/>
+        <location filename="../widgets/config_editor.py" line="560"/>
         <source>Backend service used for image text replacement.</source>
         <translation>Backend service used for image text replacement.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="477"/>
+        <location filename="../widgets/config_editor.py" line="565"/>
         <source>Endpoint profile used by the image reembedding backend.</source>
         <translation>Endpoint profile used by the image reembedding backend.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="483"/>
+        <location filename="../widgets/config_editor.py" line="571"/>
         <source>Endpoint profile used for manga page translation.</source>
         <translation>Endpoint profile used for manga page translation.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="488"/>
+        <location filename="../widgets/config_editor.py" line="576"/>
         <source>Number of manga pages sent per translation request.</source>
         <translation>Number of manga pages sent per translation request.</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="663"/>
+        <location filename="../widgets/config_editor.py" line="781"/>
         <source>Target language is required.</source>
         <translation>目标语言为必填项。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="667"/>
+        <location filename="../widgets/config_editor.py" line="792"/>
         <source>Image reembedding is enabled but no endpoint profile is selected.</source>
         <translation>图片重嵌入已启用，但未选择端点配置。</translation>
     </message>
@@ -3143,77 +3303,93 @@ This will permanently remove all book data including documents, translations, an
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../main_window.py" line="39"/>
-        <location filename="../main_window.py" line="401"/>
+        <location filename="../main_window.py" line="57"/>
+        <location filename="../main_window.py" line="631"/>
         <source>Context-Aware Translation</source>
         <translation>上下文感知翻译</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="107"/>
-        <location filename="../main_window.py" line="405"/>
+        <location filename="../main_window.py" line="131"/>
+        <location filename="../main_window.py" line="635"/>
         <source>Library</source>
         <translation>书库</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="111"/>
-        <location filename="../main_window.py" line="407"/>
+        <location filename="../main_window.py" line="135"/>
+        <location filename="../main_window.py" line="637"/>
         <source>Profiles</source>
         <translation>配置</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="139"/>
-        <location filename="../main_window.py" line="412"/>
+        <location filename="../main_window.py" line="163"/>
+        <location filename="../main_window.py" line="642"/>
         <source>&amp;File</source>
         <translation>文件(&amp;F)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="141"/>
-        <location filename="../main_window.py" line="417"/>
+        <location filename="../main_window.py" line="165"/>
+        <location filename="../main_window.py" line="647"/>
         <source>Open &amp;Data Folder</source>
         <translation>打开数据文件夹(&amp;D)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="146"/>
-        <location filename="../main_window.py" line="413"/>
+        <location filename="../main_window.py" line="170"/>
+        <location filename="../main_window.py" line="643"/>
         <source>&amp;Language</source>
         <translation>语言(&amp;L)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="162"/>
-        <location filename="../main_window.py" line="414"/>
+        <location filename="../main_window.py" line="186"/>
+        <location filename="../main_window.py" line="644"/>
         <source>&amp;Help</source>
         <translation>帮助(&amp;H)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="164"/>
-        <location filename="../main_window.py" line="418"/>
+        <location filename="../main_window.py" line="188"/>
+        <location filename="../main_window.py" line="648"/>
         <source>&amp;About</source>
         <translation>关于(&amp;A)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="172"/>
-        <location filename="../main_window.py" line="423"/>
+        <location filename="../main_window.py" line="196"/>
+        <location filename="../main_window.py" line="653"/>
         <source>Ready</source>
         <translation>就绪</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="202"/>
+        <location filename="../main_window.py" line="431"/>
         <source>Translation</source>
         <translation>翻译</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="213"/>
+        <location filename="../main_window.py" line="442"/>
         <source>Operation in Progress</source>
         <translation>操作进行中</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="216"/>
+        <location filename="../main_window.py" line="445"/>
+        <source>The following operations are currently running: %1.
+
+Leaving the book will stop local processing.
+
+Submitted async batch tasks will continue at the provider and can be resumed later.
+
+All completed results are already saved and won&apos;t be lost.</source>
+        <translation>以下操作正在运行：%1。
+
+离开本书将停止本地处理。
+
+已提交的异步批量任务将在服务端继续运行，稍后可恢复。
+
+所有已完成的结果已保存，不会丢失。</translation>
+    </message>
+    <message>
         <source>The following operations are currently running: %1.
 
 Leaving the book will cancel them.
 
 All completed results are already saved and won&apos;t be lost.</source>
-        <translation>以下操作正在进行：%1。
+        <translation type="vanished">以下操作正在进行：%1。
 
 离开本书将取消它们。
 
@@ -3232,33 +3408,33 @@ All completed translations are already saved and won&apos;t be lost.</source>
 已完成的翻译内容均已保存，不会丢失。</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="269"/>
+        <location filename="../main_window.py" line="499"/>
         <source>About Context-Aware Translation</source>
         <translation>关于上下文感知翻译</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="272"/>
+        <location filename="../main_window.py" line="502"/>
         <source>&lt;h3&gt;Context-Aware Translation&lt;/h3&gt;&lt;p&gt;Version %1&lt;/p&gt;&lt;p&gt;A desktop application for context-aware document translation with glossary management and OCR support.&lt;/p&gt;&lt;p&gt;Built with PySide6 (Qt for Python)&lt;/p&gt;</source>
         <translation>&lt;h3&gt;上下文感知翻译&lt;/h3&gt;&lt;p&gt;版本 %1&lt;/p&gt;&lt;p&gt;一款支持术语表管理和OCR的上下文感知文档翻译桌面应用。&lt;/p&gt;&lt;p&gt;基于 PySide6（Qt for Python）构建&lt;/p&gt;</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="313"/>
+        <location filename="../main_window.py" line="543"/>
         <source>View &apos;%1&apos; not found</source>
         <translation>未找到视图“%1”</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="335"/>
-        <location filename="../main_window.py" line="409"/>
+        <location filename="../main_window.py" line="565"/>
+        <location filename="../main_window.py" line="639"/>
         <source>Book: %1</source>
         <translation>书籍：%1</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="347"/>
+        <location filename="../main_window.py" line="577"/>
         <source>Opened book: %1</source>
         <translation>已打开书籍：%1</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="380"/>
+        <location filename="../main_window.py" line="610"/>
         <source>Closed book: %1</source>
         <translation>已关闭书籍：%1</translation>
     </message>
@@ -4033,142 +4209,194 @@ Do you want to continue?</source>
 <context>
     <name>TranslationView</name>
     <message>
-        <location filename="../views/translation_view.py" line="490"/>
         <source>Untranslated Terms</source>
-        <translation>未翻译术语</translation>
+        <translation type="vanished">未翻译术语</translation>
     </message>
     <message numerus="yes">
-        <location filename="../views/translation_view.py" line="492"/>
         <source>%n term(s) in the glossary have not been translated yet. Please translate all glossary terms before starting chunk translation.</source>
-        <translation>
+        <translation type="vanished">
             <numerusform>术语表中有 %n 个术语尚未翻译。请在开始文本翻译前先翻译所有术语。</numerusform>
         </translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="98"/>
-        <location filename="../views/translation_view.py" line="159"/>
-        <location filename="../views/translation_view.py" line="1064"/>
-        <location filename="../views/translation_view.py" line="1072"/>
+        <location filename="../views/translation_view.py" line="152"/>
+        <location filename="../views/translation_view.py" line="251"/>
+        <location filename="../views/translation_view.py" line="1612"/>
+        <location filename="../views/translation_view.py" line="1625"/>
         <source>Document:</source>
         <translation>文档：</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="101"/>
-        <location filename="../views/translation_view.py" line="162"/>
-        <location filename="../views/translation_view.py" line="411"/>
-        <location filename="../views/translation_view.py" line="621"/>
+        <location filename="../views/translation_view.py" line="155"/>
+        <location filename="../views/translation_view.py" line="254"/>
+        <location filename="../views/translation_view.py" line="554"/>
+        <location filename="../views/translation_view.py" line="1098"/>
         <source>All Documents</source>
         <translation>所有文档</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="114"/>
-        <location filename="../views/translation_view.py" line="321"/>
-        <location filename="../views/translation_view.py" line="329"/>
-        <location filename="../views/translation_view.py" line="343"/>
+        <location filename="../views/translation_view.py" line="168"/>
+        <location filename="../views/translation_view.py" line="419"/>
+        <location filename="../views/translation_view.py" line="427"/>
+        <location filename="../views/translation_view.py" line="452"/>
         <source>Start Translation</source>
         <translation>开始翻译</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="119"/>
-        <location filename="../views/translation_view.py" line="1066"/>
+        <location filename="../views/translation_view.py" line="173"/>
+        <location filename="../views/translation_view.py" line="1614"/>
         <source>Skip context (use first description only)</source>
         <translation>跳过上下文（仅使用首条描述）</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="138"/>
-        <location filename="../views/translation_view.py" line="1065"/>
+        <location filename="../views/translation_view.py" line="177"/>
+        <location filename="../views/translation_view.py" line="1615"/>
+        <source>Async Batch Tasks</source>
+        <translation>异步批量任务</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="182"/>
+        <location filename="../views/translation_view.py" line="1616"/>
+        <source>Submit Batch Task</source>
+        <translation>提交批量任务</translation>
+    </message>
+    <message>
+        <source>Refresh Tasks</source>
+        <translation type="vanished">刷新任务</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="192"/>
+        <location filename="../views/translation_view.py" line="1617"/>
+        <source>Run Selected Task</source>
+        <translation>运行所选任务</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="195"/>
+        <location filename="../views/translation_view.py" line="1618"/>
+        <source>Cancel Selected Task</source>
+        <translation>取消所选任务</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="198"/>
+        <location filename="../views/translation_view.py" line="1619"/>
+        <source>Delete Selected Task</source>
+        <translation>删除选中的任务</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="230"/>
+        <location filename="../views/translation_view.py" line="1613"/>
         <source>Review Translations</source>
         <translation>审阅翻译</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="153"/>
-        <location filename="../views/translation_view.py" line="1071"/>
+        <location filename="../views/translation_view.py" line="245"/>
+        <location filename="../views/translation_view.py" line="1624"/>
         <source>Back to Progress</source>
         <translation>返回进度</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="198"/>
-        <location filename="../views/translation_view.py" line="1075"/>
+        <location filename="../views/translation_view.py" line="290"/>
+        <location filename="../views/translation_view.py" line="1628"/>
         <source>Chunks:</source>
         <translation>文本块：</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="213"/>
-        <location filename="../views/translation_view.py" line="1076"/>
+        <location filename="../views/translation_view.py" line="305"/>
+        <location filename="../views/translation_view.py" line="1629"/>
         <source>Original:</source>
         <translation>原文：</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="223"/>
-        <location filename="../views/translation_view.py" line="1077"/>
+        <location filename="../views/translation_view.py" line="315"/>
+        <location filename="../views/translation_view.py" line="1630"/>
         <source>Translation:</source>
         <translation>翻译：</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="230"/>
-        <location filename="../views/translation_view.py" line="1078"/>
+        <location filename="../views/translation_view.py" line="322"/>
+        <location filename="../views/translation_view.py" line="1631"/>
         <source>Find...</source>
         <translation>查找...</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="232"/>
-        <location filename="../views/translation_view.py" line="1079"/>
+        <location filename="../views/translation_view.py" line="324"/>
+        <location filename="../views/translation_view.py" line="1632"/>
         <source>Replace with...</source>
         <translation>替换为...</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="233"/>
-        <location filename="../views/translation_view.py" line="1080"/>
+        <location filename="../views/translation_view.py" line="325"/>
+        <location filename="../views/translation_view.py" line="1633"/>
         <source>Find Next</source>
         <translation>查找下一个</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="234"/>
-        <location filename="../views/translation_view.py" line="1081"/>
+        <location filename="../views/translation_view.py" line="326"/>
+        <location filename="../views/translation_view.py" line="1634"/>
         <source>Replace</source>
         <translation>替换</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="235"/>
-        <location filename="../views/translation_view.py" line="1082"/>
+        <location filename="../views/translation_view.py" line="327"/>
+        <location filename="../views/translation_view.py" line="1635"/>
         <source>Replace All</source>
         <translation>全部替换</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="256"/>
-        <location filename="../views/translation_view.py" line="1083"/>
+        <location filename="../views/translation_view.py" line="348"/>
+        <location filename="../views/translation_view.py" line="1636"/>
         <source>Save Changes</source>
         <translation>保存更改</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="268"/>
-        <location filename="../views/translation_view.py" line="1085"/>
+        <location filename="../views/translation_view.py" line="360"/>
+        <location filename="../views/translation_view.py" line="1638"/>
         <source>Previous</source>
         <translation>上一个</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="270"/>
-        <location filename="../views/translation_view.py" line="1086"/>
+        <location filename="../views/translation_view.py" line="362"/>
+        <location filename="../views/translation_view.py" line="1639"/>
         <source>Next</source>
         <translation>下一个</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="298"/>
+        <location filename="../views/translation_view.py" line="394"/>
         <source>Document %1 (%2) [OCR pending]</source>
         <translation>文档 %1（%2）[OCR待处理]</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="333"/>
+        <location filename="../views/translation_view.py" line="431"/>
         <source>OCR is pending for document(s): %1. Complete OCR first.</source>
         <translation>以下文档OCR待处理：%1。请先完成OCR。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="474"/>
+        <location filename="../views/translation_view.py" line="443"/>
+        <location filename="../views/translation_view.py" line="475"/>
+        <location filename="../views/translation_view.py" line="676"/>
+        <location filename="../views/translation_view.py" line="1256"/>
+        <source>Retranslate is unavailable while async batch tasks are active for this book.</source>
+        <translation>本书有异步批量任务正在运行，无法重新翻译。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="675"/>
+        <location filename="../views/translation_view.py" line="703"/>
+        <location filename="../views/translation_view.py" line="1255"/>
+        <source>Batch Task Running</source>
+        <translation>批量任务运行中</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="704"/>
+        <source>A batch task operation is running. Please wait for it to finish first.</source>
+        <translation>批量任务操作正在运行，请等待完成。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="636"/>
         <source>OCR Not Complete</source>
         <translation>OCR未完成</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="477"/>
+        <location filename="../views/translation_view.py" line="630"/>
         <source>Cannot translate yet. Documents with pending OCR in the selected stack: %1.
 
 Please complete OCR from the OCR Review tab first.</source>
@@ -4177,27 +4405,148 @@ Please complete OCR from the OCR Review tab first.</source>
 请先在OCR审阅标签页中完成OCR。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="563"/>
+        <location filename="../views/translation_view.py" line="743"/>
         <source>Cancelling...</source>
         <translation>正在取消...</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="781"/>
+        <location filename="../views/translation_view.py" line="893"/>
+        <source>Running batch task operation...</source>
+        <translation>正在运行批量任务操作...</translation>
+    </message>
+    <message>
+        <source>Pausing...</source>
+        <translation type="vanished">正在暂停...</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="625"/>
+        <source>Cannot submit batch task yet. Documents with pending OCR in the selected stack: %1.
+
+Please complete OCR from the OCR Review tab first.</source>
+        <translation>尚无法提交批量任务。所选文档栈中有待处理的OCR文档：%1。
+
+请先在OCR审查标签页中完成OCR。</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n term(s) in the glossary have not been translated yet. Please translate all glossary terms before submitting a batch task.</source>
+        <translation type="vanished">
+            <numerusform>术语表中有 %n 个术语尚未翻译。请在提交批量任务前翻译所有术语。</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="649"/>
+        <source>Not Supported</source>
+        <translation>不支持</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="650"/>
+        <source>Async batch tasks are not supported for manga documents.</source>
+        <translation>漫画文档不支持异步批量任务。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="657"/>
+        <source>translator_batch_config is required to submit async batch tasks.</source>
+        <translation>提交异步批量任务需要配置 translator_batch_config。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="951"/>
+        <location filename="../views/translation_view.py" line="1012"/>
+        <source>Batch task cancellation requested.</source>
+        <translation>已请求取消批量任务。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="971"/>
+        <source>Delete Batch Task</source>
+        <translation>删除批量任务</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="972"/>
+        <source>Delete the selected async batch task from local history?</source>
+        <translation>是否从本地历史中删除选中的异步批量任务？</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1008"/>
+        <source>Batch task cancelled.</source>
+        <translation>批量任务已取消。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1010"/>
+        <source>Batch task cancellation is in progress.</source>
+        <translation>批量任务正在取消中。</translation>
+    </message>
+    <message>
+        <source>Batch task paused due transient error. Re-run selected task.</source>
+        <translation type="vanished">批量任务因临时错误暂停，请重新运行选中的任务。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1020"/>
+        <source>Batch task run failed.</source>
+        <translation>批量任务运行失败。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1023"/>
+        <source>Batch task run completed with errors.</source>
+        <translation>批量任务运行完成，但有错误。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1026"/>
+        <source>Batch task run completed.</source>
+        <translation>批量任务运行完成。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1035"/>
+        <source>Batch task deleted locally; remote cleanup completed with warnings.</source>
+        <translation>批量任务已从本地删除；远程清理完成，但有警告。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1040"/>
+        <source>Batch task deleted.</source>
+        <translation>批量任务已删除。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1043"/>
+        <source>Batch task submitted.</source>
+        <translation>批量任务已提交。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1053"/>
+        <source>Batch task failed: %1</source>
+        <translation>批量任务失败：%1</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1058"/>
+        <source>Batch Task Error</source>
+        <translation>批量任务错误</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1059"/>
+        <source>Failed to process batch task:
+%1</source>
+        <translation>批量任务处理失败：
+%1</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1066"/>
+        <source>Batch task operation paused.</source>
+        <translation>批量任务操作已暂停。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1267"/>
         <source>Error</source>
         <translation>错误</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="781"/>
+        <location filename="../views/translation_view.py" line="1267"/>
         <source>Chunk has no associated document.</source>
         <translation>该分块没有关联的文档。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="786"/>
+        <location filename="../views/translation_view.py" line="1272"/>
         <source>Retranslate Chunk</source>
         <translation>重新翻译分块</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="788"/>
+        <location filename="../views/translation_view.py" line="1274"/>
         <source>This will retranslate chunk #%1 using the LLM.
 LLM API costs will be incurred.
 
@@ -4208,39 +4557,64 @@ Continue?</source>
 是否继续？</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="797"/>
+        <location filename="../views/translation_view.py" line="1283"/>
         <source>Retranslating...</source>
         <translation>正在重新翻译...</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="840"/>
+        <location filename="../views/translation_view.py" line="1326"/>
         <source>Retranslation Error</source>
         <translation>重新翻译错误</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="841"/>
+        <location filename="../views/translation_view.py" line="1327"/>
         <source>Failed to retranslate chunk:
 %1</source>
         <translation>重新翻译分块失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1045"/>
+        <location filename="../views/translation_view.py" line="1583"/>
         <source>Start translation for selected documents. If already translated, this will retranslate.</source>
         <translation>开始翻译所选文档；若已翻译，将执行重新翻译。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1049"/>
+        <location filename="../views/translation_view.py" line="1587"/>
         <source>Use only the earliest glossary description for each term instead of chunk-positioned context summaries.</source>
         <translation>仅使用每个术语最早的描述，而非基于分块位置的上下文摘要。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1056"/>
+        <location filename="../views/translation_view.py" line="1591"/>
+        <source>Create and run an async batch translation task.</source>
+        <translation>创建并运行异步批量翻译任务。</translation>
+    </message>
+    <message>
+        <source>Reload async batch task list.</source>
+        <translation type="vanished">重新加载异步批量任务列表。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1593"/>
+        <source>Resume processing for the selected async task.</source>
+        <translation>恢复处理所选的异步任务。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1596"/>
+        <source>Request cancellation for the selected async task and provider batch job.</source>
+        <translation>请求取消所选的异步任务和服务端批量作业。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="479"/>
+        <location filename="../views/translation_view.py" line="1604"/>
         <source>Retranslate the selected chunk using the LLM (incurs API cost).</source>
         <translation>使用 LLM 重新翻译所选分块（会产生 API 费用）。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1094"/>
+        <location filename="../views/translation_view.py" line="1599"/>
+        <source>Delete the selected async task from local history.</source>
+        <translation>从本地历史中删除选中的异步任务。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1647"/>
         <source>Translate selected documents directly (glossary extraction is optional, but glossary terms are always used).
 For OCR-required document types, complete OCR first. Keep original line count when editing text chunks.</source>
         <translation>直接翻译选中的文档（术语表提取为可选，但术语表术语始终会被使用）。
@@ -4383,27 +4757,27 @@ This action cannot be undone. Continue?</source>
         <translation type="vanished">导入失败</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1052"/>
+        <location filename="../views/translation_view.py" line="1600"/>
         <source>Open review mode to inspect and edit translated chunks.</source>
         <translation>打开审阅模式以检查并编辑已翻译分块。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1053"/>
+        <location filename="../views/translation_view.py" line="1601"/>
         <source>Return to progress mode and translation controls.</source>
         <translation>返回进度模式和翻译控制界面。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1054"/>
+        <location filename="../views/translation_view.py" line="1602"/>
         <source>Save edits for the currently selected chunk translation.</source>
         <translation>保存当前所选分块翻译的编辑。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1058"/>
+        <location filename="../views/translation_view.py" line="1606"/>
         <source>Go to the previous chunk in the review list.</source>
         <translation>跳转到审阅列表中的上一个分块。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1059"/>
+        <location filename="../views/translation_view.py" line="1607"/>
         <source>Go to the next chunk in the review list.</source>
         <translation>跳转到审阅列表中的下一个分块。</translation>
     </message>
@@ -4428,51 +4802,53 @@ This action cannot be undone. Continue?</source>
         <translation type="vanished">保存</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="300"/>
+        <location filename="../views/translation_view.py" line="396"/>
         <source>Document %1 (%2) [Translated]</source>
         <translation>文档 %1（%2）[已翻译]</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="302"/>
+        <location filename="../views/translation_view.py" line="398"/>
         <source>Document %1 (%2) [%3/%4 translated]</source>
         <translation>文档 %1（%2）[%3/%4 已翻译]</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="304"/>
-        <location filename="../views/translation_view.py" line="614"/>
+        <location filename="../views/translation_view.py" line="400"/>
+        <location filename="../views/translation_view.py" line="1089"/>
         <source>Document %1 (%2)</source>
         <translation>文档 %1（%2）</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="260"/>
-        <location filename="../views/translation_view.py" line="340"/>
-        <location filename="../views/translation_view.py" line="847"/>
-        <location filename="../views/translation_view.py" line="1084"/>
+        <location filename="../views/translation_view.py" line="352"/>
+        <location filename="../views/translation_view.py" line="440"/>
+        <location filename="../views/translation_view.py" line="449"/>
+        <location filename="../views/translation_view.py" line="1332"/>
+        <location filename="../views/translation_view.py" line="1637"/>
         <source>Retranslate</source>
         <translation>重新翻译</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="450"/>
+        <location filename="../views/translation_view.py" line="601"/>
         <source>Chunks: %1 translated / %2 total (%3%)</source>
         <translation>文本块：%1 已翻译 / 共 %2 个（%3%）</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="508"/>
+        <location filename="../views/translation_view.py" line="656"/>
+        <location filename="../views/translation_view.py" line="663"/>
         <source>Configuration Required</source>
         <translation>需要配置</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="510"/>
+        <location filename="../views/translation_view.py" line="665"/>
         <source>manga_translator_config is required to translate manga documents. Please configure it in your book settings.</source>
         <translation>翻译漫画文档需要 manga_translator_config。请在书籍设置中进行配置。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="522"/>
+        <location filename="../views/translation_view.py" line="682"/>
         <source>Retranslate Document</source>
         <translation>重新翻译文档</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="524"/>
+        <location filename="../views/translation_view.py" line="684"/>
         <source>This will retranslate all chunks in the selected document(s). Existing translations will be overwritten and LLM API costs will be incurred.
 
 Are you sure you want to continue?</source>
@@ -4485,39 +4861,49 @@ Are you sure you want to continue?</source>
         <translation type="vanished">正在取消翻译...</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="573"/>
+        <location filename="../views/translation_view.py" line="753"/>
         <source>Translation completed successfully!</source>
         <translation>翻译成功完成！</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="583"/>
+        <location filename="../views/translation_view.py" line="763"/>
         <source>Translation failed: %1</source>
         <translation>翻译失败：%1</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="589"/>
+        <location filename="../views/translation_view.py" line="769"/>
         <source>Translation Error</source>
         <translation>翻译错误</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="590"/>
+        <location filename="../views/translation_view.py" line="770"/>
         <source>Failed to translate chunks:
 %1</source>
         <translation>翻译文本块失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="595"/>
+        <location filename="../views/translation_view.py" line="775"/>
         <source>Translation cancelled.</source>
         <translation>翻译已取消。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="736"/>
+        <location filename="../views/translation_view.py" line="882"/>
+        <source>A batch run is already active for this book.</source>
+        <translation>该书籍已有一个批量任务正在运行。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1016"/>
+        <source>Batch task paused due to transient error. Re-run selected task.</source>
+        <translation>批量任务因临时错误已暂停。请重新运行所选任务。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1215"/>
         <source>Line Count Mismatch</source>
         <translation>行数不匹配</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="739"/>
+        <location filename="../views/translation_view.py" line="1218"/>
         <source>Cannot save: translation has %1 lines but original has %2 lines.
 
 The number of lines must remain the same.</source>
@@ -4526,12 +4912,12 @@ The number of lines must remain the same.</source>
 行数必须保持一致。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="769"/>
+        <location filename="../views/translation_view.py" line="1248"/>
         <source>Saved</source>
         <translation>已保存</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="769"/>
+        <location filename="../views/translation_view.py" line="1248"/>
         <source>Translation saved successfully!</source>
         <translation>翻译保存成功！</translation>
     </message>
