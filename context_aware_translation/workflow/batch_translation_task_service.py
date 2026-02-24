@@ -53,6 +53,7 @@ _RERUNNABLE_TERMINAL_STATUSES = {
     STATUS_FAILED,
     STATUS_COMPLETED_WITH_ERRORS,
 }
+RERUNNABLE_TERMINAL_STATUSES = _RERUNNABLE_TERMINAL_STATUSES
 AUTO_RUN_TASK_STATUSES = frozenset(
     {
         STATUS_QUEUED,
@@ -111,6 +112,24 @@ def _is_transient_batch_error(exc: Exception) -> bool:
             return True
         current = current.__cause__ or current.__context__
     return False
+
+
+def prepare_payload_for_rerun(payload: dict[str, Any]) -> dict[str, Any]:
+    """Reset a batch-task payload so unapplied items are retried."""
+    payload = dict(payload)
+    items = payload.get("items")
+    if isinstance(items, list):
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            if bool(item.get("applied")):
+                continue
+            for stage in ("translation", "polish"):
+                existing = item.get(stage) if isinstance(item.get(stage), dict) else {}
+                item[stage] = new_stage_state(messages=existing.get("messages") if existing else None)
+    payload["translation"] = new_payload_stage()
+    payload["polish"] = new_payload_stage()
+    return payload
 
 
 class BatchTranslationTaskService:
@@ -334,7 +353,7 @@ class BatchTranslationTaskService:
         if task.status == STATUS_COMPLETED:
             return task
         if task.status in _RERUNNABLE_TERMINAL_STATUSES:
-            payload = self._prepare_payload_for_rerun(self._decode_payload(task))
+            payload = prepare_payload_for_rerun(self._decode_payload(task))
             task = self.task_store.update(
                 task_id,
                 status=STATUS_PAUSED,
@@ -350,8 +369,12 @@ class BatchTranslationTaskService:
             return await self.request_cancel(task_id)
 
         try:
-            task = self.task_store.update(task_id, status=STATUS_RUNNING, cancel_requested=False)
+            task = self.task_store.update(task_id, status=STATUS_RUNNING)
             payload = self._decode_payload(task)
+            # If re-queued from a terminal state, reset stale payload items.
+            existing_items = payload.get("items")
+            if isinstance(existing_items, list) and existing_items:
+                payload = prepare_payload_for_rerun(payload)
             payload = await ensure_payload_prepared(self, task, payload, cancel_check=cancel_check)
             task = self.persist_payload(task_id, payload, phase=PHASE_TRANSLATION_SUBMIT, status=STATUS_RUNNING)
 
@@ -417,8 +440,14 @@ class BatchTranslationTaskService:
                 last_error=last_error,
             )
         except _PauseRequestedError:
+            refreshed = self.task_store.get(task_id)
+            if refreshed is not None and refreshed.cancel_requested:
+                return await self.request_cancel(task_id)
             return self.task_store.update(task_id, status=STATUS_PAUSED)
         except OperationCancelledError:
+            refreshed = self.task_store.get(task_id)
+            if refreshed is not None and refreshed.cancel_requested:
+                return await self.request_cancel(task_id)
             return self.task_store.update(task_id, status=STATUS_PAUSED)
         except Exception as exc:
             if _is_transient_batch_error(exc):
@@ -448,23 +477,6 @@ class BatchTranslationTaskService:
         except json.JSONDecodeError:
             return {}
         return value if isinstance(value, dict) else {}
-
-    @staticmethod
-    def _prepare_payload_for_rerun(payload: dict[str, Any]) -> dict[str, Any]:
-        payload = dict(payload)
-        items = payload.get("items")
-        if isinstance(items, list):
-            for item in items:
-                if not isinstance(item, dict):
-                    continue
-                if bool(item.get("applied")):
-                    continue
-                for stage in ("translation", "polish"):
-                    existing = item.get(stage) if isinstance(item.get(stage), dict) else {}
-                    item[stage] = new_stage_state(messages=existing.get("messages") if existing else None)
-        payload["translation"] = new_payload_stage()
-        payload["polish"] = new_payload_stage()
-        return payload
 
     @staticmethod
     def _collect_remote_cleanup_targets(payload: dict[str, Any]) -> tuple[list[str], list[str]]:
@@ -580,9 +592,10 @@ class BatchTranslationTaskService:
         return any(str(doc.get("document_type", "")) == "manga" for doc in docs)
 
     def raise_if_local_pause(self, task_id: str, cancel_check: Callable[[], bool] | None) -> None:
-        if cancel_check is None:
-            return
-        if cancel_check():
-            task = self.task_store.get(task_id)
-            if task is None or not task.cancel_requested:
-                raise _PauseRequestedError()
+        # Check local thread interruption (UI-initiated pause).
+        if cancel_check is not None and cancel_check():
+            raise _PauseRequestedError()
+        # Check DB for external cancel request (e.g. from cancel worker or UI).
+        task = self.task_store.get(task_id)
+        if task is not None and task.cancel_requested:
+            raise _PauseRequestedError()

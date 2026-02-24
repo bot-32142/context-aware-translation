@@ -44,7 +44,6 @@ def test_is_workspace_translation_worker_running_detects_interactive_translation
     translation_view = SimpleNamespace(
         worker=_Worker(True),
         retranslate_worker=None,
-        batch_task_worker=_Worker(False),
     )
     workspace = MagicMock(spec=BookWorkspace)
     workspace.get_translation_view.return_value = translation_view

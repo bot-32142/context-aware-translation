@@ -33,7 +33,6 @@ class BatchTranslationTaskWorker(BaseWorker):
         document_ids: list[int] | None = None,
         force: bool = False,
         skip_context: bool = False,
-        auto_run_after_create: bool = False,
     ) -> None:
         super().__init__()
         self.book_manager = book_manager
@@ -43,7 +42,6 @@ class BatchTranslationTaskWorker(BaseWorker):
         self.document_ids = document_ids
         self.force = force
         self.skip_context = skip_context
-        self.auto_run_after_create = auto_run_after_create
 
     @classmethod
     def is_run_active_for_book(cls, book_id: str) -> bool:
@@ -132,14 +130,6 @@ class BatchTranslationTaskWorker(BaseWorker):
                         force=self.force,
                         skip_context=self.skip_context,
                     )
-                    if self.auto_run_after_create:
-                        record = asyncio.run(
-                            service.run_task(
-                                record.task_id,
-                                cancel_check=self._is_cancelled,
-                                progress_callback=self._emit_progress,
-                            )
-                        )
                     self.finished_success.emit({"action": "create", "task": self._record_to_payload(record)})
                     return
 

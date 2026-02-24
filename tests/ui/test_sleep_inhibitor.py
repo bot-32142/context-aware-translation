@@ -426,32 +426,7 @@ def test_update_sleep_inhibitor_acquires_when_translation_batch_worker_running()
         _sleep_inhibitor=mock_inhibitor,
     )
 
-    with patch(
-        "context_aware_translation.ui.views.translation_view.TranslationView._DETACHED_BATCH_RUN_WORKERS",
-        set(),
-    ):
-        MainWindow._update_sleep_inhibitor(fake_window)
-    mock_inhibitor.acquire.assert_called_once()
-    mock_inhibitor.release.assert_not_called()
-
-
-def test_update_sleep_inhibitor_acquires_when_detached_batch_run_worker_active():
-    from context_aware_translation.ui.main_window import MainWindow
-
-    mock_inhibitor = MagicMock()
-    detached_worker = MagicMock()
-    detached_worker.isRunning.return_value = True
-    fake_window = SimpleNamespace(
-        _global_batch_workers={},
-        _view_registry={},
-        _sleep_inhibitor=mock_inhibitor,
-    )
-
-    with patch(
-        "context_aware_translation.ui.views.translation_view.TranslationView._DETACHED_BATCH_RUN_WORKERS",
-        {detached_worker},
-    ):
-        MainWindow._update_sleep_inhibitor(fake_window)
+    MainWindow._update_sleep_inhibitor(fake_window)
     mock_inhibitor.acquire.assert_called_once()
     mock_inhibitor.release.assert_not_called()
 

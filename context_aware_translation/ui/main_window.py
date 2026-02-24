@@ -246,18 +246,6 @@ class MainWindow(QMainWindow):
             self._sleep_inhibitor.acquire()
             return
 
-        # Detached run workers can outlive their originating translation view.
-        # Keep sleep inhibition active until those workers have actually finished.
-        from .views.translation_view import TranslationView
-
-        for worker in list(TranslationView._DETACHED_BATCH_RUN_WORKERS):
-            try:
-                if worker.isRunning():
-                    self._sleep_inhibitor.acquire()
-                    return
-            except RuntimeError:
-                continue
-
         for view_name, widget in self._view_registry.items():
             if not view_name.startswith("book_"):
                 continue
@@ -295,6 +283,8 @@ class MainWindow(QMainWindow):
                     continue
                 self._global_batch_retry_after.pop(book_id, None)
             if self._is_workspace_translation_worker_running(book_id):
+                continue
+            if self._global_batch_workers.get(book_id):
                 continue
             candidate = self._next_auto_batch_candidate(book_id)
             if candidate is None:
@@ -364,9 +354,7 @@ class MainWindow(QMainWindow):
             return False
         if translation_view.worker is not None and translation_view.worker.isRunning():
             return True
-        if translation_view.retranslate_worker is not None and translation_view.retranslate_worker.isRunning():
-            return True
-        return translation_view.batch_task_worker is not None and translation_view.batch_task_worker.isRunning()
+        return translation_view.retranslate_worker is not None and translation_view.retranslate_worker.isRunning()
 
     def _start_global_batch_worker(self, book_id: str, task_id: str, doc_ids: list[int] | None = None) -> None:
         worker = BatchTranslationTaskWorker(
@@ -693,12 +681,5 @@ class MainWindow(QMainWindow):
         self._shutdown_global_batch_autorun()
         self._sleep_inhibitor.release()
         self.close_book()
-        # Safety: interrupt and release any detached batch workers that outlived their views.
-        from .views.translation_view import TranslationView
-
-        for worker in list(TranslationView._DETACHED_BATCH_RUN_WORKERS):
-            worker.requestInterruption()
-            worker.wait(1000)
-        TranslationView._DETACHED_BATCH_RUN_WORKERS.clear()
         self._save_geometry()
         event.accept()

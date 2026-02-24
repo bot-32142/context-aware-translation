@@ -100,6 +100,53 @@ def test_select_next_auto_run_task_prefers_oldest_runnable_entry():
     assert selected.task_id == "older-runnable"
 
 
+def test_select_next_auto_run_task_includes_cancel_requested_cancelling_entry():
+    tasks = [
+        TranslationBatchTaskRecord(
+            task_id="terminal-newer",
+            book_id="book-1",
+            status=STATUS_COMPLETED,
+            phase=PHASE_DONE,
+            payload_json="{}",
+            document_ids_json=None,
+            force=False,
+            skip_context=False,
+            total_items=1,
+            completed_items=1,
+            failed_items=0,
+            cancel_requested=False,
+            translation_batch_name=None,
+            polish_batch_name=None,
+            last_error=None,
+            created_at=2.0,
+            updated_at=2.0,
+        ),
+        TranslationBatchTaskRecord(
+            task_id="cancelling-older",
+            book_id="book-1",
+            status=STATUS_CANCELLING,
+            phase=PHASE_DONE,
+            payload_json="{}",
+            document_ids_json=None,
+            force=False,
+            skip_context=False,
+            total_items=1,
+            completed_items=0,
+            failed_items=0,
+            cancel_requested=True,
+            translation_batch_name=None,
+            polish_batch_name=None,
+            last_error=None,
+            created_at=1.0,
+            updated_at=1.0,
+        ),
+    ]
+
+    selected = select_next_auto_run_task(tasks)
+    assert selected is not None
+    assert selected.task_id == "cancelling-older"
+
+
 def test_delete_task_removes_terminal_task(tmp_path):
     service = _build_service(tmp_path)
     try:

@@ -1,5 +1,6 @@
 """Translation view with progress and review modes."""
 
+import json
 import sqlite3
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
@@ -33,6 +34,7 @@ from context_aware_translation.storage.translation_batch_task_store import (
     STATUS_COMPLETED_WITH_ERRORS,
     STATUS_FAILED,
     STATUS_PAUSED,
+    STATUS_QUEUED,
     STATUS_RUNNING,
     TERMINAL_TASK_STATUSES,
     TranslationBatchTaskRecord,
@@ -46,6 +48,10 @@ from ..workers.batch_task_overlap_guard import has_any_batch_task_overlap
 from ..workers.batch_translation_task_worker import BatchTranslationTaskWorker
 from ..workers.operation_tracker import DocumentOperationTracker
 from ..workers.translation_worker import RetranslateChunkWorker, TranslationWorker
+from context_aware_translation.workflow.batch_translation_task_service import (
+    AUTO_RUN_TASK_STATUSES,
+    RERUNNABLE_TERMINAL_STATUSES,
+)
 from .manga_review_widget import MangaReviewWidget
 
 PREVIEW_TRUNCATION_LENGTH = 50
@@ -70,11 +76,6 @@ def _is_closed_database_error(exc: Exception) -> bool:
 class TranslationView(QWidget):
     """View for translating chunks with progress and review modes."""
 
-    # Class-level shared set: holds batch "run" workers detached during cleanup
-    # so they stay alive until they finish naturally (preventing data loss).
-    # Entries are auto-removed via the worker's ``finished`` signal.
-    _DETACHED_BATCH_RUN_WORKERS: set[BatchTranslationTaskWorker] = set()
-
     translation_completed = Signal()
 
     def __init__(
@@ -89,7 +90,6 @@ class TranslationView(QWidget):
         self.worker: TranslationWorker | None = None
         self.retranslate_worker: RetranslateChunkWorker | None = None
         self.batch_task_worker: BatchTranslationTaskWorker | None = None
-        self._active_batch_task_id: str | None = None
         self._batch_tasks_cache: list[TranslationBatchTaskRecord] = []
         self._batch_auto_timer: QTimer | None = None
         self._is_cleaned_up = False
@@ -484,6 +484,16 @@ class TranslationView(QWidget):
         tasks = self._batch_tasks_cache
         return any(task.status not in TERMINAL_TASK_STATUSES for task in tasks)
 
+    def _has_batch_task_for_document(self, document_id: int) -> bool:
+        """Return True when a non-terminal batch task covers *document_id*."""
+        for task in self._batch_tasks_cache:
+            if task.status in TERMINAL_TASK_STATUSES:
+                continue
+            task_doc_ids = self._parse_task_doc_ids(task.document_ids_json)
+            if task_doc_ids is None or document_id in task_doc_ids:
+                return True
+        return False
+
     def _update_retranslate_chunk_button_state(self) -> None:
         """Enable/disable chunk retranslate based on task state and selection."""
         if not hasattr(self, "retranslate_chunk_btn"):
@@ -494,11 +504,12 @@ class TranslationView(QWidget):
 
         current_chunk = getattr(self, "_current_chunk", None)
         has_selected_chunk = current_chunk is not None
-        blocked_by_batch_tasks = self._has_uncancelled_batch_tasks()
+        blocked_by_batch_tasks = False
         blocked_by_active_operation = False
         if has_selected_chunk:
             current_doc_id = getattr(current_chunk, "document_id", None)
             if current_doc_id is not None:
+                blocked_by_batch_tasks = self._has_batch_task_for_document(current_doc_id)
                 blocked_by_active_operation = DocumentOperationTracker.has_document_overlap(
                     self.book_id,
                     [current_doc_id],
@@ -508,7 +519,7 @@ class TranslationView(QWidget):
         )
         if blocked_by_batch_tasks:
             self.retranslate_chunk_btn.setToolTip(
-                self.tr("Retranslate is unavailable while async batch tasks are active for this book.")
+                self.tr("Retranslate is unavailable while a batch task covers this document.")
             )
         elif blocked_by_active_operation:
             self.retranslate_chunk_btn.setToolTip(
@@ -904,7 +915,7 @@ class TranslationView(QWidget):
         if self._is_batch_task_worker_running():
             self.run_batch_task_btn.setEnabled(False)
             self.delete_batch_task_btn.setEnabled(False)
-            self.cancel_batch_task_btn.setEnabled(task.task_id == getattr(self, "_active_batch_task_id", None))
+            self.cancel_batch_task_btn.setEnabled(False)
             return
 
         is_terminal = task.status in TERMINAL_TASK_STATUSES
@@ -936,10 +947,6 @@ class TranslationView(QWidget):
         """Resolve document IDs from a batch task worker for reservation checks."""
         if worker.action == "create":
             return worker.document_ids
-        if worker.action == "run" and worker.task_id:
-            task = self._batch_task_store.get(worker.task_id)
-            if task:
-                return self._parse_task_doc_ids(task.document_ids_json)
         return None
 
     def _has_document_reservation(
@@ -961,7 +968,7 @@ class TranslationView(QWidget):
     def _start_batch_task_worker(self, worker: BatchTranslationTaskWorker) -> None:
         if self._is_batch_task_worker_running():
             return
-        if worker.action in {"create", "run"}:
+        if worker.action == "create":
             doc_ids = self._resolve_worker_document_ids(worker)
             if DocumentOperationTracker.has_document_overlap(self.book_id, doc_ids):
                 if hasattr(self, "batch_status_label"):
@@ -970,10 +977,9 @@ class TranslationView(QWidget):
                     self.batch_status_label.show()
                 return
         self.batch_task_worker = worker
-        self._active_batch_task_id = worker.task_id if worker.action == "run" else None
         self.submit_batch_btn.setEnabled(False)
         self.run_batch_task_btn.setEnabled(False)
-        self.cancel_batch_task_btn.setEnabled(bool(self._active_batch_task_id))
+        self.cancel_batch_task_btn.setEnabled(False)
         self.delete_batch_task_btn.setEnabled(False)
         self.start_btn.setEnabled(False)
         self.batch_status_label.show()
@@ -1012,7 +1018,6 @@ class TranslationView(QWidget):
             document_ids=document_ids,
             force=force,
             skip_context=self.skip_context_cb.isChecked(),
-            auto_run_after_create=False,
         )
         self._start_batch_task_worker(worker)
 
@@ -1022,47 +1027,49 @@ class TranslationView(QWidget):
         task_id = self._selected_batch_task_id()
         if not task_id:
             return
-
-        # Check document reservation for this task's docs (excluding self)
         task = self._batch_task_store.get(task_id)
-        if task is not None:
-            task_doc_ids = self._parse_task_doc_ids(task.document_ids_json)
-            if self._has_document_reservation(task_doc_ids, exclude_task_ids={task_id}):
-                if hasattr(self, "batch_status_label"):
-                    self.batch_status_label.setStyleSheet("color: #b45309;")
-                    self.batch_status_label.setText(
-                        self.tr("Selected task's documents are reserved by active operations or overlapping tasks.")
-                    )
-                    self.batch_status_label.show()
-                return
-
-        worker = BatchTranslationTaskWorker(
-            self.book_manager,
-            self.book_id,
-            action="run",
-            task_id=task_id,
+        if task is None:
+            return
+        if task.status in AUTO_RUN_TASK_STATUSES:
+            # Already queued for global autorun
+            self.batch_status_label.setStyleSheet("")
+            self.batch_status_label.setText(self.tr("Batch task submitted."))
+            self.batch_status_label.show()
+            return
+        if task.status not in RERUNNABLE_TERMINAL_STATUSES:
+            return
+        # Check document reservation (excluding self)
+        task_doc_ids = self._parse_task_doc_ids(task.document_ids_json)
+        if self._has_document_reservation(task_doc_ids, exclude_task_ids={task_id}):
+            if hasattr(self, "batch_status_label"):
+                self.batch_status_label.setStyleSheet("color: #b45309;")
+                self.batch_status_label.setText(
+                    self.tr("Selected task's documents are reserved by active operations or overlapping tasks.")
+                )
+                self.batch_status_label.show()
+            return
+        self._batch_task_store.update(
+            task_id,
+            status=STATUS_QUEUED,
+            cancel_requested=False,
+            last_error=None,
         )
-        self._start_batch_task_worker(worker)
+        self.batch_status_label.setStyleSheet("")
+        self.batch_status_label.setText(self.tr("Batch task submitted."))
+        self.batch_status_label.show()
+        self._refresh_batch_tasks()
 
     def _cancel_selected_batch_task(self) -> None:
-        if self.worker and self.worker.isRunning():
+        if (self.worker and self.worker.isRunning()) or self._is_batch_task_worker_running():
             return
         task_id = self._selected_batch_task_id()
         if not task_id:
             return
-        if self._is_batch_task_worker_running():
-            if task_id != self._active_batch_task_id:
-                return
-            task = self._batch_task_store.get(task_id)
-            if task is None or task.status in TERMINAL_TASK_STATUSES:
-                self._refresh_batch_tasks()
-                return
-            self._batch_task_store.mark_cancel_requested(task_id)
-            self.batch_status_label.setStyleSheet("")
-            self.batch_status_label.setText(self.tr("Batch task cancellation requested."))
-            self.batch_status_label.show()
+        task = self._batch_task_store.get(task_id)
+        if task is None or task.status in TERMINAL_TASK_STATUSES:
             self._refresh_batch_tasks()
             return
+        self._batch_task_store.mark_cancel_requested(task_id)
         worker = BatchTranslationTaskWorker(
             self.book_manager,
             self.book_id,
@@ -1121,20 +1128,6 @@ class TranslationView(QWidget):
                 self.batch_status_label.setText(self.tr("Batch task cancellation is in progress."))
             else:
                 self.batch_status_label.setText(self.tr("Batch task cancellation requested."))
-        elif action == "run":
-            if task_status == STATUS_PAUSED:
-                self.batch_status_label.setText(
-                    self.tr("Batch task paused due to transient error. Re-run selected task.")
-                )
-                self.batch_status_label.setStyleSheet("color: #b45309;")
-            elif task_status == STATUS_FAILED:
-                self.batch_status_label.setText(self.tr("Batch task run failed."))
-                self.batch_status_label.setStyleSheet("color: red;")
-            elif task_status == STATUS_COMPLETED_WITH_ERRORS:
-                self.batch_status_label.setText(self.tr("Batch task run completed with errors."))
-                self.batch_status_label.setStyleSheet("color: #b45309;")
-            else:
-                self.batch_status_label.setText(self.tr("Batch task run completed."))
         elif action == "delete":
             cleanup_warnings: list[str] = []
             if isinstance(payload, dict):
@@ -1182,10 +1175,8 @@ class TranslationView(QWidget):
     def _on_batch_task_finished(self) -> None:
         if self._is_cleaned_up:
             self.batch_task_worker = None
-            self._active_batch_task_id = None
             return
         self.batch_task_worker = None
-        self._active_batch_task_id = None
         self._refresh_batch_tasks()
         self._on_batch_task_selected(self.batch_task_list.currentRow())
         self._update_start_button_state()
@@ -1359,14 +1350,15 @@ class TranslationView(QWidget):
 
     def _retranslate_current_chunk(self) -> None:
         """Retranslate the currently selected chunk using the LLM."""
-        if self._has_uncancelled_batch_tasks():
+        if not self._current_chunk:
+            return
+        current_doc_id = getattr(self._current_chunk, "document_id", None)
+        if current_doc_id is not None and self._has_batch_task_for_document(current_doc_id):
             QMessageBox.information(
                 self,
                 self.tr("Batch Task Running"),
-                self.tr("Retranslate is unavailable while async batch tasks are active for this book."),
+                self.tr("Retranslate is unavailable while a batch task covers this document."),
             )
-            return
-        if not self._current_chunk:
             return
 
         if self.retranslate_worker and self.retranslate_worker.isRunning():
@@ -1628,14 +1620,10 @@ class TranslationView(QWidget):
         batch_task_worker = self.batch_task_worker
         if batch_task_worker is not None:
             self._disconnect_batch_task_worker_signals(batch_task_worker)
-            if getattr(batch_task_worker, "action", "") == "run":
-                self._detach_batch_run_worker(batch_task_worker)
-            else:
-                batch_task_worker.requestInterruption()
-                if batch_task_worker.isRunning():
-                    batch_task_worker.wait()
+            batch_task_worker.requestInterruption()
+            if batch_task_worker.isRunning():
+                batch_task_worker.wait()
             self.batch_task_worker = None
-            self._active_batch_task_id = None
         if self.retranslate_worker and self.retranslate_worker.isRunning():
             self.retranslate_worker.requestInterruption()
             self.retranslate_worker.wait()
@@ -1659,23 +1647,6 @@ class TranslationView(QWidget):
                 signal.disconnect(slot)
             except (TypeError, RuntimeError):
                 continue
-
-    @classmethod
-    def _detach_batch_run_worker(cls, worker: BatchTranslationTaskWorker) -> None:
-        cls._DETACHED_BATCH_RUN_WORKERS.add(worker)
-
-        def _release_worker() -> None:
-            cls._DETACHED_BATCH_RUN_WORKERS.discard(worker)
-            worker.deleteLater()
-
-        finished_signal = getattr(worker, "finished", None)
-        if finished_signal is None:
-            cls._DETACHED_BATCH_RUN_WORKERS.discard(worker)
-            return
-        try:
-            finished_signal.connect(_release_worker)
-        except (TypeError, RuntimeError):
-            cls._DETACHED_BATCH_RUN_WORKERS.discard(worker)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Handle widget close event."""
