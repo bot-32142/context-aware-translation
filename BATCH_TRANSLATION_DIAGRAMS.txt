@@ -1,0 +1,422 @@
+================================================================================
+BATCH TRANSLATION SERVICE LAYER - VISUAL DIAGRAMS
+================================================================================
+
+1. TWO-LAYER ARCHITECTURE OVERVIEW
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              UI LAYER                                       │
+│                         TranslationView                                     │
+│                                                                             │
+│  Legacy Path:                           New Path:                          │
+│  _legacy_batch_store.list_tasks()      task_engine.get_tasks()             │
+│  _legacy_batch_store.create_task()     task_engine.submit()                │
+│  service.delete_task()                 task_engine.delete()                │
+│  service.request_cancel()              task_engine.cancel()                │
+└─────────────────────────────────────────────────────────────────────────────┘
+           ↓                                      ↓
+┌──────────────────────────────────┐  ┌────────────────────────────────────┐
+│  LEGACY CONTROL PLANE            │  │  NEW CONTROL PLANE (CANONICAL)     │
+│                                  │  │                                    │
+│  BatchTranslationTaskService     │  │  TaskEngine + Handlers             │
+│  - list_tasks()                  │  │  - submit() / rerun()              │
+│  - create_task()                 │  │  - cancel() / delete()             │
+│  - delete_task()                 │  │  - get_tasks() [query]             │
+│  - request_cancel()              │  │  - preflight() [advisory]          │
+│                                  │  │  - tick() [scheduler]              │
+│                                  │  │  - register_handler()              │
+└──────────────────────────────────┘  └────────────────────────────────────┘
+           ↓                                      ↓
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           WORKER THREAD                                     │
+│                  BatchTranslationTaskWorker (Qt QThread)                    │
+│                                                                             │
+│  _execute() dispatches on action:                                          │
+│    - "list"   → service.list_tasks()                                       │
+│    - "create" → service.create_task()                                      │
+│    - "run"    → asyncio.run(service.run_task())       ← SHARED             │
+│    - "cancel" → asyncio.run(service.request_cancel()) ← SHARED             │
+│    - "delete" → service.delete_task()                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+           ↓
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       EXECUTION LAYER (SHARED)                             │
+│                  BatchTranslationTaskService + Ops                         │
+│                                                                             │
+│  Service Methods:                    Stage Functions:                      │
+│  - run_task()          [main]        - ensure_payload_prepared()           │
+│  - persist_payload()   [progress]    - run_translation_stage()             │
+│  - request_cancel()    [async]       - run_polish_stage()                  │
+│                                      - apply_results()                     │
+│                                      - poll_until_terminal()               │
+│                                      - _execute_stage()                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+2. TASK LIFECYCLE STATE MACHINE
+================================================================================
+
+                    ┌─────────────────────────────────────────┐
+                    │                                         │
+                    ↓                                         │
+    ┌─────────────────────────────────────────┐              │
+    │  queued  (initial state)                │              │
+    │  submit() or rerun()                    │              │
+    └──────────────────┬──────────────────────┘              │
+                       ↓                                      │
+    ┌─────────────────────────────────────────┐              │
+    │  running                                │              │
+    │  - prepare payload                      │              │
+    │  - run translation stage                │              │
+    │  - run polish stage                     │              │
+    │  - apply results                        │              │
+    └──────────────────┬──────────────────────┘              │
+                       ↓                                      │
+         ┌─────────────────────┬──────────────────────┐      │
+         ↓                     ↓                      ↓       │
+    completed      completed_with_errors         paused      │
+    (all OK)       (some items failed)       (transient       │
+                                             error)          │
+         │                     │                  ↑          │
+         │                     │                  │          │
+         │                     └─────────────────┘           │
+         │                                                   │
+         │           Cancel requested (from DB check)        │
+         │                         ↓                          │
+         │                  cancelling                       │
+         │                         ↓                         │
+         │                   cancelled ← ← ← ← ← ← ← ← ← ←─┘
+         │
+         └────────────────────────┬─────────────────────────→ failed
+                                  ↑                          (fatal
+                                  │                          error)
+                            [rerun from
+                             terminal]
+
+
+3. RESOURCE CLAIM CONFLICT DETECTION
+================================================================================
+
+Task 1: Translate docs [1, 2]                Task 2: Translate docs [2, 3]
+        ↓                                             ↓
+Claims: {                                    Claims: {
+  ResourceClaim("doc", "book-x", "1"),         ResourceClaim("doc", "book-x", "2"),
+  ResourceClaim("doc", "book-x", "2"),         ResourceClaim("doc", "book-x", "3"),
+}                                            }
+
+                    ↓
+        ClaimArbiter.conflicts(claims1, claims2)
+                    ↓
+        Checks: ("doc", "book-x") matches
+                key="1" vs "2" → overlap? YES
+                key="2" vs "2" → overlap? YES ✗ CONFLICT
+                key="2" vs "3" → overlap? YES
+
+Result: Cannot run Task 2 while Task 1 is running
+        ✓ Task 1 must complete first
+        ✓ TaskEngine prevents simultaneous launch
+
+
+4. STAGE PIPELINE EXECUTION FLOW
+================================================================================
+
+For each stage (translation or polish):
+
+    ┌──────────────────────────────────────────────────────────────┐
+    │  1. SUBMIT: Build requests, upload to provider (batches)    │
+    └──────────────────┬───────────────────────────────────────────┘
+                       ↓
+    ┌──────────────────────────────────────────────────────────────┐
+    │  2. POLL: Check batch status until terminal (COMPLETED/FAILED)│
+    │     - Long poll with exponential backoff                      │
+    │     - Check cancel_requested flag periodically                │
+    │     - 24-hour timeout per batch                               │
+    └──────────────────┬───────────────────────────────────────────┘
+                       ↓
+    ┌──────────────────────────────────────────────────────────────┐
+    │  3. VALIDATE: Deserialize responses, validate JSON          │
+    │     - For each item: llm_batch_store.get_completed_response()│
+    │     - validated_chat() to ensure response matches schema     │
+    │     - Mark item as "succeeded" or "failed"                   │
+    └──────────────────┬───────────────────────────────────────────┘
+                       ↓
+    ┌──────────────────────────────────────────────────────────────┐
+    │  4. FALLBACK: Retry failed items via direct LLM call        │
+    │     - NOT via batch (faster feedback)                        │
+    │     - Same validation logic (validated_chat)                 │
+    │     - Only if translation succeeded (polish only)            │
+    │     - Mark as "succeeded" or leave "failed"                  │
+    └──────────────────┬───────────────────────────────────────────┘
+                       ↓
+                   [continue to next stage
+                    or apply results]
+
+
+5. PAYLOAD STRUCTURE (Simplified)
+================================================================================
+
+{
+  "source_language": "ja",
+  "target_language": "en",
+  "model": "gemini-2.0-flash-exp",
+  
+  "items": [
+    {
+      "index": 0,
+      "chunk_ids": [1, 2, 3],
+      
+      "translation": {
+        "state": "pending|succeeded|failed",
+        "request_hash": "abc123...",
+        "output_blocks": ["translated text..."]
+      },
+      
+      "polish": {
+        "state": "pending|succeeded|failed|skipped",
+        "output_blocks": ["polished text..."]
+      },
+      
+      "applied": false  ← becomes true after results written
+    }
+  ],
+  
+  "translation": {
+    "batch_name": "projects/xxx/batches/yyy",
+    "batch_display_name": "cat-translation-...",
+    "jobs": [
+      {
+        "batch_name": "...",
+        "submitted_at": 1708703600.0,
+        "request_hashes": ["req1", "req2"],
+        "output_file_name": "..."
+      }
+    ]
+  },
+  
+  "polish": { /* same structure */ }
+}
+
+
+6. ACTION DISPATCH TABLE (BatchTranslationTaskWorker._execute)
+================================================================================
+
+Worker Constructor:
+  action="list"|"create"|"run"|"cancel"|"delete"
+  task_id (required for run/cancel/delete)
+  document_ids (for create)
+  force, skip_context (for create/run)
+
+Dispatcher:
+┌────────┬──────────────────────┬──────────────────────┬──────────────┐
+│ action │ source               │ calls                │ emits        │
+├────────┼──────────────────────┼──────────────────────┼──────────────┤
+│ list   │ Legacy UI (timer)    │ service.list_tasks() │ finished_    │
+│        │                      │                      │ success      │
+├────────┼──────────────────────┼──────────────────────┼──────────────┤
+│ create │ Legacy UI (button)   │ service.create_task()│ finished_    │
+│        │                      │                      │ success      │
+├────────┼──────────────────────┼──────────────────────┼──────────────┤
+│ run    │ TaskEngine OR Legacy │ asyncio.run(         │ finished_    │
+│        │                      │ service.run_task())  │ success      │
+├────────┼──────────────────────┼──────────────────────┼──────────────┤
+│ cancel │ TaskEngine OR Legacy │ asyncio.run(         │ finished_    │
+│        │                      │ service.request_     │ success      │
+│        │                      │ cancel())            │              │
+├────────┼──────────────────────┼──────────────────────┼──────────────┤
+│ delete │ TaskEngine OR Legacy │ service.delete_task()│ finished_    │
+│        │                      │ (includes remote     │ success      │
+│        │                      │ cleanup)             │              │
+└────────┴──────────────────────┴──────────────────────┴──────────────┘
+
+
+7. HANDLER PROTOCOL (TaskTypeHandler)
+================================================================================
+
+Implemented by: BatchTranslationHandler
+
+Methods:
+
+  task_type: str
+    ↓
+    Identifier used by TaskEngine.register_handler(handler)
+
+  decode_payload(record: TaskRecord) → dict
+    ↓
+    Deserialize JSON from record.payload_json
+
+  scope(record, payload) → DocumentScope
+    ↓
+    Returns: AllDocuments | SomeDocuments | NoDocuments
+
+  claims(record, payload) → frozenset[ResourceClaim]
+    ↓
+    Returns resource claims (used for conflict detection)
+
+  can(action, record, payload, snapshot) → Decision
+    ↓
+    Policy check: is this action allowed given current state?
+    action = RUN | CANCEL | DELETE
+    snapshot = ActionSnapshot (running_task_ids, active_claims, now, retry_after)
+
+  can_autorun(record, payload, snapshot) → Decision
+    ↓
+    Autorun eligibility: should TaskEngine.tick() start this task?
+
+  build_worker(action, record, payload, deps) → Worker
+    ↓
+    Factory: creates BatchTranslationTaskWorker configured for action
+
+
+8. ERROR HANDLING CHAIN
+================================================================================
+
+During run_task():
+
+    ┌─ Transient Error (network, timeout, rate limit)
+    │  ├─ _is_transient_batch_error(exc) → True
+    │  ├─ Mark status=PAUSED, last_error=str(exc)
+    │  └─ Next tick() can retry
+    │
+    ├─ Permanent Error (invalid config, schema mismatch)
+    │  ├─ _is_transient_batch_error(exc) → False
+    │  ├─ Mark status=FAILED, phase=PHASE_DONE
+    │  └─ Manual rerun only
+    │
+    ├─ _PauseRequestedError (local thread interrupted)
+    │  ├─ Check if cancel_requested flag set in DB
+    │  ├─ If yes: call request_cancel() → CANCELLING/CANCELLED
+    │  └─ If no: status=PAUSED (resume on next tick)
+    │
+    └─ OperationCancelledError (core.cancellation)
+       └─ Same as _PauseRequestedError
+
+
+9. DECISION WORKFLOW (UI → Action)
+================================================================================
+
+User clicks button
+  ↓
+UI calls task_engine.preflight(task_type, book_id, params, action)
+  ├─ Builds draft TaskRecord
+  ├─ Calls handler.can(action, record, payload, snapshot)
+  ├─ Checks claim conflicts via ClaimArbiter
+  └─ Returns Decision(allowed: bool, reason: str)
+  ↓
+If Decision.allowed:
+  ├─ Button shows: ENABLED, tooltip=""
+  └─ User can click → task_engine.submit/cancel/delete()
+Else:
+  ├─ Button shows: DISABLED, tooltip=Decision.reason
+  └─ User cannot click
+
+
+10. MIGRATION PATH: LEGACY → NEW
+================================================================================
+
+PHASE 1 (COMPLETE):
+  ✓ Created TaskStore (unified store for all task types)
+  ✓ Created TaskEngine (canonical control plane)
+  ✓ Created TaskTypeHandler protocol + BatchTranslationHandler
+  ✓ Created resource claim system (ClaimArbiter, ResourceClaim)
+  ✓ Created document scope system (DocumentScope, AllDocuments, SomeDocuments)
+
+PHASE 2 (TODO):
+  □ Wire TaskEngine into MainWindow
+  □ Update TranslationView to use task_engine instead of _legacy_batch_store
+  □ Wire task_engine.tasks_changed signal to UI refresh
+  □ Remove _legacy_batch_store() method
+
+PHASE 3 (OPTIONAL):
+  □ Remove BatchTranslationTaskService.list_tasks/create_task/delete_task
+  □ Keep run_task/persist_payload/request_cancel (execution layer)
+  □ Add more task types (using existing handler protocol)
+
+
+11. CALLER GRAPH (Compact)
+================================================================================
+
+[TranslationView]
+  ├─ LEGACY: _legacy_batch_store().list_tasks()
+  ├─ LEGACY: service.create_task()
+  ├─ LEGACY: service.delete_task()
+  ├─ NEW: task_engine.get_tasks()
+  ├─ NEW: task_engine.submit()
+  ├─ NEW: task_engine.preflight()
+  └─ NEW: task_engine.cancel()
+
+[BatchTranslationTaskWorker]
+  ├─ action="list"
+  │  └─ service.list_tasks()
+  ├─ action="create"
+  │  └─ service.create_task()
+  ├─ action="run"
+  │  └─ asyncio.run(service.run_task())
+  │     └─ ensure_payload_prepared()
+  │     └─ run_translation_stage()
+  │     └─ run_polish_stage()
+  │     └─ apply_results()
+  ├─ action="cancel"
+  │  └─ asyncio.run(service.request_cancel())
+  └─ action="delete"
+     └─ service.delete_task()
+
+[TaskEngine]
+  ├─ submit() → TaskStore.create() → _start_action() → build_worker("run")
+  ├─ tick() → scan tasks → call handler.can_autorun() → _start_action()
+  ├─ cancel() → _store.mark_cancel_requested() → interrupt worker
+  └─ delete() → _store.delete()
+
+[GeminiBatchJobGateway]
+  ├─ build_inlined_request()
+  ├─ submit_batch()
+  ├─ poll_once()
+  ├─ cancel_batch()
+  ├─ get_batch_state()
+  ├─ delete_batch()
+  ├─ delete_file()
+  └─ find_batch_names()
+
+
+12. KEY FILES AND RESPONSIBILITIES
+================================================================================
+
+New Files (Phase 1):
+  ✓ task_store.py                    — unified task storage
+  ✓ task_engine.py                   — canonical control plane
+  ✓ task_types/base.py               — protocol definition
+  ✓ task_types/batch_translation_handler.py — handler implementation
+  ✓ action_snapshot.py               — decision context
+  ✓ resource_claim.py                — resource reservation
+  ✓ document_scope.py                — scope types
+  ✓ claim_arbiter.py                 — conflict detection
+  ✓ worker_deps.py                   — dependency injection
+
+Modified Files:
+  ~ batch_translation_task_service.py — execution layer (keep), control removed
+  ~ batch_translation_task_ops.py    — execution ops (unchanged)
+  ~ batch_translation_task_worker.py — worker dispatcher (stable)
+
+Files Using New Layer:
+  ◊ translation_view.py              — needs wiring to TaskEngine
+  ◊ main_window.py                   — needs to create TaskEngine
+  ◊ batch_task_overlap_guard.py      — currently uses legacy store
+
+
+13. QUICK LOOKUP TABLE
+================================================================================
+
+Need to...                          Look in...
+────────────────────────────────────────────────────────────────────
+Understand architecture             BATCH_TRANSLATION_SUMMARY.md
+Find a method signature             BATCH_TRANSLATION_ANALYSIS.md
+Trace call chain                    BATCH_TRANSLATION_CALLGRAPH.md
+See data structures                 BATCH_TRANSLATION_ANALYSIS.md (Payload Structure)
+Implement new task type             task_types/batch_translation_handler.py (example)
+Add preflight check                 BatchTranslationHandler.can()
+Schedule autorun                    TaskEngine.tick()
+Understand resource conflicts       BATCH_TRANSLATION_SUMMARY.md (Resource Claims)
+Debug crash                         BATCH_TRANSLATION_CALLGRAPH.md (error handling)
+Add test                            tests/workflow/test_batch_translation_task_service.py
+
+================================================================================

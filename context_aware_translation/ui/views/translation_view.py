@@ -27,6 +27,7 @@ from context_aware_translation.storage.book_db import SQLiteBookDB, TranslationC
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.document_repository import DocumentRepository
 from context_aware_translation.storage.task_store import TaskRecord
+from context_aware_translation.ui.tasks import TaskRowVM, map_tasks_to_row_vms
 from context_aware_translation.workflow.tasks.models import (
     STATUS_CANCELLED,
     STATUS_CANCELLING,
@@ -71,6 +72,7 @@ class TranslationView(QWidget):
         self.retranslate_worker: RetranslateChunkWorker | None = None
         self.batch_task_worker: BatchTranslationTaskWorker | None = None
         self._batch_tasks_cache: list[TaskRecord] = []
+        self._batch_task_vms: list[TaskRowVM] = []
         self._batch_auto_timer: QTimer | None = None
         self._is_cleaned_up = False
 
@@ -839,18 +841,19 @@ class TranslationView(QWidget):
         current_task_id = self._selected_batch_task_id()
         tasks = self._task_engine.get_tasks(self.book_id, task_type="batch_translation")
         self._batch_tasks_cache = tasks
+        self._batch_task_vms = map_tasks_to_row_vms(tasks)
 
         self.batch_task_list.blockSignals(True)
         self.batch_task_list.clear()
         target_row = -1
-        for idx, task in enumerate(tasks):
-            text = f"#{task.task_id[:8]} | {task.status} | {task.phase} | {task.completed_items}/{task.total_items}"
-            if task.last_error:
-                text += f" | {task.last_error}"
+        for idx, vm in enumerate(self._batch_task_vms):
+            text = f"#{vm.task_id[:8]} | {vm.status} | {vm.phase} | {vm.completed_items}/{vm.total_items}"
+            if vm.last_error:
+                text += f" | {vm.last_error}"
             item = QListWidgetItem(text)
-            item.setData(Qt.ItemDataRole.UserRole, task.task_id)
+            item.setData(Qt.ItemDataRole.UserRole, vm.task_id)
             self.batch_task_list.addItem(item)
-            if current_task_id and task.task_id == current_task_id:
+            if current_task_id and vm.task_id == current_task_id:
                 target_row = idx
         self.batch_task_list.blockSignals(False)
 
