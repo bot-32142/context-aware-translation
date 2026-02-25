@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import TYPE_CHECKING
 
-from context_aware_translation.storage.book_manager import BookManager
-from context_aware_translation.storage.translation_batch_task_store import TranslationBatchTaskStore
+if TYPE_CHECKING:
+    from context_aware_translation.storage.task_store import TaskStore
 
 logger = logging.getLogger(__name__)
 
 
 def has_any_batch_task_overlap(
-    book_manager: BookManager,
+    task_store: "TaskStore",
     book_id: str,
     document_ids: list[int] | None,
     *,
@@ -25,19 +26,14 @@ def has_any_batch_task_overlap(
     - exclude_task_ids: skip these task IDs (e.g. the task being run itself).
     - No status filtering: all task rows are considered blockers.
     """
-    store_path = book_manager.get_book_db_path(book_id).parent / "translation_batch_tasks.db"
-    store = TranslationBatchTaskStore(store_path)
-    try:
-        tasks = store.list_tasks(book_id)
-        for task in tasks:
-            if exclude_task_ids and task.task_id in exclude_task_ids:
-                continue
-            task_doc_ids = _parse_task_document_ids(task)
-            if _ids_overlap(task_doc_ids, document_ids):
-                return True
-        return False
-    finally:
-        store.close()
+    tasks = task_store.list_tasks(book_id=book_id, task_type="batch_translation")
+    for task in tasks:
+        if exclude_task_ids and task.task_id in exclude_task_ids:
+            continue
+        task_doc_ids = _parse_task_document_ids(task)
+        if _ids_overlap(task_doc_ids, document_ids):
+            return True
+    return False
 
 
 def _parse_task_document_ids(task: object) -> list[int] | None:

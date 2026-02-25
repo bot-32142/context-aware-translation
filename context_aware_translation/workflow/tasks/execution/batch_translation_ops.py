@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
 import time
 from collections.abc import Callable
@@ -9,7 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypedDict
 
 if TYPE_CHECKING:
-    from context_aware_translation.workflow.batch_translation_task_service import BatchTranslationTaskService
+    from context_aware_translation.workflow.tasks.execution.batch_translation_executor import BatchTranslationExecutor
 
 from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.core.progress import ProgressCallback, ProgressUpdate, WorkflowStep
@@ -26,7 +27,8 @@ from context_aware_translation.llm.translator import (
     validated_chat,
 )
 from context_aware_translation.storage.llm_batch_store import STATUS_FAILED, STATUS_SUBMITTED
-from context_aware_translation.storage.translation_batch_task_store import (
+from context_aware_translation.storage.task_store import TaskRecord
+from context_aware_translation.workflow.tasks.models import (
     PHASE_APPLY,
     PHASE_POLISH_FALLBACK,
     PHASE_POLISH_POLL,
@@ -37,11 +39,21 @@ from context_aware_translation.storage.translation_batch_task_store import (
     PHASE_TRANSLATION_SUBMIT,
     PHASE_TRANSLATION_VALIDATE,
     STATUS_RUNNING,
-    TranslationBatchTaskRecord,
 )
 
 logger = logging.getLogger(__name__)
 _PROVIDER_NAME = "gemini_ai_studio"
+
+
+def decode_task_payload(record: TaskRecord) -> dict[str, Any]:
+    """Decode a task record's payload_json into a dict, returning {} on failure."""
+    if not record.payload_json:
+        return {}
+    try:
+        value = json.loads(record.payload_json)
+    except json.JSONDecodeError:
+        return {}
+    return value if isinstance(value, dict) else {}
 
 
 class StageItemState(TypedDict):
@@ -131,8 +143,8 @@ def _stage_request_kwargs(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 async def ensure_payload_prepared(
-    service: BatchTranslationTaskService,
-    task: TranslationBatchTaskRecord,
+    service: BatchTranslationExecutor,
+    task: TaskRecord,
     payload: dict[str, Any],
     *,
     cancel_check: Callable[[], bool] | None,
@@ -149,7 +161,8 @@ async def ensure_payload_prepared(
     await service.workflow.prepare_llm_prerequisites(preflight_document_ids, cancel_check=cancel_check)
     service.raise_if_local_pause(task.task_id, cancel_check)
 
-    if not task.skip_context:
+    skip_context = service._get_skip_context(task)
+    if not skip_context:
         service.workflow.check_cancel(cancel_check)
         service.workflow.manager.build_context_tree(cancel_check=cancel_check)
 
@@ -166,7 +179,7 @@ async def ensure_payload_prepared(
     inputs = service.workflow.manager.collect_chunk_translation_inputs(
         batch_size=translator_config.num_of_chunks_per_llm_call,
         document_ids=document_ids,
-        force=task.force,
+        force=service._get_force(task),
         cancel_check=cancel_check,
         source_language=source_language,
     )
@@ -186,7 +199,7 @@ async def ensure_payload_prepared(
         batch_texts, batch_terms = service.workflow.manager.build_batch_request_payload(
             batch,
             inputs.all_terms,
-            skip_context=task.skip_context,
+            skip_context=skip_context,
         )
         prepared = prepare_chunk_translation(
             batch_texts,
@@ -220,7 +233,7 @@ async def ensure_payload_prepared(
 
 
 async def run_translation_stage(
-    service: BatchTranslationTaskService,
+    service: BatchTranslationExecutor,
     task_id: str,
     payload: dict[str, Any],
     *,
@@ -266,7 +279,7 @@ async def run_translation_stage(
 
 
 async def run_polish_stage(
-    service: BatchTranslationTaskService,
+    service: BatchTranslationExecutor,
     task_id: str,
     payload: dict[str, Any],
     *,
@@ -328,7 +341,7 @@ async def run_polish_stage(
 
 
 async def _execute_stage(
-    service: BatchTranslationTaskService,
+    service: BatchTranslationExecutor,
     task_id: str,
     payload: dict[str, Any],
     items: list[dict[str, Any]],
@@ -551,8 +564,8 @@ _POLL_TIMEOUT_SEC = 24 * 60 * 60  # 24 hours
 
 
 async def poll_until_terminal(
-    service: BatchTranslationTaskService,
-    task: TranslationBatchTaskRecord,
+    service: BatchTranslationExecutor,
+    task: TaskRecord,
     payload: dict[str, Any],
     *,
     stage: str,
@@ -634,7 +647,7 @@ async def poll_until_terminal(
 
 
 def apply_results(
-    service: BatchTranslationTaskService,
+    service: BatchTranslationExecutor,
     task_id: str,
     payload: dict[str, Any],
     *,
@@ -715,7 +728,7 @@ def _merge_job_warnings(job: dict[str, Any], warnings: list[str]) -> None:
 
 
 def _clear_cached_stage_responses(
-    service: BatchTranslationTaskService,
+    service: BatchTranslationExecutor,
     items: list[dict[str, Any]],
     *,
     stage: str,
@@ -731,7 +744,7 @@ def _clear_cached_stage_responses(
 
 
 def _ordered_pending_stage_hashes(
-    service: BatchTranslationTaskService,
+    service: BatchTranslationExecutor,
     items: list[dict[str, Any]],
     *,
     spec: _StageSpec,
@@ -796,7 +809,7 @@ def _collect_stage_inlined_requests(
 
 
 def _recover_submitted_batch_name(
-    service: BatchTranslationTaskService,
+    service: BatchTranslationExecutor,
     unresolved: set[str],
     *,
     spec: _StageSpec,

@@ -41,7 +41,7 @@ def _make_workspace():
     from context_aware_translation.ui.views.book_workspace import BookWorkspace
 
     with patch.object(BookWorkspace, "_init_ui", lambda _self: None):
-        workspace = BookWorkspace(MagicMock(), "book-id", "Book Name")
+        workspace = BookWorkspace(MagicMock(), "book-id", "Book Name", task_engine=MagicMock())
     workspace._view_cache = {}
     return workspace
 

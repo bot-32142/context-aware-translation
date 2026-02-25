@@ -85,7 +85,7 @@ def test_translation_view_cleanup_waits_without_timeout():
     worker = _FakeWorker()
     view._is_cleaned_up = False
     view._batch_auto_timer = None
-    view._batch_task_store = MagicMock()
+    view._task_engine = None
     view.worker = worker
     view.batch_task_worker = None
     view.retranslate_worker = None
@@ -106,7 +106,7 @@ def test_translation_view_cleanup_interrupts_running_batch_run_worker():
     batch_worker = _FakeBatchWorker(action="run")
     view._is_cleaned_up = False
     view._batch_auto_timer = None
-    view._batch_task_store = MagicMock()
+    view._task_engine = None
     view.worker = None
     view.batch_task_worker = batch_worker
     view.retranslate_worker = None
@@ -127,7 +127,7 @@ def test_translation_view_cleanup_interrupts_non_run_batch_worker():
     batch_worker = _FakeBatchWorker(action="cancel")
     view._is_cleaned_up = False
     view._batch_auto_timer = None
-    view._batch_task_store = MagicMock()
+    view._task_engine = None
     view.worker = None
     view.batch_task_worker = batch_worker
     view.retranslate_worker = None
@@ -136,6 +136,25 @@ def test_translation_view_cleanup_interrupts_non_run_batch_worker():
 
     assert batch_worker.interruption_requested is True
     assert batch_worker.wait_calls == [()]
+    view.term_db.close.assert_called_once()
+
+
+def test_translation_view_cleanup_closes_term_db():
+    from context_aware_translation.ui.views.translation_view import TranslationView
+
+    with patch.object(TranslationView, "__init__", _noop_init):
+        view = TranslationView(None, "")
+
+    view._is_cleaned_up = False
+    view._batch_auto_timer = None
+    view._task_engine = MagicMock()
+    view.worker = None
+    view.batch_task_worker = None
+    view.retranslate_worker = None
+    view.term_db = MagicMock()
+
+    view.cleanup()
+
     view.term_db.close.assert_called_once()
 
 

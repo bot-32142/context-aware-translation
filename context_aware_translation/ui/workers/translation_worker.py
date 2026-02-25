@@ -1,7 +1,10 @@
 """Worker for translation operations."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.workflow.session import WorkflowSession
@@ -9,6 +12,9 @@ from context_aware_translation.workflow.session import WorkflowSession
 from .base_worker import BaseWorker
 from .batch_task_overlap_guard import has_any_batch_task_overlap
 from .operation_tracker import DocumentOperationTracker
+
+if TYPE_CHECKING:
+    from context_aware_translation.storage.task_store import TaskStore
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +29,7 @@ class TranslationWorker(BaseWorker):
         document_ids: list[int] | None = None,
         force: bool = False,
         skip_context: bool = False,
+        task_store: TaskStore | None = None,
     ) -> None:
         super().__init__()
         self.book_manager = book_manager
@@ -30,6 +37,7 @@ class TranslationWorker(BaseWorker):
         self.document_ids = document_ids
         self.force = force
         self.skip_context = skip_context
+        self.task_store = task_store
 
     def run(self) -> None:
         op_id = DocumentOperationTracker.try_start_operation(self.book_id, self.document_ids)
@@ -38,7 +46,7 @@ class TranslationWorker(BaseWorker):
             self.error.emit("Selected documents have active operations. Please wait for them to complete.")
             return
         try:
-            if has_any_batch_task_overlap(self.book_manager, self.book_id, self.document_ids):
+            if self.task_store is not None and has_any_batch_task_overlap(self.task_store, self.book_id, self.document_ids):
                 logger.info("Skipping translation for %s due to existing batch-task reservation", self.book_id)
                 self.error.emit(
                     "Selected documents are reserved by existing batch tasks. Delete overlapping task(s) first."

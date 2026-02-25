@@ -15,7 +15,7 @@ try:
 except ImportError:
     HAS_PYSIDE6 = False
 
-from context_aware_translation.storage.translation_batch_task_store import (
+from context_aware_translation.workflow.tasks.models import (
     STATUS_CANCELLED,
     STATUS_COMPLETED,
     STATUS_FAILED,
@@ -50,7 +50,7 @@ def _make_view():
     # Set attributes normally created in __init__ that production code accesses directly.
     view._is_cleaned_up = False
     view._batch_tasks_cache = []
-    view._batch_task_store = MagicMock()
+    view._task_engine = MagicMock()
     view.worker = None
     view.retranslate_worker = None
     view.batch_task_worker = None
@@ -210,20 +210,15 @@ def test_submit_batch_task_does_not_require_translated_glossary_terms():
     view._resolve_trigger_conditions = MagicMock(return_value=([1], False))
     view.skip_context_cb = QCheckBox()
     view.skip_context_cb.setChecked(False)
-    view._start_batch_task_worker = MagicMock()
     view.book_manager = _make_book_manager()
     view.book_id = "book-id"
 
-    worker_instance = MagicMock()
-    with patch(
-        "context_aware_translation.ui.views.translation_view.BatchTranslationTaskWorker",
-        return_value=worker_instance,
-    ) as worker_cls:
-        view._submit_batch_task()
+    view._submit_batch_task()
 
     view._resolve_trigger_conditions.assert_called_once_with(for_batch_submit=True)
-    worker_cls.assert_called_once()
-    view._start_batch_task_worker.assert_called_once_with(worker_instance)
+    view._task_engine.submit.assert_called_once_with(
+        "batch_translation", "book-id", document_ids=[1], force=False, skip_context=False
+    )
     view.term_db.list_terms.assert_not_called()
 
 
@@ -232,16 +227,13 @@ def test_submit_batch_task_returns_when_trigger_conditions_fail():
     view.worker = None
     view.batch_task_worker = None
     view._resolve_trigger_conditions = MagicMock(return_value=None)
-    view._start_batch_task_worker = MagicMock()
     view.book_manager = _make_book_manager()
     view.book_id = "book-id"
 
-    with patch("context_aware_translation.ui.views.translation_view.BatchTranslationTaskWorker") as worker_cls:
-        view._submit_batch_task()
+    view._submit_batch_task()
 
     view._resolve_trigger_conditions.assert_called_once_with(for_batch_submit=True)
-    worker_cls.assert_not_called()
-    view._start_batch_task_worker.assert_not_called()
+    view._task_engine.submit.assert_not_called()
 
 
 def test_run_selected_batch_task_returns_when_translation_worker_running():
@@ -253,108 +245,38 @@ def test_run_selected_batch_task_returns_when_translation_worker_running():
     view.worker = _RunningWorker()
     view.batch_task_worker = None
     view._selected_batch_task_id = MagicMock(return_value="task-1")
-    view._start_batch_task_worker = MagicMock()
 
     view._run_selected_batch_task()
 
     view._selected_batch_task_id.assert_not_called()
-    view._start_batch_task_worker.assert_not_called()
+    view._task_engine.run_task.assert_not_called()
 
 
-def test_run_selected_batch_task_blocks_when_docs_overlap_other_task_reservation():
+def test_run_selected_batch_task_calls_engine_run_task():
     view = _make_view()
     view.worker = None
     view.batch_task_worker = None
     view._selected_batch_task_id = MagicMock(return_value="task-1")
-    view._start_batch_task_worker = MagicMock()
-    view.batch_status_label = MagicMock()
-    view._batch_task_store.get.return_value = MagicMock(
-        status=STATUS_FAILED, document_ids_json="[1]", payload_json=None,
-    )
-
-    with (
-        patch(
-            "context_aware_translation.ui.views.translation_view.DocumentOperationTracker.has_document_overlap",
-            return_value=False,
-        ),
-        patch("context_aware_translation.ui.views.translation_view.has_any_batch_task_overlap", return_value=True),
-    ):
-        view._run_selected_batch_task()
-
-    view.batch_status_label.setText.assert_called_once_with(
-        "Selected task's documents are reserved by active operations or overlapping tasks."
-    )
-
-
-def test_run_selected_batch_task_requeues_failed_task_via_db_update():
-    view = _make_view()
-    view.worker = None
-    view.batch_task_worker = None
-    view._selected_batch_task_id = MagicMock(return_value="task-1")
-    view.batch_status_label = MagicMock()
-    view._refresh_batch_tasks = MagicMock()
-    view._batch_task_store.get.return_value = MagicMock(
-        status=STATUS_FAILED, document_ids_json="[1]", payload_json='{"items": []}',
-    )
-
-    with (
-        patch(
-            "context_aware_translation.ui.views.translation_view.DocumentOperationTracker.has_document_overlap",
-            return_value=False,
-        ),
-        patch("context_aware_translation.ui.views.translation_view.has_any_batch_task_overlap", return_value=False),
-    ):
-        view._run_selected_batch_task()
-
-    view._batch_task_store.update.assert_called_once()
-    call_kwargs = view._batch_task_store.update.call_args.kwargs
-    assert call_kwargs["status"] == "queued"
-    assert call_kwargs["cancel_requested"] is False
-    assert call_kwargs["last_error"] is None
-    assert "phase" not in call_kwargs
-    assert "payload_json" not in call_kwargs
-    view.batch_status_label.setText.assert_called_with("Batch task submitted.")
-    view._refresh_batch_tasks.assert_called_once()
-
-
-def test_run_selected_batch_task_shows_submitted_for_already_queued_task():
-    from context_aware_translation.storage.translation_batch_task_store import STATUS_QUEUED
-
-    view = _make_view()
-    view.worker = None
-    view.batch_task_worker = None
-    view._selected_batch_task_id = MagicMock(return_value="task-1")
-    view.batch_status_label = MagicMock()
-    view._batch_task_store.get.return_value = MagicMock(status=STATUS_QUEUED)
 
     view._run_selected_batch_task()
 
-    view._batch_task_store.update.assert_not_called()
-    view.batch_status_label.setText.assert_called_once_with("Batch task submitted.")
+    view._task_engine.run_task.assert_called_once_with("task-1")
 
 
-def test_start_batch_task_worker_blocks_create_worker_when_docs_overlap():
+def test_submit_batch_task_calls_engine_submit_with_correct_args():
     view = _make_view()
+    view.worker = None
+    view.batch_task_worker = None
     view.book_id = "book-1"
-    view.batch_status_label = MagicMock()
-    view.submit_batch_btn = MagicMock()
-    view.run_batch_task_btn = MagicMock()
-    view.cancel_batch_task_btn = MagicMock()
-    view.delete_batch_task_btn = MagicMock()
-    view.start_btn = MagicMock()
-    worker = MagicMock()
-    worker.action = "create"
-    worker.document_ids = [1]
+    view._resolve_trigger_conditions = MagicMock(return_value=([2, 3], True))
+    view.skip_context_cb = QCheckBox()
+    view.skip_context_cb.setChecked(True)
 
-    with patch(
-        "context_aware_translation.ui.views.translation_view.DocumentOperationTracker.has_document_overlap",
-        return_value=True,
-    ):
-        view._start_batch_task_worker(worker)
+    view._submit_batch_task()
 
-    assert view.batch_task_worker is None
-    worker.start.assert_not_called()
-    view.batch_status_label.setText.assert_called_once_with(view.tr("Selected documents have active operations."))
+    view._task_engine.submit.assert_called_once_with(
+        "batch_translation", "book-1", document_ids=[2, 3], force=True, skip_context=True
+    )
 
 
 def test_cancel_selected_batch_task_returns_when_translation_worker_running():
@@ -366,50 +288,33 @@ def test_cancel_selected_batch_task_returns_when_translation_worker_running():
     view.worker = _RunningWorker()
     view.batch_task_worker = None
     view._selected_batch_task_id = MagicMock(return_value="task-1")
-    view._start_batch_task_worker = MagicMock()
 
     view._cancel_selected_batch_task()
 
     view._selected_batch_task_id.assert_not_called()
-    view._start_batch_task_worker.assert_not_called()
+    view._task_engine.cancel.assert_not_called()
 
 
-def test_cancel_selected_batch_task_spawns_cancel_worker_when_idle():
+def test_cancel_selected_batch_task_calls_engine_cancel():
     view = _make_view()
     view.worker = None
     view.batch_task_worker = None
     view._selected_batch_task_id = MagicMock(return_value="task-1")
-    view._start_batch_task_worker = MagicMock()
-    view._refresh_batch_tasks = MagicMock()
-    view._batch_task_store.get.return_value = MagicMock(status="running")
-
-    worker_instance = MagicMock()
-    with patch(
-        "context_aware_translation.ui.views.translation_view.BatchTranslationTaskWorker",
-        return_value=worker_instance,
-    ) as worker_cls:
-        view._cancel_selected_batch_task()
-
-    view._batch_task_store.mark_cancel_requested.assert_called_once_with("task-1")
-    worker_cls.assert_called_once()
-    assert worker_cls.call_args.kwargs["action"] == "cancel"
-    view._start_batch_task_worker.assert_called_once_with(worker_instance)
-
-
-def test_cancel_selected_batch_task_skips_terminal_task():
-    view = _make_view()
-    view.worker = None
-    view.batch_task_worker = None
-    view._selected_batch_task_id = MagicMock(return_value="task-1")
-    view._refresh_batch_tasks = MagicMock()
-    view._start_batch_task_worker = MagicMock()
-    view._batch_task_store.get.return_value = MagicMock(status=STATUS_COMPLETED)
 
     view._cancel_selected_batch_task()
 
-    view._batch_task_store.mark_cancel_requested.assert_not_called()
-    view._refresh_batch_tasks.assert_called_once()
-    view._start_batch_task_worker.assert_not_called()
+    view._task_engine.cancel.assert_called_once_with("task-1")
+
+
+def test_cancel_selected_batch_task_skips_when_no_task_selected():
+    view = _make_view()
+    view.worker = None
+    view.batch_task_worker = None
+    view._selected_batch_task_id = MagicMock(return_value=None)
+
+    view._cancel_selected_batch_task()
+
+    view._task_engine.cancel.assert_not_called()
 
 
 def test_update_retranslate_chunk_button_state_disables_retranslate_when_batch_tasks_active():
@@ -538,40 +443,43 @@ def test_delete_selected_batch_task_returns_when_translation_worker_running():
     view.worker = _RunningWorker()
     view.batch_task_worker = None
     view._selected_batch_task_id = MagicMock(return_value="task-1")
-    view._start_batch_task_worker = MagicMock()
 
     view._delete_selected_batch_task()
 
     view._selected_batch_task_id.assert_not_called()
-    view._start_batch_task_worker.assert_not_called()
+    view._task_engine.delete.assert_not_called()
 
 
-def test_delete_selected_batch_task_starts_worker_after_confirmation():
+def test_delete_selected_batch_task_calls_engine_delete_after_confirmation():
     view = _make_view()
     view.worker = None
     view.batch_task_worker = None
     view._selected_batch_task_id = MagicMock(return_value="task-1")
-    view._start_batch_task_worker = MagicMock()
-    view.book_manager = _make_book_manager()
     view.book_id = "book-id"
 
-    worker_instance = MagicMock()
-    with (
-        patch(
-            "context_aware_translation.ui.views.translation_view.BatchTranslationTaskWorker",
-            return_value=worker_instance,
-        ) as worker_cls,
-        patch(
-            "context_aware_translation.ui.views.translation_view.QMessageBox.question",
-            return_value=QMessageBox.StandardButton.Yes,
-        ),
+    with patch(
+        "context_aware_translation.ui.views.translation_view.QMessageBox.question",
+        return_value=QMessageBox.StandardButton.Yes,
     ):
         view._delete_selected_batch_task()
 
-    worker_cls.assert_called_once()
-    assert worker_cls.call_args.kwargs["action"] == "delete"
-    assert worker_cls.call_args.kwargs["task_id"] == "task-1"
-    view._start_batch_task_worker.assert_called_once_with(worker_instance)
+    view._task_engine.delete.assert_called_once_with("task-1")
+
+
+def test_delete_selected_batch_task_does_not_delete_when_cancelled():
+    view = _make_view()
+    view.worker = None
+    view.batch_task_worker = None
+    view._selected_batch_task_id = MagicMock(return_value="task-1")
+    view.book_id = "book-id"
+
+    with patch(
+        "context_aware_translation.ui.views.translation_view.QMessageBox.question",
+        return_value=QMessageBox.StandardButton.No,
+    ):
+        view._delete_selected_batch_task()
+
+    view._task_engine.delete.assert_not_called()
 
 
 def test_update_start_button_state_disables_retranslate_when_batch_tasks_active():

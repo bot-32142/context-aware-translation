@@ -9,7 +9,8 @@ import pytest
 from context_aware_translation.config import TranslatorBatchConfig, TranslatorConfig
 from context_aware_translation.llm.batch_jobs.base import POLL_STATUS_COMPLETED, BatchPollResult, BatchSubmitResult
 from context_aware_translation.storage.llm_batch_store import LLMBatchStore
-from context_aware_translation.storage.translation_batch_task_store import (
+from context_aware_translation.storage.task_store import TaskStore
+from context_aware_translation.workflow.tasks.models import (
     PHASE_DONE,
     PHASE_PREPARE,
     STATUS_CANCELLED,
@@ -20,21 +21,16 @@ from context_aware_translation.storage.translation_batch_task_store import (
     STATUS_PAUSED,
     STATUS_QUEUED,
     STATUS_RUNNING,
-    TranslationBatchTaskRecord,
-    TranslationBatchTaskStore,
 )
-from context_aware_translation.workflow.batch_translation_task_ops import (
+from context_aware_translation.workflow.tasks.execution.batch_translation_ops import (
     _TRANSLATION_STAGE,
     _execute_stage,
     ensure_payload_prepared,
 )
-from context_aware_translation.workflow.batch_translation_task_service import (
-    BatchTranslationTaskService,
-    select_next_auto_run_task,
-)
+from context_aware_translation.workflow.tasks.execution.batch_translation_executor import BatchTranslationExecutor
 
 
-def _build_service(tmp_path) -> BatchTranslationTaskService:
+def _build_executor(tmp_path) -> BatchTranslationExecutor:
     workflow = MagicMock()
     workflow.book_id = "book-1"
     workflow.config = MagicMock()
@@ -44,308 +40,197 @@ def _build_service(tmp_path) -> BatchTranslationTaskService:
         model="gemini-2.5-flash",
     )
 
-    task_store = TranslationBatchTaskStore(tmp_path / "translation_batch_tasks.db")
+    task_store = TaskStore(tmp_path / "task_store.db")
     llm_batch_store = LLMBatchStore(tmp_path / "llm_batch_cache.db")
-    return BatchTranslationTaskService(
+    return BatchTranslationExecutor(
         workflow=workflow,
         task_store=task_store,
         llm_batch_store=llm_batch_store,
     )
 
 
-def test_select_next_auto_run_task_prefers_oldest_runnable_entry():
-    tasks = [
-        TranslationBatchTaskRecord(
-            task_id="newest-terminal",
-            book_id="book-1",
-            status=STATUS_COMPLETED,
-            phase=PHASE_DONE,
-            payload_json="{}",
-            document_ids_json=None,
-            force=False,
-            skip_context=False,
-            total_items=1,
-            completed_items=1,
-            failed_items=0,
-            cancel_requested=False,
-            translation_batch_name=None,
-            polish_batch_name=None,
-            last_error=None,
-            created_at=2.0,
-            updated_at=2.0,
-        ),
-        TranslationBatchTaskRecord(
-            task_id="older-runnable",
-            book_id="book-1",
-            status=STATUS_PAUSED,
-            phase=PHASE_DONE,
-            payload_json="{}",
-            document_ids_json=None,
-            force=False,
-            skip_context=False,
-            total_items=1,
-            completed_items=0,
-            failed_items=1,
-            cancel_requested=False,
-            translation_batch_name=None,
-            polish_batch_name=None,
-            last_error=None,
-            created_at=1.0,
-            updated_at=1.0,
-        ),
-    ]
-
-    selected = select_next_auto_run_task(tasks)
-    assert selected is not None
-    assert selected.task_id == "older-runnable"
+def _create_task(executor: BatchTranslationExecutor, *, book_id: str = "book-1", payload_json: str | None = None) -> object:
+    """Helper to create a task record in the executor's TaskStore."""
+    return executor.task_store.create(
+        book_id=book_id,
+        task_type="batch_translation",
+        payload_json=payload_json,
+        phase=PHASE_PREPARE,
+    )
 
 
-def test_select_next_auto_run_task_includes_cancel_requested_cancelling_entry():
-    tasks = [
-        TranslationBatchTaskRecord(
-            task_id="terminal-newer",
-            book_id="book-1",
-            status=STATUS_COMPLETED,
-            phase=PHASE_DONE,
-            payload_json="{}",
-            document_ids_json=None,
-            force=False,
-            skip_context=False,
-            total_items=1,
-            completed_items=1,
-            failed_items=0,
-            cancel_requested=False,
-            translation_batch_name=None,
-            polish_batch_name=None,
-            last_error=None,
-            created_at=2.0,
-            updated_at=2.0,
-        ),
-        TranslationBatchTaskRecord(
-            task_id="cancelling-older",
-            book_id="book-1",
-            status=STATUS_CANCELLING,
-            phase=PHASE_DONE,
-            payload_json="{}",
-            document_ids_json=None,
-            force=False,
-            skip_context=False,
-            total_items=1,
-            completed_items=0,
-            failed_items=0,
-            cancel_requested=True,
-            translation_batch_name=None,
-            polish_batch_name=None,
-            last_error=None,
-            created_at=1.0,
-            updated_at=1.0,
-        ),
-    ]
-
-    selected = select_next_auto_run_task(tasks)
-    assert selected is not None
-    assert selected.task_id == "cancelling-older"
-
-
-def test_delete_task_removes_terminal_task(tmp_path):
-    service = _build_service(tmp_path)
-    try:
-        created = service.task_store.create_task(book_id="book-1")
-        service.task_store.update(created.task_id, status=STATUS_COMPLETED, phase=PHASE_DONE)
-
-        service.delete_task(created.task_id)
-
-        assert service.task_store.get(created.task_id) is None
-    finally:
-        service.close()
-
-
-def test_delete_task_rejects_active_task(tmp_path):
-    service = _build_service(tmp_path)
-    try:
-        created = service.task_store.create_task(book_id="book-1")
-        service.task_store.update(created.task_id, status=STATUS_RUNNING)
-
-        with pytest.raises(ValueError, match="Cannot delete active task"):
-            service.delete_task(created.task_id)
-
-        assert service.task_store.get(created.task_id) is not None
-    finally:
-        service.close()
-
-
-def test_delete_task_attempts_remote_cleanup_and_deletes_locally(tmp_path):
-    service = _build_service(tmp_path)
+def test_cleanup_remote_artifacts_performs_remote_cleanup(tmp_path):
+    executor = _build_executor(tmp_path)
     try:
         payload_json = (
             '{"translation":{"batch_name":"batches/root","jobs":[{"batch_name":"batches/a","source_file_name":"files/src-a","output_file_name":"files/out-a","request_hashes":["h1"]}]},'
             '"polish":{"jobs":[{"batch_name":"batches/b","source_file_name":"files/src-b","output_file_name":"files/out-b","request_hashes":["h2"]}]}}'
         )
-        created = service.task_store.create_task(book_id="book-1", payload_json=payload_json)
-        service.task_store.update(created.task_id, status=STATUS_COMPLETED, phase=PHASE_DONE)
+        created = _create_task(executor, book_id="book-1", payload_json=payload_json)
+        executor.task_store.update(created.task_id, status=STATUS_COMPLETED, phase=PHASE_DONE)
 
-        service.gateway.delete_batch = AsyncMock()
-        service.gateway.delete_file = AsyncMock()
+        executor.gateway.delete_batch = AsyncMock()
+        executor.gateway.delete_file = AsyncMock()
 
-        result = service.delete_task(created.task_id)
+        result = executor.cleanup_remote_artifacts(created.task_id)
 
-        assert service.task_store.get(created.task_id) is None
         assert result["task_id"] == created.task_id
         assert result["cleanup_warnings"] == []
-        assert service.gateway.delete_batch.await_count == 3
-        assert service.gateway.delete_file.await_count == 4
+        assert executor.gateway.delete_batch.await_count == 3
+        assert executor.gateway.delete_file.await_count == 4
+        # cleanup_remote_artifacts does NOT delete from store
+        assert executor.task_store.get(created.task_id) is not None
     finally:
-        service.close()
+        executor.close()
 
 
-def test_delete_task_keeps_local_delete_when_remote_cleanup_fails(tmp_path):
-    service = _build_service(tmp_path)
+def test_cleanup_remote_artifacts_returns_warnings_on_remote_failure(tmp_path):
+    executor = _build_executor(tmp_path)
     try:
         payload_json = '{"translation":{"jobs":[{"batch_name":"batches/a","source_file_name":"files/src-a","request_hashes":["h1"]}]}}'
-        created = service.task_store.create_task(book_id="book-1", payload_json=payload_json)
-        service.task_store.update(created.task_id, status=STATUS_COMPLETED, phase=PHASE_DONE)
+        created = _create_task(executor, book_id="book-1", payload_json=payload_json)
+        executor.task_store.update(created.task_id, status=STATUS_COMPLETED, phase=PHASE_DONE)
 
-        service.gateway.delete_batch = AsyncMock(side_effect=RuntimeError("boom"))
-        service.gateway.delete_file = AsyncMock(side_effect=RuntimeError("boom"))
+        executor.gateway.delete_batch = AsyncMock(side_effect=RuntimeError("boom"))
+        executor.gateway.delete_file = AsyncMock(side_effect=RuntimeError("boom"))
 
-        result = service.delete_task(created.task_id)
+        result = executor.cleanup_remote_artifacts(created.task_id)
 
-        assert service.task_store.get(created.task_id) is None
         assert any("Failed to delete remote batch" in warning for warning in result["cleanup_warnings"])
         assert any("Failed to delete remote file" in warning for warning in result["cleanup_warnings"])
     finally:
-        service.close()
+        executor.close()
 
 
 @pytest.mark.asyncio
 async def test_request_cancel_without_provider_batches_marks_task_cancelled(tmp_path):
-    service = _build_service(tmp_path)
+    executor = _build_executor(tmp_path)
     try:
-        created = service.task_store.create_task(book_id="book-1")
-        service.gateway.cancel_batch = AsyncMock()
+        created = _create_task(executor, book_id="book-1")
+        executor.gateway.cancel_batch = AsyncMock()
 
-        result = await service.request_cancel(created.task_id)
+        result = await executor.request_cancel(created.task_id)
 
         assert result.status == STATUS_CANCELLED
         assert result.phase == PHASE_DONE
         assert result.cancel_requested is True
-        service.gateway.cancel_batch.assert_not_awaited()
+        executor.gateway.cancel_batch.assert_not_awaited()
     finally:
-        service.close()
+        executor.close()
 
 
 @pytest.mark.asyncio
 async def test_request_cancel_without_batch_config_marks_task_cancelled_locally(tmp_path):
-    service = _build_service(tmp_path)
+    executor = _build_executor(tmp_path)
     try:
-        created = service.task_store.create_task(
+        created = _create_task(executor, 
             book_id="book-1",
             payload_json='{"translation":{"batch_name":"batches/active","batch_display_name":"cat-translation-task"}}',
         )
-        service.workflow.config.translator_batch_config = None
-        service.gateway.cancel_batch = AsyncMock()
+        executor.workflow.config.translator_batch_config = None
+        executor.gateway.cancel_batch = AsyncMock()
 
-        result = await service.request_cancel(created.task_id)
+        result = await executor.request_cancel(created.task_id)
 
         assert result.status == STATUS_CANCELLED
         assert result.phase == PHASE_DONE
         assert result.last_error is not None
         assert "translator_batch_config" in result.last_error
-        service.gateway.cancel_batch.assert_not_awaited()
+        executor.gateway.cancel_batch.assert_not_awaited()
     finally:
-        service.close()
+        executor.close()
 
 
 @pytest.mark.asyncio
 async def test_request_cancel_resolves_provider_batches_by_display_name(tmp_path):
-    service = _build_service(tmp_path)
+    executor = _build_executor(tmp_path)
     try:
-        created = service.task_store.create_task(
+        created = _create_task(executor, 
             book_id="book-1",
             payload_json='{"model":"models/gemini-2.5-pro","translation":{"batch_display_name":"cat-translation-task"}}',
         )
-        service.gateway.find_batch_names = AsyncMock(return_value=["batches/a", "batches/b"])
-        service.gateway.cancel_batch = AsyncMock()
-        service.gateway.get_batch_state = AsyncMock(side_effect=["CANCELLED", "CANCELLED"])
+        executor.gateway.find_batch_names = AsyncMock(return_value=["batches/a", "batches/b"])
+        executor.gateway.cancel_batch = AsyncMock()
+        executor.gateway.get_batch_state = AsyncMock(side_effect=["CANCELLED", "CANCELLED"])
 
-        result = await service.request_cancel(created.task_id)
+        result = await executor.request_cancel(created.task_id)
 
         assert result.status == STATUS_CANCELLED
         assert result.phase == PHASE_DONE
-        service.gateway.find_batch_names.assert_awaited_once()
-        assert service.gateway.cancel_batch.await_count == 2
-        assert service.gateway.get_batch_state.await_count == 2
+        executor.gateway.find_batch_names.assert_awaited_once()
+        assert executor.gateway.cancel_batch.await_count == 2
+        assert executor.gateway.get_batch_state.await_count == 2
     finally:
-        service.close()
+        executor.close()
 
 
 @pytest.mark.asyncio
 async def test_request_cancel_keeps_cancelling_when_provider_batch_is_still_active(tmp_path):
-    service = _build_service(tmp_path)
+    executor = _build_executor(tmp_path)
     try:
-        created = service.task_store.create_task(
+        created = _create_task(executor, 
             book_id="book-1",
             payload_json='{"translation":{"batch_name":"batches/active"}}',
         )
-        service.gateway.cancel_batch = AsyncMock()
-        service.gateway.get_batch_state = AsyncMock(return_value="CANCELLING")
+        executor.gateway.cancel_batch = AsyncMock()
+        executor.gateway.get_batch_state = AsyncMock(return_value="CANCELLING")
 
-        result = await service.request_cancel(created.task_id)
+        result = await executor.request_cancel(created.task_id)
 
         assert result.status == STATUS_CANCELLING
         assert result.phase != PHASE_DONE
-        service.gateway.cancel_batch.assert_awaited_once()
-        service.gateway.get_batch_state.assert_awaited_once()
+        executor.gateway.cancel_batch.assert_awaited_once()
+        executor.gateway.get_batch_state.assert_awaited_once()
     finally:
-        service.close()
+        executor.close()
 
 
 @pytest.mark.asyncio
 async def test_run_task_short_circuits_when_cancel_requested(tmp_path):
-    service = _build_service(tmp_path)
+    executor = _build_executor(tmp_path)
     try:
-        created = service.task_store.create_task(book_id="book-1")
-        service.task_store.mark_cancel_requested(created.task_id)
+        created = _create_task(executor, book_id="book-1")
+        executor.task_store.mark_cancel_requested(created.task_id)
         with patch(
-            "context_aware_translation.workflow.batch_translation_task_service.ensure_payload_prepared",
+            "context_aware_translation.workflow.tasks.execution.batch_translation_executor.ensure_payload_prepared",
             new_callable=AsyncMock,
         ) as mock_prepare:
-            result = await service.run_task(created.task_id)
+            result = await executor.run_task(created.task_id)
 
             assert result.status == STATUS_CANCELLED
             assert result.phase == PHASE_DONE
             mock_prepare.assert_not_awaited()
     finally:
-        service.close()
+        executor.close()
 
 
 @pytest.mark.asyncio
 async def test_run_task_cancel_requested_retries_provider_cancel_when_batch_exists(tmp_path):
-    service = _build_service(tmp_path)
+    executor = _build_executor(tmp_path)
     try:
-        created = service.task_store.create_task(
+        created = _create_task(executor, 
             book_id="book-1",
             payload_json='{"translation":{"batch_name":"batch/jobs/123"}}',
         )
-        service.task_store.mark_cancel_requested(created.task_id)
-        service.gateway.cancel_batch = AsyncMock()
-        service.gateway.get_batch_state = AsyncMock(return_value="CANCELLED")
+        executor.task_store.mark_cancel_requested(created.task_id)
+        executor.gateway.cancel_batch = AsyncMock()
+        executor.gateway.get_batch_state = AsyncMock(return_value="CANCELLED")
 
-        result = await service.run_task(created.task_id)
+        result = await executor.run_task(created.task_id)
 
         assert result.status == STATUS_CANCELLED
         assert result.phase == PHASE_DONE
-        service.gateway.cancel_batch.assert_awaited_once()
-        service.gateway.get_batch_state.assert_awaited_once()
+        executor.gateway.cancel_batch.assert_awaited_once()
+        executor.gateway.get_batch_state.assert_awaited_once()
     finally:
-        service.close()
+        executor.close()
 
 
 @pytest.mark.asyncio
 async def test_run_task_reruns_cancelled_task_with_reset_pending_payload(tmp_path):
-    service = _build_service(tmp_path)
+    executor = _build_executor(tmp_path)
     try:
-        created = service.task_store.create_task(
+        created = _create_task(executor, 
             book_id="book-1",
             payload_json=(
                 '{"items":[{"applied":false,'
@@ -355,7 +240,7 @@ async def test_run_task_reruns_cancelled_task_with_reset_pending_payload(tmp_pat
                 '"polish":{"batch_name":"batches/old-polish","batch_display_name":"cat-polish-old","jobs":[]}}'
             ),
         )
-        service.task_store.update(created.task_id, status=STATUS_CANCELLED, cancel_requested=True, phase=PHASE_DONE)
+        executor.task_store.update(created.task_id, status=STATUS_CANCELLED, cancel_requested=True, phase=PHASE_DONE)
 
         async def _pass_translation(_service, _task_id, payload, **_kwargs):  # noqa: ANN001
             return payload
@@ -368,21 +253,21 @@ async def test_run_task_reruns_cancelled_task_with_reset_pending_payload(tmp_pat
 
         with (
             patch(
-                "context_aware_translation.workflow.batch_translation_task_service.run_translation_stage",
+                "context_aware_translation.workflow.tasks.execution.batch_translation_executor.run_translation_stage",
                 new_callable=AsyncMock,
                 side_effect=_pass_translation,
             ) as mock_translation,
             patch(
-                "context_aware_translation.workflow.batch_translation_task_service.run_polish_stage",
+                "context_aware_translation.workflow.tasks.execution.batch_translation_executor.run_polish_stage",
                 new_callable=AsyncMock,
                 side_effect=_pass_polish,
             ),
             patch(
-                "context_aware_translation.workflow.batch_translation_task_service.apply_results",
+                "context_aware_translation.workflow.tasks.execution.batch_translation_executor.apply_results",
                 side_effect=_pass_apply,
             ),
         ):
-            result = await service.run_task(created.task_id)
+            result = await executor.run_task(created.task_id)
 
             assert result.status == STATUS_COMPLETED_WITH_ERRORS
             assert result.cancel_requested is False
@@ -394,82 +279,81 @@ async def test_run_task_reruns_cancelled_task_with_reset_pending_payload(tmp_pat
             assert call_payload["items"][0]["translation"]["state"] == "pending"
             assert call_payload["items"][0]["polish"]["state"] == "pending"
     finally:
-        service.close()
+        executor.close()
 
 
 @pytest.mark.asyncio
 async def test_run_task_pauses_on_transient_timeout(tmp_path):
-    service = _build_service(tmp_path)
+    executor = _build_executor(tmp_path)
     try:
-        created = service.task_store.create_task(book_id="book-1")
+        created = _create_task(executor, book_id="book-1")
         with patch(
-            "context_aware_translation.workflow.batch_translation_task_service.ensure_payload_prepared",
+            "context_aware_translation.workflow.tasks.execution.batch_translation_executor.ensure_payload_prepared",
             new_callable=AsyncMock,
             side_effect=httpx.ReadTimeout("timed out"),
         ):
-            result = await service.run_task(created.task_id)
+            result = await executor.run_task(created.task_id)
 
             assert result.status == STATUS_PAUSED
             assert result.phase == PHASE_PREPARE
             assert "ReadTimeout" in (result.last_error or "")
     finally:
-        service.close()
+        executor.close()
 
 
 @pytest.mark.asyncio
 async def test_run_task_pauses_on_quota_error(tmp_path):
-    service = _build_service(tmp_path)
+    executor = _build_executor(tmp_path)
     try:
-        created = service.task_store.create_task(book_id="book-1")
+        created = _create_task(executor, book_id="book-1")
         with patch(
-            "context_aware_translation.workflow.batch_translation_task_service.ensure_payload_prepared",
+            "context_aware_translation.workflow.tasks.execution.batch_translation_executor.ensure_payload_prepared",
             new_callable=AsyncMock,
             side_effect=RuntimeError("429 RESOURCE_EXHAUSTED quota exceeded"),
         ):
-            result = await service.run_task(created.task_id)
+            result = await executor.run_task(created.task_id)
 
             assert result.status == STATUS_PAUSED
             assert "RESOURCE_EXHAUSTED" in (result.last_error or "")
     finally:
-        service.close()
+        executor.close()
 
 
 @pytest.mark.asyncio
 async def test_run_task_marks_failed_on_non_transient_error(tmp_path):
-    service = _build_service(tmp_path)
+    executor = _build_executor(tmp_path)
     try:
-        created = service.task_store.create_task(book_id="book-1")
+        created = _create_task(executor, book_id="book-1")
         with patch(
-            "context_aware_translation.workflow.batch_translation_task_service.ensure_payload_prepared",
+            "context_aware_translation.workflow.tasks.execution.batch_translation_executor.ensure_payload_prepared",
             new_callable=AsyncMock,
             side_effect=ValueError("bad payload"),
         ):
-            result = await service.run_task(created.task_id)
+            result = await executor.run_task(created.task_id)
 
             assert result.status == STATUS_FAILED
             assert result.phase == PHASE_DONE
             assert result.last_error == "ValueError: bad payload"
     finally:
-        service.close()
+        executor.close()
 
 
 @pytest.mark.asyncio
 async def test_ensure_payload_prepared_uses_batch_model_with_fixed_temperature():
-    task = TranslationBatchTaskRecord(
+    from context_aware_translation.storage.task_store import TaskRecord
+
+    task = TaskRecord(
         task_id="task-1",
         book_id="book-1",
+        task_type="batch_translation",
         status=STATUS_QUEUED,
         phase=PHASE_PREPARE,
         payload_json="{}",
         document_ids_json=None,
-        force=False,
-        skip_context=False,
+        cancel_requested=False,
         total_items=0,
         completed_items=0,
         failed_items=0,
-        cancel_requested=False,
-        translation_batch_name=None,
-        polish_batch_name=None,
         last_error=None,
         created_at=0.0,
         updated_at=0.0,
@@ -503,6 +387,8 @@ async def test_ensure_payload_prepared_uses_batch_model_with_fixed_temperature()
     service.document_ids_for_task.return_value = None
     service.translator_config.return_value = translator_config
     service.batch_config.return_value = batch_config
+    service._get_force.return_value = False
+    service._get_skip_context.return_value = False
 
     payload = await ensure_payload_prepared(service, task, {}, cancel_check=None)
 
@@ -565,11 +451,11 @@ async def test_execute_stage_reuses_cached_submitted_batch_without_resubmitting(
     try:
         with (
             patch(
-                "context_aware_translation.workflow.batch_translation_task_ops.poll_until_terminal",
+                "context_aware_translation.workflow.tasks.execution.batch_translation_ops.poll_until_terminal",
                 new=AsyncMock(side_effect=fake_poll),
             ),
             patch(
-                "context_aware_translation.workflow.batch_translation_task_ops.validated_chat",
+                "context_aware_translation.workflow.tasks.execution.batch_translation_ops.validated_chat",
                 new=AsyncMock(return_value=["ok"]),
             ),
         ):
@@ -649,11 +535,11 @@ async def test_execute_stage_deduplicates_duplicate_request_hashes(tmp_path):
     try:
         with (
             patch(
-                "context_aware_translation.workflow.batch_translation_task_ops.poll_until_terminal",
+                "context_aware_translation.workflow.tasks.execution.batch_translation_ops.poll_until_terminal",
                 new=AsyncMock(side_effect=fake_poll),
             ),
             patch(
-                "context_aware_translation.workflow.batch_translation_task_ops.validated_chat",
+                "context_aware_translation.workflow.tasks.execution.batch_translation_ops.validated_chat",
                 new=AsyncMock(return_value=["ok"]),
             ),
         ):
@@ -732,11 +618,11 @@ async def test_execute_stage_resubmits_when_cached_failed_record_was_cancelled(t
     try:
         with (
             patch(
-                "context_aware_translation.workflow.batch_translation_task_ops.poll_until_terminal",
+                "context_aware_translation.workflow.tasks.execution.batch_translation_ops.poll_until_terminal",
                 new=AsyncMock(side_effect=fake_poll),
             ),
             patch(
-                "context_aware_translation.workflow.batch_translation_task_ops.validated_chat",
+                "context_aware_translation.workflow.tasks.execution.batch_translation_ops.validated_chat",
                 new=AsyncMock(return_value=["ok"]),
             ),
         ):
@@ -818,11 +704,11 @@ async def test_execute_stage_submits_sequential_slices_by_batch_size(tmp_path):
     try:
         with (
             patch(
-                "context_aware_translation.workflow.batch_translation_task_ops.poll_until_terminal",
+                "context_aware_translation.workflow.tasks.execution.batch_translation_ops.poll_until_terminal",
                 new=AsyncMock(side_effect=fake_poll),
             ),
             patch(
-                "context_aware_translation.workflow.batch_translation_task_ops.validated_chat",
+                "context_aware_translation.workflow.tasks.execution.batch_translation_ops.validated_chat",
                 new=AsyncMock(return_value=["ok"]),
             ),
         ):

@@ -13,9 +13,12 @@ from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.core.progress import ProgressCallback
 from context_aware_translation.llm.batch_jobs import GeminiBatchJobGateway
 from context_aware_translation.storage.llm_batch_store import LLMBatchStore
-from context_aware_translation.storage.translation_batch_task_store import (
+from context_aware_translation.storage.task_store import TaskRecord, TaskStore
+from context_aware_translation.workflow.tasks.models import (
     PHASE_DONE,
     PHASE_TRANSLATION_SUBMIT,
+)
+from context_aware_translation.workflow.tasks.models import (
     STATUS_CANCEL_REQUESTED,
     STATUS_CANCELLED,
     STATUS_CANCELLING,
@@ -26,11 +29,10 @@ from context_aware_translation.storage.translation_batch_task_store import (
     STATUS_QUEUED,
     STATUS_RUNNING,
     TERMINAL_TASK_STATUSES,
-    TranslationBatchTaskRecord,
-    TranslationBatchTaskStore,
 )
-from context_aware_translation.workflow.batch_translation_task_ops import (
+from context_aware_translation.workflow.tasks.execution.batch_translation_ops import (
     apply_results,
+    decode_task_payload,
     ensure_payload_prepared,
     is_item_translation_success,
     new_payload_stage,
@@ -43,11 +45,6 @@ from context_aware_translation.workflow.service import WorkflowService
 logger = logging.getLogger(__name__)
 
 DEFAULT_TASK_POLL_INTERVAL_SEC = 10
-_NON_DELETABLE_TASK_STATUSES = {
-    STATUS_RUNNING,
-    STATUS_CANCEL_REQUESTED,
-    STATUS_CANCELLING,
-}
 _RERUNNABLE_TERMINAL_STATUSES = {
     STATUS_CANCELLED,
     STATUS_FAILED,
@@ -76,13 +73,6 @@ _ACTIVE_PROVIDER_BATCH_STATES = {
 
 class _PauseRequestedError(Exception):
     pass
-
-
-def select_next_auto_run_task(
-    tasks: list[TranslationBatchTaskRecord],
-) -> TranslationBatchTaskRecord | None:
-    """Return the next background-runnable task from a task list."""
-    return next((task for task in reversed(tasks) if task.status in AUTO_RUN_TASK_STATUSES), None)
 
 
 def _is_transient_batch_error(exc: Exception) -> bool:
@@ -132,75 +122,70 @@ def prepare_payload_for_rerun(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-class BatchTranslationTaskService:
+class BatchTranslationExecutor:
     """Persistent task orchestrator for async Gemini initial-call batch translation."""
 
     def __init__(
         self,
         *,
         workflow: WorkflowService,
-        task_store: TranslationBatchTaskStore,
+        task_store: TaskStore,
         llm_batch_store: LLMBatchStore,
         poll_interval_sec: int = DEFAULT_TASK_POLL_INTERVAL_SEC,
+        notify_task_changed: Callable[[str], None] | None = None,
     ) -> None:
         self.workflow = workflow
         self.task_store = task_store
         self.llm_batch_store = llm_batch_store
         self.gateway = GeminiBatchJobGateway()
         self.poll_interval_sec = max(1, int(poll_interval_sec))
+        self._notify_task_changed = notify_task_changed
+        self._book_id = workflow.book_id if workflow is not None else None
 
     @classmethod
-    def from_workflow(cls, workflow: WorkflowService) -> BatchTranslationTaskService:
+    def from_workflow(
+        cls,
+        workflow: WorkflowService,
+        *,
+        task_store: TaskStore | None = None,
+        notify_task_changed: Callable[[str], None] | None = None,
+    ) -> BatchTranslationExecutor:
         if workflow.config.sqlite_path is None:
-            raise ValueError("sqlite_path is required to create BatchTranslationTaskService.")
+            raise ValueError("sqlite_path is required to create BatchTranslationExecutor.")
         runtime_root = workflow.config.sqlite_path.parent
+        resolved_store = task_store if task_store is not None else TaskStore(runtime_root / "task_store.db")
         return cls(
             workflow=workflow,
-            task_store=TranslationBatchTaskStore(runtime_root / "translation_batch_tasks.db"),
+            task_store=resolved_store,
             llm_batch_store=LLMBatchStore(runtime_root / "llm_batch_cache.db"),
+            notify_task_changed=notify_task_changed,
         )
 
     def close(self) -> None:
-        self.task_store.close()
+        # Only close resources this executor owns (llm_batch_store).
+        # task_store may be shared; caller is responsible for its lifecycle.
         self.llm_batch_store.close()
+
+    # ------------------------------------------------------------------
+    # Internal persistence helper
+    # ------------------------------------------------------------------
+
+    def _persist(self, task_id: str, **kwargs) -> TaskRecord:
+        record = self.task_store.update(task_id, **kwargs)
+        if self._notify_task_changed is not None:
+            book_id = record.book_id if hasattr(record, "book_id") else self._book_id
+            if book_id:
+                self._notify_task_changed(book_id)
+        return record
 
     # ------------------------------------------------------------------
     # Public APIs used by UI worker
     # ------------------------------------------------------------------
 
-    def list_tasks(self) -> list[TranslationBatchTaskRecord]:
-        if not self.workflow.book_id:
-            return []
-        return self.task_store.list_tasks(self.workflow.book_id)
-
-    def create_task(
-        self,
-        *,
-        document_ids: list[int] | None,
-        force: bool,
-        skip_context: bool,
-    ) -> TranslationBatchTaskRecord:
-        if not self.workflow.book_id:
-            raise ValueError("Book ID is required for translation batch tasks.")
-        if not isinstance(self.workflow.config.translator_batch_config, TranslatorBatchConfig):
-            raise ValueError("translator_batch_config is required for async batch tasks.")
-        if self.has_manga_documents(document_ids):
-            raise ValueError("Async batch translation does not support manga documents.")
-
-        doc_ids_json = None if document_ids is None else json.dumps([int(doc_id) for doc_id in document_ids])
-        return self.task_store.create_task(
-            book_id=self.workflow.book_id,
-            document_ids_json=doc_ids_json,
-            force=force,
-            skip_context=skip_context,
-        )
-
-    def delete_task(self, task_id: str) -> dict[str, Any]:
+    def cleanup_remote_artifacts(self, task_id: str) -> dict[str, Any]:
         task = self.task_store.get(task_id)
         if task is None:
             raise ValueError(f"Task not found: {task_id}")
-        if task.status in _NON_DELETABLE_TASK_STATUSES:
-            raise ValueError(f"Cannot delete active task: {task_id} (status={task.status})")
 
         payload = self._decode_payload(task)
         cleanup_warnings: list[str] = []
@@ -232,16 +217,15 @@ class BatchTranslationTaskService:
                 )
             else:
                 cleanup_warnings.append(
-                    "Skipped remote cleanup because delete_task was called from a running event loop."
+                    "Skipped remote cleanup because cleanup_remote_artifacts was called from a running event loop."
                 )
 
-        self.task_store.delete(task_id)
         return {
             "task_id": task_id,
             "cleanup_warnings": cleanup_warnings,
         }
 
-    async def request_cancel(self, task_id: str) -> TranslationBatchTaskRecord:
+    async def request_cancel(self, task_id: str) -> TaskRecord:
         task = self.task_store.get(task_id)
         if task is None:
             raise ValueError(f"Task not found: {task_id}")
@@ -269,7 +253,7 @@ class BatchTranslationTaskService:
                     f"{type(exc).__name__}: {exc}"
                 )
                 logger.warning("Task %s marked cancelled locally without provider cancellation: %s", task_id, exc)
-            return self.task_store.update(
+            return self._persist(
                 task_id,
                 status=STATUS_CANCELLED,
                 phase=PHASE_DONE,
@@ -292,13 +276,13 @@ class BatchTranslationTaskService:
                     batch_names.append(resolved_name)
 
         if not batch_names:
-            return self.task_store.update(
+            return self._persist(
                 task_id,
                 status=STATUS_CANCELLED,
                 phase=PHASE_DONE,
             )
 
-        task = self.task_store.update(task_id, status=STATUS_CANCELLING)
+        task = self._persist(task_id, status=STATUS_CANCELLING)
         has_active_batches = False
         last_error: str | None = None
         for batch_name in batch_names:
@@ -328,12 +312,12 @@ class BatchTranslationTaskService:
                 has_active_batches = True
 
         if has_active_batches:
-            return self.task_store.update(
+            return self._persist(
                 task_id,
                 status=STATUS_CANCELLING,
                 last_error=last_error,
             )
-        return self.task_store.update(
+        return self._persist(
             task_id,
             status=STATUS_CANCELLED,
             phase=PHASE_DONE,
@@ -346,7 +330,7 @@ class BatchTranslationTaskService:
         *,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
-    ) -> TranslationBatchTaskRecord:
+    ) -> TaskRecord:
         task = self.task_store.get(task_id)
         if task is None:
             raise ValueError(f"Task not found: {task_id}")
@@ -354,13 +338,11 @@ class BatchTranslationTaskService:
             return task
         if task.status in _RERUNNABLE_TERMINAL_STATUSES:
             payload = prepare_payload_for_rerun(self._decode_payload(task))
-            task = self.task_store.update(
+            task = self._persist(
                 task_id,
                 status=STATUS_PAUSED,
                 cancel_requested=False,
                 payload_json=json.dumps(payload, ensure_ascii=False),
-                translation_batch_name=payload.get("translation", {}).get("batch_name"),
-                polish_batch_name=payload.get("polish", {}).get("batch_name"),
                 last_error=None,
             )
         elif task.status in TERMINAL_TASK_STATUSES:
@@ -369,7 +351,7 @@ class BatchTranslationTaskService:
             return await self.request_cancel(task_id)
 
         try:
-            task = self.task_store.update(task_id, status=STATUS_RUNNING)
+            task = self._persist(task_id, status=STATUS_RUNNING)
             payload = self._decode_payload(task)
             # If re-queued from a terminal state, reset stale payload items.
             existing_items = payload.get("items")
@@ -379,7 +361,7 @@ class BatchTranslationTaskService:
             task = self.persist_payload(task_id, payload, phase=PHASE_TRANSLATION_SUBMIT, status=STATUS_RUNNING)
 
             if not payload.get("items"):
-                return self.task_store.update(
+                return self._persist(
                     task_id,
                     status=STATUS_COMPLETED,
                     phase=PHASE_DONE,
@@ -392,7 +374,7 @@ class BatchTranslationTaskService:
                 self,
                 task_id,
                 payload,
-                force=task.force,
+                force=self._get_force(task),
                 cancel_check=cancel_check,
                 progress_callback=progress_callback,
             )
@@ -401,7 +383,7 @@ class BatchTranslationTaskService:
                 self,
                 task_id,
                 payload,
-                force=task.force,
+                force=self._get_force(task),
                 cancel_check=cancel_check,
                 progress_callback=progress_callback,
             )
@@ -429,7 +411,7 @@ class BatchTranslationTaskService:
                 ]
                 last_error = failed_messages[0] if failed_messages else "Some items failed."
 
-            return self.task_store.update(
+            return self._persist(
                 task_id,
                 status=terminal_status,
                 phase=PHASE_DONE,
@@ -443,22 +425,22 @@ class BatchTranslationTaskService:
             refreshed = self.task_store.get(task_id)
             if refreshed is not None and refreshed.cancel_requested:
                 return await self.request_cancel(task_id)
-            return self.task_store.update(task_id, status=STATUS_PAUSED)
+            return self._persist(task_id, status=STATUS_PAUSED)
         except OperationCancelledError:
             refreshed = self.task_store.get(task_id)
             if refreshed is not None and refreshed.cancel_requested:
                 return await self.request_cancel(task_id)
-            return self.task_store.update(task_id, status=STATUS_PAUSED)
+            return self._persist(task_id, status=STATUS_PAUSED)
         except Exception as exc:
             if _is_transient_batch_error(exc):
                 logger.warning("Batch translation task paused on transient error: %s (%s)", task_id, exc)
-                return self.task_store.update(
+                return self._persist(
                     task_id,
                     status=STATUS_PAUSED,
                     last_error=f"{type(exc).__name__}: {exc}",
                 )
             logger.exception("Batch translation task failed: %s", task_id)
-            return self.task_store.update(
+            return self._persist(
                 task_id,
                 status=STATUS_FAILED,
                 phase=PHASE_DONE,
@@ -469,14 +451,18 @@ class BatchTranslationTaskService:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _decode_payload(self, task: TranslationBatchTaskRecord) -> dict[str, Any]:
-        if not task.payload_json:
-            return {}
-        try:
-            value = json.loads(task.payload_json)
-        except json.JSONDecodeError:
-            return {}
-        return value if isinstance(value, dict) else {}
+    def _get_force(self, task: TaskRecord) -> bool:
+        """Extract the 'force' flag from task payload_json (set by engine at task creation)."""
+        payload = self._decode_payload(task)
+        return bool(payload.get("force", False))
+
+    def _get_skip_context(self, task: TaskRecord) -> bool:
+        """Extract the 'skip_context' flag from task payload_json."""
+        payload = self._decode_payload(task)
+        return bool(payload.get("skip_context", False))
+
+    def _decode_payload(self, task: TaskRecord) -> dict[str, Any]:
+        return decode_task_payload(task)
 
     @staticmethod
     def _collect_remote_cleanup_targets(payload: dict[str, Any]) -> tuple[list[str], list[str]]:
@@ -538,7 +524,7 @@ class BatchTranslationTaskService:
         *,
         phase: str,
         status: str,
-    ) -> TranslationBatchTaskRecord:
+    ) -> TaskRecord:
         items = payload.get("items", [])
         total_items = len(items) if isinstance(items, list) else 0
         completed_items = 0
@@ -552,7 +538,7 @@ class BatchTranslationTaskService:
                 and isinstance(item.get("translation"), dict)
                 and item["translation"].get("state") == "failed"
             )
-        return self.task_store.update(
+        return self._persist(
             task_id,
             status=status,
             phase=phase,
@@ -560,8 +546,6 @@ class BatchTranslationTaskService:
             total_items=total_items,
             completed_items=completed_items,
             failed_items=failed_items,
-            translation_batch_name=payload.get("translation", {}).get("batch_name"),
-            polish_batch_name=payload.get("polish", {}).get("batch_name"),
         )
 
     def batch_config(self) -> TranslatorBatchConfig:
@@ -576,20 +560,13 @@ class BatchTranslationTaskService:
             raise ValueError("translator_config is required.")
         return translator_config
 
-    def document_ids_for_task(self, task: TranslationBatchTaskRecord) -> list[int] | None:
+    def document_ids_for_task(self, task: TaskRecord) -> list[int] | None:
         if task.document_ids_json is None or task.document_ids_json == "":
             return None
         raw = json.loads(task.document_ids_json)
         if not isinstance(raw, list):
             raise ValueError("Invalid task document_ids_json payload.")
         return [int(doc_id) for doc_id in raw]
-
-    def has_manga_documents(self, document_ids: list[int] | None) -> bool:
-        docs = self.workflow.document_repo.list_documents()
-        if document_ids is not None:
-            wanted = set(document_ids)
-            docs = [doc for doc in docs if int(doc["document_id"]) in wanted]
-        return any(str(doc.get("document_type", "")) == "manga" for doc in docs)
 
     def raise_if_local_pause(self, task_id: str, cancel_check: Callable[[], bool] | None) -> None:
         # Check local thread interruption (UI-initiated pause).

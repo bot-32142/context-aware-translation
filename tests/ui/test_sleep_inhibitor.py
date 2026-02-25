@@ -380,12 +380,16 @@ def test_base_worker_releases_on_cancellation(mock_inhibitor):
 # --- MainWindow _update_sleep_inhibitor integration tests ---
 
 
-def test_update_sleep_inhibitor_acquires_when_global_batch_workers_active():
+def _make_fake_task_engine(has_running_work: bool = False):
+    return SimpleNamespace(has_running_work=MagicMock(return_value=has_running_work))
+
+
+def test_update_sleep_inhibitor_acquires_when_task_engine_has_running_work():
     from context_aware_translation.ui.main_window import MainWindow
 
     mock_inhibitor = MagicMock()
     fake_window = SimpleNamespace(
-        _global_batch_workers={"book-1": MagicMock()},
+        _task_engine=_make_fake_task_engine(has_running_work=True),
         _view_registry={},
         _sleep_inhibitor=mock_inhibitor,
     )
@@ -401,7 +405,7 @@ def test_update_sleep_inhibitor_acquires_when_workspace_has_running_ops():
     mock_inhibitor = MagicMock()
     workspace = SimpleNamespace(get_running_operations=MagicMock(return_value=["Translation"]))
     fake_window = SimpleNamespace(
-        _global_batch_workers={},
+        _task_engine=_make_fake_task_engine(has_running_work=False),
         _view_registry={"book_abc": workspace},
         _sleep_inhibitor=mock_inhibitor,
     )
@@ -421,7 +425,7 @@ def test_update_sleep_inhibitor_acquires_when_translation_batch_worker_running()
     workspace.get_translation_view.return_value = translation_view
     workspace.get_running_operations.return_value = []
     fake_window = SimpleNamespace(
-        _global_batch_workers={},
+        _task_engine=_make_fake_task_engine(has_running_work=False),
         _view_registry={"book_abc": workspace},
         _sleep_inhibitor=mock_inhibitor,
     )
@@ -437,7 +441,7 @@ def test_update_sleep_inhibitor_releases_when_nothing_running():
     mock_inhibitor = MagicMock()
     workspace = SimpleNamespace(get_running_operations=MagicMock(return_value=[]))
     fake_window = SimpleNamespace(
-        _global_batch_workers={},
+        _task_engine=_make_fake_task_engine(has_running_work=False),
         _view_registry={"book_abc": workspace, "library": SimpleNamespace()},
         _sleep_inhibitor=mock_inhibitor,
     )

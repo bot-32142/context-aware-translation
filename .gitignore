@@ -56,3 +56,4 @@ delete-me-output/
 .omc
 .claude
 evaluation/output/
+MagicMock/

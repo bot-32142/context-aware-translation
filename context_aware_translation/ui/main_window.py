@@ -1,10 +1,8 @@
 """Main application window with sidebar navigation."""
 
-import contextlib
 import logging
-import time
 
-from PySide6.QtCore import QEvent, QSettings, Qt, QTimer
+from PySide6.QtCore import QEvent, QSettings, QTimer, Qt
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
@@ -19,14 +17,12 @@ from PySide6.QtWidgets import (
 )
 
 from context_aware_translation.llm.token_tracker import TokenTracker
-from context_aware_translation.storage.book import BookStatus
 from context_aware_translation.storage.book_manager import BookManager
-from context_aware_translation.storage.translation_batch_task_store import (
-    STATUS_PAUSED,
-    TERMINAL_TASK_STATUSES,
-    TranslationBatchTaskStore,
-)
-from context_aware_translation.workflow.batch_translation_task_service import select_next_auto_run_task
+from context_aware_translation.storage.task_store import TaskStore
+from context_aware_translation.ui.tasks.qt_task_engine import TaskEngine
+from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
+from context_aware_translation.workflow.session import WorkflowSession
+from context_aware_translation.workflow.tasks.handlers.batch_translation import BatchTranslationHandler
 
 from . import i18n
 from .constants import (
@@ -40,18 +36,12 @@ from .constants import (
 from .i18n import qarg
 from .sleep_inhibitor import SleepInhibitor
 from .views import BookWorkspace, LibraryView, ProfileView
-from .workers.batch_task_overlap_guard import has_any_batch_task_overlap
-from .workers.batch_translation_task_worker import BatchTranslationTaskWorker
-from .workers.operation_tracker import DocumentOperationTracker
 
 logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
     """Main application window with sidebar navigation."""
-
-    _GLOBAL_BATCH_AUTORUN_INTERVAL_MS = 3000
-    _GLOBAL_BATCH_AUTORUN_RETRY_BACKOFF_SEC = 30
 
     def __init__(self) -> None:
         """Initialize the main window."""
@@ -70,10 +60,6 @@ class MainWindow(QMainWindow):
         # Navigation items (store for retranslation)
         self._library_nav_item: QListWidgetItem | None = None
         self._profiles_nav_item: QListWidgetItem | None = None
-        self._global_batch_workers: dict[str, dict[str, BatchTranslationTaskWorker]] = {}
-        self._global_batch_retry_after: dict[str, float] = {}
-        self._global_batch_timer: QTimer | None = None
-        self._global_batch_task_stores: dict[str, TranslationBatchTaskStore] = {}
         self._sleep_inhibitor = SleepInhibitor()
 
         # Initialize book manager
@@ -83,6 +69,22 @@ class MainWindow(QMainWindow):
         # Initialize TokenTracker
         TokenTracker.initialize(self.book_manager.registry)
 
+        # Initialize centralized TaskEngine
+        self._task_store = TaskStore(self.book_manager.library_root / "task_store.db")
+        self._worker_deps = WorkerDeps(
+            book_manager=self.book_manager,
+            task_store=self._task_store,
+            create_workflow_session=lambda book_id: WorkflowSession.from_book(self.book_manager, book_id),
+            notify_task_changed=self._enqueue_task_changed,
+        )
+        self._task_engine = TaskEngine(store=self._task_store, deps=self._worker_deps, parent=self)
+        self._task_engine.register_handler(BatchTranslationHandler())
+        self._task_engine.running_work_changed.connect(self._on_engine_running_work_changed)
+
+        self._sleep_check_timer = QTimer(self)
+        self._sleep_check_timer.timeout.connect(self._update_sleep_inhibitor)
+        self._sleep_check_timer.start(5000)
+
         # Initialize UI components (status bar first to avoid errors during nav init)
         self._init_status_bar()
         self._init_ui()
@@ -90,7 +92,7 @@ class MainWindow(QMainWindow):
 
         # Restore window geometry
         self._restore_geometry()
-        self._start_global_batch_autorun()
+        self._task_engine.start_autorun()
 
     def _init_ui(self) -> None:
         """Initialize the main UI layout."""
@@ -211,38 +213,17 @@ class MainWindow(QMainWindow):
         settings = QSettings("CAT", "Context-Aware Translation")
         settings.setValue("geometry", self.saveGeometry())
 
-    def _start_global_batch_autorun(self) -> None:
-        """Start background scheduler for async batch tasks across all books."""
-        if self._global_batch_timer is not None:
-            self._global_batch_timer.stop()
-        self._global_batch_timer = QTimer(self)
-        self._global_batch_timer.setInterval(self._GLOBAL_BATCH_AUTORUN_INTERVAL_MS)
-        self._global_batch_timer.timeout.connect(self._on_global_batch_autorun_tick)
-        self._global_batch_timer.start()
-        self._on_global_batch_autorun_tick()
+    def _enqueue_task_changed(self, book_id: str) -> None:
+        """Thread-safe relay: emit engine signal from any thread."""
+        self._task_engine.enqueue_task_changed.emit(book_id)
 
-    def _shutdown_global_batch_autorun(self) -> None:
-        """Stop global scheduler and interrupt active background batch workers."""
-        timer = self._global_batch_timer
-        if timer is not None:
-            timer.stop()
-            self._global_batch_timer = None
-        for task_workers in list(self._global_batch_workers.values()):
-            for worker in list(task_workers.values()):
-                if worker.isRunning():
-                    worker.requestInterruption()
-                    if not worker.wait(1500):
-                        logger.warning("Timed out while stopping global batch worker during shutdown")
-        self._global_batch_workers.clear()
-        self._global_batch_retry_after.clear()
-        for store in self._global_batch_task_stores.values():
-            with contextlib.suppress(Exception):
-                store.close()
-        self._global_batch_task_stores.clear()
+    def _on_engine_running_work_changed(self, is_running: bool) -> None:
+        """React to TaskEngine running-work state changes."""
+        self._update_sleep_inhibitor()
 
     def _update_sleep_inhibitor(self) -> None:
         """Acquire or release sleep inhibition based on whether any work is active."""
-        if any(task_workers for task_workers in self._global_batch_workers.values()):
+        if self._task_engine.has_running_work():
             self._sleep_inhibitor.acquire()
             return
 
@@ -264,179 +245,6 @@ class MainWindow(QMainWindow):
                     self._sleep_inhibitor.acquire()
                     return
         self._sleep_inhibitor.release()
-
-    def _on_global_batch_autorun_tick(self) -> None:
-        """Auto-run queued/ongoing async batch tasks for all active books."""
-        self._cleanup_finished_global_batch_workers()
-        self._update_sleep_inhibitor()
-        try:
-            books = self.book_manager.list_books(status=BookStatus.ACTIVE)
-        except Exception:
-            logger.exception("Failed to list books for global batch auto-run")
-            return
-        now = time.monotonic()
-        for book in books:
-            book_id = book.book_id
-            retry_after = self._global_batch_retry_after.get(book_id)
-            if retry_after is not None:
-                if now < retry_after:
-                    continue
-                self._global_batch_retry_after.pop(book_id, None)
-            if self._is_workspace_translation_worker_running(book_id):
-                continue
-            if self._global_batch_workers.get(book_id):
-                continue
-            candidate = self._next_auto_batch_candidate(book_id)
-            if candidate is None:
-                continue
-            task_id, doc_ids = candidate
-            if DocumentOperationTracker.has_document_overlap(book_id, doc_ids):
-                continue
-            if has_any_batch_task_overlap(
-                self.book_manager,
-                book_id,
-                doc_ids,
-                exclude_task_ids={task_id},
-            ):
-                continue
-            self._start_global_batch_worker(book_id, task_id, doc_ids)
-
-    def _cleanup_finished_global_batch_workers(self) -> None:
-        for book_id in list(self._global_batch_workers.keys()):
-            task_workers = self._global_batch_workers[book_id]
-            finished_task_ids = [tid for tid, worker in task_workers.items() if not worker.isRunning()]
-            for tid in finished_task_ids:
-                task_workers.pop(tid, None)
-            if not task_workers:
-                self._global_batch_workers.pop(book_id, None)
-
-    def _get_batch_task_store(self, book_id: str) -> TranslationBatchTaskStore:
-        """Return a cached ``TranslationBatchTaskStore`` for *book_id*."""
-        store = self._global_batch_task_stores.get(book_id)
-        if store is None:
-            store_path = self.book_manager.get_book_db_path(book_id).parent / "translation_batch_tasks.db"
-            store = TranslationBatchTaskStore(store_path)
-            self._global_batch_task_stores[book_id] = store
-        return store
-
-    def _next_auto_batch_candidate(self, book_id: str) -> tuple[str, list[int] | None] | None:
-        """Return (task_id, document_ids) for the next auto-runnable task, or None."""
-        store = self._get_batch_task_store(book_id)
-        tasks = store.list_tasks(book_id)
-        task = select_next_auto_run_task(tasks)
-        if task is None:
-            return None
-        doc_ids = self._parse_task_doc_ids(task)
-        return task.task_id, doc_ids
-
-    @staticmethod
-    def _parse_task_doc_ids(task: object) -> list[int] | None:
-        """Parse document_ids_json from a task record."""
-        import json
-
-        raw = getattr(task, "document_ids_json", None)
-        if raw is None or raw == "" or raw == "null":
-            return None
-        try:
-            parsed = json.loads(raw)
-            if parsed is None:
-                return None
-            return [int(doc_id) for doc_id in parsed]
-        except (json.JSONDecodeError, TypeError, ValueError):
-            return None
-
-    def _is_workspace_translation_worker_running(self, book_id: str) -> bool:
-        workspace = self._view_registry.get(f"book_{book_id}")
-        if not isinstance(workspace, BookWorkspace):
-            return False
-        translation_view = workspace.get_translation_view()
-        if translation_view is None:
-            return False
-        if translation_view.worker is not None and translation_view.worker.isRunning():
-            return True
-        return translation_view.retranslate_worker is not None and translation_view.retranslate_worker.isRunning()
-
-    def _start_global_batch_worker(self, book_id: str, task_id: str, doc_ids: list[int] | None = None) -> None:
-        worker = BatchTranslationTaskWorker(
-            self.book_manager,
-            book_id,
-            action="run",
-            task_id=task_id,
-            document_ids=doc_ids,
-        )
-        worker.finished_success.connect(
-            lambda payload, bid=book_id, _tid=task_id: self._on_global_batch_worker_success(bid, payload)
-        )
-        worker.error.connect(
-            lambda error_msg, bid=book_id, tid=task_id: self._on_global_batch_worker_error(bid, tid, error_msg)
-        )
-        worker.finished.connect(lambda bid=book_id, tid=task_id: self._on_global_batch_worker_finished(bid, tid))
-        self._global_batch_workers.setdefault(book_id, {})[task_id] = worker
-        worker.start()
-
-    def _on_global_batch_worker_success(self, book_id: str, payload: object) -> None:
-        task_status = ""
-        last_error = ""
-        if isinstance(payload, dict):
-            task_payload = payload.get("task")
-            if isinstance(task_payload, dict):
-                status_value = task_payload.get("status")
-                error_value = task_payload.get("last_error")
-                if isinstance(status_value, str):
-                    task_status = status_value
-                if isinstance(error_value, str):
-                    last_error = error_value
-
-        if task_status == STATUS_PAUSED:
-            normalized_error = last_error.lower()
-            if any(token in normalized_error for token in ("429", "resource_exhausted", "quota", "rate limit")):
-                self._global_batch_retry_after[book_id] = (
-                    time.monotonic() + self._GLOBAL_BATCH_AUTORUN_RETRY_BACKOFF_SEC
-                )
-                return
-
-        self._global_batch_retry_after.pop(book_id, None)
-
-    def _on_global_batch_worker_error(self, book_id: str, task_id: str, error_msg: str) -> None:
-        self._global_batch_retry_after[book_id] = time.monotonic() + self._GLOBAL_BATCH_AUTORUN_RETRY_BACKOFF_SEC
-        logger.warning("Global batch worker failed for book %s task %s: %s", book_id, task_id, error_msg)
-        self._pause_global_task_after_worker_error(book_id, task_id, error_msg)
-
-    def _pause_global_task_after_worker_error(self, book_id: str, task_id: str, error_msg: str) -> None:
-        if not isinstance(task_id, str) or not task_id:
-            return
-        try:
-            store = self._get_batch_task_store(book_id)
-            task = store.get(task_id)
-            if task is None or task.status in TERMINAL_TASK_STATUSES:
-                return
-            store.update(
-                task_id,
-                status=STATUS_PAUSED,
-                last_error=f"Global auto-run worker error: {error_msg}",
-            )
-        except Exception:
-            logger.exception("Failed to pause task %s after global worker error", task_id)
-
-    def _on_global_batch_worker_finished(self, book_id: str, task_id: str) -> None:
-        task_workers = self._global_batch_workers.get(book_id)
-        if task_workers is not None:
-            worker = task_workers.get(task_id)
-            if worker is not None and worker.isRunning():
-                return
-            task_workers.pop(task_id, None)
-            if not task_workers:
-                self._global_batch_workers.pop(book_id, None)
-        self._refresh_translation_view_if_open(book_id)
-        QTimer.singleShot(0, self._on_global_batch_autorun_tick)
-
-    def _refresh_translation_view_if_open(self, book_id: str) -> None:
-        workspace = self._view_registry.get(f"book_{book_id}")
-        if not isinstance(workspace, BookWorkspace):
-            return
-        translation_view = workspace.get_translation_view()
-        if translation_view is not None:
-            translation_view.refresh()
 
     def _get_book_running_operations(self) -> list[str]:
         """Return running operations in the current book workspace."""
@@ -592,7 +400,7 @@ class MainWindow(QMainWindow):
         self._book_nav_item = book_item
 
         # Create book workspace
-        workspace = BookWorkspace(self.book_manager, book_id, book_name)
+        workspace = BookWorkspace(self.book_manager, book_id, book_name, task_engine=self._task_engine)
         workspace.close_requested.connect(self.close_book)
         self.register_view(f"book_{book_id}", workspace)
 
@@ -678,7 +486,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Handle window close event."""
-        self._shutdown_global_batch_autorun()
+        self._task_engine.close()
+        self._sleep_check_timer.stop()
         self._sleep_inhibitor.release()
         self.close_book()
         self._save_geometry()

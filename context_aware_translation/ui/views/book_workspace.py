@@ -2,8 +2,12 @@
 
 import logging
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QEvent, QTimer, Signal
+
+if TYPE_CHECKING:
+    from context_aware_translation.ui.tasks.qt_task_engine import TaskEngine
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -40,12 +44,14 @@ class BookWorkspace(QWidget):
         book_manager: BookManager,
         book_id: str,
         book_name: str,
+        task_engine: "TaskEngine",
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.book_manager = book_manager
         self.book_id = book_id
         self.book_name = book_name
+        self._task_engine = task_engine
         self._cleaned_up = False
 
         self._init_ui()
@@ -158,7 +164,7 @@ class BookWorkspace(QWidget):
 
     def _create_translation_view(self) -> QWidget:
         """Create the translation view."""
-        return TranslationView(self.book_manager, self.book_id)
+        return TranslationView(self.book_manager, self.book_id, task_engine=self._task_engine)
 
     def _create_export_view(self) -> QWidget:
         """Create the export view."""
@@ -227,6 +233,8 @@ class BookWorkspace(QWidget):
 
     def request_cancel_running_operations(self) -> None:
         """Request cancellation for all currently running background workers."""
+        self._task_engine.cancel_running_tasks(self.book_id)
+
         # Import tab (index 0)
         import_view = self._view_cache.get(0)
         if import_view is not None:

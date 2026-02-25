@@ -1,16 +1,17 @@
-"""Worker for async translation batch-task operations."""
+"""Worker for async translation batch-task run/cancel operations."""
 
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import asdict
 from typing import Any
 
 from context_aware_translation.storage.book_manager import BookManager
-from context_aware_translation.storage.translation_batch_task_store import TranslationBatchTaskStore
-from context_aware_translation.workflow.batch_translation_task_service import BatchTranslationTaskService
+from context_aware_translation.storage.task_store import TaskStore
+from context_aware_translation.workflow.tasks.execution.batch_translation_executor import BatchTranslationExecutor
 from context_aware_translation.workflow.session import WorkflowSession
 
 from .base_worker import BaseWorker
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class BatchTranslationTaskWorker(BaseWorker):
-    """Worker to create/list/run/cancel/delete persistent translation batch tasks."""
+    """Worker to run/cancel persistent translation batch tasks."""
 
     def __init__(
         self,
@@ -33,6 +34,8 @@ class BatchTranslationTaskWorker(BaseWorker):
         document_ids: list[int] | None = None,
         force: bool = False,
         skip_context: bool = False,
+        task_store: TaskStore | None = None,
+        notify_task_changed: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__()
         self.book_manager = book_manager
@@ -42,6 +45,8 @@ class BatchTranslationTaskWorker(BaseWorker):
         self.document_ids = document_ids
         self.force = force
         self.skip_context = skip_context
+        self.task_store = task_store
+        self.notify_task_changed = notify_task_changed
 
     @classmethod
     def is_run_active_for_book(cls, book_id: str) -> bool:
@@ -51,13 +56,8 @@ class BatchTranslationTaskWorker(BaseWorker):
         """Resolve document IDs for a 'run' action from the task record."""
         if self.document_ids is not None:
             return self.document_ids
-        if self.task_id:
-            store_path = self.book_manager.get_book_db_path(self.book_id).parent / "translation_batch_tasks.db"
-            store = TranslationBatchTaskStore(store_path)
-            try:
-                task = store.get(self.task_id)
-            finally:
-                store.close()
+        if self.task_id and self.task_store is not None:
+            task = self.task_store.get(self.task_id)
             if task and task.document_ids_json:
                 try:
                     parsed = json.loads(task.document_ids_json)
@@ -70,8 +70,8 @@ class BatchTranslationTaskWorker(BaseWorker):
     def run(self) -> None:
         op_id = None
         doc_ids = None
-        if self.action in {"create", "run"}:
-            doc_ids = self.document_ids if self.action == "create" else self._resolve_run_document_ids()
+        if self.action in {"run"}:
+            doc_ids = self._resolve_run_document_ids()
             op_id = DocumentOperationTracker.try_start_operation(self.book_id, doc_ids)
             if op_id is None:
                 logger.info(
@@ -84,8 +84,8 @@ class BatchTranslationTaskWorker(BaseWorker):
         try:
             if op_id is not None:
                 exclude = {self.task_id} if self.action == "run" and self.task_id else set()
-                if has_any_batch_task_overlap(
-                    self.book_manager,
+                if self.task_store is not None and has_any_batch_task_overlap(
+                    self.task_store,
                     self.book_id,
                     doc_ids,
                     exclude_task_ids=exclude or None,
@@ -116,28 +116,17 @@ class BatchTranslationTaskWorker(BaseWorker):
         self._raise_if_cancelled()
         session_manager = WorkflowSession.from_book(self.book_manager, self.book_id)
         with session_manager as session:
-            service = BatchTranslationTaskService.from_workflow(session)
+            executor = BatchTranslationExecutor.from_workflow(
+                session,
+                task_store=self.task_store,
+                notify_task_changed=self.notify_task_changed,
+            )
             try:
-                if self.action == "list":
-                    records = service.list_tasks()
-                    payload = [self._record_to_payload(record) for record in records]
-                    self.finished_success.emit({"action": "list", "tasks": payload})
-                    return
-
-                if self.action == "create":
-                    record = service.create_task(
-                        document_ids=self.document_ids,
-                        force=self.force,
-                        skip_context=self.skip_context,
-                    )
-                    self.finished_success.emit({"action": "create", "task": self._record_to_payload(record)})
-                    return
-
                 if self.action == "run":
                     if not self.task_id:
                         raise ValueError("task_id is required for action='run'.")
                     record = asyncio.run(
-                        service.run_task(
+                        executor.run_task(
                             self.task_id,
                             cancel_check=self._is_cancelled,
                             progress_callback=self._emit_progress,
@@ -149,20 +138,10 @@ class BatchTranslationTaskWorker(BaseWorker):
                 if self.action == "cancel":
                     if not self.task_id:
                         raise ValueError("task_id is required for action='cancel'.")
-                    record = asyncio.run(service.request_cancel(self.task_id))
+                    record = asyncio.run(executor.request_cancel(self.task_id))
                     self.finished_success.emit({"action": "cancel", "task": self._record_to_payload(record)})
-                    return
-
-                if self.action == "delete":
-                    if not self.task_id:
-                        raise ValueError("task_id is required for action='delete'.")
-                    result = service.delete_task(self.task_id)
-                    payload = {"action": "delete", "task_id": self.task_id}
-                    if isinstance(result, dict):
-                        payload.update(result)
-                    self.finished_success.emit(payload)
                     return
 
                 raise ValueError(f"Unsupported batch task worker action: {self.action}")
             finally:
-                service.close()
+                executor.close()
