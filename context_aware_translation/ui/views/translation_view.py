@@ -165,10 +165,6 @@ class TranslationView(QWidget):
         layout.addWidget(self.task_console)
         self.task_console.console_refreshed.connect(self._on_task_console_refreshed)
 
-        self.batch_status_label = QLabel()
-        self.batch_status_label.setWordWrap(True)
-        self.batch_status_label.hide()
-        layout.addWidget(self.batch_status_label)
 
         # Update start button state based on pending documents
         self._update_start_button_state()
