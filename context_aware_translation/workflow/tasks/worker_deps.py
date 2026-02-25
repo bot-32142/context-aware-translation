@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -12,7 +13,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class WorkerDeps:
-    book_manager: "BookManager"
-    task_store: "TaskStore"
-    create_workflow_session: Callable[[str], AbstractContextManager["WorkflowService"]]
+    book_manager: BookManager
+    task_store: TaskStore
+    create_workflow_session: Callable[[str], AbstractContextManager[WorkflowService]]
     notify_task_changed: Callable[[str], None]

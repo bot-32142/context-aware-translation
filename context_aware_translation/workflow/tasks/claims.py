@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 # ---------------------------------------------------------------------------
 # ResourceClaim (from resource_claim.py)
 # ---------------------------------------------------------------------------
+
+
+class ClaimMode(StrEnum):
+    READ_SHARED = "read_shared"
+    WRITE_EXCLUSIVE = "write_exclusive"
+    WRITE_COOPERATIVE = "write_cooperative"
 
 
 @dataclass(frozen=True)
@@ -12,6 +19,7 @@ class ResourceClaim:
     namespace: str   # e.g. "doc", "glossary", "embedding_index"
     book_id: str
     key: str         # e.g. "*", "42", "default"
+    mode: ClaimMode = ClaimMode.WRITE_EXCLUSIVE
 
 # ---------------------------------------------------------------------------
 # ClaimArbiter (from claim_arbiter.py)
@@ -27,8 +35,21 @@ class ClaimArbiter:
                 if w.book_id != a.book_id:
                     continue
                 if w.key == a.key or w.key == "*" or a.key == "*":
-                    return True
+                    # Key overlap established — check mode compatibility
+                    if self._modes_conflict(w.mode, a.mode):
+                        return True
         return False
+
+    @staticmethod
+    def _modes_conflict(m1: ClaimMode, m2: ClaimMode) -> bool:
+        # READ_SHARED vs READ_SHARED: no conflict
+        if m1 == ClaimMode.READ_SHARED and m2 == ClaimMode.READ_SHARED:
+            return False
+        # WRITE_COOPERATIVE vs WRITE_COOPERATIVE: no conflict
+        if m1 == ClaimMode.WRITE_COOPERATIVE and m2 == ClaimMode.WRITE_COOPERATIVE:
+            return False
+        # All other combinations conflict
+        return True
 
 # ---------------------------------------------------------------------------
 # DocumentScope (from document_scope.py)

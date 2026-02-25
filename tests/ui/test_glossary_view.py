@@ -46,11 +46,14 @@ def _make_view():
     view.export_button = QPushButton()
     view.import_button = QPushButton()
     view.table_view = QTableView()
+    view._task_engine = MagicMock()
+    view.book_id = "test-book"
     view.term_db = MagicMock()
     view.term_db.list_terms.return_value = []
     view.document_repo = MagicMock()
     view.document_repo.list_documents.return_value = []
     view.document_repo.get_documents_with_status.return_value = []
+    view.document_repo.list_documents_pending_glossary.return_value = []
     return view
 
 
@@ -222,10 +225,12 @@ def test_filter_rare_shows_no_match_message_when_nothing_is_rare():
 
 def test_build_glossary_confirmation_clarifies_translation_step_is_separate():
     view = _make_view()
-    view._build_worker = None
     view.document_repo = MagicMock()
     view.document_repo.list_documents.return_value = [{"document_id": 1, "document_type": "text"}]
-    view.document_repo.get_document_sources_needing_ocr.return_value = []
+    view.document_repo.list_documents_pending_glossary.return_value = [{"document_id": 1, "document_type": "text"}]
+    view.document_repo.get_documents_with_status.return_value = [
+        {"document_id": 1, "document_type": "text", "ocr_pending": 0},
+    ]
     view.doc_combo = QComboBox()
     view.doc_combo.addItem("All Documents", None)
     view.doc_combo.addItem("Document 1", 1)
@@ -267,7 +272,6 @@ def test_selected_document_ids_cutoff_returns_pending_up_to_selected():
 
 def test_build_glossary_all_selection_processes_all_pending_documents_only():
     view = _make_view()
-    view._build_worker = None
     view.book_manager = MagicMock()
     view.book_id = "book"
     view.progress_widget = MagicMock()
@@ -281,29 +285,30 @@ def test_build_glossary_all_selection_processes_all_pending_documents_only():
         {"document_id": 2, "document_type": "text"},
         {"document_id": 4, "document_type": "text"},
     ]
-    view.document_repo.get_document_sources_needing_ocr.return_value = []
+    view.document_repo.list_documents_pending_glossary.return_value = [
+        {"document_id": 2, "document_type": "text"},
+        {"document_id": 4, "document_type": "text"},
+    ]
+    view.document_repo.get_documents_with_status.return_value = [
+        {"document_id": 2, "document_type": "text", "ocr_pending": 0},
+        {"document_id": 4, "document_type": "text", "ocr_pending": 0},
+    ]
 
-    worker_instance = MagicMock()
-
-    with (
-        patch(
-            "context_aware_translation.ui.views.glossary_view.QMessageBox.question",
-            return_value=QMessageBox.StandardButton.Yes,
-        ),
-        patch(
-            "context_aware_translation.ui.views.glossary_view.BuildGlossaryWorker", return_value=worker_instance
-        ) as cls,
+    with patch(
+        "context_aware_translation.ui.views.glossary_view.QMessageBox.question",
+        return_value=QMessageBox.StandardButton.Yes,
     ):
         view._on_build_glossary()
 
-    assert cls.call_count == 1
-    assert cls.call_args.args[2] == [2, 4]
-    worker_instance.start.assert_called_once()
+    view._task_engine.submit.assert_called_once()
+    call_args = view._task_engine.submit.call_args
+    assert call_args.args[0] == "glossary_extraction"
+    assert call_args.args[1] == "book"
+    assert call_args.kwargs["document_ids"] == [2, 4]
 
 
 def test_build_glossary_blocks_when_earlier_ocr_required_document_is_pending():
     view = _make_view()
-    view._build_worker = None
     view.doc_combo = QComboBox()
     view.doc_combo.addItem("All Documents", None)
     view.doc_combo.addItem("Document 3", 3)
@@ -311,6 +316,9 @@ def test_build_glossary_blocks_when_earlier_ocr_required_document_is_pending():
     view.document_repo = MagicMock()
     view.document_repo.list_documents.return_value = [
         {"document_id": 1, "document_type": "pdf"},
+        {"document_id": 3, "document_type": "manga"},
+    ]
+    view.document_repo.list_documents_pending_glossary.return_value = [
         {"document_id": 3, "document_type": "manga"},
     ]
     view.document_repo.get_documents_with_status.return_value = [
@@ -321,12 +329,11 @@ def test_build_glossary_blocks_when_earlier_ocr_required_document_is_pending():
     with (
         patch("context_aware_translation.ui.views.glossary_view.QMessageBox.warning") as warning_mock,
         patch("context_aware_translation.ui.views.glossary_view.QMessageBox.question") as question_mock,
-        patch("context_aware_translation.ui.views.glossary_view.BuildGlossaryWorker") as worker_cls,
     ):
         view._on_build_glossary()
 
     question_mock.assert_not_called()
-    worker_cls.assert_not_called()
+    view._task_engine.submit.assert_not_called()
     assert warning_mock.call_count == 1
     assert "earlier OCR-required" in warning_mock.call_args.args[2]
 

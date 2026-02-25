@@ -317,14 +317,9 @@ def test_ocr_worker_does_not_emit_success_when_session_exit_fails(monkeypatch: p
 
 def test_glossary_workers_do_not_emit_success_when_session_exit_fails(monkeypatch: pytest.MonkeyPatch):
     from context_aware_translation.ui.workers.glossary_worker import (
-        BuildGlossaryWorker,
         ReviewTermsWorker,
         TranslateGlossaryWorker,
     )
-
-    class _BuildSession:
-        async def build_glossary(self, **kwargs) -> None:  # noqa: ANN003
-            _ = kwargs
 
     class _TranslateSession:
         async def translate_glossary(self, **kwargs) -> None:  # noqa: ANN003
@@ -335,7 +330,6 @@ def test_glossary_workers_do_not_emit_success_when_session_exit_fails(monkeypatc
             _ = kwargs
 
     workers_and_sessions = [
-        (BuildGlossaryWorker(MagicMock(), "book-id"), _BuildSession()),
         (TranslateGlossaryWorker(MagicMock(), "book-id"), _TranslateSession()),
         (ReviewTermsWorker(MagicMock(), "book-id"), _ReviewSession()),
     ]

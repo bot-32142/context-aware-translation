@@ -10,6 +10,12 @@ from context_aware_translation.config import TranslatorBatchConfig, TranslatorCo
 from context_aware_translation.llm.batch_jobs.base import POLL_STATUS_COMPLETED, BatchPollResult, BatchSubmitResult
 from context_aware_translation.storage.llm_batch_store import LLMBatchStore
 from context_aware_translation.storage.task_store import TaskStore
+from context_aware_translation.workflow.tasks.execution.batch_translation_executor import BatchTranslationExecutor
+from context_aware_translation.workflow.tasks.execution.batch_translation_ops import (
+    _TRANSLATION_STAGE,
+    _execute_stage,
+    ensure_payload_prepared,
+)
 from context_aware_translation.workflow.tasks.models import (
     PHASE_DONE,
     PHASE_PREPARE,
@@ -20,14 +26,7 @@ from context_aware_translation.workflow.tasks.models import (
     STATUS_FAILED,
     STATUS_PAUSED,
     STATUS_QUEUED,
-    STATUS_RUNNING,
 )
-from context_aware_translation.workflow.tasks.execution.batch_translation_ops import (
-    _TRANSLATION_STAGE,
-    _execute_stage,
-    ensure_payload_prepared,
-)
-from context_aware_translation.workflow.tasks.execution.batch_translation_executor import BatchTranslationExecutor
 
 
 def _build_executor(tmp_path) -> BatchTranslationExecutor:
@@ -123,7 +122,7 @@ async def test_request_cancel_without_provider_batches_marks_task_cancelled(tmp_
 async def test_request_cancel_without_batch_config_marks_task_cancelled_locally(tmp_path):
     executor = _build_executor(tmp_path)
     try:
-        created = _create_task(executor, 
+        created = _create_task(executor,
             book_id="book-1",
             payload_json='{"translation":{"batch_name":"batches/active","batch_display_name":"cat-translation-task"}}',
         )
@@ -145,7 +144,7 @@ async def test_request_cancel_without_batch_config_marks_task_cancelled_locally(
 async def test_request_cancel_resolves_provider_batches_by_display_name(tmp_path):
     executor = _build_executor(tmp_path)
     try:
-        created = _create_task(executor, 
+        created = _create_task(executor,
             book_id="book-1",
             payload_json='{"model":"models/gemini-2.5-pro","translation":{"batch_display_name":"cat-translation-task"}}',
         )
@@ -168,7 +167,7 @@ async def test_request_cancel_resolves_provider_batches_by_display_name(tmp_path
 async def test_request_cancel_keeps_cancelling_when_provider_batch_is_still_active(tmp_path):
     executor = _build_executor(tmp_path)
     try:
-        created = _create_task(executor, 
+        created = _create_task(executor,
             book_id="book-1",
             payload_json='{"translation":{"batch_name":"batches/active"}}',
         )
@@ -208,7 +207,7 @@ async def test_run_task_short_circuits_when_cancel_requested(tmp_path):
 async def test_run_task_cancel_requested_retries_provider_cancel_when_batch_exists(tmp_path):
     executor = _build_executor(tmp_path)
     try:
-        created = _create_task(executor, 
+        created = _create_task(executor,
             book_id="book-1",
             payload_json='{"translation":{"batch_name":"batch/jobs/123"}}',
         )
@@ -230,7 +229,7 @@ async def test_run_task_cancel_requested_retries_provider_cancel_when_batch_exis
 async def test_run_task_reruns_cancelled_task_with_reset_pending_payload(tmp_path):
     executor = _build_executor(tmp_path)
     try:
-        created = _create_task(executor, 
+        created = _create_task(executor,
             book_id="book-1",
             payload_json=(
                 '{"items":[{"applied":false,'

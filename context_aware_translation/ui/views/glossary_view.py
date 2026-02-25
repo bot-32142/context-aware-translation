@@ -1,6 +1,7 @@
 """Glossary editor view for managing translation terms."""
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QEvent, QPoint, QSize, Qt, Signal
 from PySide6.QtGui import QCloseEvent
@@ -29,13 +30,18 @@ from context_aware_translation.storage.book_db import SQLiteBookDB
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.context_tree_db import ContextTreeDB
 from context_aware_translation.storage.document_repository import DocumentRepository
+from context_aware_translation.workflow.tasks.glossary_preflight import compute_glossary_preflight
+from context_aware_translation.workflow.tasks.models import TaskAction
+
+if TYPE_CHECKING:
+    from ..tasks.qt_task_engine import TaskEngine
 
 from ..i18n import qarg, translate_progress_message
 from ..models.term_model import TermTableModel
+from ..tasks.task_console import TaskConsole
 from ..utils import create_tip_label, translate_document_type
 from ..widgets import ProgressWidget
 from ..workers.glossary_worker import (
-    BuildGlossaryWorker,
     ExportGlossaryWorker,
     ReviewTermsWorker,
     TranslateGlossaryWorker,
@@ -74,28 +80,31 @@ class GlossaryView(QWidget):
 
     glossary_changed = Signal()
 
-    def __init__(self, book_manager: BookManager, book_id: str, parent: QWidget | None = None) -> None:
+    def __init__(self, book_manager: BookManager, book_id: str, task_engine: "TaskEngine", parent: QWidget | None = None) -> None:
         """Initialize the glossary view.
 
         Args:
             book_manager: Book manager instance
             book_id: Book ID to manage glossary for
+            task_engine: Task engine for glossary_extraction tasks
             parent: Parent widget
         """
         super().__init__(parent)
         self.book_manager = book_manager
         self.book_id = book_id
+        self._task_engine = task_engine
 
         # Get database and repository
         db_path = self.book_manager.get_book_db_path(book_id)
         self.term_db = SQLiteBookDB(db_path)
         self.document_repo = DocumentRepository(self.term_db)
 
-        # Workers
-        self._build_worker: BuildGlossaryWorker | None = None
+        # Workers (build glossary now handled via task engine)
         self._translate_worker: TranslateGlossaryWorker | None = None
         self._review_worker: ReviewTermsWorker | None = None
         self._export_worker: ExportGlossaryWorker | None = None
+
+        self._completed_task_ids: set[str] = set()
 
         self._setup_ui()
         self._update_stats()
@@ -199,6 +208,16 @@ class GlossaryView(QWidget):
         self.progress_widget.hide()
         layout.addWidget(self.progress_widget)
 
+        # Task console for glossary_extraction engine tasks
+        self.task_console = TaskConsole(
+            task_engine=self._task_engine,
+            book_id=self.book_id,
+            task_type="glossary_extraction",
+            parent=self,
+        )
+        layout.addWidget(self.task_console)
+        self.task_console.console_refreshed.connect(self._on_task_console_refreshed)
+
         # Table view
         self.table_view = QTableView()
         self.table_model = TermTableModel(self.term_db)
@@ -229,6 +248,27 @@ class GlossaryView(QWidget):
         # Status bar
         self.status_label = QLabel()
         layout.addWidget(self.status_label)
+
+    def _on_task_console_refreshed(self) -> None:
+        """Handle task console refresh — sync term DB, table, stats, and button state."""
+        from context_aware_translation.workflow.tasks.models import (
+            STATUS_COMPLETED,
+            STATUS_COMPLETED_WITH_ERRORS,
+            TERMINAL_TASK_STATUSES,
+        )
+
+        self.term_db.refresh()
+        self.table_model.refresh()
+        self._update_stats()
+        self._refresh_document_selector()
+
+        # Emit glossary_changed only on success-like completions (not cancelled/failed)
+        _SUCCESS_TERMINAL = {STATUS_COMPLETED, STATUS_COMPLETED_WITH_ERRORS}
+        for vm in self.task_console.task_vms():
+            if vm.status in TERMINAL_TASK_STATUSES and vm.task_id not in self._completed_task_ids:
+                self._completed_task_ids.add(vm.task_id)
+                if vm.status in _SUCCESS_TERMINAL:
+                    self.glossary_changed.emit()
 
     def _update_stats(self) -> None:
         """Update the status bar with term statistics."""
@@ -415,30 +455,63 @@ class GlossaryView(QWidget):
             doc_type = translate_document_type(doc.get("document_type", "unknown"))
             self.doc_combo.addItem(qarg(self.tr("Document %1 (%2)"), doc_id, doc_type), doc_id)
 
+    def _sync_build_selector_from_db(self) -> None:
+        """Refresh doc_combo items from current DB state without changing selection."""
+        self._refresh_document_selector()
+
+    def _format_build_block_reason(self, blocking_doc_ids: list[int]) -> str:
+        joined_ids = ", ".join(str(doc_id) for doc_id in blocking_doc_ids)
+        return qarg(
+            self.tr("Blocked: earlier OCR-required document(s) pending OCR: %1"),
+            joined_ids,
+        )
+
+    def _format_engine_preflight_denial(self, decision) -> str:
+        return qarg(
+            self.tr("Task engine blocked: %1"),
+            decision.reason or decision.code,
+        )
+
+    def _format_submit_error(self, exc: Exception) -> str:
+        return qarg(self.tr("Submit error: %1"), str(exc))
+
     def _update_build_button_state(self) -> None:
-        """Enable/disable build button based on pending documents."""
-        has_pending = self.doc_combo.count() > 1
+        """Enable/disable build button based on pending documents and engine preflight."""
+        pending_ids = self._get_pending_document_ids()
+        has_pending = len(pending_ids) > 0
         if not has_pending:
             self.build_button.setEnabled(False)
             self.doc_combo.setEnabled(False)
             return
 
-        blocking_doc_ids = self._get_selected_build_blocking_ocr_document_ids()
-        is_blocked = len(blocking_doc_ids) > 0
-        self.build_button.setEnabled(not is_blocked)
-        if is_blocked:
-            joined_ids = ", ".join(str(doc_id) for doc_id in blocking_doc_ids)
-            self.build_button.setToolTip(
-                qarg(
-                    self.tr("Blocked: earlier OCR-required document(s) pending OCR: %1"),
-                    joined_ids,
-                )
-            )
-        else:
-            self.build_button.setToolTip(
-                self.tr("Build glossary terms from pending documents up to the selected document.")
-            )
-        self.doc_combo.setEnabled(has_pending)
+        selected_cutoff = self.doc_combo.currentData()
+        selected_cutoff_int = int(selected_cutoff) if selected_cutoff is not None else None
+
+        preflight = compute_glossary_preflight(pending_ids, selected_cutoff_int, self.document_repo)
+        if preflight.is_blocked:
+            self.build_button.setEnabled(False)
+            self.build_button.setToolTip(self._format_build_block_reason(preflight.blocking_ocr_doc_ids))
+            self.doc_combo.setEnabled(True)
+            return
+
+        # Check engine preflight for claim conflicts
+        engine_decision = self._task_engine.preflight(
+            "glossary_extraction",
+            self.book_id,
+            {"document_ids": preflight.target_doc_ids, "cutoff_doc_id": preflight.cutoff_doc_id},
+            TaskAction.RUN,
+        )
+        if not engine_decision.allowed:
+            self.build_button.setEnabled(False)
+            self.build_button.setToolTip(self._format_engine_preflight_denial(engine_decision))
+            self.doc_combo.setEnabled(True)
+            return
+
+        self.build_button.setEnabled(True)
+        self.build_button.setToolTip(
+            self.tr("Build glossary terms from pending documents up to the selected document.")
+        )
+        self.doc_combo.setEnabled(True)
 
     def _on_build_selection_changed(self, _index: int) -> None:
         """Re-evaluate glossary build availability when build target changes."""
@@ -462,85 +535,13 @@ class GlossaryView(QWidget):
             return pending_ids
         return [doc_id for doc_id in pending_ids if doc_id <= int(selected_id)]
 
-    def _get_build_cutoff_document_id(self, selected_document_ids: list[int]) -> int | None:
-        """Resolve highest document_id affected by the current build selection."""
-        selected_id = self.doc_combo.currentData()
-        if selected_id is not None:
-            return int(selected_id)
-        if selected_document_ids:
-            return max(selected_document_ids)
-        return None
-
-    def _get_build_preflight_document_ids(self, selected_document_ids: list[int]) -> list[int]:
-        """Return all document IDs in stack order up to the selected build cutoff."""
-        all_docs = self.document_repo.list_documents() if hasattr(self, "document_repo") else []
-        all_ids = sorted(int(doc["document_id"]) for doc in all_docs)
-        if not all_ids:
-            return []
-
-        cutoff_document_id = self._get_build_cutoff_document_id(selected_document_ids)
-        if cutoff_document_id is None:
-            return all_ids
-
-        return [doc_id for doc_id in all_ids if doc_id <= cutoff_document_id]
-
-    def _get_blocking_ocr_document_ids(self, preflight_document_ids: list[int]) -> list[int]:
-        """Return OCR-required preflight document IDs that still have pending OCR."""
-        from context_aware_translation.documents.base import is_ocr_required_for_type
-
-        if not preflight_document_ids:
-            return []
-
-        docs_with_status = self.document_repo.get_documents_with_status() if hasattr(self, "document_repo") else []
-        docs_by_id = {int(doc["document_id"]): doc for doc in docs_with_status}
-        blocking_doc_ids: list[int] = []
-        for doc_id in preflight_document_ids:
-            doc = docs_by_id.get(doc_id)
-            if doc is None:
-                continue
-            if not is_ocr_required_for_type(doc.get("document_type", "")):
-                continue
-            if int(doc.get("ocr_pending", 0) or 0) > 0:
-                blocking_doc_ids.append(doc_id)
-        return blocking_doc_ids
-
-    def _should_enforce_ocr_block_for_selection(self, selected_document_ids: list[int]) -> bool:
-        """Return True unless all selected target types allow skipping prior OCR blockers."""
-        from context_aware_translation.documents.base import can_build_glossary_without_prior_ocr_for_type
-
-        if not selected_document_ids:
-            return False
-
-        all_docs = self.document_repo.list_documents() if hasattr(self, "document_repo") else []
-        docs_by_id = {int(doc["document_id"]): doc for doc in all_docs}
-
-        selected_types = []
-        for doc_id in selected_document_ids:
-            doc = docs_by_id.get(int(doc_id))
-            if doc is None:
-                continue
-            selected_types.append(str(doc.get("document_type", "")))
-
-        if not selected_types:
-            return True
-        return not all(can_build_glossary_without_prior_ocr_for_type(doc_type) for doc_type in selected_types)
-
-    def _get_selected_build_blocking_ocr_document_ids(self) -> list[int]:
-        """Return blocking OCR-required docs for current build selection."""
-        selected_document_ids = self._get_selected_document_ids()
-        if not self._should_enforce_ocr_block_for_selection(selected_document_ids):
-            return []
-
-        preflight_document_ids = self._get_build_preflight_document_ids(selected_document_ids)
-        return self._get_blocking_ocr_document_ids(preflight_document_ids)
-
     def _on_build_glossary(self) -> None:
         """Handle build glossary button click."""
-        if self._build_worker and self._build_worker.isRunning():
-            return
+        self.term_db.refresh()
+        self._sync_build_selector_from_db()
 
-        document_ids = self._get_selected_document_ids()
-        if not document_ids:
+        pending_ids = self._get_pending_document_ids()
+        if not pending_ids:
             QMessageBox.information(
                 self,
                 self.tr("No Pending Documents"),
@@ -548,15 +549,13 @@ class GlossaryView(QWidget):
             )
             return
 
-        selected_id = self.doc_combo.currentData()
-        if selected_id is None:
-            doc_label = self.tr("all pending documents")
-        else:
-            doc_label = qarg(self.tr("all pending documents up to and including document %1"), selected_id)
+        selected_cutoff = self.doc_combo.currentData()
+        selected_cutoff_int = int(selected_cutoff) if selected_cutoff is not None else None
+        document_ids = self._get_selected_document_ids()
 
-        blocking_doc_ids = self._get_selected_build_blocking_ocr_document_ids()
-        if blocking_doc_ids:
-            joined_ids = ", ".join(str(doc_id) for doc_id in blocking_doc_ids)
+        preflight = compute_glossary_preflight(pending_ids, selected_cutoff_int, self.document_repo)
+        if preflight.is_blocked:
+            joined_ids = ", ".join(str(doc_id) for doc_id in preflight.blocking_ocr_doc_ids)
             QMessageBox.warning(
                 self,
                 self.tr("OCR Not Complete"),
@@ -569,6 +568,12 @@ class GlossaryView(QWidget):
                 ),
             )
             return
+
+        selected_id = self.doc_combo.currentData()
+        if selected_id is None:
+            doc_label = self.tr("all pending documents")
+        else:
+            doc_label = qarg(self.tr("all pending documents up to and including document %1"), selected_id)
 
         reply = QMessageBox.question(
             self,
@@ -587,53 +592,22 @@ class GlossaryView(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        # Check if there are images needing OCR and warn user
-        # Skip documents where OCR is not required for translation (e.g. EPUB)
-        from context_aware_translation.documents.base import is_ocr_required_for_type
-
-        total_sources_needing_ocr = 0
-        doc_id_set = set(document_ids)
-        docs_to_check = [d for d in self.document_repo.list_documents() if int(d["document_id"]) in doc_id_set]
-
-        for doc in docs_to_check:
-            if not is_ocr_required_for_type(doc.get("document_type", "")):
-                continue
-            sources_needing_ocr = self.document_repo.get_document_sources_needing_ocr(doc["document_id"])
-            total_sources_needing_ocr += len(sources_needing_ocr)
-
-        if total_sources_needing_ocr > 0:
-            # Warn user that OCR is not complete
-            QMessageBox.warning(
+        try:
+            self._task_engine.submit(
+                "glossary_extraction",
+                self.book_id,
+                document_ids=document_ids,
+                cutoff_doc_id=preflight.cutoff_doc_id,
+            )
+        except Exception as exc:
+            QMessageBox.critical(
                 self,
-                self.tr("OCR Not Complete"),
-                qarg(
-                    self.tr(
-                        "Found %1 page(s) that have not been OCR'd.\n\n"
-                        "Please run OCR from the OCR Review tab before building the glossary.\n\n"
-                        "Building glossary without OCR may result in missing text."
-                    ),
-                    total_sources_needing_ocr,
-                ),
+                self.tr("Submit Failed"),
+                self._format_submit_error(exc),
             )
             return
 
-        # Start worker
-        self._build_worker = BuildGlossaryWorker(self.book_manager, self.book_id, document_ids)
-        self._build_worker.progress.connect(self._on_progress)
-        self._build_worker.finished_success.connect(self._on_build_finished)
-        self._build_worker.cancelled.connect(self._on_operation_cancelled)
-        self._build_worker.error.connect(self._on_operation_error)
-        self._build_worker.finished.connect(self._on_build_worker_finished)
-
-        # Show progress
-        self.progress_widget.reset()
-        self.progress_widget.set_cancellable(True)
-        self.progress_widget.show()
-
-        # Disable controls
-        self._set_controls_enabled(False)
-
-        self._build_worker.start()
+        self._update_build_button_state()
 
     def _on_translate_glossary(self) -> None:
         """Handle re-translate button click."""
@@ -678,19 +652,6 @@ class GlossaryView(QWidget):
         """
         translated_message = translate_progress_message(message)
         self.progress_widget.set_progress(current, total, translated_message)
-
-    def _on_build_finished(self, _result) -> None:
-        """Handle build glossary completion."""
-        self.progress_widget.hide()
-        self._set_controls_enabled(True)
-
-        self.term_db.refresh()
-        self.table_model.refresh()
-        self._update_stats()
-        self._refresh_document_selector()
-        self.glossary_changed.emit()
-
-        QMessageBox.information(self, self.tr("Build Complete"), self.tr("Glossary has been built successfully."))
 
     def _refresh_document_selector(self) -> None:
         """Refresh the document selector with current pending documents."""
@@ -807,8 +768,6 @@ class GlossaryView(QWidget):
     def _on_cancel_operation(self) -> None:
         """Handle operation cancellation."""
         # Try to cancel any running worker
-        if self._build_worker and self._build_worker.isRunning():
-            self._build_worker.requestInterruption()
         if self._translate_worker and self._translate_worker.isRunning():
             self._translate_worker.requestInterruption()
         if self._review_worker and self._review_worker.isRunning():
@@ -823,11 +782,6 @@ class GlossaryView(QWidget):
         self.progress_widget.hide()
         self._set_controls_enabled(True)
         QMessageBox.information(self, self.tr("Cancelled"), self.tr("Operation cancelled."))
-
-    def _on_build_worker_finished(self) -> None:
-        """Reset build worker pointer."""
-        self.progress_widget.set_cancellable(True)
-        self._build_worker = None
 
     def _on_translate_worker_finished(self) -> None:
         """Reset translate worker pointer."""
@@ -1101,9 +1055,8 @@ class GlossaryView(QWidget):
 
     def cleanup(self) -> None:
         """Clean up resources."""
-        if self._build_worker and self._build_worker.isRunning():
-            self._build_worker.requestInterruption()
-            self._build_worker.wait()
+        if hasattr(self, "task_console"):
+            self.task_console.cleanup()
 
         if self._translate_worker and self._translate_worker.isRunning():
             self._translate_worker.requestInterruption()

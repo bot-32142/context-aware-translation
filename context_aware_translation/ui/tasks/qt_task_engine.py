@@ -1,19 +1,21 @@
 from __future__ import annotations
+
 import logging
 import time
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QObject, QTimer, Signal, Slot, Qt
+from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
 
-from context_aware_translation.workflow.tasks.engine_core import EngineCore
-from context_aware_translation.workflow.tasks.models import TaskAction, TERMINAL_TASK_STATUSES
 from context_aware_translation.workflow.tasks.claims import ResourceClaim
+from context_aware_translation.workflow.tasks.engine_core import EngineCore
+from context_aware_translation.workflow.tasks.exceptions import CancelDispatchRaceError
+from context_aware_translation.workflow.tasks.models import TaskAction
 
 if TYPE_CHECKING:
-    from context_aware_translation.storage.task_store import TaskStore, TaskRecord
-    from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
+    from context_aware_translation.storage.task_store import TaskRecord, TaskStore
     from context_aware_translation.workflow.tasks.handlers.base import TaskTypeHandler
     from context_aware_translation.workflow.tasks.models import Decision
+    from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +29,7 @@ class TaskEngine(QObject):
     running_work_changed = Signal(bool)   # is_running
     enqueue_task_changed = Signal(str)    # internal — connected via QueuedConnection to _emit_task_changed
 
-    def __init__(self, *, store: "TaskStore", deps: "WorkerDeps", parent: QObject | None = None) -> None:
+    def __init__(self, *, store: TaskStore, deps: WorkerDeps, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._core = EngineCore(store=store, deps=deps)
         self._store = store
@@ -36,20 +38,20 @@ class TaskEngine(QObject):
         self.enqueue_task_changed.connect(self._emit_task_changed, Qt.ConnectionType.QueuedConnection)
 
     @property
-    def store(self) -> "TaskStore":
+    def store(self) -> TaskStore:
         return self._store
 
     # ------------------------------------------------------------------
     # Delegate to core
     # ------------------------------------------------------------------
 
-    def register_handler(self, handler: "TaskTypeHandler") -> None:
+    def register_handler(self, handler: TaskTypeHandler) -> None:
         self._core.register_handler(handler)
 
-    def get_tasks(self, book_id: str, task_type: str | None = None) -> list["TaskRecord"]:
+    def get_tasks(self, book_id: str, task_type: str | None = None) -> list[TaskRecord]:
         return self._core.get_tasks(book_id, task_type)
 
-    def get_task(self, task_id: str) -> "TaskRecord | None":
+    def get_task(self, task_id: str) -> TaskRecord | None:
         return self._core.get_task(task_id)
 
     def has_active_worker(self, task_id: str) -> bool:
@@ -61,17 +63,17 @@ class TaskEngine(QObject):
     def has_active_claims(self, book_id: str, wanted: frozenset[ResourceClaim]) -> bool:
         return self._core.has_active_claims(book_id, wanted)
 
-    def preflight(self, task_type: str, book_id: str, params: dict, action: TaskAction) -> "Decision":
+    def preflight(self, task_type: str, book_id: str, params: dict, action: TaskAction) -> Decision:
         return self._core.preflight(task_type, book_id, params, action)
 
-    def preflight_task(self, task_id: str, action: TaskAction) -> "Decision":
+    def preflight_task(self, task_id: str, action: TaskAction) -> Decision:
         return self._core.preflight_task(task_id, action)
 
     # ------------------------------------------------------------------
     # Mutation APIs
     # ------------------------------------------------------------------
 
-    def submit(self, task_type: str, book_id: str, **params) -> "TaskRecord":
+    def submit(self, task_type: str, book_id: str, **params) -> TaskRecord:
         """Create a new task row then best-effort start it."""
         record = self._core.submit(task_type, book_id, **params)
         try:
@@ -80,7 +82,7 @@ class TaskEngine(QObject):
             logger.debug("Best-effort start failed for task %s; will retry on next tick", record.task_id)
         return record
 
-    def run_task(self, task_id: str) -> "TaskRecord":
+    def run_task(self, task_id: str) -> TaskRecord:
         """Run a task: atomically resets to queued if terminal, then starts it."""
         record = self._core.ensure_runnable(task_id)
         try:
@@ -89,7 +91,7 @@ class TaskEngine(QObject):
             logger.debug("Best-effort run start failed for task %s", task_id)
         return record
 
-    def rerun(self, task_id: str) -> "TaskRecord":
+    def rerun(self, task_id: str) -> TaskRecord:
         """Reset a terminal task to queued then start it."""
         record = self._core.rerun(task_id)
         try:
@@ -103,6 +105,19 @@ class TaskEngine(QObject):
         worker = self._core.cancel(task_id)
         if worker is not None and hasattr(worker, "requestInterruption"):
             worker.requestInterruption()  # type: ignore[attr-defined]
+        elif worker is None:
+            # No active RUN worker — dispatch explicit cancel action worker
+            # Only if core.cancel() actually accepted the request (cancel_requested=True).
+            record_after = self._core.get_task(task_id)
+            if record_after is not None and record_after.cancel_requested:
+                try:
+                    self._start_action(task_id, TaskAction.CANCEL)
+                except (CancelDispatchRaceError, KeyError) as exc:
+                    logger.debug("Cancel action worker not started for task %s", task_id)
+                    self._core.handle_cancel_dispatch_failure(
+                        task_id,
+                        reason=f"cancel dispatch failed: {type(exc).__name__}: {exc}",
+                    )
         record = self._core.get_task(task_id)
         if record is not None:
             self.enqueue_task_changed.emit(record.book_id)

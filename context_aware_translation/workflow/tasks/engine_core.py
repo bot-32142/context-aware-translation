@@ -1,16 +1,18 @@
 from __future__ import annotations
+
 import json
 import logging
 import threading
 import time
 from typing import TYPE_CHECKING
 
-from context_aware_translation.workflow.tasks.models import ActionSnapshot, Decision, TaskAction, TERMINAL_TASK_STATUSES
 from context_aware_translation.workflow.tasks.claims import ClaimArbiter, ResourceClaim
+from context_aware_translation.workflow.tasks.exceptions import CancelDispatchRaceError
 from context_aware_translation.workflow.tasks.handlers.base import TaskTypeHandler
+from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, ActionSnapshot, Decision, TaskAction
 
 if TYPE_CHECKING:
-    from context_aware_translation.storage.task_store import TaskStore, TaskRecord
+    from context_aware_translation.storage.task_store import TaskRecord, TaskStore
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
 logger = logging.getLogger(__name__)
@@ -19,14 +21,15 @@ logger = logging.getLogger(__name__)
 class EngineCore:
     """Pure-Python task scheduling/admission engine (no Qt dependency)."""
 
-    def __init__(self, *, store: "TaskStore", deps: "WorkerDeps") -> None:
+    def __init__(self, *, store: TaskStore, deps: WorkerDeps) -> None:
         self._handlers: dict[str, TaskTypeHandler] = {}
-        self._store: "TaskStore" = store
-        self._deps: "WorkerDeps" = deps
+        self._store: TaskStore = store
+        self._deps: WorkerDeps = deps
         self._active_workers: dict[str, object] = {}      # task_id -> worker
         self._active_claims: dict[str, frozenset[ResourceClaim]] = {}
         self._retry_after_by_book: dict[str, float] = {}
         self._book_locks: dict[str, threading.RLock] = {}
+        self._book_locks_guard = threading.Lock()
         self._arbiter = ClaimArbiter()
 
     # ------------------------------------------------------------------
@@ -47,11 +50,12 @@ class EngineCore:
     # ------------------------------------------------------------------
 
     def _book_lock(self, book_id: str) -> threading.RLock:
-        lock = self._book_locks.get(book_id)
-        if lock is None:
-            lock = threading.RLock()
-            self._book_locks[book_id] = lock
-        return lock
+        with self._book_locks_guard:
+            lock = self._book_locks.get(book_id)
+            if lock is None:
+                lock = threading.RLock()
+                self._book_locks[book_id] = lock
+            return lock
 
     # ------------------------------------------------------------------
     # Snapshot helpers
@@ -78,10 +82,10 @@ class EngineCore:
     # Query APIs
     # ------------------------------------------------------------------
 
-    def get_tasks(self, book_id: str, task_type: str | None = None) -> list["TaskRecord"]:
+    def get_tasks(self, book_id: str, task_type: str | None = None) -> list[TaskRecord]:
         return self._store.list_tasks(book_id=book_id, task_type=task_type)
 
-    def get_task(self, task_id: str) -> "TaskRecord | None":
+    def get_task(self, task_id: str) -> TaskRecord | None:
         return self._store.get(task_id)
 
     def has_active_worker(self, task_id: str) -> bool:
@@ -174,14 +178,14 @@ class EngineCore:
                 for claim in claims_set
             )
             if self._arbiter.conflicts(wanted, all_active):
-                return Decision(allowed=False, reason="Blocked by active task claims")
+                return Decision(allowed=False, code="blocked_claim_conflict", reason="Blocked by active task claims")
             return Decision(allowed=True)
 
     def preflight_task(self, task_id: str, action: TaskAction) -> Decision:
         """Advisory check for an existing task."""
         record = self._store.get(task_id)
         if record is None:
-            return Decision(allowed=False, reason=f"Task not found: {task_id}")
+            return Decision(allowed=False, code="task_not_found", reason=f"Task not found: {task_id}")
         with self._book_lock(record.book_id):
             handler = self._handler_or_raise(record.task_type)
             payload = handler.decode_payload(record)
@@ -189,6 +193,11 @@ class EngineCore:
             decision = handler.can(action, record, payload, snapshot)
             if not decision.allowed:
                 return decision
+            # RUN-specific domain validation
+            if action == TaskAction.RUN:
+                run_decision = handler.validate_run(record, payload, self._deps)
+                if not run_decision.allowed:
+                    return run_decision
             # Check claim conflicts for RUN action
             if action == TaskAction.RUN:
                 wanted = handler.claims(record, payload)
@@ -198,14 +207,14 @@ class EngineCore:
                     for claim in claims_set
                 )
                 if self._arbiter.conflicts(wanted, all_active):
-                    return Decision(allowed=False, reason="Blocked by active task claims")
+                    return Decision(allowed=False, code="blocked_claim_conflict", reason="Blocked by active task claims")
             return Decision(allowed=True)
 
     # ------------------------------------------------------------------
     # Mutation APIs
     # ------------------------------------------------------------------
 
-    def authorize_start(self, task_id: str, action: TaskAction) -> tuple["TaskRecord", object, frozenset[ResourceClaim]]:
+    def authorize_start(self, task_id: str, action: TaskAction) -> tuple[TaskRecord, object, frozenset[ResourceClaim]]:
         """Authorize under per-book lock, build worker. Returns (record, worker, claims).
 
         Caller is responsible for connecting signals and calling worker.start().
@@ -227,7 +236,25 @@ class EngineCore:
             snapshot = self._build_snapshot_locked(record.book_id)
             decision = handler.can(action, record, payload, snapshot)
             if not decision.allowed:
+                if action == TaskAction.CANCEL:
+                    raise CancelDispatchRaceError(
+                        f"Cancel not allowed for task {task_id}: {decision.reason}"
+                    )
                 raise RuntimeError(f"Action {action} not allowed for task {task_id}: {decision.reason}")
+
+            # RUN-specific domain validation
+            if action == TaskAction.RUN:
+                run_decision = handler.validate_run(record, payload, self._deps)
+                if not run_decision.allowed:
+                    raise RuntimeError(
+                        f"Run validation failed for task {task_id}: "
+                        f"code={run_decision.code}, reason={run_decision.reason}"
+                    )
+
+            # For CANCEL, skip claim conflict check
+            if action == TaskAction.CANCEL:
+                worker = handler.build_worker(action, record, payload, self._deps)
+                return record, worker, frozenset()
 
             claims = handler.claims(record, payload)
             all_active: frozenset[ResourceClaim] = frozenset(
@@ -247,7 +274,7 @@ class EngineCore:
         self._active_workers[task_id] = worker
         self._active_claims[task_id] = claims
 
-    def submit(self, task_type: str, book_id: str, **params) -> "TaskRecord":
+    def submit(self, task_type: str, book_id: str, **params) -> TaskRecord:
         """Create a new task row (does not start worker — caller handles that)."""
         handler = self._handler_or_raise(task_type)
         submit_decision = handler.validate_submit(book_id, params, self._deps)
@@ -264,7 +291,7 @@ class EngineCore:
             )
         return record
 
-    def ensure_runnable(self, task_id: str) -> "TaskRecord":
+    def ensure_runnable(self, task_id: str) -> TaskRecord:
         """Atomically reset a terminal task to queued if handler allows RUN; non-terminal tasks are returned as-is."""
         record = self._store.get(task_id)
         if record is None:
@@ -283,7 +310,7 @@ class EngineCore:
                 record = self._store.update(task_id, status="queued", cancel_requested=False)
         return record
 
-    def rerun(self, task_id: str) -> "TaskRecord":
+    def rerun(self, task_id: str) -> TaskRecord:
         """Reset a terminal task to queued."""
         record = self._store.get(task_id)
         if record is None:
@@ -341,6 +368,28 @@ class EngineCore:
                 logger.warning("pre_delete warning for task %s: %s", task_id, w)
             self._store.delete(task_id)
         return record.book_id
+
+    def handle_cancel_dispatch_failure(self, task_id: str, *, reason: str) -> None:
+        record = self._store.get(task_id)
+        if record is None:
+            return
+        with self._book_lock(record.book_id):
+            record = self._store.get(task_id)
+            if record is None:
+                return
+            if task_id in self._active_workers:
+                return
+            handler = self._handler_or_raise(record.task_type)
+            payload = handler.decode_payload(record)
+            from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy
+            policy = handler.cancel_dispatch_policy(record, payload)
+            if policy == CancelDispatchPolicy.LOCAL_TERMINALIZE:
+                if record.status in {"cancel_requested", "cancelling", "queued", "paused"}:
+                    self._store.update(task_id, status="cancelled", cancel_requested=False, last_error=reason)
+            elif policy == CancelDispatchPolicy.REQUIRE_REMOTE_CONFIRMATION:
+                self._store.update(task_id, status="cancelling", cancel_requested=True, last_error=reason)
+            else:
+                raise RuntimeError(f"Unknown cancel dispatch policy: {policy!r}")
 
     def cancel_running_tasks(self, book_id: str) -> list[object]:
         """Interrupt active workers for the given book using handler policy.

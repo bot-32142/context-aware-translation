@@ -2,7 +2,7 @@
 
 import logging
 
-from PySide6.QtCore import QEvent, QSettings, QTimer, Qt
+from PySide6.QtCore import QEvent, QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
@@ -20,9 +20,10 @@ from context_aware_translation.llm.token_tracker import TokenTracker
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.task_store import TaskStore
 from context_aware_translation.ui.tasks.qt_task_engine import TaskEngine
-from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 from context_aware_translation.workflow.session import WorkflowSession
 from context_aware_translation.workflow.tasks.handlers.batch_translation import BatchTranslationHandler
+from context_aware_translation.workflow.tasks.handlers.glossary_extraction import GlossaryExtractionHandler
+from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
 from . import i18n
 from .constants import (
@@ -79,6 +80,7 @@ class MainWindow(QMainWindow):
         )
         self._task_engine = TaskEngine(store=self._task_store, deps=self._worker_deps, parent=self)
         self._task_engine.register_handler(BatchTranslationHandler())
+        self._task_engine.register_handler(GlossaryExtractionHandler())
         self._task_engine.running_work_changed.connect(self._on_engine_running_work_changed)
 
         self._sleep_check_timer = QTimer(self)

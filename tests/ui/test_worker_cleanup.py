@@ -98,44 +98,42 @@ def test_translation_view_cleanup_waits_without_timeout():
 
 
 def test_translation_view_cleanup_interrupts_running_batch_run_worker():
+    """Batch worker cleanup is now handled via task_console; verify console cleanup called."""
     from context_aware_translation.ui.views.translation_view import TranslationView
 
     with patch.object(TranslationView, "__init__", _noop_init):
         view = TranslationView(None, "")
 
-    batch_worker = _FakeBatchWorker(action="run")
     view._is_cleaned_up = False
     view._batch_auto_timer = None
     view._task_engine = None
+    view.task_console = MagicMock()
     view.worker = None
-    view.batch_task_worker = batch_worker
     view.retranslate_worker = None
     view.term_db = MagicMock()
     view.cleanup()
 
-    assert batch_worker.interruption_requested is True
-    assert batch_worker.wait_calls == [()]
+    view.task_console.cleanup.assert_called_once()
     view.term_db.close.assert_called_once()
 
 
 def test_translation_view_cleanup_interrupts_non_run_batch_worker():
+    """Batch worker cleanup is now handled via task_console; verify console cleanup called."""
     from context_aware_translation.ui.views.translation_view import TranslationView
 
     with patch.object(TranslationView, "__init__", _noop_init):
         view = TranslationView(None, "")
 
-    batch_worker = _FakeBatchWorker(action="cancel")
     view._is_cleaned_up = False
     view._batch_auto_timer = None
     view._task_engine = None
+    view.task_console = MagicMock()
     view.worker = None
-    view.batch_task_worker = batch_worker
     view.retranslate_worker = None
     view.term_db = MagicMock()
     view.cleanup()
 
-    assert batch_worker.interruption_requested is True
-    assert batch_worker.wait_calls == [()]
+    view.task_console.cleanup.assert_called_once()
     view.term_db.close.assert_called_once()
 
 
@@ -180,22 +178,20 @@ def test_glossary_view_cleanup_waits_without_timeout():
     with patch.object(GlossaryView, "__init__", _noop_init):
         view = GlossaryView(None, "")
 
-    build_worker = _FakeWorker()
     translate_worker = _FakeWorker()
     review_worker = _FakeWorker()
     export_worker = _FakeWorker()
-    view._build_worker = build_worker
+    view.task_console = MagicMock()
     view._translate_worker = translate_worker
     view._review_worker = review_worker
     view._export_worker = export_worker
     view.term_db = MagicMock()
     view.cleanup()
 
-    assert build_worker.interruption_requested
+    view.task_console.cleanup.assert_called_once()
     assert translate_worker.interruption_requested
     assert review_worker.interruption_requested
     assert export_worker.interruption_requested
-    assert build_worker.wait_calls == [()]
     assert translate_worker.wait_calls == [()]
     assert review_worker.wait_calls == [()]
     assert export_worker.wait_calls == [()]

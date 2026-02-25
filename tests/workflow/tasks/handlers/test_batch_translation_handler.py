@@ -3,24 +3,27 @@ from __future__ import annotations
 import json
 import time
 
-import pytest
-
 from context_aware_translation.storage.task_store import TaskRecord
+from context_aware_translation.workflow.tasks.claims import (
+    AllDocuments,
+    ClaimMode,
+    ResourceClaim,
+    SomeDocuments,
+)
+from context_aware_translation.workflow.tasks.handlers.batch_translation import BatchTranslationHandler
 from context_aware_translation.workflow.tasks.models import (
-    ActionSnapshot,
-    TaskAction,
     STATUS_CANCEL_REQUESTED,
-    STATUS_CANCELLING,
     STATUS_CANCELLED,
+    STATUS_CANCELLING,
     STATUS_COMPLETED,
     STATUS_COMPLETED_WITH_ERRORS,
     STATUS_FAILED,
     STATUS_PAUSED,
     STATUS_QUEUED,
     STATUS_RUNNING,
+    ActionSnapshot,
+    TaskAction,
 )
-from context_aware_translation.workflow.tasks.claims import AllDocuments, SomeDocuments, ResourceClaim, ClaimArbiter
-from context_aware_translation.workflow.tasks.handlers.batch_translation import BatchTranslationHandler
 
 
 def _make_record(
@@ -108,7 +111,11 @@ def test_scope_some_documents_with_ids():
 def test_claims_wildcard_for_all_documents():
     record = _make_record(document_ids_json=None)
     claims = handler.claims(record, {})
-    assert claims == frozenset({ResourceClaim("doc", "book-1", "*")})
+    assert claims == frozenset({
+        ResourceClaim("doc", "book-1", "*"),
+        ResourceClaim("glossary_state", "book-1", "*", ClaimMode.READ_SHARED),
+        ResourceClaim("context_tree", "book-1", "*", ClaimMode.WRITE_COOPERATIVE),
+    })
 
 
 def test_claims_per_doc_for_some_documents():
@@ -117,6 +124,8 @@ def test_claims_per_doc_for_some_documents():
     assert claims == frozenset({
         ResourceClaim("doc", "book-1", "5"),
         ResourceClaim("doc", "book-1", "7"),
+        ResourceClaim("glossary_state", "book-1", "*", ClaimMode.READ_SHARED),
+        ResourceClaim("context_tree", "book-1", "*", ClaimMode.WRITE_COOPERATIVE),
     })
 
 

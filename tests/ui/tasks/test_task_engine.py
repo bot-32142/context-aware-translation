@@ -1,17 +1,14 @@
 """Tests for TaskEngine core behavior."""
 from __future__ import annotations
 
-import threading
 import time
-from pathlib import Path
-from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 try:
+    from PySide6.QtCore import Qt, QTimer
     from PySide6.QtWidgets import QApplication
-    from PySide6.QtCore import QTimer, Qt
 
     HAS_PYSIDE6 = True
 except ImportError:
@@ -57,7 +54,7 @@ def mock_deps():
 
 def _make_handler(task_type: str = "test_task", *, can_autorun: bool = True, can_run: bool = True):
     """Build a minimal mock TaskTypeHandler."""
-    from context_aware_translation.workflow.tasks.models import Decision, TaskAction
+    from context_aware_translation.workflow.tasks.models import Decision
 
     handler = MagicMock()
     handler.task_type = task_type
@@ -164,9 +161,9 @@ def test_submit_creates_record(engine, tmp_store):
 
 
 def test_preflight_creation_returns_decision_for_batch_handler(engine, tmp_path):
-    from context_aware_translation.workflow.tasks.models import TaskAction
-    from context_aware_translation.workflow.tasks.handlers.batch_translation import BatchTranslationHandler
     from context_aware_translation.storage.book_db import SQLiteBookDB
+    from context_aware_translation.workflow.tasks.handlers.batch_translation import BatchTranslationHandler
+    from context_aware_translation.workflow.tasks.models import TaskAction
 
     # Set up a real book DB so validate_submit can open it
     book_db_path = tmp_path / "book.db"

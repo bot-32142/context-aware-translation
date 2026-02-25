@@ -160,7 +160,7 @@ class BookWorkspace(QWidget):
 
     def _create_glossary_view(self) -> QWidget:
         """Create the glossary view."""
-        return GlossaryView(self.book_manager, self.book_id)
+        return GlossaryView(self.book_manager, self.book_id, self._task_engine)
 
     def _create_translation_view(self) -> QWidget:
         """Create the translation view."""
@@ -205,13 +205,21 @@ class BookWorkspace(QWidget):
         if ocr_view is not None and self._is_worker_running(getattr(ocr_view, "ocr_worker", None)):
             running.append(self.tr("OCR"))
 
-        # Glossary tab (index 2)
+        # Glossary tab (index 2) — check local workers AND engine-managed tasks
         glossary_view = self._view_cache.get(2)
+        glossary_running = False
         if glossary_view is not None and (
-            self._is_worker_running(getattr(glossary_view, "_build_worker", None))
-            or self._is_worker_running(getattr(glossary_view, "_translate_worker", None))
+            self._is_worker_running(getattr(glossary_view, "_translate_worker", None))
             or self._is_worker_running(getattr(glossary_view, "_review_worker", None))
         ):
+            glossary_running = True
+        if not glossary_running:
+            from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES
+            for rec in self._task_engine.get_tasks(self.book_id, task_type="glossary_extraction"):
+                if rec.status not in TERMINAL_TASK_STATUSES:
+                    glossary_running = True
+                    break
+        if glossary_running:
             running.append(self.tr("Glossary"))
 
         # Translation tab (index 3)
@@ -248,7 +256,6 @@ class BookWorkspace(QWidget):
         # Glossary tab (index 2)
         glossary_view = self._view_cache.get(2)
         if glossary_view is not None:
-            self._request_worker_interruption(getattr(glossary_view, "_build_worker", None))
             self._request_worker_interruption(getattr(glossary_view, "_translate_worker", None))
             self._request_worker_interruption(getattr(glossary_view, "_review_worker", None))
             self._request_worker_interruption(getattr(glossary_view, "_export_worker", None))

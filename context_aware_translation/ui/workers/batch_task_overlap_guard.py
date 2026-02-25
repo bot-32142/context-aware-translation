@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def has_any_batch_task_overlap(
-    task_store: "TaskStore",
+    task_store: TaskStore,
     book_id: str,
     document_ids: list[int] | None,
     *,

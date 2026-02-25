@@ -11,8 +11,8 @@ from typing import Any
 
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.task_store import TaskStore
-from context_aware_translation.workflow.tasks.execution.batch_translation_executor import BatchTranslationExecutor
 from context_aware_translation.workflow.session import WorkflowSession
+from context_aware_translation.workflow.tasks.execution.batch_translation_executor import BatchTranslationExecutor
 
 from .base_worker import BaseWorker
 from .batch_task_overlap_guard import has_any_batch_task_overlap
@@ -132,6 +132,23 @@ class BatchTranslationTaskWorker(BaseWorker):
                             progress_callback=self._emit_progress,
                         )
                     )
+                    # Persist remote_submission_state into payload_json so
+                    # cancel_dispatch_policy can inspect it later.
+                    if self.task_store is not None and self.task_id:
+                        try:
+                            current = self.task_store.get(self.task_id)
+                            if current is not None:
+                                try:
+                                    existing_payload = json.loads(current.payload_json or "{}")
+                                except (json.JSONDecodeError, TypeError):
+                                    existing_payload = {}
+                                existing_payload["remote_submission_state"] = "submitted"
+                                self.task_store.update(
+                                    self.task_id,
+                                    payload_json=json.dumps(existing_payload),
+                                )
+                        except Exception:
+                            pass  # Non-fatal: state persistence best-effort
                     self.finished_success.emit({"action": "run", "task": self._record_to_payload(record)})
                     return
 

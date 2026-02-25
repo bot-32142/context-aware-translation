@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 from context_aware_translation.workflow.tasks.claims import ResourceClaim
@@ -52,7 +52,9 @@ class TaskAction(StrEnum):
 @dataclass(frozen=True)
 class Decision:
     allowed: bool
+    code: str = "ok"
     reason: str = ""
+    args: Mapping[str, object] = field(default_factory=dict)
 
 # ---------------------------------------------------------------------------
 # ActionSnapshot (from action_snapshot.py)

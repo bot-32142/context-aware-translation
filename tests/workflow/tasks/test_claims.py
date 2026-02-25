@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import pytest
-
-from context_aware_translation.workflow.tasks.claims import ClaimArbiter, ResourceClaim
+from context_aware_translation.workflow.tasks.claims import ClaimArbiter, ClaimMode, ResourceClaim
 
 
 def test_same_namespace_book_key_conflicts():
@@ -110,3 +108,66 @@ def test_different_books_never_overlap():
     e = NoDocuments(book_id="b1")
     f = NoDocuments(book_id="b2")
     assert scopes_overlap(e, f) is False
+
+
+# ---------------------------------------------------------------------------
+# ClaimMode-aware conflict tests
+# ---------------------------------------------------------------------------
+
+
+def test_read_shared_vs_read_shared_no_conflict():
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("glossary_state", "b1", "*", ClaimMode.READ_SHARED)})
+    active = frozenset({ResourceClaim("glossary_state", "b1", "*", ClaimMode.READ_SHARED)})
+    assert arbiter.conflicts(wanted, active) is False
+
+
+def test_write_cooperative_vs_write_cooperative_no_conflict():
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("context_tree", "b1", "*", ClaimMode.WRITE_COOPERATIVE)})
+    active = frozenset({ResourceClaim("context_tree", "b1", "*", ClaimMode.WRITE_COOPERATIVE)})
+    assert arbiter.conflicts(wanted, active) is False
+
+
+def test_read_shared_vs_write_exclusive_conflicts():
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("glossary_state", "b1", "*", ClaimMode.READ_SHARED)})
+    active = frozenset({ResourceClaim("glossary_state", "b1", "*", ClaimMode.WRITE_EXCLUSIVE)})
+    assert arbiter.conflicts(wanted, active) is True
+
+
+def test_write_exclusive_vs_read_shared_conflicts():
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("glossary_state", "b1", "*", ClaimMode.WRITE_EXCLUSIVE)})
+    active = frozenset({ResourceClaim("glossary_state", "b1", "*", ClaimMode.READ_SHARED)})
+    assert arbiter.conflicts(wanted, active) is True
+
+
+def test_write_cooperative_vs_write_exclusive_conflicts():
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("context_tree", "b1", "*", ClaimMode.WRITE_COOPERATIVE)})
+    active = frozenset({ResourceClaim("context_tree", "b1", "*", ClaimMode.WRITE_EXCLUSIVE)})
+    assert arbiter.conflicts(wanted, active) is True
+
+
+def test_write_exclusive_vs_write_exclusive_conflicts():
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("glossary_state", "b1", "*", ClaimMode.WRITE_EXCLUSIVE)})
+    active = frozenset({ResourceClaim("glossary_state", "b1", "*", ClaimMode.WRITE_EXCLUSIVE)})
+    assert arbiter.conflicts(wanted, active) is True
+
+
+def test_read_shared_vs_write_cooperative_conflicts():
+    """READ_SHARED and WRITE_COOPERATIVE conflict — cooperative writers don't share with readers."""
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("glossary_state", "b1", "*", ClaimMode.READ_SHARED)})
+    active = frozenset({ResourceClaim("glossary_state", "b1", "*", ClaimMode.WRITE_COOPERATIVE)})
+    assert arbiter.conflicts(wanted, active) is True
+
+
+def test_claim_mode_no_conflict_different_namespace():
+    """Even conflicting modes don't conflict across different namespaces."""
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("glossary_state", "b1", "*", ClaimMode.WRITE_EXCLUSIVE)})
+    active = frozenset({ResourceClaim("context_tree", "b1", "*", ClaimMode.WRITE_EXCLUSIVE)})
+    assert arbiter.conflicts(wanted, active) is False
