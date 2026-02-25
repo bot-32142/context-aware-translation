@@ -323,3 +323,61 @@ def test_cancel_does_not_rewrite_terminal_status(engine, tmp_store):
     assert updated is not None
     assert updated.status == "completed"
     assert updated.cancel_requested is False
+
+
+# ------------------------------------------------------------------
+# submit_and_start: strict interactive submit for chunk_retranslation
+# ------------------------------------------------------------------
+
+
+def test_submit_and_start_marks_task_failed_when_start_raises(engine, tmp_store):
+    """submit_and_start never strands a task in queued when the immediate start fails.
+
+    This is the strict interactive submit contract used for chunk_retranslation.
+    """
+    from context_aware_translation.workflow.tasks.models import Decision
+
+    handler = _make_handler("chunk_retranslation")
+    # Simulate validate_submit allowed but build_worker raises (start will fail)
+    handler.validate_submit.return_value = Decision(allowed=True)
+    handler.validate_run.return_value = Decision(allowed=True)
+    handler.can.return_value = Decision(allowed=True)
+    handler.build_worker.side_effect = RuntimeError("worker construction failed")
+    engine.register_handler(handler)
+
+    record = engine.submit_and_start("chunk_retranslation", "book-strict", chunk_id=1, document_id=2)
+
+    # Task must NOT be left in queued — it should be marked failed
+    assert record.status == "failed"
+    stored = tmp_store.get(record.task_id)
+    assert stored is not None
+    assert stored.status == "failed"
+    assert stored.last_error is not None
+    assert "strict-start failed" in stored.last_error
+
+
+def test_submit_and_start_succeeds_when_worker_starts(engine, tmp_store):
+    """submit_and_start returns a running/queued record when start succeeds."""
+    from context_aware_translation.workflow.tasks.models import Decision
+
+    handler = _make_handler("chunk_retranslation")
+    handler.validate_submit.return_value = Decision(allowed=True)
+    handler.validate_run.return_value = Decision(allowed=True)
+    handler.can.return_value = Decision(allowed=True)
+    worker_mock = MagicMock()
+    worker_mock.isRunning.return_value = True
+    handler.build_worker.return_value = worker_mock
+    handler.build_worker.side_effect = None
+    engine.register_handler(handler)
+
+    record = engine.submit_and_start("chunk_retranslation", "book-strict2", chunk_id=3, document_id=4)
+
+    # Should not be failed
+    assert record.status != "failed"
+    stored = tmp_store.get(record.task_id)
+    assert stored is not None
+    assert stored.status != "failed"
+
+    # cleanup
+    engine._core._active_workers.clear()
+    engine._core._active_claims.clear()

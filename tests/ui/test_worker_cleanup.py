@@ -76,60 +76,46 @@ def test_export_view_cleanup_waits_without_timeout():
     assert worker.wait_calls == [()]
 
 
-def test_translation_view_cleanup_waits_without_timeout():
+def test_translation_view_cleanup_does_not_cancel_engine_tasks():
+    """Engine-managed tasks continue in background — cleanup must NOT cancel them."""
     from context_aware_translation.ui.views.translation_view import TranslationView
 
     with patch.object(TranslationView, "__init__", _noop_init):
         view = TranslationView(None, "")
 
-    worker = _FakeWorker()
+    from context_aware_translation.workflow.tasks.models import STATUS_RUNNING
+
+    task_engine = MagicMock()
+    running_record = MagicMock()
+    running_record.status = STATUS_RUNNING
+    task_engine.get_task.return_value = running_record
+
     view._is_cleaned_up = False
-    view._batch_auto_timer = None
-    view._task_engine = None
-    view.worker = worker
-    view.batch_task_worker = None
-    view.retranslate_worker = None
+    view._task_engine = task_engine
+    view._sync_task_id = "sync-task-1"
+    view._pending_retranslations = {"chunk-task-1": (3, 7)}
+    view._emitted_sync_translation_done = set()
     view.term_db = MagicMock()
     view.cleanup()
 
-    assert worker.interruption_requested
-    assert worker.wait_calls == [()]
+    task_engine.cancel.assert_not_called()
     view.term_db.close.assert_called_once()
 
 
-def test_translation_view_cleanup_interrupts_running_batch_run_worker():
-    """Batch worker cleanup is now handled via task_console; verify console cleanup called."""
+def test_translation_view_cleanup_with_task_console_calls_console_cleanup():
+    """task_console.cleanup() is called when the console attribute exists."""
     from context_aware_translation.ui.views.translation_view import TranslationView
 
     with patch.object(TranslationView, "__init__", _noop_init):
         view = TranslationView(None, "")
 
     view._is_cleaned_up = False
-    view._batch_auto_timer = None
-    view._task_engine = None
+    view._task_engine = MagicMock()
+    view._task_engine.get_task.return_value = None
+    view._sync_task_id = None
+    view._pending_retranslations = {}
+    view._emitted_sync_translation_done = set()
     view.task_console = MagicMock()
-    view.worker = None
-    view.retranslate_worker = None
-    view.term_db = MagicMock()
-    view.cleanup()
-
-    view.task_console.cleanup.assert_called_once()
-    view.term_db.close.assert_called_once()
-
-
-def test_translation_view_cleanup_interrupts_non_run_batch_worker():
-    """Batch worker cleanup is now handled via task_console; verify console cleanup called."""
-    from context_aware_translation.ui.views.translation_view import TranslationView
-
-    with patch.object(TranslationView, "__init__", _noop_init):
-        view = TranslationView(None, "")
-
-    view._is_cleaned_up = False
-    view._batch_auto_timer = None
-    view._task_engine = None
-    view.task_console = MagicMock()
-    view.worker = None
-    view.retranslate_worker = None
     view.term_db = MagicMock()
     view.cleanup()
 
@@ -144,11 +130,11 @@ def test_translation_view_cleanup_closes_term_db():
         view = TranslationView(None, "")
 
     view._is_cleaned_up = False
-    view._batch_auto_timer = None
     view._task_engine = MagicMock()
-    view.worker = None
-    view.batch_task_worker = None
-    view.retranslate_worker = None
+    view._task_engine.get_task.return_value = None
+    view._sync_task_id = None
+    view._pending_retranslations = {}
+    view._emitted_sync_translation_done = set()
     view.term_db = MagicMock()
 
     view.cleanup()

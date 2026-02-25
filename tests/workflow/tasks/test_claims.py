@@ -171,3 +171,66 @@ def test_claim_mode_no_conflict_different_namespace():
     wanted = frozenset({ResourceClaim("glossary_state", "b1", "*", ClaimMode.WRITE_EXCLUSIVE)})
     active = frozenset({ResourceClaim("context_tree", "b1", "*", ClaimMode.WRITE_EXCLUSIVE)})
     assert arbiter.conflicts(wanted, active) is False
+
+
+# ---------------------------------------------------------------------------
+# sync_translation / chunk_retranslation interaction scenarios
+# ---------------------------------------------------------------------------
+
+
+def test_sync_translation_conflicts_with_active_sync_translation():
+    """Two sync_translation tasks on the same book conflict via all-doc W_E claim."""
+    arbiter = ClaimArbiter()
+    # Both claim doc/* W_E for the same book
+    wanted = frozenset({ResourceClaim("doc", "book-1", "*")})
+    active = frozenset({ResourceClaim("doc", "book-1", "*")})
+    assert arbiter.conflicts(wanted, active) is True
+
+
+def test_chunk_retranslation_conflicts_with_sync_translation_all_docs():
+    """chunk_retranslation (specific doc W_E) conflicts with sync_translation (all-doc W_E)."""
+    arbiter = ClaimArbiter()
+    # chunk_retranslation wants doc/5 W_E; sync_translation holds doc/* W_E
+    wanted = frozenset({ResourceClaim("doc", "book-1", "5")})
+    active = frozenset({ResourceClaim("doc", "book-1", "*")})
+    assert arbiter.conflicts(wanted, active) is True
+
+
+def test_two_chunk_retranslations_same_doc_conflict():
+    """Two chunk_retranslation tasks on the same document conflict."""
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("doc", "book-1", "3")})
+    active = frozenset({ResourceClaim("doc", "book-1", "3")})
+    assert arbiter.conflicts(wanted, active) is True
+
+
+def test_two_chunk_retranslations_different_docs_no_conflict():
+    """Two chunk_retranslation tasks on different documents do not conflict."""
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("doc", "book-1", "3")})
+    active = frozenset({ResourceClaim("doc", "book-1", "7")})
+    assert arbiter.conflicts(wanted, active) is False
+
+
+def test_chunk_retranslation_glossary_read_shared_no_conflict():
+    """Multiple chunk_retranslations can share the glossary_state READ_SHARED claim."""
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("glossary_state", "book-1", "*", ClaimMode.READ_SHARED)})
+    active = frozenset({ResourceClaim("glossary_state", "book-1", "*", ClaimMode.READ_SHARED)})
+    assert arbiter.conflicts(wanted, active) is False
+
+
+def test_chunk_retranslation_context_tree_write_cooperative_no_conflict():
+    """Multiple chunk_retranslations can hold context_tree WRITE_COOPERATIVE simultaneously."""
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("context_tree", "book-1", "*", ClaimMode.WRITE_COOPERATIVE)})
+    active = frozenset({ResourceClaim("context_tree", "book-1", "*", ClaimMode.WRITE_COOPERATIVE)})
+    assert arbiter.conflicts(wanted, active) is False
+
+
+def test_sync_translation_different_books_no_conflict():
+    """sync_translation tasks on different books never conflict."""
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("doc", "book-1", "*")})
+    active = frozenset({ResourceClaim("doc", "book-2", "*")})
+    assert arbiter.conflicts(wanted, active) is False

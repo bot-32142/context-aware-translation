@@ -1,7 +1,10 @@
 """Translation view with progress and review modes."""
 
 import json
+import logging
 import sqlite3
+
+logger = logging.getLogger(__name__)
 
 from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QCloseEvent, QColor, QTextCharFormat, QTextCursor
@@ -32,12 +35,9 @@ from context_aware_translation.workflow.tasks.models import (
     TaskAction,
 )
 
-from ..i18n import qarg, translate_progress_message
+from ..i18n import qarg
 from ..utils import create_tip_label, translate_document_type
-from ..widgets import ProgressWidget
-from ..workers.batch_task_overlap_guard import has_any_batch_task_overlap
 from ..workers.operation_tracker import DocumentOperationTracker
-from ..workers.translation_worker import RetranslateChunkWorker, TranslationWorker
 from .manga_review_widget import MangaReviewWidget
 
 PREVIEW_TRUNCATION_LENGTH = 50
@@ -63,8 +63,10 @@ class TranslationView(QWidget):
         self.book_manager = book_manager
         self.book_id = book_id
         self._task_engine = task_engine
-        self.worker: TranslationWorker | None = None
-        self.retranslate_worker: RetranslateChunkWorker | None = None
+        self._sync_task_id: str | None = None
+        self._tracked_sync_task_ids: set[str] = set()
+        self._pending_retranslations: dict[str, tuple[int, int]] = {}  # task_id -> (chunk_id, document_id)
+        self._emitted_sync_translation_done: set[str] = set()
         self._is_cleaned_up = False
 
         # Initialize database
@@ -81,6 +83,8 @@ class TranslationView(QWidget):
 
         self._init_ui()
         self._update_stats()
+        self._task_engine.tasks_changed.connect(self._on_tasks_changed)
+        self._initialize_sync_task_tracking()
 
     @staticmethod
     def _db_call_or_default(default_value, fn, *args, **kwargs):  # noqa: ANN001
@@ -165,15 +169,22 @@ class TranslationView(QWidget):
         layout.addWidget(self.task_console)
         self.task_console.console_refreshed.connect(self._on_task_console_refreshed)
 
+        # Sync translation task history
+        self.sync_translation_section_label = QLabel(self.tr("Sync Translation Tasks"))
+        self.sync_translation_section_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(self.sync_translation_section_label)
+
+        self.sync_task_console = TaskConsole(
+            task_engine=self._task_engine,
+            book_id=self.book_id,
+            task_type="sync_translation",
+            parent=self,
+        )
+        layout.addWidget(self.sync_task_console)
+        self.sync_task_console.console_refreshed.connect(self._on_task_console_refreshed)
 
         # Update start button state based on pending documents
         self._update_start_button_state()
-
-        # Progress widget
-        self.progress_widget = ProgressWidget()
-        self.progress_widget.hide()
-        self.progress_widget.cancelled.connect(self._cancel_translation)
-        layout.addWidget(self.progress_widget)
 
         # Status message
         self.status_label = QLabel()
@@ -361,8 +372,8 @@ class TranslationView(QWidget):
         if self._is_cleaned_up:
             return
 
-        # Single sync worker slot guard
-        if self.worker and self.worker.isRunning():
+        # Single sync worker slot guard — check for active engine-managed sync task
+        if self._is_sync_translation_running():
             self.start_btn.setEnabled(False)
             self.doc_combo.setEnabled(False)
             self.skip_context_cb.setEnabled(False)
@@ -426,6 +437,29 @@ class TranslationView(QWidget):
         self.submit_batch_btn.setToolTip("")
         self._update_retranslate_chunk_button_state()
 
+    def _is_sync_translation_running(self) -> bool:
+        """Return True if any sync_translation task is active (non-terminal)."""
+        # Fast path for the currently tracked task ID.
+        if getattr(self, "_sync_task_id", None) is not None:
+            record = self._task_engine.get_task(self._sync_task_id)
+            if record is not None and record.status not in TERMINAL_TASK_STATUSES:
+                return True
+        for record in self._task_engine.get_tasks(self.book_id, task_type="sync_translation"):
+            task_type = getattr(record, "task_type", "sync_translation")
+            if not isinstance(task_type, str) or task_type != "sync_translation":
+                continue
+            if record.status not in TERMINAL_TASK_STATUSES:
+                return True
+        return False
+
+    def _is_chunk_retranslation_running(self) -> bool:
+        """Return True if any pending chunk_retranslation task is active (non-terminal)."""
+        for task_id in self._pending_retranslations:
+            record = self._task_engine.get_task(task_id)
+            if record is not None and record.status not in TERMINAL_TASK_STATUSES:
+                return True
+        return False
+
     def _has_uncancelled_batch_tasks(self) -> bool:
         """Return True when this book still has non-terminal async batch tasks."""
         tasks = self._task_engine.get_tasks(self.book_id, task_type="batch_translation")
@@ -445,14 +479,14 @@ class TranslationView(QWidget):
         """Enable/disable chunk retranslate based on task state and selection."""
         if not hasattr(self, "retranslate_chunk_btn"):
             return
-        retranslate_worker = getattr(self, "retranslate_worker", None)
-        if retranslate_worker and retranslate_worker.isRunning():
+        if self._is_chunk_retranslation_running():
             return
 
         current_chunk = getattr(self, "_current_chunk", None)
         has_selected_chunk = current_chunk is not None
         blocked_by_batch_tasks = False
         blocked_by_active_operation = False
+        blocked_by_sync_translation = self._is_sync_translation_running()
         if has_selected_chunk:
             current_doc_id = getattr(current_chunk, "document_id", None)
             if current_doc_id is not None:
@@ -462,9 +496,16 @@ class TranslationView(QWidget):
                     [current_doc_id],
                 )
         self.retranslate_chunk_btn.setEnabled(
-            has_selected_chunk and not blocked_by_batch_tasks and not blocked_by_active_operation
+            has_selected_chunk
+            and not blocked_by_batch_tasks
+            and not blocked_by_active_operation
+            and not blocked_by_sync_translation
         )
-        if blocked_by_batch_tasks:
+        if blocked_by_sync_translation:
+            self.retranslate_chunk_btn.setToolTip(
+                self.tr("Retranslate is unavailable while sync translation is running.")
+            )
+        elif blocked_by_batch_tasks:
             self.retranslate_chunk_btn.setToolTip(
                 self.tr("Retranslate is unavailable while a batch task covers this document.")
             )
@@ -573,6 +614,8 @@ class TranslationView(QWidget):
         self._refresh_review_document_selector()
         if hasattr(self, "task_console"):
             self.task_console.refresh()
+        if hasattr(self, "sync_task_console"):
+            self.sync_task_console.refresh()
         self._update_stats()
         if in_review_mode:
             self._on_review_document_changed(self.review_doc_combo.currentIndex())
@@ -692,8 +735,8 @@ class TranslationView(QWidget):
         return document_ids, force
 
     def _start_translation(self) -> None:
-        """Start translation in background."""
-        if self.worker and self.worker.isRunning():
+        """Start translation via the task engine (sync_translation task type)."""
+        if self._is_sync_translation_running():
             return
 
         selected_doc_ids = self._get_selected_document_ids()
@@ -713,44 +756,41 @@ class TranslationView(QWidget):
             return
         document_ids, force = resolved
 
-        # Disable start button (review stays enabled)
+        params = dict(
+            document_ids=document_ids,
+            force=force,
+            skip_context=self.skip_context_cb.isChecked(),
+        )
+
+        # Preflight advisory check before committing to storage
+        decision = self._task_engine.preflight("sync_translation", self.book_id, params, TaskAction.RUN)
+        if not decision.allowed:
+            QMessageBox.warning(self, self.tr("Cannot Start"), decision.reason)
+            return
+
+        # Disable start button; TaskConsole shows progress
         self.start_btn.setEnabled(False)
         self.doc_combo.setEnabled(False)
         self.skip_context_cb.setEnabled(False)
         self.status_label.hide()
 
-        # Show progress
-        self.progress_widget.show()
-        self.progress_widget.reset()
-        self.progress_widget.set_cancellable(True)
-
-        # Create and start worker
-        self.worker = TranslationWorker(
-            self.book_manager,
-            self.book_id,
-            document_ids,
-            force=force,
-            skip_context=self.skip_context_cb.isChecked(),
-            task_store=self._task_engine.store,
-        )
-        self.worker.progress.connect(self._on_translation_progress)
-        self.worker.finished_success.connect(self._on_translation_success)
-        self.worker.cancelled.connect(self._on_translation_cancelled)
-        self.worker.error.connect(self._on_translation_error)
-        self.worker.finished.connect(self._on_worker_finished)
-        self.worker.start()
+        # Submit to task engine; engine best-effort starts SyncTranslationTaskWorker
+        record = self._task_engine.submit("sync_translation", self.book_id, **params)
+        self._sync_task_id = record.task_id
+        tracked = getattr(self, "_tracked_sync_task_ids", None)
+        if tracked is None:
+            tracked = set()
+            self._tracked_sync_task_ids = tracked
+        tracked.add(record.task_id)
 
     def _cancel_translation(self) -> None:
-        """Cancel ongoing translation."""
-        if self.worker and self.worker.isRunning():
-            self.worker.requestInterruption()
-            self.progress_widget.message_label.setText(self.tr("Cancelling..."))
-            self.progress_widget.set_cancellable(False)
-
-    def _on_translation_progress(self, current: int, total: int, message: str) -> None:
-        """Handle translation progress update."""
-        translated_message = translate_progress_message(message)
-        self.progress_widget.set_progress(current, total, translated_message)
+        """Cancel ongoing translation via the task engine."""
+        for record in self._task_engine.get_tasks(self.book_id, task_type="sync_translation"):
+            task_type = getattr(record, "task_type", "sync_translation")
+            if not isinstance(task_type, str) or task_type != "sync_translation":
+                continue
+            if record.status not in TERMINAL_TASK_STATUSES:
+                self._task_engine.cancel(record.task_id)
 
     def _on_translation_success(self, _result: object) -> None:
         """Handle successful translation."""
@@ -780,14 +820,129 @@ class TranslationView(QWidget):
         self.status_label.setStyleSheet("color: #b45309;")
         self.status_label.show()
 
-    def _on_worker_finished(self) -> None:
-        """Clean up after worker finishes."""
-        self.progress_widget.hide()
-        self.progress_widget.set_cancellable(True)
-        self.worker = None
+    def _on_sync_task_finished(self) -> None:
+        """Clean up after sync translation task finishes."""
         self.skip_context_cb.setEnabled(True)
         self._refresh_document_selector()
         self._refresh_review_document_selector()
+
+    def _on_tasks_changed(self, book_id: str) -> None:
+        """React to engine task-changed events for this book."""
+        if book_id != self.book_id or getattr(self, "_is_cleaned_up", False):
+            return
+        self._handle_sync_task_update()
+        self._handle_chunk_retrans_task_update()
+        self._update_start_button_state()
+        # Prune stale tracking sets to bound memory.
+        live_ids = {r.task_id for r in self._task_engine.get_tasks(self.book_id, task_type="sync_translation")}
+        tracked = getattr(self, "_tracked_sync_task_ids", None)
+        if tracked is not None:
+            tracked &= live_ids
+        emitted = getattr(self, "_emitted_sync_translation_done", None)
+        if emitted is not None:
+            emitted &= live_ids
+
+    def _initialize_sync_task_tracking(self) -> None:
+        """Seed sync-task tracking without replaying old terminal notifications."""
+        tasks = self._task_engine.get_tasks(self.book_id, task_type="sync_translation")
+        self._tracked_sync_task_ids = {r.task_id for r in tasks if r.status not in TERMINAL_TASK_STATUSES}
+        self._emitted_sync_translation_done = {r.task_id for r in tasks if r.status in TERMINAL_TASK_STATUSES}
+        self._sync_task_id = next((r.task_id for r in tasks if r.status not in TERMINAL_TASK_STATUSES), None)
+
+    def _handle_sync_task_update(self) -> None:
+        """Check and react to sync_translation task state changes for tracked tasks."""
+        tracked = getattr(self, "_tracked_sync_task_ids", None)
+        if tracked is None:
+            tracked = set()
+            self._tracked_sync_task_ids = tracked
+        emitted = getattr(self, "_emitted_sync_translation_done", None)
+        if emitted is None:
+            emitted = set()
+            self._emitted_sync_translation_done = emitted
+
+        sync_tasks = self._task_engine.get_tasks(self.book_id, task_type="sync_translation")
+        # Fallback for partially mocked engines or stale list snapshots: use tracked task lookup.
+        if not sync_tasks and getattr(self, "_sync_task_id", None) is not None:
+            record = self._task_engine.get_task(self._sync_task_id)
+            if record is not None:
+                sync_tasks = [record]
+        if not sync_tasks and not tracked:
+            self._sync_task_id = None
+            return
+        records_by_id = {record.task_id: record for record in sync_tasks}
+        live_ids = set(records_by_id.keys())
+        active_ids = {
+            record.task_id
+            for record in sync_tasks
+            if record.status not in TERMINAL_TASK_STATUSES
+        }
+        current_sync_id = getattr(self, "_sync_task_id", None)
+        if current_sync_id is not None and current_sync_id in live_ids:
+            tracked.add(current_sync_id)
+
+        # Capture active tasks started from any UI path (e.g. TaskConsole Run).
+        tracked |= active_ids
+        tracked &= live_ids
+        self._sync_task_id = next((r.task_id for r in sync_tasks if r.status not in TERMINAL_TASK_STATUSES), None)
+
+        terminal_records = []
+        for task_id in list(tracked):
+            record = records_by_id.get(task_id)
+            if record is None:
+                tracked.discard(task_id)
+                continue
+            if record.status in TERMINAL_TASK_STATUSES:
+                terminal_records.append(record)
+                tracked.discard(task_id)
+
+        if not terminal_records:
+            return
+
+        terminal_records.sort(key=lambda rec: rec.updated_at)
+        for record in terminal_records:
+            if record.task_id in emitted:
+                continue
+            emitted.add(record.task_id)
+            self._on_sync_task_finished()
+            if record.status == "completed":
+                self._on_translation_success(None)
+            elif record.status == "cancelled":
+                self._on_translation_cancelled()
+            elif record.status in ("failed", "completed_with_errors"):
+                self._on_translation_error(record.last_error or "Unknown error")
+
+    def _handle_chunk_retrans_task_update(self) -> None:
+        """Check and react to chunk_retranslation task state changes."""
+        if not self._pending_retranslations:
+            return
+        done: list[str] = []
+        for task_id in list(self._pending_retranslations):
+            record = self._task_engine.get_task(task_id)
+            if record is None:
+                # Task deleted/purged — remove stale ref
+                done.append(task_id)
+                continue
+            if record.status not in TERMINAL_TASK_STATUSES:
+                continue
+            # Terminal: re-read the chunk from DB to get the updated translation
+            if record.status == "completed":
+                chunk_id, _doc_id = self._pending_retranslations.get(task_id, (None, None))
+                current = getattr(self, "_current_chunk", None)
+                if chunk_id is not None and current is not None and current.chunk_id == chunk_id:
+                    try:
+                        self.term_db.refresh()
+                        chunk = self.term_db.get_chunk_by_id(chunk_id)
+                        if chunk is not None and chunk.translation:
+                            self._on_retranslate_success(chunk.translation)
+                    except Exception:
+                        logger.debug("Best-effort chunk refresh failed for chunk %s", chunk_id, exc_info=True)
+            elif record.status in ("failed", "completed_with_errors"):
+                self._on_retranslate_error(record.last_error or "Unknown error")
+            done.append(task_id)
+        for task_id in done:
+            self._pending_retranslations.pop(task_id, None)
+        if done:
+            self._on_retranslate_finished()
 
     # ------------------------------------------------------------------
     # Task console callbacks
@@ -810,21 +965,12 @@ class TranslationView(QWidget):
     def _has_document_reservation(
         self,
         document_ids: list[int] | None,
-        *,
-        exclude_task_ids: set[str] | None = None,
     ) -> bool:
-        """Check if documents are reserved by active ops or existing batch tasks."""
-        if DocumentOperationTracker.has_document_overlap(self.book_id, document_ids):
-            return True
-        return has_any_batch_task_overlap(
-            self._task_engine.store,
-            self.book_id,
-            document_ids,
-            exclude_task_ids=exclude_task_ids,
-        )
+        """Check if documents are reserved by active local operations."""
+        return DocumentOperationTracker.has_document_overlap(self.book_id, document_ids)
 
     def _submit_batch_task(self) -> None:
-        if self.worker and self.worker.isRunning():
+        if self._is_sync_translation_running():
             return
 
         resolved = self._resolve_trigger_conditions(for_batch_submit=True)
@@ -1024,7 +1170,7 @@ class TranslationView(QWidget):
             )
             return
 
-        if self.retranslate_worker and self.retranslate_worker.isRunning():
+        if self._is_chunk_retranslation_running():
             return
 
         chunk = self._current_chunk
@@ -1047,18 +1193,19 @@ class TranslationView(QWidget):
         self.retranslate_chunk_btn.setEnabled(False)
         self.retranslate_chunk_btn.setText(self.tr("Retranslating..."))
 
-        self.retranslate_worker = RetranslateChunkWorker(
-            self.book_manager,
+        # Submit via engine (strict interactive); ChunkRetranslationHandler builds ChunkRetranslationTaskWorker
+        record = self._task_engine.submit_and_start(
+            "chunk_retranslation",
             self.book_id,
             chunk_id=chunk.chunk_id,
             document_id=chunk.document_id,
             skip_context=self.skip_context_cb.isChecked(),
         )
-        self.retranslate_worker.finished_success.connect(self._on_retranslate_success)
-        self.retranslate_worker.error.connect(self._on_retranslate_error)
-        self.retranslate_worker.cancelled.connect(self._on_retranslate_finished)
-        self.retranslate_worker.finished.connect(self._on_retranslate_finished)
-        self.retranslate_worker.start()
+        self._pending_retranslations[record.task_id] = (chunk.chunk_id, chunk.document_id)
+        if record.status == "failed":
+            self._on_retranslate_error(record.last_error or "Task failed to start")
+            self._pending_retranslations.pop(record.task_id, None)
+            self._on_retranslate_finished()
 
     def _on_retranslate_success(self, new_translation: object) -> None:
         """Handle successful chunk retranslation."""
@@ -1093,9 +1240,8 @@ class TranslationView(QWidget):
         )
 
     def _on_retranslate_finished(self) -> None:
-        """Clean up after retranslation worker finishes."""
+        """Clean up after retranslation task(s) finish."""
         self.retranslate_chunk_btn.setText(self.tr("Retranslate"))
-        self.retranslate_worker = None
         self._update_retranslate_chunk_button_state()
 
     def _build_chunk_record(self, chunk: TranslationChunkRecord, translation_text: str) -> TranslationChunkRecord:
@@ -1274,14 +1420,17 @@ class TranslationView(QWidget):
         if self._is_cleaned_up:
             return
         self._is_cleaned_up = True
-        if self.worker and self.worker.isRunning():
-            self.worker.requestInterruption()
-            self.worker.wait()
-        if self.retranslate_worker and self.retranslate_worker.isRunning():
-            self.retranslate_worker.requestInterruption()
-            self.retranslate_worker.wait()
+        try:
+            self._task_engine.tasks_changed.disconnect(self._on_tasks_changed)
+        except (TypeError, RuntimeError):
+            pass
+        # Engine-managed tasks (sync_translation, chunk_retranslation) are NOT cancelled
+        # here — they continue running in background, consistent with batch_translation.
+        # Results are written to DB and visible when the book is reopened.
         if hasattr(self, "task_console"):
             self.task_console.cleanup()
+        if hasattr(self, "sync_task_console"):
+            self.sync_task_console.cleanup()
         if self.term_db:
             self.term_db.close()
 
@@ -1324,6 +1473,7 @@ class TranslationView(QWidget):
         self.skip_context_cb.setText(self.tr("Skip context (use first description only)"))
         self.batch_section_label.setText(self.tr("Async Batch Tasks"))
         self.submit_batch_btn.setText(self.tr("Submit Batch Task"))
+        self.sync_translation_section_label.setText(self.tr("Sync Translation Tasks"))
         self._update_stats()
         self._update_start_button_state()
 

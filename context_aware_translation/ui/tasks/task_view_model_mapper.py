@@ -11,6 +11,8 @@ from .task_view_models import TaskRowVM
 _TASK_TYPE_TITLES: dict[str, str] = {
     "batch_translation": "Batch Translation",
     "glossary_extraction": "Glossary Extraction",
+    "sync_translation": "Sync Translation",
+    "chunk_retranslation": "Chunk Retranslation",
 }
 
 
@@ -62,6 +64,7 @@ def map_task_to_row_vm(record: TaskRecord) -> TaskRowVM:
         total_items=_normalize_progress(record.total_items),
         failed_items=_normalize_progress(record.failed_items),
         last_error=record.last_error,
+        created_at=record.created_at,
         updated_at=record.updated_at,
     )
 

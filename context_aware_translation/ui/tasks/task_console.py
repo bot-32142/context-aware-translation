@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -21,9 +23,27 @@ from .task_view_models import TaskRowVM
 _AUTO_REFRESH_INTERVAL_MS = 3000
 
 
-def _row_text(vm: TaskRowVM) -> str:
+def _format_eta(seconds_left: float) -> str:
+    """Format remaining seconds into a human-readable ETA string."""
+    if seconds_left < 60:
+        return f"ETA ~{int(seconds_left)}s"
+    minutes_left = seconds_left / 60
+    if minutes_left < 60:
+        return f"ETA ~{int(minutes_left)}m"
+    hours_left = minutes_left / 60
+    return f"ETA ~{hours_left:.1f}h"
+
+
+def _row_text(vm: TaskRowVM, start_times: dict[str, float]) -> str:
     """Format a single-line display string for a TaskRowVM."""
     text = f"#{vm.task_id[:8]} | {vm.status} | {vm.phase} | {vm.completed_items}/{vm.total_items}"
+    if vm.status == "running" and vm.task_id in start_times:
+        elapsed = time.monotonic() - start_times[vm.task_id]
+        if elapsed > 0 and vm.completed_items > 0 and vm.total_items > 0:
+            rate = vm.completed_items / elapsed
+            remaining = vm.total_items - vm.completed_items
+            if remaining > 0:
+                text += f" | {_format_eta(remaining / rate)}"
     if vm.last_error:
         text += f" | {vm.last_error}"
     return text
@@ -50,6 +70,7 @@ class TaskConsole(QWidget):
         self._book_id = book_id
         self._task_type = task_type
         self._vms: list[TaskRowVM] = []
+        self._start_times: dict[str, float] = {}
 
         self._init_ui()
         self.retranslate_ui()
@@ -84,6 +105,23 @@ class TaskConsole(QWidget):
         """Re-fetch tasks from the engine and repaint the list."""
         records = self._engine.get_tasks(self._book_id, task_type=self._task_type)
         self._vms = map_tasks_to_row_vms(records)
+
+        # Track when tasks first enter "running" and prune stale entries.
+        now = time.monotonic()
+        current_ids: set[str] = set()
+        for vm in self._vms:
+            current_ids.add(vm.task_id)
+            if vm.status == "running":
+                if vm.task_id not in self._start_times:
+                    self._start_times[vm.task_id] = now
+            else:
+                # Task left running (paused, cancel_requested, cancelling, terminal)
+                self._start_times.pop(vm.task_id, None)
+        # Prune IDs no longer in the current snapshot
+        for stale_id in list(self._start_times):
+            if stale_id not in current_ids:
+                del self._start_times[stale_id]
+
         self._repopulate_list()
         self.console_refreshed.emit()
 
@@ -151,7 +189,7 @@ class TaskConsole(QWidget):
         self._task_list.clear()
         target_row = -1
         for idx, vm in enumerate(self._vms):
-            item = QListWidgetItem(_row_text(vm))
+            item = QListWidgetItem(_row_text(vm, self._start_times))
             item.setData(Qt.ItemDataRole.UserRole, vm.task_id)
             self._task_list.addItem(item)
             if current_id and vm.task_id == current_id:

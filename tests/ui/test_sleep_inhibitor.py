@@ -415,26 +415,6 @@ def test_update_sleep_inhibitor_acquires_when_workspace_has_running_ops():
     mock_inhibitor.release.assert_not_called()
 
 
-def test_update_sleep_inhibitor_acquires_when_translation_batch_worker_running():
-    from context_aware_translation.ui.main_window import MainWindow
-    from context_aware_translation.ui.views.book_workspace import BookWorkspace
-
-    mock_inhibitor = MagicMock()
-    translation_view = SimpleNamespace(batch_task_worker=SimpleNamespace(isRunning=MagicMock(return_value=True)))
-    workspace = MagicMock(spec=BookWorkspace)
-    workspace.get_translation_view.return_value = translation_view
-    workspace.get_running_operations.return_value = []
-    fake_window = SimpleNamespace(
-        _task_engine=_make_fake_task_engine(has_running_work=False),
-        _view_registry={"book_abc": workspace},
-        _sleep_inhibitor=mock_inhibitor,
-    )
-
-    MainWindow._update_sleep_inhibitor(fake_window)
-    mock_inhibitor.acquire.assert_called_once()
-    mock_inhibitor.release.assert_not_called()
-
-
 def test_update_sleep_inhibitor_releases_when_nothing_running():
     from context_aware_translation.ui.main_window import MainWindow
 

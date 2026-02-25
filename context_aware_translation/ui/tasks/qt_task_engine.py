@@ -82,6 +82,32 @@ class TaskEngine(QObject):
             logger.debug("Best-effort start failed for task %s; will retry on next tick", record.task_id)
         return record
 
+    def submit_and_start(self, task_type: str, book_id: str, **params) -> TaskRecord:
+        """Create a new task row and immediately start it (strict mode).
+
+        Unlike ``submit``, this method guarantees the task either starts
+        successfully or is immediately marked failed.  It never leaves the
+        task in ``queued`` state and never silently discards a created row.
+
+        Raises ``ValueError`` if ``_core.submit`` itself rejects the task
+        (e.g. validate_submit fails).
+        """
+        record = self._core.submit(task_type, book_id, **params)
+        try:
+            self._start_action(record.task_id, TaskAction.RUN)
+        except Exception as exc:
+            reason = f"strict-start failed: {type(exc).__name__}: {exc}"
+            logger.warning("submit_and_start: marking task %s failed — %s", record.task_id, reason)
+            try:
+                self._store.update(record.task_id, status="failed", last_error=reason)
+            except Exception:
+                logger.exception("submit_and_start: could not mark task %s failed", record.task_id)
+            self.enqueue_task_changed.emit(book_id)
+            # Re-fetch the record so the caller sees the failed status.
+            updated = self._core.get_task(record.task_id)
+            return updated if updated is not None else record
+        return record
+
     def run_task(self, task_id: str) -> TaskRecord:
         """Run a task: atomically resets to queued if terminal, then starts it."""
         record = self._core.ensure_runnable(task_id)

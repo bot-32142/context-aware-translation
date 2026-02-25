@@ -22,7 +22,9 @@ from context_aware_translation.storage.task_store import TaskStore
 from context_aware_translation.ui.tasks.qt_task_engine import TaskEngine
 from context_aware_translation.workflow.session import WorkflowSession
 from context_aware_translation.workflow.tasks.handlers.batch_translation import BatchTranslationHandler
+from context_aware_translation.workflow.tasks.handlers.chunk_retranslation import ChunkRetranslationHandler
 from context_aware_translation.workflow.tasks.handlers.glossary_extraction import GlossaryExtractionHandler
+from context_aware_translation.workflow.tasks.handlers.sync_translation import SyncTranslationHandler
 from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
 from . import i18n
@@ -81,6 +83,8 @@ class MainWindow(QMainWindow):
         self._task_engine = TaskEngine(store=self._task_store, deps=self._worker_deps, parent=self)
         self._task_engine.register_handler(BatchTranslationHandler())
         self._task_engine.register_handler(GlossaryExtractionHandler())
+        self._task_engine.register_handler(SyncTranslationHandler())
+        self._task_engine.register_handler(ChunkRetranslationHandler())
         self._task_engine.running_work_changed.connect(self._on_engine_running_work_changed)
 
         self._sleep_check_timer = QTimer(self)
@@ -233,14 +237,6 @@ class MainWindow(QMainWindow):
             if not view_name.startswith("book_"):
                 continue
 
-            if isinstance(widget, BookWorkspace):
-                translation_view = widget.get_translation_view()
-                if translation_view is not None:
-                    batch_worker = getattr(translation_view, "batch_task_worker", None)
-                    if batch_worker is not None and batch_worker.isRunning():
-                        self._sleep_inhibitor.acquire()
-                        return
-
             if hasattr(widget, "get_running_operations"):
                 ops = widget.get_running_operations()
                 if isinstance(ops, list) and ops:
@@ -316,7 +312,7 @@ class MainWindow(QMainWindow):
                 view_name_current = f"book_{self._current_book_id}"
                 workspace = self._view_registry.get(view_name_current)
                 if workspace is not None and hasattr(workspace, "request_cancel_running_operations"):
-                    workspace.request_cancel_running_operations()
+                    workspace.request_cancel_running_operations(include_engine_tasks=False)
 
         self.switch_view(view_name)
 

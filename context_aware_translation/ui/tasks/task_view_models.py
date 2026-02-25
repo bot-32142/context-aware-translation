@@ -23,4 +23,5 @@ class TaskRowVM:
     total_items: int
     failed_items: int
     last_error: str | None
+    created_at: float
     updated_at: float

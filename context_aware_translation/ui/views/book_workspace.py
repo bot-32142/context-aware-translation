@@ -222,10 +222,9 @@ class BookWorkspace(QWidget):
         if glossary_running:
             running.append(self.tr("Glossary"))
 
-        # Translation tab (index 3)
-        translation_view = self._view_cache.get(3)
-        if translation_view is not None and self._is_worker_running(getattr(translation_view, "worker", None)):
-            running.append(self.tr("Translation"))
+        # Translation tab (index 3) — engine-managed tasks (sync_translation,
+        # chunk_retranslation, batch_translation) continue in background and are
+        # not included here.  Results are written to DB and visible on reopen.
 
         # Export tab (index 4)
         export_view = self._view_cache.get(4)
@@ -239,9 +238,15 @@ class BookWorkspace(QWidget):
         running = self.get_running_operations()
         return self.tr("Translation") in running
 
-    def request_cancel_running_operations(self) -> None:
-        """Request cancellation for all currently running background workers."""
-        self._task_engine.cancel_running_tasks(self.book_id)
+    def request_cancel_running_operations(self, *, include_engine_tasks: bool = True) -> None:
+        """Request cancellation for currently running workers in this workspace.
+
+        Args:
+            include_engine_tasks: When True, also request cancellation for engine-managed
+                task workers. Leave-book flow passes False so background tasks continue.
+        """
+        if include_engine_tasks:
+            self._task_engine.cancel_running_tasks(self.book_id)
 
         # Import tab (index 0)
         import_view = self._view_cache.get(0)
@@ -260,11 +265,7 @@ class BookWorkspace(QWidget):
             self._request_worker_interruption(getattr(glossary_view, "_review_worker", None))
             self._request_worker_interruption(getattr(glossary_view, "_export_worker", None))
 
-        # Translation tab (index 3)
-        translation_view = self._view_cache.get(3)
-        if translation_view is not None:
-            self._request_worker_interruption(getattr(translation_view, "worker", None))
-            self._request_worker_interruption(getattr(translation_view, "batch_task_worker", None))
+        # Translation tab (index 3) — sync/chunk tasks are cancelled via engine above
 
         # Export tab (index 4)
         export_view = self._view_cache.get(4)

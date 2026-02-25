@@ -49,11 +49,14 @@ def _make_view():
     # Set attributes normally created in __init__ that production code accesses directly.
     view._is_cleaned_up = False
     view._task_engine = MagicMock()
+    view._task_engine.get_task.return_value = None
     view.task_console = MagicMock()
-    view.worker = None
-    view.retranslate_worker = None
+    view._sync_task_id = None
+    view._pending_retranslations = {}
+    view._emitted_sync_translation_done = set()
     view.book_id = "test-book"
     view.book_manager = _make_book_manager()
+    view.term_db = MagicMock()
     return view
 
 
@@ -153,44 +156,50 @@ def test_apply_button_tooltips_sets_hover_explanations():
     assert missing == []
 
 
-def test_start_translation_forwards_skip_context_to_worker():
+def test_start_translation_forwards_skip_context_to_engine():
     view = _make_view()
-    view.worker = None
     view.book_manager = _make_book_manager()
     view.book_id = "book-id"
     view._resolve_trigger_conditions = MagicMock(return_value=([1], False))
+    view._has_document_reservation = MagicMock(return_value=False)
     view.start_btn = QPushButton()
     view.doc_combo = QComboBox()
     view.skip_context_cb = QCheckBox()
     view.skip_context_cb.setChecked(True)
     view.status_label = MagicMock()
-    view.progress_widget = MagicMock()
 
-    worker_instance = MagicMock()
-    worker_instance.progress = MagicMock()
-    worker_instance.finished_success = MagicMock()
-    worker_instance.cancelled = MagicMock()
-    worker_instance.error = MagicMock()
-    worker_instance.finished = MagicMock()
+    preflight_decision = MagicMock()
+    preflight_decision.allowed = True
+    view._task_engine.preflight.return_value = preflight_decision
 
-    with patch(
-        "context_aware_translation.ui.views.translation_view.TranslationWorker", return_value=worker_instance
-    ) as cls:
-        view._start_translation()
+    submitted_record = MagicMock()
+    submitted_record.task_id = "task-1"
+    submitted_record.status = "running"
+    submitted_record.last_error = None
+    view._task_engine.submit.return_value = submitted_record
+
+    view._start_translation()
 
     view._resolve_trigger_conditions.assert_called_once_with(for_batch_submit=False)
-    assert cls.call_count == 1
-    assert cls.call_args.kwargs.get("skip_context") is True
-    worker_instance.start.assert_called_once()
+    view._task_engine.submit.assert_called_once_with(
+        "sync_translation",
+        "book-id",
+        document_ids=[1],
+        force=False,
+        skip_context=True,
+    )
+    assert view._sync_task_id == "task-1"
 
 
-def test_submit_batch_task_returns_when_translation_worker_running():
-    class _RunningWorker:
-        def isRunning(self) -> bool:  # noqa: N802
-            return True
+def test_submit_batch_task_returns_when_sync_translation_running():
+    from context_aware_translation.workflow.tasks.models import STATUS_RUNNING
 
     view = _make_view()
-    view.worker = _RunningWorker()
+    # Simulate a running sync_translation task
+    view._sync_task_id = "task-running"
+    running_record = MagicMock()
+    running_record.status = STATUS_RUNNING
+    view._task_engine.get_task.return_value = running_record
     view._get_preflight_docs_with_pending_ocr = MagicMock(return_value=[])
 
     view._submit_batch_task()
@@ -200,7 +209,6 @@ def test_submit_batch_task_returns_when_translation_worker_running():
 
 def test_submit_batch_task_does_not_require_translated_glossary_terms():
     view = _make_view()
-    view.worker = None
     view.term_db = MagicMock()
     view.term_db.list_terms.return_value = [MagicMock()]
     view._resolve_trigger_conditions = MagicMock(return_value=([1], False))
@@ -220,7 +228,6 @@ def test_submit_batch_task_does_not_require_translated_glossary_terms():
 
 def test_submit_batch_task_returns_when_trigger_conditions_fail():
     view = _make_view()
-    view.worker = None
     view._resolve_trigger_conditions = MagicMock(return_value=None)
     view.book_manager = _make_book_manager()
     view.book_id = "book-id"
@@ -233,7 +240,6 @@ def test_submit_batch_task_returns_when_trigger_conditions_fail():
 
 def test_submit_batch_task_calls_engine_submit_with_correct_args():
     view = _make_view()
-    view.worker = None
     view.book_id = "book-1"
     view._resolve_trigger_conditions = MagicMock(return_value=([2, 3], True))
     view.skip_context_cb = QCheckBox()
@@ -251,7 +257,6 @@ def test_update_retranslate_chunk_button_state_disables_retranslate_when_batch_t
     view.retranslate_chunk_btn = QPushButton()
     view._current_chunk = MagicMock()
     view._task_engine.get_tasks.return_value = [MagicMock(status="running", document_ids_json=None)]
-    view.retranslate_worker = None
 
     view._update_retranslate_chunk_button_state()
 
@@ -267,7 +272,6 @@ def test_update_retranslate_chunk_button_state_enables_retranslate_when_only_ter
         MagicMock(status=STATUS_COMPLETED, document_ids_json=None),
         MagicMock(status=STATUS_CANCELLED, document_ids_json=None),
     ]
-    view.retranslate_worker = None
 
     view._update_retranslate_chunk_button_state()
 
@@ -280,7 +284,6 @@ def test_update_retranslate_chunk_button_state_disables_when_selected_doc_has_ac
     view.retranslate_chunk_btn = QPushButton()
     view._current_chunk = MagicMock(document_id=1)
     view._task_engine.get_tasks.return_value = []
-    view.retranslate_worker = None
 
     with patch(
         "context_aware_translation.ui.views.translation_view.DocumentOperationTracker.has_document_overlap",
@@ -296,25 +299,22 @@ def test_retranslate_current_chunk_blocks_when_batch_tasks_active():
     view = _make_view()
     view._task_engine.get_tasks.return_value = [MagicMock(status="running", document_ids_json=None)]
     view._current_chunk = MagicMock()
-    view.retranslate_worker = None
     view.book_manager = _make_book_manager()
     view.book_id = "book-id"
 
     with (
         patch("context_aware_translation.ui.views.translation_view.QMessageBox.information") as info_mock,
-        patch("context_aware_translation.ui.views.translation_view.RetranslateChunkWorker") as worker_cls,
         patch("context_aware_translation.ui.views.translation_view.QMessageBox.question") as question_mock,
     ):
         view._retranslate_current_chunk()
 
     info_mock.assert_called_once()
-    worker_cls.assert_not_called()
     question_mock.assert_not_called()
+    view._task_engine.submit_and_start.assert_not_called()
 
 
-def test_update_start_button_state_disables_retranslate_when_batch_tasks_active():
+def test_update_start_button_state_disables_retranslate_when_doc_has_active_operation():
     view = _make_view()
-    view.worker = None
     view.book_id = "book-1"
     view.book_manager = _make_book_manager()
     view.book_manager.get_book_config.return_value = {}
@@ -327,15 +327,9 @@ def test_update_start_button_state_disables_retranslate_when_batch_tasks_active(
     view._get_preflight_docs_with_pending_ocr = MagicMock(return_value=[])
     view._is_retranslation = MagicMock(return_value=True)
 
-    with (
-        patch(
-            "context_aware_translation.ui.views.translation_view.DocumentOperationTracker.has_document_overlap",
-            return_value=False,
-        ),
-        patch(
-            "context_aware_translation.ui.views.translation_view.has_any_batch_task_overlap",
-            return_value=True,
-        ),
+    with patch(
+        "context_aware_translation.ui.views.translation_view.DocumentOperationTracker.has_document_overlap",
+        return_value=True,
     ):
         view._update_start_button_state()
 
@@ -367,7 +361,6 @@ def test_resolve_trigger_conditions_blocks_retranslate_when_batch_tasks_active()
 
 def test_update_start_button_state_disables_start_when_ocr_pending():
     view = _make_view()
-    view.worker = None
     view.doc_combo = QComboBox()
     view.doc_combo.addItem("All Documents", None)
     view.doc_combo.addItem("Document 1", 1)
@@ -376,15 +369,9 @@ def test_update_start_button_state_disables_start_when_ocr_pending():
     view._get_preflight_docs_with_pending_ocr = MagicMock(return_value=[1])
     view._is_retranslation = MagicMock(return_value=False)
 
-    with (
-        patch(
-            "context_aware_translation.ui.views.translation_view.DocumentOperationTracker.has_document_overlap",
-            return_value=False,
-        ),
-        patch(
-            "context_aware_translation.ui.views.translation_view.has_any_batch_task_overlap",
-            return_value=False,
-        ),
+    with patch(
+        "context_aware_translation.ui.views.translation_view.DocumentOperationTracker.has_document_overlap",
+        return_value=False,
     ):
         view._update_start_button_state()
 
@@ -480,3 +467,139 @@ def test_populate_review_documents_translates_document_type_in_labels():
     assert view.review_doc_combo.itemData(0) == 4
     assert QCoreApplication.translate("ExportView", "Scanned Book") in text
     assert "scanned_book" not in text
+
+
+# ------------------------------------------------------------------
+# _pending_retranslations cleanup tests
+# ------------------------------------------------------------------
+
+
+def test_handle_chunk_retrans_clears_terminal_task_from_pending():
+    """Terminal chunk tasks are removed from _pending_retranslations."""
+    from context_aware_translation.workflow.tasks.models import STATUS_COMPLETED
+
+    view = _make_view()
+    completed_record = MagicMock()
+    completed_record.task_id = "chunk-task-1"
+    completed_record.status = STATUS_COMPLETED
+    completed_record.payload_json = None
+    completed_record.last_error = None
+    view._task_engine.get_task.return_value = completed_record
+
+    view._pending_retranslations = {"chunk-task-1": (3, 7)}
+    view._on_retranslate_success = MagicMock()
+    view._on_retranslate_error = MagicMock()
+    view._on_retranslate_finished = MagicMock()
+
+    view._handle_chunk_retrans_task_update()
+
+    assert "chunk-task-1" not in view._pending_retranslations
+    view._on_retranslate_finished.assert_called_once()
+
+
+def test_handle_chunk_retrans_removes_deleted_task_from_pending():
+    """Tasks deleted from store are removed from _pending_retranslations."""
+    view = _make_view()
+    view._task_engine.get_task.return_value = None  # task was deleted
+
+    view._pending_retranslations = {"chunk-task-deleted": (5, 9)}
+    view._on_retranslate_finished = MagicMock()
+
+    view._handle_chunk_retrans_task_update()
+
+    assert "chunk-task-deleted" not in view._pending_retranslations
+    view._on_retranslate_finished.assert_called_once()
+
+
+def test_handle_chunk_retrans_keeps_non_terminal_task_in_pending():
+    """Non-terminal chunk tasks remain in _pending_retranslations."""
+    from context_aware_translation.workflow.tasks.models import STATUS_RUNNING
+
+    view = _make_view()
+    running_record = MagicMock()
+    running_record.task_id = "chunk-running"
+    running_record.status = STATUS_RUNNING
+    view._task_engine.get_task.return_value = running_record
+
+    view._pending_retranslations = {"chunk-running": (2, 4)}
+    view._on_retranslate_finished = MagicMock()
+
+    view._handle_chunk_retrans_task_update()
+
+    assert "chunk-running" in view._pending_retranslations
+    view._on_retranslate_finished.assert_not_called()
+
+
+# ------------------------------------------------------------------
+# translation_completed dedupe test
+# ------------------------------------------------------------------
+
+
+def test_translation_completed_emitted_only_once_per_task_terminal_transition():
+    """translation_completed signal emitted once per task_id terminal transition (dedupe via set)."""
+    from context_aware_translation.workflow.tasks.models import STATUS_COMPLETED
+
+    view = _make_view()
+    completed_record = MagicMock()
+    completed_record.task_id = "sync-task-dedupe"
+    completed_record.status = STATUS_COMPLETED
+    completed_record.last_error = None
+    view._task_engine.get_task.return_value = completed_record
+    view._task_engine.get_tasks.return_value = [completed_record]
+
+    view._sync_task_id = "sync-task-dedupe"
+    view._on_sync_task_finished = MagicMock()
+    success_calls: list[object] = []
+    view._on_translation_success = MagicMock(side_effect=lambda r: success_calls.append(r))
+
+    # First call — should call _on_translation_success and add to emitted set
+    view._handle_sync_task_update()
+    # _sync_task_id is now None — second call is a no-op
+    view._handle_sync_task_update()
+
+    # _on_translation_success called exactly once
+    assert len(success_calls) == 1
+    # ID is tracked in emitted set
+    assert "sync-task-dedupe" in view._emitted_sync_translation_done
+
+
+# ------------------------------------------------------------------
+# _retranslate_current_chunk wiring test
+# ------------------------------------------------------------------
+
+
+def test_retranslate_current_chunk_uses_strict_submit_and_tracks_task():
+    """_retranslate_current_chunk uses submit_and_start and tracks task_id in _pending_retranslations."""
+    view = _make_view()
+    view.book_id = "book-id"
+    view._task_engine.get_tasks.return_value = []  # no batch tasks blocking
+
+    chunk = MagicMock()
+    chunk.chunk_id = 5
+    chunk.document_id = 3
+    view._current_chunk = chunk
+    view.skip_context_cb = QCheckBox()
+    view.skip_context_cb.setChecked(False)
+    view.retranslate_chunk_btn = QPushButton()
+
+    submitted_record = MagicMock()
+    submitted_record.task_id = "chunk-task-new"
+    submitted_record.status = "running"
+    submitted_record.last_error = None
+    view._task_engine.submit_and_start.return_value = submitted_record
+
+    with (
+        patch("context_aware_translation.ui.views.translation_view.QMessageBox.question",
+              return_value=QMessageBox.StandardButton.Yes),
+    ):
+        view._retranslate_current_chunk()
+
+    view._task_engine.submit_and_start.assert_called_once_with(
+        "chunk_retranslation",
+        "book-id",
+        chunk_id=5,
+        document_id=3,
+        skip_context=False,
+    )
+    assert "chunk-task-new" in view._pending_retranslations
+    assert view._pending_retranslations["chunk-task-new"] == (5, 3)
