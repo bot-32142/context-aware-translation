@@ -16,6 +16,7 @@ _ALLOWED_UPDATE_COLUMNS = frozenset(
         "phase",
         "document_ids_json",
         "payload_json",
+        "config_snapshot_json",
         "cancel_requested",
         "total_items",
         "completed_items",
@@ -34,6 +35,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     phase TEXT,
     document_ids_json TEXT,
     payload_json TEXT,
+    config_snapshot_json TEXT,
     cancel_requested INTEGER NOT NULL DEFAULT 0,
     total_items INTEGER NOT NULL DEFAULT 0,
     completed_items INTEGER NOT NULL DEFAULT 0,
@@ -62,6 +64,7 @@ class TaskRecord:
     phase: str | None
     document_ids_json: str | None
     payload_json: str | None
+    config_snapshot_json: str | None
     cancel_requested: bool
     total_items: int
     completed_items: int
@@ -94,6 +97,10 @@ class TaskStore:
             cur.execute(_CREATE_TASKS_TABLE)
             cur.execute(_CREATE_IDX_BOOK_TYPE)
             cur.execute(_CREATE_IDX_STATUS)
+            # Migration: add config_snapshot_json if missing (existing databases)
+            existing_cols = {row[1] for row in cur.execute("PRAGMA table_info(tasks)").fetchall()}
+            if "config_snapshot_json" not in existing_cols:
+                cur.execute("ALTER TABLE tasks ADD COLUMN config_snapshot_json TEXT")
             self.conn.commit()
 
     def close(self) -> None:
@@ -107,6 +114,7 @@ class TaskStore:
         task_type: str,
         document_ids_json: str | None = None,
         payload_json: str | None = None,
+        config_snapshot_json: str | None = None,
         status: str = "queued",
         phase: str | None = None,
     ) -> TaskRecord:
@@ -123,6 +131,7 @@ class TaskStore:
                     phase,
                     document_ids_json,
                     payload_json,
+                    config_snapshot_json,
                     cancel_requested,
                     total_items,
                     completed_items,
@@ -131,7 +140,7 @@ class TaskStore:
                     created_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task_id,
@@ -141,6 +150,7 @@ class TaskStore:
                     phase,
                     document_ids_json,
                     payload_json,
+                    config_snapshot_json,
                     0,
                     0,
                     0,
@@ -251,6 +261,7 @@ class TaskStore:
             phase=str(row["phase"]) if row["phase"] is not None else None,
             document_ids_json=str(row["document_ids_json"]) if row["document_ids_json"] is not None else None,
             payload_json=str(row["payload_json"]) if row["payload_json"] is not None else None,
+            config_snapshot_json=str(row["config_snapshot_json"]) if row["config_snapshot_json"] is not None else None,
             cancel_requested=bool(row["cancel_requested"]),
             total_items=int(row["total_items"]),
             completed_items=int(row["completed_items"]),

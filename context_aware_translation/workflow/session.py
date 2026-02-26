@@ -1,7 +1,8 @@
+import json
 from types import TracebackType
 from typing import TYPE_CHECKING
 
-from context_aware_translation.config import Config, WorkflowRuntimeConfig
+from context_aware_translation.config import CONFIG_SNAPSHOT_VERSION, Config, WorkflowRuntimeConfig
 from context_aware_translation.core.context_tree_registry import ContextTreeRegistry
 from context_aware_translation.workflow.bootstrap import _build_context_tree, _build_llm_client, build_workflow_runtime
 from context_aware_translation.workflow.runtime import WorkflowRuntime
@@ -32,6 +33,21 @@ class WorkflowSession:
             raise ValueError(f"Book not found: {book_id}")
 
         config = Config.from_book(book, book_manager.library_root, book_manager.registry)
+        session = cls(config)
+        session._book_id = book_id
+        return session
+
+    @classmethod
+    def from_snapshot(cls, config_snapshot_json: str, book_id: str) -> "WorkflowSession":
+        payload = json.loads(config_snapshot_json)
+        if isinstance(payload, dict) and "snapshot_version" in payload and "config" in payload:
+            version = int(payload["snapshot_version"])
+            if version != CONFIG_SNAPSHOT_VERSION:
+                raise ValueError(f"Unsupported config snapshot version: {version}")
+            config_dict = payload["config"]
+        else:
+            config_dict = payload
+        config = Config.from_dict(config_dict)
         session = cls(config)
         session._book_id = book_id
         return session

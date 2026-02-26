@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING, Any
 
 from context_aware_translation.workflow.tasks.claims import (
@@ -31,6 +32,8 @@ if TYPE_CHECKING:
     from context_aware_translation.storage.task_store import TaskRecord
     from context_aware_translation.workflow.tasks.models import ActionSnapshot
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
+
+logger = logging.getLogger(__name__)
 
 _RERUNNABLE_TERMINAL_STATUSES = frozenset({STATUS_CANCELLED, STATUS_FAILED, STATUS_COMPLETED_WITH_ERRORS})
 _NON_DELETABLE_STATUSES = frozenset({STATUS_RUNNING, STATUS_CANCEL_REQUESTED, STATUS_CANCELLING})
@@ -135,9 +138,13 @@ class BatchTranslationHandler:
         return Decision(allowed=True)
 
     def pre_delete(self, record: TaskRecord, payload: Any, deps: WorkerDeps) -> list[str]:
+        from context_aware_translation.workflow.session import WorkflowSession as _WorkflowSession
+
         warnings: list[str] = []
-        try:
-            with deps.create_workflow_session(record.book_id) as session:
+        snapshot_exc: Exception | None = None
+
+        def _cleanup_with_session_ctx(session_ctx) -> None:  # noqa: ANN001
+            with session_ctx as session:
                 from context_aware_translation.workflow.tasks.execution.batch_translation_executor import (
                     BatchTranslationExecutor,
                 )
@@ -149,8 +156,32 @@ class BatchTranslationHandler:
                         warnings.extend(str(w) for w in cleanup_warnings)
                 finally:
                     executor.close()
-        except Exception as exc:
-            warnings.append(f"pre_delete cleanup error for task {record.task_id}: {type(exc).__name__}: {exc}")
+
+        if record.config_snapshot_json:
+            try:
+                snapshot_ctx = _WorkflowSession.from_snapshot(record.config_snapshot_json, record.book_id)
+                _cleanup_with_session_ctx(snapshot_ctx)
+                return warnings
+            except Exception as exc:  # noqa: BLE001
+                snapshot_exc = exc
+                logger.warning(
+                    "pre_delete: snapshot cleanup failed for task %s; retrying with live config: %s",
+                    record.task_id,
+                    exc,
+                    exc_info=True,
+                )
+
+        try:
+            _cleanup_with_session_ctx(deps.create_workflow_session(record.book_id))
+        except Exception as live_exc:
+            if snapshot_exc is not None:
+                warnings.append(
+                    f"pre_delete cleanup error for task {record.task_id}: "
+                    f"snapshot path failed ({type(snapshot_exc).__name__}: {snapshot_exc}); "
+                    f"live-config fallback failed ({type(live_exc).__name__}: {live_exc})"
+                )
+            else:
+                warnings.append(f"pre_delete cleanup error for task {record.task_id}: {type(live_exc).__name__}: {live_exc}")
         return warnings
 
     def build_worker(self, action: TaskAction, record: TaskRecord, payload: Any, deps: WorkerDeps):
@@ -173,6 +204,7 @@ class BatchTranslationHandler:
                 document_ids=doc_ids,
                 task_store=deps.task_store,
                 notify_task_changed=deps.notify_task_changed,
+                config_snapshot_json=record.config_snapshot_json,
             )
         if action == TaskAction.CANCEL:
             return BatchTranslationTaskWorker(
@@ -182,5 +214,6 @@ class BatchTranslationHandler:
                 task_id=record.task_id,
                 task_store=deps.task_store,
                 notify_task_changed=deps.notify_task_changed,
+                config_snapshot_json=record.config_snapshot_json,
             )
         raise ValueError(f"Unsupported action for BatchTranslationHandler: {action}")

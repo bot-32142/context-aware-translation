@@ -23,6 +23,7 @@ def _make_record(**overrides) -> TaskRecord:
         phase="translating",
         document_ids_json=None,
         payload_json=None,
+        config_snapshot_json=None,
         cancel_requested=False,
         total_items=10,
         completed_items=3,

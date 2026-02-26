@@ -40,6 +40,7 @@ def _make_record(
         phase=None,
         document_ids_json=document_ids_json,
         payload_json=payload_json,
+        config_snapshot_json=None,
         cancel_requested=False,
         total_items=0,
         completed_items=0,

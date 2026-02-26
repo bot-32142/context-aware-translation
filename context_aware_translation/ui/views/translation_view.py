@@ -775,7 +775,18 @@ class TranslationView(QWidget):
         self.status_label.hide()
 
         # Submit to task engine; engine best-effort starts SyncTranslationTaskWorker
-        record = self._task_engine.submit("sync_translation", self.book_id, **params)
+        try:
+            record = self._task_engine.submit("sync_translation", self.book_id, **params)
+        except Exception as exc:  # noqa: BLE001
+            self.doc_combo.setEnabled(True)
+            self.skip_context_cb.setEnabled(True)
+            self._update_start_button_state()
+            QMessageBox.critical(
+                self,
+                self.tr("Submit Failed"),
+                qarg(self.tr("Failed to submit translation task:\n%1"), str(exc)),
+            )
+            return
         self._sync_task_id = record.task_id
         tracked = getattr(self, "_tracked_sync_task_ids", None)
         if tracked is None:
@@ -978,13 +989,20 @@ class TranslationView(QWidget):
             return
         document_ids, force = resolved
 
-        self._task_engine.submit(
-            "batch_translation",
-            self.book_id,
-            document_ids=document_ids,
-            force=force,
-            skip_context=self.skip_context_cb.isChecked(),
-        )
+        try:
+            self._task_engine.submit(
+                "batch_translation",
+                self.book_id,
+                document_ids=document_ids,
+                force=force,
+                skip_context=self.skip_context_cb.isChecked(),
+            )
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(
+                self,
+                self.tr("Submit Failed"),
+                qarg(self.tr("Failed to submit batch task:\n%1"), str(exc)),
+            )
 
     def _on_task_console_refreshed(self) -> None:
         self._update_retranslate_chunk_button_state()

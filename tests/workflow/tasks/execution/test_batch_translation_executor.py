@@ -349,6 +349,7 @@ async def test_ensure_payload_prepared_uses_batch_model_with_fixed_temperature()
         phase=PHASE_PREPARE,
         payload_json="{}",
         document_ids_json=None,
+        config_snapshot_json=None,
         cancel_requested=False,
         total_items=0,
         completed_items=0,

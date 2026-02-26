@@ -618,6 +618,29 @@ class BookManager:
             # Custom config mode
             return self.registry.get_book_config(book_id)
 
+    def get_config_snapshot_json(self, book_id: str) -> str:
+        """
+        Capture and serialize the current config for book_id as a JSON envelope string.
+
+        Raises:
+            ValueError: If the book is not found or has no valid config.
+        """
+        import json
+
+        from context_aware_translation.config import Config
+
+        book = self.registry.get_book(book_id)
+        if book is None:
+            raise ValueError(f"Book not found: {book_id}")
+        config = Config.from_book(book, self.library_root, self.registry)
+        from context_aware_translation.config import CONFIG_SNAPSHOT_VERSION
+
+        envelope = {
+            "snapshot_version": CONFIG_SNAPSHOT_VERSION,
+            "config": config.to_dict(),
+        }
+        return json.dumps(envelope, ensure_ascii=False)
+
     def get_book_path(self, book_id: str) -> Path:
         """
         Get path to book folder.

@@ -38,9 +38,15 @@ def tmp_store(tmp_path):
 @pytest.fixture()
 def mock_deps():
     """Create a mock WorkerDeps."""
+    import json
+
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
     book_manager = MagicMock()
+    # Provide a valid snapshot JSON so submit() / ensure_runnable() / rerun() succeed
+    book_manager.get_config_snapshot_json.return_value = json.dumps(
+        {"snapshot_version": 1, "config": {"translation_target_language": "en"}}
+    )
     task_store = MagicMock()
     create_workflow_session = MagicMock()
     notify_task_changed = MagicMock()

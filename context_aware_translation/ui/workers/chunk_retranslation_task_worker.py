@@ -31,6 +31,7 @@ class ChunkRetranslationTaskWorker(BaseWorker):
         skip_context: bool = False,
         task_store: TaskStore | None = None,
         notify_task_changed: Callable[[str], None] | None = None,
+        config_snapshot_json: str | None = None,
     ) -> None:
         super().__init__()
         self._book_manager = book_manager
@@ -42,6 +43,7 @@ class ChunkRetranslationTaskWorker(BaseWorker):
         self._skip_context = skip_context
         self._task_store = task_store
         self._notify_task_changed = notify_task_changed
+        self._config_snapshot_json = config_snapshot_json
 
     def _execute(self) -> None:
         if self._action == "run":
@@ -57,7 +59,10 @@ class ChunkRetranslationTaskWorker(BaseWorker):
             self._task_store.update(self._task_id, status="running")
         self._notify()
         try:
-            session_ctx = WorkflowSession.from_book(self._book_manager, self._book_id)
+            if self._config_snapshot_json:
+                session_ctx = WorkflowSession.from_snapshot(self._config_snapshot_json, self._book_id)
+            else:
+                session_ctx = WorkflowSession.from_book(self._book_manager, self._book_id)
             with session_ctx as session:
                 new_translation = asyncio.run(
                     session.retranslate_chunk(

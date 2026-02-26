@@ -18,6 +18,7 @@ T = TypeVar("T", bound="LLMConfig")
 SQLITE_FILENAME = "terms.db"
 DEFAULT_OUTPUT_DIR = Path(".")
 DEFAULT_WORKING_SUBDIR = "data"
+CONFIG_SNAPSHOT_VERSION = 1
 
 
 @dataclass

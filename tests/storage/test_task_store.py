@@ -195,3 +195,87 @@ def test_multiple_creates_generate_unique_task_ids(tmp_path):
 
     task_ids = [r.task_id for r in records]
     assert len(set(task_ids)) == 10
+
+
+# ---------------------------------------------------------------------------
+# config_snapshot_json round-trip
+# ---------------------------------------------------------------------------
+
+def test_config_snapshot_json_round_trips_through_create_and_get(tmp_path):
+    """config_snapshot_json written via create() must be returned verbatim by get()."""
+    import json
+    snapshot = json.dumps({"snapshot_version": 1, "config": {"key": "value"}})
+    db_path = tmp_path / "tasks.db"
+    store = TaskStore(db_path)
+    try:
+        created = store.create(
+            book_id="book-snap",
+            task_type="translation",
+            config_snapshot_json=snapshot,
+        )
+        fetched = store.get(created.task_id)
+    finally:
+        store.close()
+
+    assert created.config_snapshot_json == snapshot
+    assert fetched is not None
+    assert fetched.config_snapshot_json == snapshot
+
+
+def test_config_snapshot_json_defaults_to_none(tmp_path):
+    """config_snapshot_json is None when not supplied."""
+    db_path = tmp_path / "tasks.db"
+    store = TaskStore(db_path)
+    try:
+        created = store.create(book_id="book-no-snap", task_type="translation")
+        fetched = store.get(created.task_id)
+    finally:
+        store.close()
+
+    assert created.config_snapshot_json is None
+    assert fetched is not None
+    assert fetched.config_snapshot_json is None
+
+
+def test_config_snapshot_json_migration_adds_column(tmp_path):
+    """Opening an older DB without config_snapshot_json column should migrate it via ALTER TABLE."""
+    import sqlite3
+    db_path = tmp_path / "old_tasks.db"
+
+    # Create a DB without config_snapshot_json (simulating an older schema)
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE tasks (
+            task_id TEXT PRIMARY KEY,
+            book_id TEXT NOT NULL,
+            task_type TEXT NOT NULL,
+            status TEXT NOT NULL,
+            phase TEXT,
+            document_ids_json TEXT,
+            payload_json TEXT,
+            cancel_requested INTEGER NOT NULL DEFAULT 0,
+            total_items INTEGER NOT NULL DEFAULT 0,
+            completed_items INTEGER NOT NULL DEFAULT 0,
+            failed_items INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+    # Opening TaskStore should migrate the column without error
+    store = TaskStore(db_path)
+    try:
+        record = store.create(book_id="book-migrated", task_type="translation")
+    finally:
+        store.close()
+
+    assert record.config_snapshot_json is None
+
+    # Verify the column now exists
+    conn2 = sqlite3.connect(db_path)
+    cols = {row[1] for row in conn2.execute("PRAGMA table_info(tasks)").fetchall()}
+    conn2.close()
+    assert "config_snapshot_json" in cols

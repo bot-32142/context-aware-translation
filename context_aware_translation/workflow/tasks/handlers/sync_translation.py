@@ -155,6 +155,7 @@ class SyncTranslationHandler:
                 skip_context=skip_context,
                 task_store=deps.task_store,
                 notify_task_changed=deps.notify_task_changed,
+                config_snapshot_json=record.config_snapshot_json,
             )
 
         if action == TaskAction.CANCEL:

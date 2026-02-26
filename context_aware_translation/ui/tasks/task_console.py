@@ -245,13 +245,31 @@ class TaskConsole(QWidget):
 
     def _on_run_clicked(self) -> None:
         task_id = self.selected_task_id()
-        if task_id:
+        if not task_id:
+            return
+        try:
             self._engine.run_task(task_id)
+        except ValueError as exc:
+            self._engine.error_occurred.emit(str(exc))
+            QMessageBox.warning(
+                self,
+                self.tr("Cannot Run Task"),
+                self.tr("The task could not be started:\n\n{0}").format(str(exc)),
+            )
 
     def _on_cancel_clicked(self) -> None:
         task_id = self.selected_task_id()
-        if task_id:
+        if not task_id:
+            return
+        try:
             self._engine.cancel(task_id)
+        except ValueError as exc:
+            self._engine.error_occurred.emit(str(exc))
+            QMessageBox.warning(
+                self,
+                self.tr("Cannot Cancel Task"),
+                self.tr("The task could not be cancelled:\n\n{0}").format(str(exc)),
+            )
 
     def _on_delete_clicked(self) -> None:
         task_id = self.selected_task_id()
@@ -264,4 +282,12 @@ class TaskConsole(QWidget):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self._engine.delete(task_id)
+            try:
+                self._engine.delete(task_id)
+            except ValueError as exc:
+                self._engine.error_occurred.emit(str(exc))
+                QMessageBox.warning(
+                    self,
+                    self.tr("Cannot Delete Task"),
+                    self.tr("The task could not be deleted:\n\n{0}").format(str(exc)),
+                )

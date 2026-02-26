@@ -15,6 +15,9 @@ if TYPE_CHECKING:
     from context_aware_translation.storage.task_store import TaskRecord, TaskStore
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
+# TTL in seconds for the config snapshot viability probe cache (per book)
+_PROBE_CACHE_TTL = 2.0
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,6 +34,8 @@ class EngineCore:
         self._book_locks: dict[str, threading.RLock] = {}
         self._book_locks_guard = threading.Lock()
         self._arbiter = ClaimArbiter()
+        # Cache: book_id -> (expires_monotonic, success: bool)
+        self._probe_cache: dict[str, tuple[float, bool]] = {}
 
     # ------------------------------------------------------------------
     # Handler registration
@@ -58,7 +63,39 @@ class EngineCore:
             return lock
 
     # ------------------------------------------------------------------
-    # Snapshot helpers
+    # Config snapshot helpers
+    # ------------------------------------------------------------------
+
+    def _capture_config_snapshot(self, book_id: str) -> str | None:
+        """Capture and serialize current config for book_id. Returns None on failure."""
+        try:
+            return self._deps.book_manager.get_config_snapshot_json(book_id)
+        except Exception:
+            logger.warning("Failed to capture config snapshot for %s", book_id, exc_info=True)
+            return None
+
+    def _probe_config_snapshot(self, book_id: str) -> bool:
+        """Check if config snapshot can be captured, with short-TTL cache.
+
+        Note: ``_probe_cache`` is accessed without a lock.  This is intentional —
+        a stale or torn read can only cause an extra (cheap) snapshot attempt,
+        and the TTL is short enough that any inconsistency self-heals within
+        seconds.  Adding a lock here would serialize all preflight calls across
+        books for negligible correctness gain.
+        """
+        now = time.monotonic()
+        cached = self._probe_cache.get(book_id)
+        if cached is not None:
+            expires, success = cached
+            if now < expires:
+                return success
+        result = self._capture_config_snapshot(book_id)
+        success = result is not None
+        self._probe_cache[book_id] = (now + _PROBE_CACHE_TTL, success)
+        return success
+
+    # ------------------------------------------------------------------
+    # Action snapshot helpers
     # ------------------------------------------------------------------
 
     def _build_snapshot(self) -> ActionSnapshot:
@@ -136,6 +173,7 @@ class EngineCore:
             phase=None,
             document_ids_json=document_ids_json,
             payload_json=payload_json,
+            config_snapshot_json=None,
             cancel_requested=False,
             total_items=0,
             completed_items=0,
@@ -159,6 +197,13 @@ class EngineCore:
             submit_decision = handler.validate_submit(book_id, params, self._deps)
             if not submit_decision.allowed:
                 return submit_decision
+            # Config snapshot viability probe (matches strict submit behavior)
+            if not self._probe_config_snapshot(book_id):
+                return Decision(
+                    allowed=False,
+                    code="config_snapshot_unavailable",
+                    reason="Cannot load config for this book. Check that a profile or custom config is assigned.",
+                )
             document_ids_json, payload_json = self._encode_creation_params(params)
             draft = self._build_draft_record(
                 book_id=book_id,
@@ -280,6 +325,12 @@ class EngineCore:
         submit_decision = handler.validate_submit(book_id, params, self._deps)
         if not submit_decision.allowed:
             raise ValueError(f"Submit rejected: {submit_decision.reason}")
+        config_snapshot_json = self._capture_config_snapshot(book_id)
+        if config_snapshot_json is None:
+            raise ValueError(
+                f"Cannot submit task: failed to capture config snapshot for book {book_id!r}. "
+                "Ensure the book has a valid profile or custom config assigned."
+            )
         document_ids_json, payload_json = self._encode_creation_params(params)
         with self._book_lock(book_id):
             record = self._store.create(
@@ -288,6 +339,7 @@ class EngineCore:
                 status="queued",
                 document_ids_json=document_ids_json,
                 payload_json=payload_json,
+                config_snapshot_json=config_snapshot_json,
             )
         return record
 
@@ -307,17 +359,49 @@ class EngineCore:
                 decision = handler.can(TaskAction.RUN, record, payload, snapshot)
                 if not decision.allowed:
                     raise ValueError(f"Cannot run task {task_id}: {decision.reason}")
-                record = self._store.update(task_id, status="queued", cancel_requested=False)
+                config_snapshot_json = self._capture_config_snapshot(record.book_id)
+                if config_snapshot_json is None:
+                    raise ValueError(
+                        f"Cannot rerun task {task_id}: failed to capture config snapshot for book {record.book_id!r}. "
+                        "Ensure the book has a valid profile or custom config assigned."
+                    )
+                record = self._store.update(
+                    task_id,
+                    status="queued",
+                    cancel_requested=False,
+                    config_snapshot_json=config_snapshot_json,
+                )
         return record
 
     def rerun(self, task_id: str) -> TaskRecord:
-        """Reset a terminal task to queued."""
+        """Reset a terminal task to queued, re-capturing config snapshot."""
         record = self._store.get(task_id)
         if record is None:
             raise KeyError(f"Task not found: {task_id}")
-        if record.status not in TERMINAL_TASK_STATUSES:
-            raise ValueError(f"Cannot rerun task {task_id} with non-terminal status: {record.status}")
-        return self._store.update(task_id, status="queued", cancel_requested=False)
+        with self._book_lock(record.book_id):
+            record = self._store.get(task_id)
+            if record is None:
+                raise KeyError(f"Task not found after lock: {task_id}")
+            if record.status not in TERMINAL_TASK_STATUSES:
+                raise ValueError(f"Cannot rerun task {task_id} with non-terminal status: {record.status}")
+            handler = self._handler_or_raise(record.task_type)
+            payload = handler.decode_payload(record)
+            snapshot = self._build_snapshot_locked(record.book_id)
+            decision = handler.can(TaskAction.RUN, record, payload, snapshot)
+            if not decision.allowed:
+                raise ValueError(f"Cannot rerun task {task_id}: {decision.reason}")
+            config_snapshot_json = self._capture_config_snapshot(record.book_id)
+            if config_snapshot_json is None:
+                raise ValueError(
+                    f"Cannot rerun task {task_id}: failed to capture config snapshot for book {record.book_id!r}. "
+                    "Ensure the book has a valid profile or custom config assigned."
+                )
+            return self._store.update(
+                task_id,
+                status="queued",
+                cancel_requested=False,
+                config_snapshot_json=config_snapshot_json,
+            )
 
     def cancel(self, task_id: str) -> object | None:
         """Request cancellation only if handler policy allows it.

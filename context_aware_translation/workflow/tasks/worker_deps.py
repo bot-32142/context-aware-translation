@@ -5,9 +5,13 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+# Imported at runtime (not under TYPE_CHECKING) because frozen-dataclass
+# field type annotations are evaluated eagerly by dataclasses and must
+# resolve to real classes at import time.
+from context_aware_translation.storage.book_manager import BookManager
+from context_aware_translation.storage.task_store import TaskStore
+
 if TYPE_CHECKING:
-    from context_aware_translation.storage.book_manager import BookManager
-    from context_aware_translation.storage.task_store import TaskStore
     from context_aware_translation.workflow.service import WorkflowService
 
 

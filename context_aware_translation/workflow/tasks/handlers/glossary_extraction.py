@@ -221,6 +221,7 @@ class GlossaryExtractionHandler:
                 document_ids=doc_ids,
                 task_store=deps.task_store,
                 notify_task_changed=deps.notify_task_changed,
+                config_snapshot_json=record.config_snapshot_json,
             )
 
         if action == TaskAction.CANCEL:

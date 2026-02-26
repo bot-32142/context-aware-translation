@@ -32,6 +32,7 @@ def _make_record(
     payload_json: str | None = None,
     task_id: str = "task-sync",
     book_id: str = "book-1",
+    config_snapshot_json: str | None = None,
 ) -> TaskRecord:
     now = time.time()
     return TaskRecord(
@@ -42,6 +43,7 @@ def _make_record(
         phase=None,
         document_ids_json=document_ids_json,
         payload_json=payload_json,
+        config_snapshot_json=config_snapshot_json,
         cancel_requested=False,
         total_items=0,
         completed_items=0,
@@ -330,3 +332,28 @@ def test_pre_delete_returns_empty_list():
 
     record = _make_record()
     assert handler.pre_delete(record, {}, MagicMock()) == []
+
+
+# ---------------------------------------------------------------------------
+# config_snapshot_json tests
+# ---------------------------------------------------------------------------
+
+def test_build_worker_run_passes_config_snapshot_to_worker():
+    """build_worker(RUN) must forward config_snapshot_json from record to the worker."""
+    from unittest.mock import MagicMock
+
+    import json
+
+    snapshot = json.dumps({"snapshot_version": 1, "config": {"key": "val"}})
+    deps = MagicMock()
+    record = _make_record(
+        status=STATUS_QUEUED,
+        payload_json=json.dumps({"force": False, "skip_context": False}),
+        config_snapshot_json=snapshot,
+    )
+    payload = handler.decode_payload(record)
+    worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
+
+    from context_aware_translation.ui.workers.sync_translation_task_worker import SyncTranslationTaskWorker
+    assert isinstance(worker, SyncTranslationTaskWorker)
+    assert worker._config_snapshot_json == snapshot

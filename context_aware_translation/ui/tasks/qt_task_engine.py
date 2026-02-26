@@ -109,8 +109,12 @@ class TaskEngine(QObject):
         return record
 
     def run_task(self, task_id: str) -> TaskRecord:
-        """Run a task: atomically resets to queued if terminal, then starts it."""
-        record = self._core.ensure_runnable(task_id)
+        """Run a task: atomically resets to queued if terminal, then starts it.
+
+        Raises ``ValueError`` if the task cannot be requeued (e.g. config snapshot
+        capture fails or the handler denies the RUN action).
+        """
+        record = self._core.ensure_runnable(task_id)  # may raise ValueError
         try:
             self._start_action(task_id, TaskAction.RUN)
         except Exception:
@@ -118,8 +122,12 @@ class TaskEngine(QObject):
         return record
 
     def rerun(self, task_id: str) -> TaskRecord:
-        """Reset a terminal task to queued then start it."""
-        record = self._core.rerun(task_id)
+        """Reset a terminal task to queued then start it.
+
+        Raises ``ValueError`` if the task cannot be rerun (e.g. config snapshot
+        capture fails or the handler denies the RUN action).
+        """
+        record = self._core.rerun(task_id)  # may raise ValueError
         try:
             self._start_action(task_id, TaskAction.RUN)
         except Exception:

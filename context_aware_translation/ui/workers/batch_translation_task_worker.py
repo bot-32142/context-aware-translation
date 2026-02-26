@@ -36,6 +36,7 @@ class BatchTranslationTaskWorker(BaseWorker):
         skip_context: bool = False,
         task_store: TaskStore | None = None,
         notify_task_changed: Callable[[str], None] | None = None,
+        config_snapshot_json: str | None = None,
     ) -> None:
         super().__init__()
         self.book_manager = book_manager
@@ -47,6 +48,7 @@ class BatchTranslationTaskWorker(BaseWorker):
         self.skip_context = skip_context
         self.task_store = task_store
         self.notify_task_changed = notify_task_changed
+        self.config_snapshot_json = config_snapshot_json
 
     @classmethod
     def is_run_active_for_book(cls, book_id: str) -> bool:
@@ -112,9 +114,52 @@ class BatchTranslationTaskWorker(BaseWorker):
             return record
         return {"value": record}
 
+    def _should_fallback_to_live_config_on_snapshot_error(self) -> bool:
+        """Allow live-config fallback only for cancellation flows."""
+        if self.action == "cancel":
+            return True
+        if self.action != "run" or self.task_store is None or not self.task_id:
+            return False
+        try:
+            task = self.task_store.get(self.task_id)
+        except Exception:
+            logger.warning("Could not load task %s to evaluate snapshot fallback policy", self.task_id, exc_info=True)
+            return False
+        if task is None:
+            return False
+        return getattr(task, "cancel_requested", False) is True
+
     def _execute(self) -> None:
         self._raise_if_cancelled()
-        session_manager = WorkflowSession.from_book(self.book_manager, self.book_id)
+        if self.config_snapshot_json:
+            try:
+                session_manager = WorkflowSession.from_snapshot(self.config_snapshot_json, self.book_id)
+            except Exception as snap_exc:
+                if self._should_fallback_to_live_config_on_snapshot_error():
+                    logger.warning(
+                        "Config snapshot restore failed for task %s (%s action); "
+                        "falling back to live config: %s",
+                        self.task_id,
+                        self.action,
+                        snap_exc,
+                    )
+                    session_manager = WorkflowSession.from_book(self.book_manager, self.book_id)
+                else:
+                    if self.task_store is not None and self.task_id:
+                        try:
+                            self.task_store.update(
+                                self.task_id,
+                                status="failed",
+                                last_error=f"Config snapshot restore failed: {snap_exc}",
+                            )
+                        except Exception:
+                            logger.exception(
+                                "Failed to mark task %s as failed after snapshot restore error",
+                                self.task_id,
+                            )
+                    raise
+        else:
+            session_manager = WorkflowSession.from_book(self.book_manager, self.book_id)
         with session_manager as session:
             executor = BatchTranslationExecutor.from_workflow(
                 session,
