@@ -774,9 +774,9 @@ class TranslationView(QWidget):
         self.skip_context_cb.setEnabled(False)
         self.status_label.hide()
 
-        # Submit to task engine; engine best-effort starts SyncTranslationTaskWorker
+        # Submit to task engine in strict mode; task either starts or is marked failed.
         try:
-            record = self._task_engine.submit("sync_translation", self.book_id, **params)
+            record = self._task_engine.submit_and_start("sync_translation", self.book_id, **params)
         except Exception as exc:  # noqa: BLE001
             self.doc_combo.setEnabled(True)
             self.skip_context_cb.setEnabled(True)
@@ -785,6 +785,16 @@ class TranslationView(QWidget):
                 self,
                 self.tr("Submit Failed"),
                 qarg(self.tr("Failed to submit translation task:\n%1"), str(exc)),
+            )
+            return
+        if record.status == "failed":
+            self.doc_combo.setEnabled(True)
+            self.skip_context_cb.setEnabled(True)
+            self._update_start_button_state()
+            QMessageBox.critical(
+                self,
+                self.tr("Start Failed"),
+                qarg(self.tr("Failed to start translation task:\n%1"), record.last_error or self.tr("Unknown error")),
             )
             return
         self._sync_task_id = record.task_id

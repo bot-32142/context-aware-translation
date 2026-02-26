@@ -640,7 +640,7 @@ class GlossaryView(QWidget):
             return
 
         try:
-            self._task_engine.submit(
+            record = self._task_engine.submit_and_start(
                 "glossary_extraction",
                 self.book_id,
                 document_ids=document_ids,
@@ -651,6 +651,13 @@ class GlossaryView(QWidget):
                 self,
                 self.tr("Submit Failed"),
                 self._format_submit_error(exc),
+            )
+            return
+        if record.status == "failed":
+            QMessageBox.critical(
+                self,
+                self.tr("Start Failed"),
+                qarg(self.tr("Failed to start glossary extraction:\n%1"), record.last_error or self.tr("Unknown error")),
             )
             return
 
@@ -771,12 +778,19 @@ class GlossaryView(QWidget):
             return
 
         try:
-            self._task_engine.submit("glossary_review", self.book_id)
+            record = self._task_engine.submit_and_start("glossary_review", self.book_id)
         except Exception as exc:
             QMessageBox.critical(
                 self,
                 self.tr("Submit Failed"),
                 self._format_submit_error(exc),
+            )
+            return
+        if record.status == "failed":
+            QMessageBox.critical(
+                self,
+                self.tr("Start Failed"),
+                qarg(self.tr("Failed to start glossary review:\n%1"), record.last_error or self.tr("Unknown error")),
             )
             return
 
