@@ -431,11 +431,10 @@ def test_build_button_disabled_for_text_selection_when_earlier_pdf_has_pending_o
 
 
 def test_export_glossary_warns_that_export_triggers_summarization():
+    """Export confirmation dialog warns about summarization and provides skip_context checkbox."""
     view = _make_view()
-    view._export_worker = None
     view.book_manager = MagicMock()
     view.book_id = "book"
-    view.progress_widget = MagicMock()
     captured: dict[str, str] = {}
 
     class _FakeMessageBox:
@@ -470,28 +469,30 @@ def test_export_glossary_warns_that_export_triggers_summarization():
         ),
         patch("context_aware_translation.ui.views.glossary_view.QMessageBox", _FakeMessageBox),
         patch("context_aware_translation.ui.views.glossary_view.QCheckBox") as checkbox_cls,
-        patch("context_aware_translation.ui.views.glossary_view.ExportGlossaryWorker") as worker_cls,
     ):
         checkbox = MagicMock()
         checkbox.isChecked.return_value = True
         checkbox_cls.return_value = checkbox
         view._on_export_glossary()
 
-    worker_cls.assert_not_called()
+    view._task_engine.submit_and_start.assert_not_called()
     assert checkbox_cls.call_count == 1
     assert "Skip context" in checkbox_cls.call_args.args[0]
     assert "summarize glossary descriptions" in captured["text"]
 
 
-def test_export_glossary_forwards_skip_context_to_worker():
+def test_export_glossary_forwards_skip_context_to_engine():
+    """Export submits task with skip_context flag when user confirms."""
+    from context_aware_translation.workflow.tasks.models import Decision
+
     view = _make_view()
-    view._export_worker = None
     view.book_manager = MagicMock()
     view.book_id = "book"
-    view.progress_widget = MagicMock()
-    view._set_controls_enabled = MagicMock()
 
-    worker_instance = MagicMock()
+    view._task_engine.preflight.return_value = Decision(allowed=True)
+    mock_record = MagicMock()
+    mock_record.status = "running"
+    view._task_engine.submit_and_start.return_value = mock_record
 
     with (
         patch(
@@ -499,20 +500,16 @@ def test_export_glossary_forwards_skip_context_to_worker():
             return_value=("/tmp/glossary.json", ""),
         ),
         patch.object(view, "_confirm_export_glossary", return_value=True),
-        patch(
-            "context_aware_translation.ui.views.glossary_view.ExportGlossaryWorker",
-            return_value=worker_instance,
-        ) as worker_cls,
     ):
         view._on_export_glossary()
 
-    assert worker_cls.call_count == 1
-    assert worker_cls.call_args.kwargs.get("skip_context") is True
-    worker_instance.start.assert_called_once()
-    view.progress_widget.reset.assert_called_once()
-    view.progress_widget.set_cancellable.assert_called_once_with(True)
-    view.progress_widget.show.assert_called_once()
-    view._set_controls_enabled.assert_called_once_with(False)
+    view._task_engine.submit_and_start.assert_called_once_with(
+        "glossary_export",
+        "book",
+        output_path="/tmp/glossary.json",
+        skip_context=True,
+    )
+    assert view._task_engine.preflight.call_count >= 1
 
 
 def test_review_button_disabled_when_engine_preflight_denied():
@@ -606,6 +603,164 @@ def test_on_review_terms_shows_error_when_submit_raises():
     critical_mock.assert_called_once()
 
 
+def test_update_export_button_state_mode_aware_preflight():
+    """Export button checks both skip_context modes and enables if either is allowed."""
+    from context_aware_translation.workflow.tasks.models import Decision
+
+    view = _make_view()
+    view._task_engine.preflight.side_effect = [
+        Decision(allowed=True),
+        Decision(allowed=False, reason="Context tree locked"),
+    ]
+
+    view._update_export_button_state()
+
+    assert view.export_button.isEnabled()
+    assert view._task_engine.preflight.call_count == 2
+
+
+def test_update_export_button_state_both_modes_blocked():
+    """Export button disabled when both skip_context modes are blocked."""
+    from context_aware_translation.workflow.tasks.models import Decision
+
+    view = _make_view()
+    view._task_engine.preflight.side_effect = [
+        Decision(allowed=False, reason="No terms"),
+        Decision(allowed=False, reason="No terms"),
+    ]
+
+    view._update_export_button_state()
+
+    assert not view.export_button.isEnabled()
+    assert "No terms" in view.export_button.toolTip()
+
+
+def test_on_task_console_refreshed_shows_export_completion_dialog():
+    """Console refresh detects completed export tasks and shows dialog with count and path."""
+    from context_aware_translation.workflow.tasks.models import STATUS_COMPLETED
+    from types import SimpleNamespace
+
+    view = _make_view()
+    view._completed_task_ids = set()
+    view.table_model = MagicMock()
+    view.document_repo = MagicMock()
+    view.status_label = MagicMock()
+    view._update_review_button_state = MagicMock()
+    view._update_export_button_state = MagicMock()
+    view._refresh_document_selector = MagicMock()
+
+    task_vm = SimpleNamespace(
+        task_type="glossary_export",
+        status=STATUS_COMPLETED,
+        task_id="export-1",
+        completed_items=42,
+    )
+    view.task_console = MagicMock()
+    view.task_console.task_vms.return_value = [task_vm]
+
+    mock_record = MagicMock()
+    mock_record.payload_json = '{"output_path": "/tmp/glossary.json", "skip_context": true}'
+    view._task_engine.get_task.return_value = mock_record
+
+    with patch("context_aware_translation.ui.views.glossary_view.QMessageBox.information") as info_mock:
+        view._on_task_console_refreshed()
+
+    info_mock.assert_called_once()
+    assert "export-1" in view._completed_task_ids
+
+
+def test_seed_completed_task_ids_from_console_skips_historical_terminal_rows():
+    """Existing terminal tasks should be treated as already-notified on startup."""
+    from context_aware_translation.workflow.tasks.models import STATUS_COMPLETED
+    from types import SimpleNamespace
+
+    view = _make_view()
+    view._completed_task_ids = set()
+    view.task_console = MagicMock()
+    view.task_console.task_vms.return_value = [
+        SimpleNamespace(task_id="old-terminal", status=STATUS_COMPLETED),
+        SimpleNamespace(task_id="still-running", status="running"),
+    ]
+
+    view._seed_completed_task_ids_from_console()
+
+    assert view._completed_task_ids == {"old-terminal"}
+
+
+def test_on_task_console_refreshed_reemits_export_dialog_after_rerun():
+    """A rerun should clear prior completion tracking and notify again on next terminal state."""
+    from context_aware_translation.workflow.tasks.models import STATUS_COMPLETED
+    from types import SimpleNamespace
+
+    view = _make_view()
+    view._completed_task_ids = {"export-1"}
+    view.table_model = MagicMock()
+    view.document_repo = MagicMock()
+    view.status_label = MagicMock()
+    view._update_review_button_state = MagicMock()
+    view._update_export_button_state = MagicMock()
+    view._refresh_document_selector = MagicMock()
+
+    running_vm = SimpleNamespace(
+        task_type="glossary_export",
+        status="running",
+        task_id="export-1",
+        completed_items=0,
+    )
+    completed_vm = SimpleNamespace(
+        task_type="glossary_export",
+        status=STATUS_COMPLETED,
+        task_id="export-1",
+        completed_items=7,
+    )
+    view.task_console = MagicMock()
+    view.task_console.task_vms.side_effect = [[running_vm], [completed_vm]]
+    view._task_engine.get_task.return_value = MagicMock(payload_json='{"output_path": "/tmp/out.json"}')
+
+    with patch("context_aware_translation.ui.views.glossary_view.QMessageBox.information") as info_mock:
+        view._on_task_console_refreshed()
+        assert "export-1" not in view._completed_task_ids
+        view._on_task_console_refreshed()
+
+    info_mock.assert_called_once()
+    assert "export-1" in view._completed_task_ids
+
+
+def test_import_glossary_claim_guard_blocks_when_tasks_running():
+    """Import checks for active claims and blocks when glossary tasks are running."""
+    view = _make_view()
+    view._task_engine.has_active_claims.return_value = True
+
+    msg_box = MagicMock()
+    msg_box.exec.return_value = QMessageBox.StandardButton.Yes
+    checkbox = MagicMock()
+    checkbox.isChecked.return_value = True
+
+    with (
+        patch(
+            "context_aware_translation.ui.views.glossary_view.QFileDialog.getOpenFileName",
+            return_value=("/tmp/glossary.json", ""),
+        ),
+        patch("context_aware_translation.ui.views.glossary_view.QCheckBox", return_value=checkbox),
+    ):
+        from context_aware_translation.ui.views.glossary_view import QMessageBox as MB
+
+        with (
+            patch.object(MB, "__init__", lambda *_a, **_k: None),
+            patch.object(MB, "setWindowTitle", lambda *_a, **_k: None),
+            patch.object(MB, "setText", lambda *_a, **_k: None),
+            patch.object(MB, "setIcon", lambda *_a, **_k: None),
+            patch.object(MB, "setStandardButtons", lambda *_a, **_k: None),
+            patch.object(MB, "setCheckBox", lambda *_a, **_k: None),
+            patch.object(MB, "exec", lambda *_a, **_k: QMessageBox.StandardButton.Yes),
+            patch.object(MB, "warning") as warning_mock,
+        ):
+            view._on_import_glossary()
+
+    warning_mock.assert_called_once()
+    assert "Cannot import glossary while glossary tasks are running" in warning_mock.call_args.args[2]
+
+
 def test_glossary_view_cleanup_calls_task_console_cleanup():
     from context_aware_translation.ui.views.glossary_view import GlossaryView
 
@@ -613,7 +768,6 @@ def test_glossary_view_cleanup_calls_task_console_cleanup():
         view = GlossaryView(None, "")
 
     view.task_console = MagicMock()
-    view._export_worker = None
     view.term_db = MagicMock()
 
     view.cleanup()

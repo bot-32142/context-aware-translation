@@ -156,21 +156,3 @@ def test_ocr_review_view_cleanup_waits_without_timeout():
     assert worker.interruption_requested
     assert worker.wait_calls == [()]
     view.term_db.close.assert_called_once()
-
-
-def test_glossary_view_cleanup_waits_without_timeout():
-    from context_aware_translation.ui.views.glossary_view import GlossaryView
-
-    with patch.object(GlossaryView, "__init__", _noop_init):
-        view = GlossaryView(None, "")
-
-    export_worker = _FakeWorker()
-    view.task_console = MagicMock()
-    view._export_worker = export_worker
-    view.term_db = MagicMock()
-    view.cleanup()
-
-    view.task_console.cleanup.assert_called_once()
-    assert export_worker.interruption_requested
-    assert export_worker.wait_calls == [()]
-    view.term_db.close.assert_called_once()

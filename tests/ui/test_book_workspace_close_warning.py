@@ -82,6 +82,21 @@ def test_get_running_operations_no_translation_when_no_engine_tasks():
     assert workspace.get_running_operations() == []
 
 
+def test_get_running_operations_detects_glossary_when_only_export_task_running():
+    workspace = _make_workspace()
+    _running_task = SimpleNamespace(status="running")
+
+    def _mock_get_tasks(_book_id, task_type=None):
+        if task_type == "glossary_export":
+            return [_running_task]
+        return []
+
+    workspace._task_engine.get_tasks.side_effect = _mock_get_tasks
+    workspace._view_cache = {}
+
+    assert workspace.get_running_operations() == [workspace.tr("Glossary")]
+
+
 def test_close_requested_without_running_operations_emits_without_warning():
     workspace = _make_workspace()
     workspace._view_cache = {0: SimpleNamespace(worker=_Worker(False))}
@@ -184,15 +199,11 @@ def test_request_cancel_running_operations_requests_interruption_for_all_running
     workspace = _make_workspace()
     import_worker = _Worker(True)
     ocr_worker = _Worker(True)
-    glossary_export = _Worker(True)
     export_worker = _Worker(True)
 
     workspace._view_cache = {
         0: SimpleNamespace(worker=import_worker),
         1: SimpleNamespace(ocr_worker=ocr_worker),
-        2: SimpleNamespace(
-            _export_worker=glossary_export,
-        ),
         # Translation tab (index 3): no direct worker — cancelled via engine
         4: SimpleNamespace(worker=export_worker),
     }
@@ -201,7 +212,6 @@ def test_request_cancel_running_operations_requests_interruption_for_all_running
 
     assert import_worker.interruption_requested is True
     assert ocr_worker.interruption_requested is True
-    assert glossary_export.interruption_requested is True
     assert export_worker.interruption_requested is True
     # Engine cancel_running_tasks is called for engine-managed translation tasks
     workspace._task_engine.cancel_running_tasks.assert_called_once_with("book-id")

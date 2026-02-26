@@ -42,7 +42,6 @@ from ..models.term_model import TermTableModel
 from ..tasks.task_console import TaskConsole
 from ..utils import create_tip_label, translate_document_type
 from ..widgets import ProgressWidget
-from ..workers.glossary_worker import ExportGlossaryWorker
 
 
 class _TranslationDelegate(QStyledItemDelegate):
@@ -77,7 +76,9 @@ class GlossaryView(QWidget):
 
     glossary_changed = Signal()
 
-    def __init__(self, book_manager: BookManager, book_id: str, task_engine: "TaskEngine", parent: QWidget | None = None) -> None:
+    def __init__(
+        self, book_manager: BookManager, book_id: str, task_engine: "TaskEngine", parent: QWidget | None = None
+    ) -> None:
         """Initialize the glossary view.
 
         Args:
@@ -96,9 +97,7 @@ class GlossaryView(QWidget):
         self.term_db = SQLiteBookDB(db_path)
         self.document_repo = DocumentRepository(self.term_db)
 
-        # Workers (build glossary, translate, and review now handled via task engine)
-        self._export_worker: ExportGlossaryWorker | None = None
-
+        # Track completed tasks for one-time completion dialogs
         self._completed_task_ids: set[str] = set()
 
         self._setup_ui()
@@ -207,11 +206,12 @@ class GlossaryView(QWidget):
         self.task_console = TaskConsole(
             task_engine=self._task_engine,
             book_id=self.book_id,
-            task_type=["glossary_extraction", "glossary_translation", "glossary_review"],
+            task_type=["glossary_extraction", "glossary_translation", "glossary_review", "glossary_export"],
             parent=self,
         )
         layout.addWidget(self.task_console)
         self.task_console.console_refreshed.connect(self._on_task_console_refreshed)
+        self._seed_completed_task_ids_from_console()
 
         # Table view
         self.table_view = QTableView()
@@ -244,11 +244,22 @@ class GlossaryView(QWidget):
         self.status_label = QLabel()
         layout.addWidget(self.status_label)
 
+    def _seed_completed_task_ids_from_console(self) -> None:
+        """Treat already-terminal rows as historical so startup doesn't replay dialogs."""
+        from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES
+
+        for vm in self.task_console.task_vms():
+            if vm.status in TERMINAL_TASK_STATUSES:
+                self._completed_task_ids.add(vm.task_id)
+
     def _on_task_console_refreshed(self) -> None:
         """Handle task console refresh — sync term DB, table, stats, and button state."""
+        import json
         from context_aware_translation.workflow.tasks.models import (
+            STATUS_CANCELLED,
             STATUS_COMPLETED,
             STATUS_COMPLETED_WITH_ERRORS,
+            STATUS_FAILED,
             TERMINAL_TASK_STATUSES,
         )
 
@@ -257,15 +268,63 @@ class GlossaryView(QWidget):
         self._update_stats()
         self._refresh_document_selector()
 
-        # Emit glossary_changed only on success-like completions (not cancelled/failed)
         _SUCCESS_TERMINAL = {STATUS_COMPLETED, STATUS_COMPLETED_WITH_ERRORS}
-        for vm in self.task_console.task_vms():
-            if vm.status in TERMINAL_TASK_STATUSES and vm.task_id not in self._completed_task_ids:
+        task_vms = self.task_console.task_vms()
+        live_ids = {vm.task_id for vm in task_vms}
+        self._completed_task_ids &= live_ids
+
+        for vm in task_vms:
+            if vm.status not in TERMINAL_TASK_STATUSES:
+                self._completed_task_ids.discard(vm.task_id)
+                continue
+
+            if vm.task_id not in self._completed_task_ids:
                 self._completed_task_ids.add(vm.task_id)
-                if vm.status in _SUCCESS_TERMINAL:
+
+                if vm.task_type == "glossary_export":
+                    if vm.status == STATUS_COMPLETED:
+                        try:
+                            record = self._task_engine.get_task(vm.task_id)
+                            if record:
+                                payload = json.loads(record.payload_json) if record.payload_json else {}
+                                count = vm.completed_items or 0
+                                QMessageBox.information(
+                                    self,
+                                    self.tr("Export Complete"),
+                                    qarg(self.tr("Exported %1 term(s) to file."), count),
+                                )
+                            else:
+                                QMessageBox.information(
+                                    self,
+                                    self.tr("Export Complete"),
+                                    self.tr("Glossary export completed."),
+                                )
+                        except Exception:
+                            QMessageBox.information(
+                                self,
+                                self.tr("Export Complete"),
+                                self.tr("Glossary export completed."),
+                            )
+                    elif vm.status == STATUS_FAILED:
+                        QMessageBox.critical(
+                            self,
+                            self.tr("Export Failed"),
+                            qarg(
+                                self.tr("Glossary export failed:\n\n%1"),
+                                vm.last_error or self.tr("Unknown error"),
+                            ),
+                        )
+                    elif vm.status == STATUS_CANCELLED:
+                        QMessageBox.information(
+                            self,
+                            self.tr("Export Cancelled"),
+                            self.tr("Glossary export was cancelled."),
+                        )
+                elif vm.status in _SUCCESS_TERMINAL:
                     self.glossary_changed.emit()
 
         self._update_review_button_state()
+        self._update_export_button_state()
 
     def _update_stats(self) -> None:
         """Update the status bar with term statistics."""
@@ -289,6 +348,7 @@ class GlossaryView(QWidget):
         self._update_filter_rare_button_state()
         self._update_translate_button_state()
         self._update_review_button_state()
+        self._update_export_button_state()
 
     def _has_glossary_mutation_claim_conflict(self) -> bool:
         """Return True when active task claims block local glossary mutations."""
@@ -341,6 +401,38 @@ class GlossaryView(QWidget):
             self.review_button.setToolTip(
                 qarg(self.tr("Review unavailable: %1"), engine_decision.reason or engine_decision.code or "")
             )
+
+    def _update_export_button_state(self) -> None:
+        """Enable/disable export button based on mode-aware engine preflight."""
+        decision_skip = self._task_engine.preflight(
+            "glossary_export",
+            self.book_id,
+            {"skip_context": True},
+            TaskAction.RUN,
+        )
+        decision_full = self._task_engine.preflight(
+            "glossary_export",
+            self.book_id,
+            {"skip_context": False},
+            TaskAction.RUN,
+        )
+
+        if decision_skip.allowed or decision_full.allowed:
+            self.export_button.setEnabled(True)
+            if decision_skip.allowed and decision_full.allowed:
+                self.export_button.setToolTip(self.tr("Export glossary terms to a JSON file."))
+            elif decision_skip.allowed:
+                self.export_button.setToolTip(
+                    self.tr("Export glossary terms to a JSON file (skip context mode available; full context blocked).")
+                )
+            else:
+                self.export_button.setToolTip(
+                    self.tr("Export glossary terms to a JSON file (full context available; skip context blocked).")
+                )
+        else:
+            self.export_button.setEnabled(False)
+            reason = decision_full.reason or decision_full.code or decision_skip.reason or decision_skip.code or ""
+            self.export_button.setToolTip(qarg(self.tr("Export unavailable: %1"), reason))
 
     def _on_search_changed(self, text: str) -> None:
         """Handle search text change.
@@ -400,9 +492,6 @@ class GlossaryView(QWidget):
         return skip_context_cb.isChecked()
 
     def _on_export_glossary(self) -> None:
-        if self._export_worker and self._export_worker.isRunning():
-            return
-
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             self.tr("Export Glossary"),
@@ -416,24 +505,46 @@ class GlossaryView(QWidget):
         if skip_context is None:
             return
 
-        self._export_worker = ExportGlossaryWorker(
-            self.book_manager,
+        decision = self._task_engine.preflight(
+            "glossary_export",
             self.book_id,
-            Path(file_path),
-            skip_context=skip_context,
+            {"output_path": str(file_path), "skip_context": skip_context},
+            TaskAction.RUN,
         )
-        self._export_worker.progress.connect(self._on_progress)
-        self._export_worker.finished_success.connect(self._on_export_finished)
-        self._export_worker.cancelled.connect(self._on_operation_cancelled)
-        self._export_worker.error.connect(self._on_operation_error)
-        self._export_worker.finished.connect(self._on_export_worker_finished)
+        if not decision.allowed:
+            QMessageBox.warning(
+                self,
+                self.tr("Export Unavailable"),
+                qarg(
+                    self.tr("Cannot start export: %1"),
+                    decision.reason or decision.code or self.tr("unknown reason"),
+                ),
+            )
+            return
 
-        self.progress_widget.reset()
-        self.progress_widget.set_cancellable(True)
-        self.progress_widget.show()
-        self._set_controls_enabled(False)
+        try:
+            record = self._task_engine.submit_and_start(
+                "glossary_export",
+                self.book_id,
+                output_path=str(file_path),
+                skip_context=skip_context,
+            )
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                self.tr("Submit Failed"),
+                self._format_submit_error(exc),
+            )
+            return
+        if record.status == "failed":
+            QMessageBox.critical(
+                self,
+                self.tr("Start Failed"),
+                qarg(self.tr("Failed to start glossary export:\n%1"), record.last_error or self.tr("Unknown error")),
+            )
+            return
 
-        self._export_worker.start()
+        self._update_export_button_state()
 
     def _on_import_glossary(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
@@ -464,6 +575,23 @@ class GlossaryView(QWidget):
             return
 
         include_translations = include_translations_cb.isChecked()
+
+        wanted = frozenset(
+            {
+                ResourceClaim("glossary_state", self.book_id, "*", ClaimMode.WRITE_EXCLUSIVE),
+                ResourceClaim("context_tree", self.book_id, "*", ClaimMode.WRITE_EXCLUSIVE),
+            }
+        )
+        if self._task_engine.has_active_claims(self.book_id, wanted):
+            QMessageBox.warning(
+                self,
+                self.tr("Import Unavailable"),
+                self.tr(
+                    "Cannot import glossary while glossary tasks are running.\n\n"
+                    "Please cancel or wait for running tasks to complete."
+                ),
+            )
+            return
 
         try:
             context_tree_db_path = self.book_manager.get_book_context_tree_path(self.book_id)
@@ -659,7 +787,9 @@ class GlossaryView(QWidget):
             QMessageBox.critical(
                 self,
                 self.tr("Start Failed"),
-                qarg(self.tr("Failed to start glossary extraction:\n%1"), record.last_error or self.tr("Unknown error")),
+                qarg(
+                    self.tr("Failed to start glossary extraction:\n%1"), record.last_error or self.tr("Unknown error")
+                ),
             )
             return
 
@@ -707,7 +837,9 @@ class GlossaryView(QWidget):
             QMessageBox.critical(
                 self,
                 self.tr("Start Failed"),
-                qarg(self.tr("Failed to start glossary translation:\n%1"), record.last_error or self.tr("Unknown error")),
+                qarg(
+                    self.tr("Failed to start glossary translation:\n%1"), record.last_error or self.tr("Unknown error")
+                ),
             )
             return
 
@@ -798,18 +930,6 @@ class GlossaryView(QWidget):
 
         self._update_review_button_state()
 
-    def _on_export_finished(self, result: object) -> None:
-        """Handle glossary export completion."""
-        self.progress_widget.hide()
-        self._set_controls_enabled(True)
-
-        count = result["count"] if isinstance(result, dict) and "count" in result else 0
-        QMessageBox.information(
-            self,
-            self.tr("Export Complete"),
-            qarg(self.tr("Exported %1 term(s) to file."), count),
-        )
-
     def _on_operation_error(self, error_message: str) -> None:
         """Handle operation error.
 
@@ -827,8 +947,6 @@ class GlossaryView(QWidget):
 
     def _on_cancel_operation(self) -> None:
         """Handle operation cancellation."""
-        if self._export_worker and self._export_worker.isRunning():
-            self._export_worker.requestInterruption()
         self.progress_widget.message_label.setText(self.tr("Cancelling..."))
         self.progress_widget.set_cancellable(False)
 
@@ -837,11 +955,6 @@ class GlossaryView(QWidget):
         self.progress_widget.hide()
         self._set_controls_enabled(True)
         QMessageBox.information(self, self.tr("Cancelled"), self.tr("Operation cancelled."))
-
-    def _on_export_worker_finished(self) -> None:
-        """Reset export worker pointer."""
-        self.progress_widget.set_cancellable(True)
-        self._export_worker = None
 
     def _set_controls_enabled(self, enabled: bool) -> None:
         """Enable or disable controls.
@@ -1107,10 +1220,6 @@ class GlossaryView(QWidget):
         """Clean up resources."""
         if hasattr(self, "task_console"):
             self.task_console.cleanup()
-
-        if self._export_worker and self._export_worker.isRunning():
-            self._export_worker.requestInterruption()
-            self._export_worker.wait()
 
         if hasattr(self, "term_db"):
             self.term_db.close()

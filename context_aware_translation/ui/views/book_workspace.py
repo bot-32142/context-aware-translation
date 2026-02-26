@@ -208,7 +208,8 @@ class BookWorkspace(QWidget):
         # Glossary tab (index 2) — engine-managed tasks
         glossary_running = False
         from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES
-        for task_type in ("glossary_extraction", "glossary_translation", "glossary_review"):
+
+        for task_type in ("glossary_extraction", "glossary_translation", "glossary_review", "glossary_export"):
             for rec in self._task_engine.get_tasks(self.book_id, task_type=task_type):
                 if rec.status not in TERMINAL_TASK_STATUSES:
                     glossary_running = True
@@ -253,11 +254,6 @@ class BookWorkspace(QWidget):
         ocr_view = self._view_cache.get(1)
         if ocr_view is not None:
             self._request_worker_interruption(getattr(ocr_view, "ocr_worker", None))
-
-        # Glossary tab (index 2) — only export worker is still direct
-        glossary_view = self._view_cache.get(2)
-        if glossary_view is not None:
-            self._request_worker_interruption(getattr(glossary_view, "_export_worker", None))
 
         # Translation tab (index 3) — sync/chunk tasks are cancelled via engine above
 

@@ -352,9 +352,7 @@ def test_glossary_translate_task_worker_does_not_emit_success_when_session_exit_
     worker = GlossaryTranslationTaskWorker(MagicMock(), "book-id", action="run")
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.glossary_translation_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _TranslatorContext(
-            _TranslateSession(), exit_error=RuntimeError("close failed")
-        ),
+        lambda *_args, **_kwargs: _TranslatorContext(_TranslateSession(), exit_error=RuntimeError("close failed")),
     )
 
     success, cancelled, errors = _capture_signals(worker)
@@ -380,9 +378,7 @@ def test_glossary_review_task_worker_does_not_emit_success_when_session_exit_fai
     worker = GlossaryReviewTaskWorker(book_manager, "book-id", action="run", task_id="task-1")
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.glossary_review_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _TranslatorContext(
-            _ReviewSession(), exit_error=RuntimeError("close failed")
-        ),
+        lambda *_args, **_kwargs: _TranslatorContext(_ReviewSession(), exit_error=RuntimeError("close failed")),
     )
 
     success, cancelled, errors = _capture_signals(worker)
@@ -394,47 +390,12 @@ def test_glossary_review_task_worker_does_not_emit_success_when_session_exit_fai
     assert "RuntimeError: close failed" in errors[0]
 
 
-def test_export_glossary_worker_forwards_skip_context(monkeypatch: pytest.MonkeyPatch):
-    from context_aware_translation.ui.workers.glossary_worker import ExportGlossaryWorker
-
-    worker = ExportGlossaryWorker(MagicMock(), "book-id", Path("/tmp/glossary.json"), skip_context=True)
-    captured_kwargs: dict[str, object] = {}
-
-    class _Session:
-        def __init__(self) -> None:
-            self.db = MagicMock()
-            self.manager = MagicMock()
-
-            def _build(**kwargs) -> dict[str, str]:  # noqa: ANN003
-                captured_kwargs.update(kwargs)
-                return {"term": "summary"}
-
-            self.manager.build_fully_summarized_descriptions.side_effect = _build
-
-    session = _Session()
-    monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _TranslatorContext(session),
-    )
-    monkeypatch.setattr("context_aware_translation.ui.workers.glossary_worker.export_glossary", lambda *_a, **_k: 1)
-
-    success, cancelled, errors = _capture_signals(worker)
-    worker.run()
-
-    assert success == [{"count": 1, "path": "/tmp/glossary.json"}]
-    assert cancelled == []
-    assert errors == []
-    assert captured_kwargs.get("skip_context") is True
-
-
 # ------------------------------------------------------------------
 # Sync translation worker: manga document passthrough
 # ------------------------------------------------------------------
 
 
-def test_sync_translation_task_worker_passes_manga_document_ids(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
+def test_sync_translation_task_worker_passes_manga_document_ids(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Sync translation worker passes document_ids through to session.translate unchanged.
 
     Manga documents must not be filtered — session.translate dispatches per doc_type internally.

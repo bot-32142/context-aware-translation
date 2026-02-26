@@ -23,6 +23,7 @@ from context_aware_translation.ui.tasks.qt_task_engine import TaskEngine
 from context_aware_translation.workflow.session import WorkflowSession
 from context_aware_translation.workflow.tasks.handlers.batch_translation import BatchTranslationHandler
 from context_aware_translation.workflow.tasks.handlers.chunk_retranslation import ChunkRetranslationHandler
+from context_aware_translation.workflow.tasks.handlers.glossary_export import GlossaryExportHandler
 from context_aware_translation.workflow.tasks.handlers.glossary_extraction import GlossaryExtractionHandler
 from context_aware_translation.workflow.tasks.handlers.glossary_review import GlossaryReviewHandler
 from context_aware_translation.workflow.tasks.handlers.glossary_translation import GlossaryTranslationHandler
@@ -61,12 +62,12 @@ class MainWindow(QMainWindow):
         self._current_book_id: str | None = None
         self._current_book_name: str | None = None
         self._book_nav_item: QListWidgetItem | None = None
+        self._is_closing = False
 
         # Navigation items (store for retranslation)
         self._library_nav_item: QListWidgetItem | None = None
         self._profiles_nav_item: QListWidgetItem | None = None
         self._sleep_inhibitor = SleepInhibitor()
-        self._is_closing = False
 
         # Initialize book manager
         self.book_manager = BookManager()
@@ -90,6 +91,7 @@ class MainWindow(QMainWindow):
         self._task_engine.register_handler(GlossaryTranslationHandler())
         self._task_engine.register_handler(SyncTranslationHandler())
         self._task_engine.register_handler(ChunkRetranslationHandler())
+        self._task_engine.register_handler(GlossaryExportHandler())
         self._task_engine.running_work_changed.connect(self._on_engine_running_work_changed)
 
         self._sleep_check_timer = QTimer(self)
@@ -234,6 +236,10 @@ class MainWindow(QMainWindow):
 
     def _update_sleep_inhibitor(self) -> None:
         """Acquire or release sleep inhibition based on whether any work is active."""
+        if getattr(self, "_is_closing", False):
+            self._sleep_inhibitor.release()
+            return
+
         if self._task_engine.has_running_work():
             self._sleep_inhibitor.acquire()
             return
@@ -251,6 +257,9 @@ class MainWindow(QMainWindow):
 
     def _get_book_running_operations(self) -> list[str]:
         """Return running operations in the current book workspace."""
+        if getattr(self, "_is_closing", False):
+            return []
+
         if self._current_book_id is None:
             return []
         view_name = f"book_{self._current_book_id}"
@@ -291,8 +300,9 @@ class MainWindow(QMainWindow):
 
     def _on_nav_changed(self, current: QListWidgetItem | None, _previous: QListWidgetItem | None) -> None:
         """Handle navigation item change."""
-        if self._is_closing:
+        if getattr(self, "_is_closing", False):
             return
+
         if current is None:
             return
 
@@ -493,8 +503,8 @@ class MainWindow(QMainWindow):
         """Handle window close event."""
         self._is_closing = True
         self._sleep_check_timer.stop()
-        self._sleep_inhibitor.release()
         self.close_book()
         self._task_engine.close()
+        self._sleep_inhibitor.release()
         self._save_geometry()
         event.accept()
