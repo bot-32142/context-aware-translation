@@ -66,6 +66,7 @@ class MainWindow(QMainWindow):
         self._library_nav_item: QListWidgetItem | None = None
         self._profiles_nav_item: QListWidgetItem | None = None
         self._sleep_inhibitor = SleepInhibitor()
+        self._is_closing = False
 
         # Initialize book manager
         self.book_manager = BookManager()
@@ -290,6 +291,8 @@ class MainWindow(QMainWindow):
 
     def _on_nav_changed(self, current: QListWidgetItem | None, _previous: QListWidgetItem | None) -> None:
         """Handle navigation item change."""
+        if self._is_closing:
+            return
         if current is None:
             return
 
@@ -488,9 +491,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Handle window close event."""
-        self._task_engine.close()
+        self._is_closing = True
         self._sleep_check_timer.stop()
         self._sleep_inhibitor.release()
         self.close_book()
+        self._task_engine.close()
         self._save_geometry()
         event.accept()

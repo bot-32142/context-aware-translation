@@ -47,6 +47,7 @@ def _make_view():
     view.import_button = QPushButton()
     view.table_view = QTableView()
     view._task_engine = MagicMock()
+    view._task_engine.has_active_claims.return_value = False
     view.book_id = "test-book"
     view.term_db = MagicMock()
     view.term_db.list_terms.return_value = []
@@ -78,6 +79,16 @@ def test_update_action_button_states_keeps_glossary_actions_available():
     assert view.translate_button.isEnabled()
     assert view.review_button.isEnabled()
     assert view.filter_rare_button.isEnabled()
+
+
+def test_update_action_button_states_disables_filter_rare_when_claim_conflict():
+    view = _make_view()
+    view._task_engine.has_active_claims.return_value = True
+
+    view._update_action_button_states()
+
+    assert not view.filter_rare_button.isEnabled()
+    assert "blocked by active task claims" in view.filter_rare_button.toolTip()
 
 
 def test_set_controls_enabled_respects_pending_documents_state():
@@ -221,6 +232,22 @@ def test_filter_rare_shows_no_match_message_when_nothing_is_rare():
     view.glossary_changed.emit.assert_not_called()
     assert info_mock.call_count == 1
     assert "No" in info_mock.call_args.args[2]
+
+
+def test_filter_rare_shows_warning_when_claim_conflict():
+    view = _make_view()
+    view._task_engine.has_active_claims.return_value = True
+    view.term_db = MagicMock()
+
+    with (
+        patch("context_aware_translation.ui.views.glossary_view.QMessageBox.warning") as warning_mock,
+        patch("context_aware_translation.ui.views.glossary_view.QMessageBox.question") as question_mock,
+    ):
+        view._on_filter_rare()
+
+    warning_mock.assert_called_once()
+    question_mock.assert_not_called()
+    view.term_db.update_terms_bulk.assert_not_called()
 
 
 def test_build_glossary_confirmation_clarifies_translation_step_is_separate():

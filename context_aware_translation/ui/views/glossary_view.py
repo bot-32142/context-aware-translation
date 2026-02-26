@@ -30,6 +30,7 @@ from context_aware_translation.storage.book_db import SQLiteBookDB
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.context_tree_db import ContextTreeDB
 from context_aware_translation.storage.document_repository import DocumentRepository
+from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 from context_aware_translation.workflow.tasks.glossary_preflight import compute_glossary_preflight
 from context_aware_translation.workflow.tasks.models import TaskAction
 
@@ -285,9 +286,27 @@ class GlossaryView(QWidget):
 
     def _update_action_button_states(self) -> None:
         """Keep glossary term-table actions available whenever controls are enabled."""
-        self.filter_rare_button.setEnabled(True)
+        self._update_filter_rare_button_state()
         self._update_translate_button_state()
         self._update_review_button_state()
+
+    def _has_glossary_mutation_claim_conflict(self) -> bool:
+        """Return True when active task claims block local glossary mutations."""
+        wanted = frozenset({
+            ResourceClaim("glossary_state", self.book_id, "*", ClaimMode.WRITE_EXCLUSIVE),
+        })
+        return bool(self._task_engine.has_active_claims(self.book_id, wanted))
+
+    def _update_filter_rare_button_state(self) -> None:
+        """Enable/disable Filter Rare based on active glossary claim conflicts."""
+        if self._has_glossary_mutation_claim_conflict():
+            self.filter_rare_button.setEnabled(False)
+            self.filter_rare_button.setToolTip(self.tr("Filter unavailable: blocked by active task claims."))
+            return
+        self.filter_rare_button.setEnabled(True)
+        self.filter_rare_button.setToolTip(
+            self.tr("Automatically ignore terms that occurred only once or were recognized by the LLM in only one chunk.")
+        )
 
     def _update_translate_button_state(self) -> None:
         """Enable/disable translate button based on engine preflight."""
@@ -946,6 +965,13 @@ class GlossaryView(QWidget):
 
     def _on_filter_rare(self) -> None:
         """Ignore terms that occurred only once or were recognized in only one chunk."""
+        if self._has_glossary_mutation_claim_conflict():
+            QMessageBox.warning(
+                self,
+                self.tr("Filter Unavailable"),
+                self.tr("Cannot filter rare terms while other glossary tasks are active."),
+            )
+            return
         reply = QMessageBox.question(
             self,
             self.tr("Filter Rare Terms"),
