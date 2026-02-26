@@ -43,7 +43,6 @@ from ..utils import create_tip_label, translate_document_type
 from ..widgets import ProgressWidget
 from ..workers.glossary_worker import (
     ExportGlossaryWorker,
-    ReviewTermsWorker,
     TranslateGlossaryWorker,
 )
 
@@ -99,9 +98,8 @@ class GlossaryView(QWidget):
         self.term_db = SQLiteBookDB(db_path)
         self.document_repo = DocumentRepository(self.term_db)
 
-        # Workers (build glossary now handled via task engine)
+        # Workers (build glossary and review now handled via task engine)
         self._translate_worker: TranslateGlossaryWorker | None = None
-        self._review_worker: ReviewTermsWorker | None = None
         self._export_worker: ExportGlossaryWorker | None = None
 
         self._completed_task_ids: set[str] = set()
@@ -218,6 +216,16 @@ class GlossaryView(QWidget):
         layout.addWidget(self.task_console)
         self.task_console.console_refreshed.connect(self._on_task_console_refreshed)
 
+        # Task console for glossary_review engine tasks
+        self.review_task_console = TaskConsole(
+            task_engine=self._task_engine,
+            book_id=self.book_id,
+            task_type="glossary_review",
+            parent=self,
+        )
+        layout.addWidget(self.review_task_console)
+        self.review_task_console.console_refreshed.connect(self._on_review_task_console_refreshed)
+
         # Table view
         self.table_view = QTableView()
         self.table_model = TermTableModel(self.term_db)
@@ -270,6 +278,28 @@ class GlossaryView(QWidget):
                 if vm.status in _SUCCESS_TERMINAL:
                     self.glossary_changed.emit()
 
+    def _on_review_task_console_refreshed(self) -> None:
+        """Handle review task console refresh — sync term DB, table, stats, and button state."""
+        from context_aware_translation.workflow.tasks.models import (
+            STATUS_COMPLETED,
+            STATUS_COMPLETED_WITH_ERRORS,
+            TERMINAL_TASK_STATUSES,
+        )
+
+        self.term_db.refresh()
+        self.table_model.refresh()
+        self._update_stats()
+
+        # Emit glossary_changed only on success-like completions (not cancelled/failed)
+        _SUCCESS_TERMINAL = {STATUS_COMPLETED, STATUS_COMPLETED_WITH_ERRORS}
+        for vm in self.review_task_console.task_vms():
+            if vm.status in TERMINAL_TASK_STATUSES and vm.task_id not in self._completed_task_ids:
+                self._completed_task_ids.add(vm.task_id)
+                if vm.status in _SUCCESS_TERMINAL:
+                    self.glossary_changed.emit()
+
+        self._update_review_button_state()
+
     def _update_stats(self) -> None:
         """Update the status bar with term statistics."""
         stats = self.term_db.get_term_stats()
@@ -290,8 +320,25 @@ class GlossaryView(QWidget):
     def _update_action_button_states(self) -> None:
         """Keep glossary term-table actions available whenever controls are enabled."""
         self.translate_button.setEnabled(True)
-        self.review_button.setEnabled(True)
         self.filter_rare_button.setEnabled(True)
+        self._update_review_button_state()
+
+    def _update_review_button_state(self) -> None:
+        """Enable/disable review button based on engine preflight."""
+        engine_decision = self._task_engine.preflight(
+            "glossary_review",
+            self.book_id,
+            {},
+            TaskAction.RUN,
+        )
+        if engine_decision.allowed:
+            self.review_button.setEnabled(True)
+            self.review_button.setToolTip(self.tr("Run an LLM review pass on unreviewed glossary terms."))
+        else:
+            self.review_button.setEnabled(False)
+            self.review_button.setToolTip(
+                qarg(self.tr("Review unavailable: %1"), engine_decision.reason or engine_decision.code or "")
+            )
 
     def _on_search_changed(self, text: str) -> None:
         """Handle search text change.
@@ -695,8 +742,22 @@ class GlossaryView(QWidget):
         )
 
     def _on_review_terms(self) -> None:
-        """Handle review terms button click."""
-        if self._review_worker and self._review_worker.isRunning():
+        """Handle review terms button click — submit a glossary_review engine task."""
+        engine_decision = self._task_engine.preflight(
+            "glossary_review",
+            self.book_id,
+            {},
+            TaskAction.RUN,
+        )
+        if not engine_decision.allowed:
+            QMessageBox.warning(
+                self,
+                self.tr("Review Unavailable"),
+                qarg(
+                    self.tr("Cannot start review: %1"),
+                    engine_decision.reason or engine_decision.code or self.tr("unknown reason"),
+                ),
+            )
             return
 
         reply = QMessageBox.question(
@@ -709,34 +770,17 @@ class GlossaryView(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        # Start worker
-        self._review_worker = ReviewTermsWorker(self.book_manager, self.book_id)
-        self._review_worker.progress.connect(self._on_progress)
-        self._review_worker.finished_success.connect(self._on_review_finished)
-        self._review_worker.cancelled.connect(self._on_operation_cancelled)
-        self._review_worker.error.connect(self._on_operation_error)
-        self._review_worker.finished.connect(self._on_review_worker_finished)
+        try:
+            self._task_engine.submit("glossary_review", self.book_id)
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                self.tr("Submit Failed"),
+                self._format_submit_error(exc),
+            )
+            return
 
-        # Show progress
-        self.progress_widget.reset()
-        self.progress_widget.set_cancellable(True)
-        self.progress_widget.show()
-
-        # Disable controls
-        self._set_controls_enabled(False)
-
-        self._review_worker.start()
-
-    def _on_review_finished(self, _result) -> None:
-        """Handle review terms completion."""
-        self.progress_widget.hide()
-        self._set_controls_enabled(True)
-
-        self.table_model.refresh()
-        self._update_stats()
-        self.glossary_changed.emit()
-
-        QMessageBox.information(self, self.tr("Review Complete"), self.tr("Terms have been reviewed successfully."))
+        self._update_review_button_state()
 
     def _on_export_finished(self, result: object) -> None:
         """Handle glossary export completion."""
@@ -770,8 +814,6 @@ class GlossaryView(QWidget):
         # Try to cancel any running worker
         if self._translate_worker and self._translate_worker.isRunning():
             self._translate_worker.requestInterruption()
-        if self._review_worker and self._review_worker.isRunning():
-            self._review_worker.requestInterruption()
         if self._export_worker and self._export_worker.isRunning():
             self._export_worker.requestInterruption()
         self.progress_widget.message_label.setText(self.tr("Cancelling..."))
@@ -788,11 +830,6 @@ class GlossaryView(QWidget):
         self.progress_widget.set_cancellable(True)
         self._translate_worker = None
 
-    def _on_review_worker_finished(self) -> None:
-        """Reset review worker pointer."""
-        self.progress_widget.set_cancellable(True)
-        self._review_worker = None
-
     def _on_export_worker_finished(self) -> None:
         """Reset export worker pointer."""
         self.progress_widget.set_cancellable(True)
@@ -807,7 +844,6 @@ class GlossaryView(QWidget):
         self.search_input.setEnabled(enabled)
         self.filter_combo.setEnabled(enabled)
         self.translate_button.setEnabled(enabled)
-        self.review_button.setEnabled(enabled)
         self.filter_rare_button.setEnabled(enabled)
         self.refresh_button.setEnabled(enabled)
         self.export_button.setEnabled(enabled)
@@ -820,7 +856,6 @@ class GlossaryView(QWidget):
             self.build_button.setEnabled(False)
             self.doc_combo.setEnabled(False)
             self.translate_button.setEnabled(False)
-            self.review_button.setEnabled(False)
             self.filter_rare_button.setEnabled(False)
 
     def _get_selected_keys(self) -> list[str]:
@@ -1058,13 +1093,12 @@ class GlossaryView(QWidget):
         if hasattr(self, "task_console"):
             self.task_console.cleanup()
 
+        if hasattr(self, "review_task_console"):
+            self.review_task_console.cleanup()
+
         if self._translate_worker and self._translate_worker.isRunning():
             self._translate_worker.requestInterruption()
             self._translate_worker.wait()
-
-        if self._review_worker and self._review_worker.isRunning():
-            self._review_worker.requestInterruption()
-            self._review_worker.wait()
 
         if self._export_worker and self._export_worker.isRunning():
             self._export_worker.requestInterruption()

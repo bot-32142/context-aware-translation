@@ -73,34 +73,6 @@ class TranslateGlossaryWorker(BaseWorker):
         self.finished_success.emit(None)
 
 
-class ReviewTermsWorker(BaseWorker):
-    """Worker for reviewing unreviewed terms."""
-
-    def __init__(self, book_manager: BookManager, book_id: str) -> None:
-        """Initialize the worker.
-
-        Args:
-            book_manager: Book manager instance
-            book_id: Book ID to review terms for
-        """
-        super().__init__()
-        self.book_manager = book_manager
-        self.book_id = book_id
-
-    def _execute(self) -> None:
-        """Run the term review process."""
-        self._raise_if_cancelled()
-        translator = WorkflowSession.from_book(self.book_manager, self.book_id)
-        with translator as session:
-            asyncio.run(
-                session.review_terms(
-                    progress_callback=self._emit_progress,
-                    cancel_check=self._is_cancelled,
-                )
-            )
-        self.finished_success.emit(None)
-
-
 class ExportGlossaryWorker(BaseWorker):
     """Worker for exporting glossary JSON with summarized descriptions."""
 

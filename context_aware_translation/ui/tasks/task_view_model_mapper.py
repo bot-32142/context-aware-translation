@@ -11,6 +11,7 @@ from .task_view_models import TaskRowVM
 _TASK_TYPE_TITLES: dict[str, str] = {
     "batch_translation": "Batch Translation",
     "glossary_extraction": "Glossary Extraction",
+    "glossary_review": "Glossary Review",
     "sync_translation": "Sync Translation",
     "chunk_retranslation": "Chunk Retranslation",
 }
@@ -23,7 +24,13 @@ def _make_title(record: TaskRecord) -> str:
     return f"{title} #{record.task_id[:8]}"
 
 
-def _make_scope_label(document_ids_json: str | None) -> str:
+_NO_DOCUMENT_TASK_TYPES: frozenset[str] = frozenset({"glossary_review"})
+
+
+def _make_scope_label(record: TaskRecord) -> str:
+    if record.task_type in _NO_DOCUMENT_TASK_TYPES:
+        return "No document scope"
+    document_ids_json = record.document_ids_json
     if not document_ids_json:
         return "All documents"
     try:
@@ -57,7 +64,7 @@ def map_task_to_row_vm(record: TaskRecord) -> TaskRowVM:
         book_id=record.book_id,
         task_type=record.task_type,
         title=_make_title(record),
-        scope_label=_make_scope_label(record.document_ids_json),
+        scope_label=_make_scope_label(record),
         status=record.status,
         phase=record.phase,
         completed_items=_normalize_progress(record.completed_items),

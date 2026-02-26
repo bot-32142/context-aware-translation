@@ -8,7 +8,7 @@ from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
 
 from context_aware_translation.workflow.tasks.claims import ResourceClaim
 from context_aware_translation.workflow.tasks.engine_core import EngineCore
-from context_aware_translation.workflow.tasks.exceptions import CancelDispatchRaceError
+from context_aware_translation.workflow.tasks.exceptions import CancelDispatchRaceError, RunValidationError
 from context_aware_translation.workflow.tasks.models import TaskAction
 
 if TYPE_CHECKING:
@@ -200,6 +200,17 @@ class TaskEngine(QObject):
         for task_id in startable:
             try:
                 self._start_action(task_id, TaskAction.RUN)
+            except RunValidationError as exc:
+                # validate_run rejected — mark task failed so it does not loop.
+                logger.warning("Run validation failed for task %s: %s", task_id, exc)
+                try:
+                    self._store.update(task_id, status="failed", last_error=str(exc))
+                except Exception:
+                    logger.exception("Could not mark task %s failed after RunValidationError", task_id)
+                record = self._core.get_task(task_id)
+                if record is not None:
+                    self.enqueue_task_changed.emit(record.book_id)
+                continue
             except RuntimeError as exc:
                 # Denied action or conflicts should not crash scheduler loop.
                 logger.debug("Skipped task %s in tick: %s", task_id, exc)

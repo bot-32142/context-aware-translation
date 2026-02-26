@@ -7,7 +7,7 @@ import time
 from typing import TYPE_CHECKING
 
 from context_aware_translation.workflow.tasks.claims import ClaimArbiter, ResourceClaim
-from context_aware_translation.workflow.tasks.exceptions import CancelDispatchRaceError
+from context_aware_translation.workflow.tasks.exceptions import CancelDispatchRaceError, RunValidationError
 from context_aware_translation.workflow.tasks.handlers.base import TaskTypeHandler
 from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, ActionSnapshot, Decision, TaskAction
 
@@ -291,7 +291,7 @@ class EngineCore:
             if action == TaskAction.RUN:
                 run_decision = handler.validate_run(record, payload, self._deps)
                 if not run_decision.allowed:
-                    raise RuntimeError(
+                    raise RunValidationError(
                         f"Run validation failed for task {task_id}: "
                         f"code={run_decision.code}, reason={run_decision.reason}"
                     )

@@ -342,40 +342,56 @@ def test_ocr_worker_does_not_emit_success_when_session_exit_fails(monkeypatch: p
     assert "RuntimeError: close failed" in errors[0]
 
 
-def test_glossary_workers_do_not_emit_success_when_session_exit_fails(monkeypatch: pytest.MonkeyPatch):
-    from context_aware_translation.ui.workers.glossary_worker import (
-        ReviewTermsWorker,
-        TranslateGlossaryWorker,
-    )
+def test_glossary_translate_worker_does_not_emit_success_when_session_exit_fails(monkeypatch: pytest.MonkeyPatch):
+    from context_aware_translation.ui.workers.glossary_worker import TranslateGlossaryWorker
 
     class _TranslateSession:
         async def translate_glossary(self, **kwargs) -> None:  # noqa: ANN003
             _ = kwargs
 
+    worker = TranslateGlossaryWorker(MagicMock(), "book-id")
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.glossary_worker.WorkflowSession.from_book",
+        lambda *_args, **_kwargs: _TranslatorContext(
+            _TranslateSession(), exit_error=RuntimeError("close failed")
+        ),
+    )
+
+    success, cancelled, errors = _capture_signals(worker)
+    worker.run()
+
+    assert success == []
+    assert cancelled == []
+    assert len(errors) == 1
+    assert "RuntimeError: close failed" in errors[0]
+
+
+def test_glossary_review_task_worker_does_not_emit_success_when_session_exit_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
+
     class _ReviewSession:
         async def review_terms(self, **kwargs) -> None:  # noqa: ANN003
             _ = kwargs
 
-    workers_and_sessions = [
-        (TranslateGlossaryWorker(MagicMock(), "book-id"), _TranslateSession()),
-        (ReviewTermsWorker(MagicMock(), "book-id"), _ReviewSession()),
-    ]
+    book_manager = MagicMock()
+    book_manager.get_book_db_path.return_value = tmp_path / "book.db"
+    worker = GlossaryReviewTaskWorker(book_manager, "book-id", action="run", task_id="task-1")
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.glossary_review_task_worker.WorkflowSession.from_book",
+        lambda *_args, **_kwargs: _TranslatorContext(
+            _ReviewSession(), exit_error=RuntimeError("close failed")
+        ),
+    )
 
-    for worker, session in workers_and_sessions:
-        monkeypatch.setattr(
-            "context_aware_translation.ui.workers.glossary_worker.WorkflowSession.from_book",
-            lambda *_args, _session=session, **_kwargs: _TranslatorContext(
-                _session, exit_error=RuntimeError("close failed")
-            ),
-        )
+    success, cancelled, errors = _capture_signals(worker)
+    worker.run()
 
-        success, cancelled, errors = _capture_signals(worker)
-        worker.run()
-
-        assert success == []
-        assert cancelled == []
-        assert len(errors) == 1
-        assert "RuntimeError: close failed" in errors[0]
+    assert success == []
+    assert cancelled == []
+    assert len(errors) == 1
+    assert "RuntimeError: close failed" in errors[0]
 
 
 def test_export_glossary_worker_forwards_skip_context(monkeypatch: pytest.MonkeyPatch):

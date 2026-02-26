@@ -165,20 +165,18 @@ def test_glossary_view_cleanup_waits_without_timeout():
         view = GlossaryView(None, "")
 
     translate_worker = _FakeWorker()
-    review_worker = _FakeWorker()
     export_worker = _FakeWorker()
     view.task_console = MagicMock()
+    view.review_task_console = MagicMock()
     view._translate_worker = translate_worker
-    view._review_worker = review_worker
     view._export_worker = export_worker
     view.term_db = MagicMock()
     view.cleanup()
 
     view.task_console.cleanup.assert_called_once()
+    view.review_task_console.cleanup.assert_called_once()
     assert translate_worker.interruption_requested
-    assert review_worker.interruption_requested
     assert export_worker.interruption_requested
     assert translate_worker.wait_calls == [()]
-    assert review_worker.wait_calls == [()]
     assert export_worker.wait_calls == [()]
     view.term_db.close.assert_called_once()

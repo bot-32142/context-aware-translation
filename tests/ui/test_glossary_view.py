@@ -486,3 +486,113 @@ def test_export_glossary_forwards_skip_context_to_worker():
     view.progress_widget.set_cancellable.assert_called_once_with(True)
     view.progress_widget.show.assert_called_once()
     view._set_controls_enabled.assert_called_once_with(False)
+
+
+def test_review_button_disabled_when_engine_preflight_denied():
+    from context_aware_translation.workflow.tasks.models import Decision
+
+    view = _make_view()
+    view._task_engine.preflight.return_value = Decision(
+        allowed=False, code="no_review_config", reason="Review config not set."
+    )
+
+    view._update_review_button_state()
+
+    assert not view.review_button.isEnabled()
+    assert "no_review_config" in view.review_button.toolTip() or "Review config" in view.review_button.toolTip()
+
+
+def test_review_button_enabled_when_engine_preflight_allowed():
+    from context_aware_translation.workflow.tasks.models import Decision
+
+    view = _make_view()
+    view._task_engine.preflight.return_value = Decision(allowed=True)
+
+    view._update_review_button_state()
+
+    assert view.review_button.isEnabled()
+
+
+def test_on_review_terms_shows_warning_when_preflight_denied():
+    from context_aware_translation.workflow.tasks.models import Decision
+
+    view = _make_view()
+    view._task_engine.preflight.return_value = Decision(
+        allowed=False, code="no_pending_terms", reason="No terms pending review."
+    )
+
+    with patch("context_aware_translation.ui.views.glossary_view.QMessageBox.warning") as warning_mock:
+        view._on_review_terms()
+
+    warning_mock.assert_called_once()
+    view._task_engine.submit.assert_not_called()
+
+
+def test_on_review_terms_submits_task_when_preflight_allowed():
+    from context_aware_translation.workflow.tasks.models import Decision
+
+    view = _make_view()
+    view._task_engine.preflight.return_value = Decision(allowed=True)
+    view._update_review_button_state = MagicMock()
+
+    with patch(
+        "context_aware_translation.ui.views.glossary_view.QMessageBox.question",
+        return_value=QMessageBox.StandardButton.Yes,
+    ):
+        view._on_review_terms()
+
+    view._task_engine.submit.assert_called_once_with("glossary_review", "test-book")
+    view._update_review_button_state.assert_called_once()
+
+
+def test_on_review_terms_does_not_submit_when_user_cancels():
+    from context_aware_translation.workflow.tasks.models import Decision
+
+    view = _make_view()
+    view._task_engine.preflight.return_value = Decision(allowed=True)
+
+    with patch(
+        "context_aware_translation.ui.views.glossary_view.QMessageBox.question",
+        return_value=QMessageBox.StandardButton.No,
+    ):
+        view._on_review_terms()
+
+    view._task_engine.submit.assert_not_called()
+
+
+def test_on_review_terms_shows_error_when_submit_raises():
+    from context_aware_translation.workflow.tasks.models import Decision
+
+    view = _make_view()
+    view._task_engine.preflight.return_value = Decision(allowed=True)
+    view._task_engine.submit.side_effect = RuntimeError("engine error")
+
+    with (
+        patch(
+            "context_aware_translation.ui.views.glossary_view.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Yes,
+        ),
+        patch("context_aware_translation.ui.views.glossary_view.QMessageBox.critical") as critical_mock,
+    ):
+        view._on_review_terms()
+
+    critical_mock.assert_called_once()
+
+
+def test_glossary_view_cleanup_calls_review_task_console_cleanup():
+    from context_aware_translation.ui.views.glossary_view import GlossaryView
+
+    with patch.object(GlossaryView, "__init__", _noop_init):
+        view = GlossaryView(None, "")
+
+    view.task_console = MagicMock()
+    view.review_task_console = MagicMock()
+    view._translate_worker = None
+    view._export_worker = None
+    view.term_db = MagicMock()
+
+    view.cleanup()
+
+    view.task_console.cleanup.assert_called_once()
+    view.review_task_console.cleanup.assert_called_once()
+    view.term_db.close.assert_called_once()

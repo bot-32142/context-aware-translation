@@ -24,6 +24,7 @@ from context_aware_translation.workflow.session import WorkflowSession
 from context_aware_translation.workflow.tasks.handlers.batch_translation import BatchTranslationHandler
 from context_aware_translation.workflow.tasks.handlers.chunk_retranslation import ChunkRetranslationHandler
 from context_aware_translation.workflow.tasks.handlers.glossary_extraction import GlossaryExtractionHandler
+from context_aware_translation.workflow.tasks.handlers.glossary_review import GlossaryReviewHandler
 from context_aware_translation.workflow.tasks.handlers.sync_translation import SyncTranslationHandler
 from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
@@ -83,6 +84,7 @@ class MainWindow(QMainWindow):
         self._task_engine = TaskEngine(store=self._task_store, deps=self._worker_deps, parent=self)
         self._task_engine.register_handler(BatchTranslationHandler())
         self._task_engine.register_handler(GlossaryExtractionHandler())
+        self._task_engine.register_handler(GlossaryReviewHandler())
         self._task_engine.register_handler(SyncTranslationHandler())
         self._task_engine.register_handler(ChunkRetranslationHandler())
         self._task_engine.running_work_changed.connect(self._on_engine_running_work_changed)

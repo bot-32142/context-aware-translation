@@ -45,6 +45,10 @@ class TestTitleMapping:
         vm = map_task_to_row_vm(_make_record(task_type="glossary_extraction"))
         assert vm.title == "Glossary Extraction #abcd1234"
 
+    def test_glossary_review_title(self):
+        vm = map_task_to_row_vm(_make_record(task_type="glossary_review"))
+        assert vm.title == "Glossary Review #abcd1234"
+
     def test_sync_translation_title(self):
         vm = map_task_to_row_vm(_make_record(task_type="sync_translation"))
         assert vm.title == "Sync Translation #abcd1234"
@@ -78,6 +82,16 @@ class TestScopeLabel:
     def test_invalid_json_falls_back(self):
         vm = map_task_to_row_vm(_make_record(document_ids_json="{bad"))
         assert vm.scope_label == "All documents"
+
+    def test_glossary_review_scope_is_no_document_scope(self):
+        """glossary_review tasks operate on no specific documents."""
+        vm = map_task_to_row_vm(_make_record(task_type="glossary_review", document_ids_json=None))
+        assert vm.scope_label == "No document scope"
+
+    def test_glossary_review_scope_ignores_document_ids_json(self):
+        """glossary_review always reports 'No document scope' regardless of document_ids_json."""
+        vm = map_task_to_row_vm(_make_record(task_type="glossary_review", document_ids_json="[1,2,3]"))
+        assert vm.scope_label == "No document scope"
 
 
 class TestProgressNormalization:

@@ -56,10 +56,8 @@ def test_get_running_operations_detects_all_supported_views():
     workspace._view_cache = {
         0: SimpleNamespace(worker=_Worker(True)),  # Import
         1: SimpleNamespace(ocr_worker=_Worker(True)),  # OCR
-        2: SimpleNamespace(  # Glossary
-            _build_worker=_Worker(False),
+        2: SimpleNamespace(  # Glossary — only _translate_worker is local now
             _translate_worker=_Worker(True),
-            _review_worker=_Worker(False),
         ),
         4: SimpleNamespace(worker=_Worker(False)),  # Export
     }
@@ -181,9 +179,7 @@ def test_request_cancel_running_operations_requests_interruption_for_all_running
     workspace = _make_workspace()
     import_worker = _Worker(True)
     ocr_worker = _Worker(True)
-    glossary_build = _Worker(False)
     glossary_translate = _Worker(True)
-    glossary_review = _Worker(False)
     glossary_export = _Worker(True)
     export_worker = _Worker(True)
 
@@ -191,9 +187,7 @@ def test_request_cancel_running_operations_requests_interruption_for_all_running
         0: SimpleNamespace(worker=import_worker),
         1: SimpleNamespace(ocr_worker=ocr_worker),
         2: SimpleNamespace(
-            _build_worker=glossary_build,
             _translate_worker=glossary_translate,
-            _review_worker=glossary_review,
             _export_worker=glossary_export,
         ),
         # Translation tab (index 3): no direct worker — cancelled via engine
@@ -204,9 +198,7 @@ def test_request_cancel_running_operations_requests_interruption_for_all_running
 
     assert import_worker.interruption_requested is True
     assert ocr_worker.interruption_requested is True
-    assert glossary_build.interruption_requested is False
     assert glossary_translate.interruption_requested is True
-    assert glossary_review.interruption_requested is False
     assert glossary_export.interruption_requested is True
     assert export_worker.interruption_requested is True
     # Engine cancel_running_tasks is called for engine-managed translation tasks
