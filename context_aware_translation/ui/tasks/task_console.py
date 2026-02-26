@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
@@ -62,7 +63,7 @@ class TaskConsole(QWidget):
         self,
         task_engine,
         book_id: str,
-        task_type: str,
+        task_type: str | Sequence[str],
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -103,7 +104,13 @@ class TaskConsole(QWidget):
 
     def refresh(self) -> None:
         """Re-fetch tasks from the engine and repaint the list."""
-        records = self._engine.get_tasks(self._book_id, task_type=self._task_type)
+        if isinstance(self._task_type, str):
+            records = self._engine.get_tasks(self._book_id, task_type=self._task_type)
+        else:
+            records = []
+            for tt in self._task_type:
+                records.extend(self._engine.get_tasks(self._book_id, task_type=tt))
+            records.sort(key=lambda r: r.updated_at, reverse=True)
         self._vms = map_tasks_to_row_vms(records)
 
         # Track when tasks first enter "running" and prune stale entries.

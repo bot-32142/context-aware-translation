@@ -300,8 +300,8 @@ def test_build_glossary_all_selection_processes_all_pending_documents_only():
     ):
         view._on_build_glossary()
 
-    view._task_engine.submit.assert_called_once()
-    call_args = view._task_engine.submit.call_args
+    view._task_engine.submit_and_start.assert_called_once()
+    call_args = view._task_engine.submit_and_start.call_args
     assert call_args.args[0] == "glossary_extraction"
     assert call_args.args[1] == "book"
     assert call_args.kwargs["document_ids"] == [2, 4]
@@ -333,7 +333,7 @@ def test_build_glossary_blocks_when_earlier_ocr_required_document_is_pending():
         view._on_build_glossary()
 
     question_mock.assert_not_called()
-    view._task_engine.submit.assert_not_called()
+    view._task_engine.submit_and_start.assert_not_called()
     assert warning_mock.call_count == 1
     assert "earlier OCR-required" in warning_mock.call_args.args[2]
 
@@ -525,7 +525,7 @@ def test_on_review_terms_shows_warning_when_preflight_denied():
         view._on_review_terms()
 
     warning_mock.assert_called_once()
-    view._task_engine.submit.assert_not_called()
+    view._task_engine.submit_and_start.assert_not_called()
 
 
 def test_on_review_terms_submits_task_when_preflight_allowed():
@@ -541,7 +541,7 @@ def test_on_review_terms_submits_task_when_preflight_allowed():
     ):
         view._on_review_terms()
 
-    view._task_engine.submit.assert_called_once_with("glossary_review", "test-book")
+    view._task_engine.submit_and_start.assert_called_once_with("glossary_review", "test-book")
     view._update_review_button_state.assert_called_once()
 
 
@@ -557,7 +557,7 @@ def test_on_review_terms_does_not_submit_when_user_cancels():
     ):
         view._on_review_terms()
 
-    view._task_engine.submit.assert_not_called()
+    view._task_engine.submit_and_start.assert_not_called()
 
 
 def test_on_review_terms_shows_error_when_submit_raises():
@@ -565,7 +565,7 @@ def test_on_review_terms_shows_error_when_submit_raises():
 
     view = _make_view()
     view._task_engine.preflight.return_value = Decision(allowed=True)
-    view._task_engine.submit.side_effect = RuntimeError("engine error")
+    view._task_engine.submit_and_start.side_effect = RuntimeError("engine error")
 
     with (
         patch(
@@ -579,20 +579,17 @@ def test_on_review_terms_shows_error_when_submit_raises():
     critical_mock.assert_called_once()
 
 
-def test_glossary_view_cleanup_calls_review_task_console_cleanup():
+def test_glossary_view_cleanup_calls_task_console_cleanup():
     from context_aware_translation.ui.views.glossary_view import GlossaryView
 
     with patch.object(GlossaryView, "__init__", _noop_init):
         view = GlossaryView(None, "")
 
     view.task_console = MagicMock()
-    view.review_task_console = MagicMock()
-    view._translate_worker = None
     view._export_worker = None
     view.term_db = MagicMock()
 
     view.cleanup()
 
     view.task_console.cleanup.assert_called_once()
-    view.review_task_console.cleanup.assert_called_once()
     view.term_db.close.assert_called_once()

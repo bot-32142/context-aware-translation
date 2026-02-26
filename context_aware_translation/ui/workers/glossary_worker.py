@@ -1,6 +1,5 @@
 """Workers for glossary operations."""
 
-import asyncio
 import logging
 from pathlib import Path
 
@@ -12,65 +11,6 @@ from context_aware_translation.workflow.session import WorkflowSession
 from .base_worker import BaseWorker
 
 logger = logging.getLogger(__name__)
-
-
-class BuildGlossaryWorker(BaseWorker):
-    """Worker for building glossary (extract + translate terms)."""
-
-    def __init__(self, book_manager: BookManager, book_id: str, document_ids: list[int] | None = None) -> None:
-        """Initialize the worker.
-
-        Args:
-            book_manager: Book manager instance
-            book_id: Book ID to build glossary for
-            document_ids: Specific document IDs to process, or None for all
-        """
-        super().__init__()
-        self.book_manager = book_manager
-        self.book_id = book_id
-        self.document_ids = document_ids
-
-    def _execute(self) -> None:
-        """Run the glossary building process."""
-        self._raise_if_cancelled()
-        translator = WorkflowSession.from_book(self.book_manager, self.book_id)
-        with translator as session:
-            asyncio.run(
-                session.build_glossary(
-                    document_ids=self.document_ids,
-                    progress_callback=self._emit_progress,
-                    cancel_check=self._is_cancelled,
-                )
-            )
-        self.finished_success.emit(None)
-
-
-class TranslateGlossaryWorker(BaseWorker):
-    """Worker for re-translating glossary terms."""
-
-    def __init__(self, book_manager: BookManager, book_id: str) -> None:
-        """Initialize the worker.
-
-        Args:
-            book_manager: Book manager instance
-            book_id: Book ID to translate glossary for
-        """
-        super().__init__()
-        self.book_manager = book_manager
-        self.book_id = book_id
-
-    def _execute(self) -> None:
-        """Run the glossary translation process."""
-        self._raise_if_cancelled()
-        translator = WorkflowSession.from_book(self.book_manager, self.book_id)
-        with translator as session:
-            asyncio.run(
-                session.translate_glossary(
-                    progress_callback=self._emit_progress,
-                    cancel_check=self._is_cancelled,
-                )
-            )
-        self.finished_success.emit(None)
 
 
 class ExportGlossaryWorker(BaseWorker):

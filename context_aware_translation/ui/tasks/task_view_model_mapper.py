@@ -12,6 +12,7 @@ _TASK_TYPE_TITLES: dict[str, str] = {
     "batch_translation": "Batch Translation",
     "glossary_extraction": "Glossary Extraction",
     "glossary_review": "Glossary Review",
+    "glossary_translation": "Glossary Translation",
     "sync_translation": "Sync Translation",
     "chunk_retranslation": "Chunk Retranslation",
 }
@@ -24,7 +25,7 @@ def _make_title(record: TaskRecord) -> str:
     return f"{title} #{record.task_id[:8]}"
 
 
-_NO_DOCUMENT_TASK_TYPES: frozenset[str] = frozenset({"glossary_review"})
+_NO_DOCUMENT_TASK_TYPES: frozenset[str] = frozenset({"glossary_review", "glossary_translation"})
 
 
 def _make_scope_label(record: TaskRecord) -> str:

@@ -342,16 +342,16 @@ def test_ocr_worker_does_not_emit_success_when_session_exit_fails(monkeypatch: p
     assert "RuntimeError: close failed" in errors[0]
 
 
-def test_glossary_translate_worker_does_not_emit_success_when_session_exit_fails(monkeypatch: pytest.MonkeyPatch):
-    from context_aware_translation.ui.workers.glossary_worker import TranslateGlossaryWorker
+def test_glossary_translate_task_worker_does_not_emit_success_when_session_exit_fails(monkeypatch: pytest.MonkeyPatch):
+    from context_aware_translation.ui.workers.glossary_translation_task_worker import GlossaryTranslationTaskWorker
 
     class _TranslateSession:
         async def translate_glossary(self, **kwargs) -> None:  # noqa: ANN003
             _ = kwargs
 
-    worker = TranslateGlossaryWorker(MagicMock(), "book-id")
+    worker = GlossaryTranslationTaskWorker(MagicMock(), "book-id", action="run")
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_worker.WorkflowSession.from_book",
+        "context_aware_translation.ui.workers.glossary_translation_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _TranslatorContext(
             _TranslateSession(), exit_error=RuntimeError("close failed")
         ),

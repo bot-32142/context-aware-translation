@@ -52,13 +52,18 @@ def test_get_running_operations_detects_all_supported_views():
     workspace = _make_workspace()
     # Engine-managed tasks (sync_translation, batch_translation) continue in
     # background and are NOT reported as running operations on leave-book.
-    workspace._task_engine.get_tasks.return_value = []
+    # Glossary operations are now fully engine-managed — simulate a running extraction.
+    _running_task = SimpleNamespace(status="running")
+
+    def _mock_get_tasks(book_id, task_type=None):
+        if task_type == "glossary_extraction":
+            return [_running_task]
+        return []
+
+    workspace._task_engine.get_tasks.side_effect = _mock_get_tasks
     workspace._view_cache = {
         0: SimpleNamespace(worker=_Worker(True)),  # Import
         1: SimpleNamespace(ocr_worker=_Worker(True)),  # OCR
-        2: SimpleNamespace(  # Glossary — only _translate_worker is local now
-            _translate_worker=_Worker(True),
-        ),
         4: SimpleNamespace(worker=_Worker(False)),  # Export
     }
 
@@ -179,7 +184,6 @@ def test_request_cancel_running_operations_requests_interruption_for_all_running
     workspace = _make_workspace()
     import_worker = _Worker(True)
     ocr_worker = _Worker(True)
-    glossary_translate = _Worker(True)
     glossary_export = _Worker(True)
     export_worker = _Worker(True)
 
@@ -187,7 +191,6 @@ def test_request_cancel_running_operations_requests_interruption_for_all_running
         0: SimpleNamespace(worker=import_worker),
         1: SimpleNamespace(ocr_worker=ocr_worker),
         2: SimpleNamespace(
-            _translate_worker=glossary_translate,
             _export_worker=glossary_export,
         ),
         # Translation tab (index 3): no direct worker — cancelled via engine
@@ -198,7 +201,6 @@ def test_request_cancel_running_operations_requests_interruption_for_all_running
 
     assert import_worker.interruption_requested is True
     assert ocr_worker.interruption_requested is True
-    assert glossary_translate.interruption_requested is True
     assert glossary_export.interruption_requested is True
     assert export_worker.interruption_requested is True
     # Engine cancel_running_tasks is called for engine-managed translation tasks
