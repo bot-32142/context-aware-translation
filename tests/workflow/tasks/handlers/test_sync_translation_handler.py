@@ -14,9 +14,7 @@ from context_aware_translation.workflow.tasks.handlers.sync_translation import S
 from context_aware_translation.workflow.tasks.models import (
     STATUS_CANCEL_REQUESTED,
     STATUS_CANCELLED,
-    STATUS_CANCELLING,
     STATUS_COMPLETED,
-    STATUS_COMPLETED_WITH_ERRORS,
     STATUS_FAILED,
     STATUS_PAUSED,
     STATUS_QUEUED,
@@ -129,6 +127,7 @@ def test_claims_specific_docs_when_scope_is_some():
 
 # --- can() tests ---
 
+
 def test_can_run_queued():
     record = _make_record(status=STATUS_QUEUED)
     result = handler.can(TaskAction.RUN, record, {}, _make_snapshot())
@@ -203,6 +202,7 @@ def test_cannot_delete_cancel_requested():
 
 # --- can_autorun() tests ---
 
+
 def test_can_autorun_queued_no_conflicts():
     record = _make_record(status=STATUS_QUEUED)
     result = handler.can_autorun(record, {}, _make_snapshot())
@@ -230,6 +230,7 @@ def test_cannot_autorun_with_claim_conflict():
 
 
 # --- validate_submit() tests ---
+
 
 def _deps_with_documents(tmp_path, documents):
     """Create WorkerDeps mock with a fake book DB returning *documents*."""
@@ -283,6 +284,7 @@ def test_validate_run_always_allowed():
 
 
 # --- build_worker() tests ---
+
 
 def test_build_worker_run_returns_sync_translation_task_worker():
     from unittest.mock import MagicMock
@@ -338,11 +340,11 @@ def test_pre_delete_returns_empty_list():
 # config_snapshot_json tests
 # ---------------------------------------------------------------------------
 
+
 def test_build_worker_run_passes_config_snapshot_to_worker():
     """build_worker(RUN) must forward config_snapshot_json from record to the worker."""
-    from unittest.mock import MagicMock
-
     import json
+    from unittest.mock import MagicMock
 
     snapshot = json.dumps({"snapshot_version": 1, "config": {"key": "val"}})
     deps = MagicMock()
@@ -355,5 +357,6 @@ def test_build_worker_run_passes_config_snapshot_to_worker():
     worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
 
     from context_aware_translation.ui.workers.sync_translation_task_worker import SyncTranslationTaskWorker
+
     assert isinstance(worker, SyncTranslationTaskWorker)
     assert worker._config_snapshot_json == snapshot

@@ -13,7 +13,6 @@ from context_aware_translation.workflow.tasks.handlers.chunk_retranslation impor
 from context_aware_translation.workflow.tasks.models import (
     STATUS_CANCEL_REQUESTED,
     STATUS_CANCELLED,
-    STATUS_CANCELLING,
     STATUS_COMPLETED,
     STATUS_FAILED,
     STATUS_PAUSED,
@@ -124,6 +123,7 @@ def test_claims_all_docs_when_no_doc_id():
 
 # --- can() tests ---
 
+
 def test_can_run_queued():
     record = _make_record(status=STATUS_QUEUED)
     result = handler.can(TaskAction.RUN, record, {}, _make_snapshot())
@@ -198,6 +198,7 @@ def test_cannot_delete_cancel_requested():
 
 # --- can_autorun() tests ---
 
+
 def test_can_autorun_always_denied():
     """Chunk retranslation is interactive-only — autorun is always denied."""
     record = _make_record(status=STATUS_QUEUED)
@@ -228,6 +229,7 @@ def test_cannot_autorun_with_claim_conflict():
 
 
 # --- validate_submit() tests ---
+
 
 def test_validate_submit_requires_chunk_id():
     from unittest.mock import MagicMock
@@ -319,6 +321,7 @@ def test_validate_run_allowed_with_both():
 
 
 # --- build_worker() tests ---
+
 
 def test_build_worker_run_returns_chunk_retranslation_task_worker():
     from unittest.mock import MagicMock

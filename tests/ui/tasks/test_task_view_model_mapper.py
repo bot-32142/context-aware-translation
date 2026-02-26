@@ -15,23 +15,23 @@ from context_aware_translation.ui.tasks import (
 
 
 def _make_record(**overrides) -> TaskRecord:
-    defaults = dict(
-        task_id="abcd1234-5678-9abc-def0-1234567890ab",
-        book_id="book-001",
-        task_type="batch_translation",
-        status="running",
-        phase="translating",
-        document_ids_json=None,
-        payload_json=None,
-        config_snapshot_json=None,
-        cancel_requested=False,
-        total_items=10,
-        completed_items=3,
-        failed_items=0,
-        last_error=None,
-        created_at=time.time(),
-        updated_at=time.time(),
-    )
+    defaults = {
+        "task_id": "abcd1234-5678-9abc-def0-1234567890ab",
+        "book_id": "book-001",
+        "task_type": "batch_translation",
+        "status": "running",
+        "phase": "translating",
+        "document_ids_json": None,
+        "payload_json": None,
+        "config_snapshot_json": None,
+        "cancel_requested": False,
+        "total_items": 10,
+        "completed_items": 3,
+        "failed_items": 0,
+        "last_error": None,
+        "created_at": time.time(),
+        "updated_at": time.time(),
+    }
     defaults.update(overrides)
     return TaskRecord(**defaults)
 
@@ -96,17 +96,13 @@ class TestScopeLabel:
 
 class TestProgressNormalization:
     def test_negative_values_clamped_to_zero(self):
-        vm = map_task_to_row_vm(
-            _make_record(completed_items=-1, total_items=-5, failed_items=-2)
-        )
+        vm = map_task_to_row_vm(_make_record(completed_items=-1, total_items=-5, failed_items=-2))
         assert vm.completed_items == 0
         assert vm.total_items == 0
         assert vm.failed_items == 0
 
     def test_positive_values_preserved(self):
-        vm = map_task_to_row_vm(
-            _make_record(completed_items=7, total_items=10, failed_items=1)
-        )
+        vm = map_task_to_row_vm(_make_record(completed_items=7, total_items=10, failed_items=1))
         assert vm.completed_items == 7
         assert vm.total_items == 10
         assert vm.failed_items == 1
@@ -134,9 +130,7 @@ class TestNullFields:
         assert vm.last_error is None
 
     def test_phase_and_error_present(self):
-        vm = map_task_to_row_vm(
-            _make_record(phase="extracting", last_error="timeout")
-        )
+        vm = map_task_to_row_vm(_make_record(phase="extracting", last_error="timeout"))
         assert vm.phase == "extracting"
         assert vm.last_error == "timeout"
 

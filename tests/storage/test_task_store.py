@@ -149,7 +149,7 @@ def test_list_tasks_limit_caps_results(tmp_path):
     db_path = tmp_path / "tasks.db"
     store = TaskStore(db_path)
     try:
-        for i in range(10):
+        for _i in range(10):
             store.create(book_id="book-e", task_type="translation")
         results = store.list_tasks(limit=3)
     finally:
@@ -201,9 +201,11 @@ def test_multiple_creates_generate_unique_task_ids(tmp_path):
 # config_snapshot_json round-trip
 # ---------------------------------------------------------------------------
 
+
 def test_config_snapshot_json_round_trips_through_create_and_get(tmp_path):
     """config_snapshot_json written via create() must be returned verbatim by get()."""
     import json
+
     snapshot = json.dumps({"snapshot_version": 1, "config": {"key": "value"}})
     db_path = tmp_path / "tasks.db"
     store = TaskStore(db_path)
@@ -240,6 +242,7 @@ def test_config_snapshot_json_defaults_to_none(tmp_path):
 def test_config_snapshot_json_migration_adds_column(tmp_path):
     """Opening an older DB without config_snapshot_json column should migrate it via ALTER TABLE."""
     import sqlite3
+
     db_path = tmp_path / "old_tasks.db"
 
     # Create a DB without config_snapshot_json (simulating an older schema)

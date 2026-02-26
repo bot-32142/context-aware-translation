@@ -1,4 +1,5 @@
 """Tests for TaskEngine core behavior."""
+
 from __future__ import annotations
 
 import time
@@ -7,7 +8,6 @@ from unittest.mock import MagicMock
 import pytest
 
 try:
-    from PySide6.QtCore import Qt, QTimer
     from PySide6.QtWidgets import QApplication
 
     HAS_PYSIDE6 = True
@@ -120,7 +120,7 @@ def test_build_snapshot_returns_action_snapshot(engine):
     assert snap.now_monotonic > 0
 
 
-def test_build_snapshot_reflects_active_workers(engine, tmp_store):
+def test_build_snapshot_reflects_active_workers(engine, tmp_store):  # noqa: ARG001
     from context_aware_translation.workflow.tasks.claims import ResourceClaim
 
     engine._core._active_workers["fake-task-id"] = MagicMock()
@@ -156,7 +156,7 @@ def test_has_running_work_true_when_worker_active(engine):
 # ------------------------------------------------------------------
 
 
-def test_submit_creates_record(engine, tmp_store):
+def test_submit_creates_record(engine, tmp_store):  # noqa: ARG001
     handler = _make_handler("batch", can_run=False)  # can=False so worker won't start
     engine.register_handler(handler)
 

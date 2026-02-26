@@ -74,13 +74,15 @@ class ChunkRetranslationTaskWorker(BaseWorker):
                 )
             if self._task_store is not None and self._task_id is not None:
                 self._task_store.update(self._task_id, status="completed")
-            self.finished_success.emit({
-                "action": "run",
-                "task_id": self._task_id,
-                "chunk_id": self._chunk_id,
-                "document_id": self._document_id,
-                "new_translation": new_translation,
-            })
+            self.finished_success.emit(
+                {
+                    "action": "run",
+                    "task_id": self._task_id,
+                    "chunk_id": self._chunk_id,
+                    "document_id": self._document_id,
+                    "new_translation": new_translation,
+                }
+            )
         except OperationCancelledError:
             if self._task_store is not None and self._task_id is not None:
                 self._task_store.update(self._task_id, status="cancelled", cancel_requested=False)

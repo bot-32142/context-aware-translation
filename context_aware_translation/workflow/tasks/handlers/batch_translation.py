@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any
 
 from context_aware_translation.workflow.tasks.claims import (
@@ -30,6 +31,7 @@ from context_aware_translation.workflow.tasks.models import (
 
 if TYPE_CHECKING:
     from context_aware_translation.storage.task_store import TaskRecord
+    from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy, CancelOutcome
     from context_aware_translation.workflow.tasks.models import ActionSnapshot
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
@@ -37,7 +39,9 @@ logger = logging.getLogger(__name__)
 
 _RERUNNABLE_TERMINAL_STATUSES = frozenset({STATUS_CANCELLED, STATUS_FAILED, STATUS_COMPLETED_WITH_ERRORS})
 _NON_DELETABLE_STATUSES = frozenset({STATUS_RUNNING, STATUS_CANCEL_REQUESTED, STATUS_CANCELLING})
-_AUTORUN_STATUSES = frozenset({STATUS_QUEUED, STATUS_RUNNING, STATUS_PAUSED, STATUS_CANCEL_REQUESTED, STATUS_CANCELLING})
+_AUTORUN_STATUSES = frozenset(
+    {STATUS_QUEUED, STATUS_RUNNING, STATUS_PAUSED, STATUS_CANCEL_REQUESTED, STATUS_CANCELLING}
+)
 
 
 class BatchTranslationHandler:
@@ -63,7 +67,7 @@ class BatchTranslationHandler:
         claims = set()
         if isinstance(doc_scope, AllDocuments):
             claims.add(ResourceClaim("doc", book_id, "*"))
-        else:
+        elif isinstance(doc_scope, SomeDocuments):
             claims.update(ResourceClaim("doc", book_id, str(doc_id)) for doc_id in doc_scope.doc_ids)
         # Shared-resource claims for glossary state and context tree
         claims.add(ResourceClaim("glossary_state", book_id, "*", ClaimMode.READ_SHARED))
@@ -73,15 +77,17 @@ class BatchTranslationHandler:
     def validate_run(self, record: TaskRecord, payload: Any, deps: WorkerDeps) -> Decision:
         return Decision(allowed=True)
 
-    def cancel_dispatch_policy(self, record: TaskRecord, payload: Any):
+    def cancel_dispatch_policy(self, record: TaskRecord, payload: Any) -> CancelDispatchPolicy:
         from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy
+
         remote_state = (payload or {}).get("remote_submission_state", "none")
         if remote_state == "submitted":
             return CancelDispatchPolicy.REQUIRE_REMOTE_CONFIRMATION
         return CancelDispatchPolicy.LOCAL_TERMINALIZE
 
-    def classify_cancel_outcome(self, record: TaskRecord, payload: Any, provider_result: Any):
+    def classify_cancel_outcome(self, record: TaskRecord, payload: Any, provider_result: Any) -> CancelOutcome:
         from context_aware_translation.workflow.tasks.handlers.base import CancelOutcome
+
         return CancelOutcome.CONFIRMED_CANCELLED
 
     def can(self, action: TaskAction, record: TaskRecord, payload: Any, snapshot: ActionSnapshot) -> Decision:
@@ -143,11 +149,12 @@ class BatchTranslationHandler:
         warnings: list[str] = []
         snapshot_exc: Exception | None = None
 
-        def _cleanup_with_session_ctx(session_ctx) -> None:  # noqa: ANN001
+        def _cleanup_with_session_ctx(session_ctx: AbstractContextManager[Any]) -> None:
             with session_ctx as session:
                 from context_aware_translation.workflow.tasks.execution.batch_translation_executor import (
                     BatchTranslationExecutor,
                 )
+
                 executor = BatchTranslationExecutor.from_workflow(session, task_store=deps.task_store)
                 try:
                     result = executor.cleanup_remote_artifacts(record.task_id)
@@ -181,11 +188,14 @@ class BatchTranslationHandler:
                     f"live-config fallback failed ({type(live_exc).__name__}: {live_exc})"
                 )
             else:
-                warnings.append(f"pre_delete cleanup error for task {record.task_id}: {type(live_exc).__name__}: {live_exc}")
+                warnings.append(
+                    f"pre_delete cleanup error for task {record.task_id}: {type(live_exc).__name__}: {live_exc}"
+                )
         return warnings
 
-    def build_worker(self, action: TaskAction, record: TaskRecord, payload: Any, deps: WorkerDeps):
+    def build_worker(self, action: TaskAction, record: TaskRecord, payload: Any, deps: WorkerDeps) -> object:
         from context_aware_translation.ui.workers.batch_translation_task_worker import BatchTranslationTaskWorker
+
         doc_ids: list[int] | None = None
         if record.document_ids_json:
             try:

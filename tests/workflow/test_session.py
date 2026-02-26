@@ -1,4 +1,5 @@
 """Tests for WorkflowSession.from_snapshot() classmethod."""
+
 from __future__ import annotations
 
 import json

@@ -1,9 +1,10 @@
 """Tests for EngineCore config snapshot capture/refresh logic."""
+
 from __future__ import annotations
 
 import json
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -16,12 +17,11 @@ from context_aware_translation.workflow.tasks.models import (
     STATUS_QUEUED,
     TaskAction,
 )
-from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_record(
     status: str = STATUS_QUEUED,
@@ -78,6 +78,7 @@ _VALID_SNAPSHOT = json.dumps({"snapshot_version": 1, "config": {"key": "value"}}
 # submit() — config snapshot capture
 # ---------------------------------------------------------------------------
 
+
 class TestSubmitConfigSnapshot:
     def test_submit_captures_config_snapshot(self, tmp_path):
         """submit() should store a config snapshot on the created task record."""
@@ -114,6 +115,7 @@ class TestSubmitConfigSnapshot:
 # preflight() — snapshot probe
 # ---------------------------------------------------------------------------
 
+
 class TestPreflightSnapshotProbe:
     def test_preflight_returns_denied_when_snapshot_probe_fails(self, tmp_path):
         """preflight() should return denied Decision when snapshot capture raises."""
@@ -145,6 +147,7 @@ class TestPreflightSnapshotProbe:
 # ---------------------------------------------------------------------------
 # ensure_runnable() — re-capture snapshot for terminal tasks
 # ---------------------------------------------------------------------------
+
 
 class TestEnsureRunnableSnapshot:
     def test_ensure_runnable_recaptures_snapshot_for_terminal_task(self, tmp_path):
@@ -218,6 +221,7 @@ class TestEnsureRunnableSnapshot:
 # ---------------------------------------------------------------------------
 # rerun() — re-capture snapshot for terminal tasks
 # ---------------------------------------------------------------------------
+
 
 class TestRerunSnapshot:
     def test_rerun_recaptures_snapshot_for_terminal_task(self, tmp_path):

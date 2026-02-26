@@ -137,8 +137,7 @@ class BatchTranslationTaskWorker(BaseWorker):
             except Exception as snap_exc:
                 if self._should_fallback_to_live_config_on_snapshot_error():
                     logger.warning(
-                        "Config snapshot restore failed for task %s (%s action); "
-                        "falling back to live config: %s",
+                        "Config snapshot restore failed for task %s (%s action); falling back to live config: %s",
                         self.task_id,
                         self.action,
                         snap_exc,

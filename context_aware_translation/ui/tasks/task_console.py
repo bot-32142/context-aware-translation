@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Sequence
+from contextlib import suppress
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
@@ -135,10 +136,8 @@ class TaskConsole(QWidget):
     def cleanup(self) -> None:
         """Stop timer and disconnect engine signal."""
         self._auto_timer.stop()
-        try:
+        with suppress(TypeError, RuntimeError):
             self._engine.tasks_changed.disconnect(self._on_tasks_changed)
-        except (TypeError, RuntimeError):
-            pass
 
     # ------------------------------------------------------------------
     # i18n

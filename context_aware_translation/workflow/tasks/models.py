@@ -56,6 +56,7 @@ class Decision:
     reason: str = ""
     args: Mapping[str, object] = field(default_factory=dict)
 
+
 # ---------------------------------------------------------------------------
 # ActionSnapshot (from action_snapshot.py)
 # ---------------------------------------------------------------------------

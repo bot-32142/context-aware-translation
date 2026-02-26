@@ -286,7 +286,7 @@ def test_progress_updates_task_store(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     mock_db = MagicMock()
     mock_manager = MagicMock()
 
-    def mock_build_with_progress(cancel_check, progress_callback, skip_context):
+    def mock_build_with_progress(_cancel_check, progress_callback, _skip_context):
         if progress_callback:
             progress_callback(ProgressUpdate(step=WorkflowStep.EXPORT, current=3, total=10, message="building"))
         return {}

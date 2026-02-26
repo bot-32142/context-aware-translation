@@ -589,8 +589,10 @@ def test_retranslate_current_chunk_uses_strict_submit_and_tracks_task():
     view._task_engine.submit_and_start.return_value = submitted_record
 
     with (
-        patch("context_aware_translation.ui.views.translation_view.QMessageBox.question",
-              return_value=QMessageBox.StandardButton.Yes),
+        patch(
+            "context_aware_translation.ui.views.translation_view.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Yes,
+        ),
     ):
         view._retranslate_current_chunk()
 

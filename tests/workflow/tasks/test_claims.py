@@ -54,6 +54,7 @@ def test_empty_active_no_conflict():
 
 def test_all_overlaps_all_same_book():
     from context_aware_translation.workflow.tasks.claims import AllDocuments, scopes_overlap
+
     a = AllDocuments(book_id="b1")
     b = AllDocuments(book_id="b1")
     assert scopes_overlap(a, b) is True
@@ -61,6 +62,7 @@ def test_all_overlaps_all_same_book():
 
 def test_all_overlaps_some_same_book():
     from context_aware_translation.workflow.tasks.claims import AllDocuments, SomeDocuments, scopes_overlap
+
     a = AllDocuments(book_id="b1")
     b = SomeDocuments(book_id="b1", doc_ids=frozenset({1, 2}))
     assert scopes_overlap(a, b) is True
@@ -69,6 +71,7 @@ def test_all_overlaps_some_same_book():
 
 def test_some_overlaps_some_intersecting():
     from context_aware_translation.workflow.tasks.claims import SomeDocuments, scopes_overlap
+
     a = SomeDocuments(book_id="b1", doc_ids=frozenset({1, 2, 3}))
     b = SomeDocuments(book_id="b1", doc_ids=frozenset({3, 4, 5}))
     assert scopes_overlap(a, b) is True
@@ -76,6 +79,7 @@ def test_some_overlaps_some_intersecting():
 
 def test_some_no_overlap_disjoint():
     from context_aware_translation.workflow.tasks.claims import SomeDocuments, scopes_overlap
+
     a = SomeDocuments(book_id="b1", doc_ids=frozenset({1, 2}))
     b = SomeDocuments(book_id="b1", doc_ids=frozenset({3, 4}))
     assert scopes_overlap(a, b) is False
@@ -83,6 +87,7 @@ def test_some_no_overlap_disjoint():
 
 def test_no_documents_overlaps_nothing():
     from context_aware_translation.workflow.tasks.claims import AllDocuments, NoDocuments, SomeDocuments, scopes_overlap
+
     none = NoDocuments(book_id="b1")
     all_docs = AllDocuments(book_id="b1")
     some_docs = SomeDocuments(book_id="b1", doc_ids=frozenset({1}))
@@ -97,6 +102,7 @@ def test_no_documents_overlaps_nothing():
 
 def test_different_books_never_overlap():
     from context_aware_translation.workflow.tasks.claims import AllDocuments, NoDocuments, SomeDocuments, scopes_overlap
+
     a = AllDocuments(book_id="b1")
     b = AllDocuments(book_id="b2")
     assert scopes_overlap(a, b) is False

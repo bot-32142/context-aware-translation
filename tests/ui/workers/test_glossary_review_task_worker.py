@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -56,6 +56,7 @@ def _book_manager_with_db(tmp_path: Path) -> MagicMock:
 
 
 # --- run action ---
+
 
 def test_run_emits_success_on_completion(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
@@ -177,6 +178,7 @@ def test_run_emits_error_when_session_exit_fails(monkeypatch: pytest.MonkeyPatch
 
 # --- cancel action ---
 
+
 def test_cancel_marks_task_cancelled(tmp_path: Path):
     from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 
@@ -215,6 +217,7 @@ def test_cancel_calls_notify_task_changed(tmp_path: Path):
 
 # --- progress ---
 
+
 def test_run_forwards_progress_updates(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     from context_aware_translation.core.progress import ProgressUpdate, WorkflowStep
     from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
@@ -244,6 +247,7 @@ def test_run_forwards_progress_updates(monkeypatch: pytest.MonkeyPatch, tmp_path
 
 
 # --- live config (no snapshot fallback) ---
+
 
 def test_run_always_uses_live_config_even_when_snapshot_set(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Glossary review always uses live config, never snapshot — per spec."""
@@ -283,6 +287,7 @@ def test_run_always_uses_live_config_even_when_snapshot_set(monkeypatch: pytest.
 
 # --- notify_task_changed ---
 
+
 def test_run_calls_notify_task_changed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 
@@ -312,6 +317,7 @@ def test_run_calls_notify_task_changed(monkeypatch: pytest.MonkeyPatch, tmp_path
 
 
 # --- unknown action ---
+
 
 def test_unknown_action_raises(tmp_path: Path):
     from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker

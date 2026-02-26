@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 try:
-    from PySide6.QtCore import QEvent, QObject, Qt, Signal
+    from PySide6.QtCore import QObject, Signal
     from PySide6.QtWidgets import QApplication, QMessageBox
 
     HAS_PYSIDE6 = True
@@ -39,23 +39,23 @@ class _SignalHolder(QObject):
 
 
 def _make_record(**overrides) -> TaskRecord:
-    defaults = dict(
-        task_id="abcd1234-5678-9abc-def0-1234567890ab",
-        book_id="book-1",
-        task_type="batch_translation",
-        status="queued",
-        phase=None,
-        document_ids_json=None,
-        payload_json=None,
-        config_snapshot_json=None,
-        cancel_requested=False,
-        total_items=10,
-        completed_items=3,
-        failed_items=0,
-        last_error=None,
-        created_at=time.time(),
-        updated_at=time.time(),
-    )
+    defaults = {
+        "task_id": "abcd1234-5678-9abc-def0-1234567890ab",
+        "book_id": "book-1",
+        "task_type": "batch_translation",
+        "status": "queued",
+        "phase": None,
+        "document_ids_json": None,
+        "payload_json": None,
+        "config_snapshot_json": None,
+        "cancel_requested": False,
+        "total_items": 10,
+        "completed_items": 3,
+        "failed_items": 0,
+        "last_error": None,
+        "created_at": time.time(),
+        "updated_at": time.time(),
+    }
     defaults.update(overrides)
     return TaskRecord(**defaults)
 
@@ -119,7 +119,7 @@ def test_buttons_use_per_action_preflight_decisions():
     r = _make_record()
     engine = _make_engine(records=[r])
 
-    def _preflight(task_id, action):
+    def _preflight(task_id, action):  # noqa: ARG001
         if action == TaskAction.RUN:
             return Decision(allowed=True, reason="")
         if action == TaskAction.CANCEL:
@@ -145,7 +145,7 @@ def test_button_state_updates_when_preflight_all_denied():
     r = _make_record()
     engine = _make_engine(records=[r])
 
-    def _preflight(task_id, action):
+    def _preflight(task_id, action):  # noqa: ARG001
         if action == TaskAction.RUN:
             return Decision(allowed=False, reason="Already running")
         if action == TaskAction.CANCEL:
@@ -258,7 +258,7 @@ def test_delete_cancelled_by_user_does_not_invoke_engine():
 def test_tasks_changed_refreshes_for_matching_book_id():
     r = _make_record()
     engine = _make_engine(records=[r])
-    console = _make_console(engine=engine, book_id="book-1")
+    console = _make_console(engine=engine, book_id="book-1")  # noqa: F841
 
     initial_count = engine.get_tasks.call_count
     engine.tasks_changed.emit("book-1")
@@ -273,7 +273,7 @@ def test_tasks_changed_refreshes_for_matching_book_id():
 
 def test_tasks_changed_ignores_different_book_id():
     engine = _make_engine(records=[])
-    console = _make_console(engine=engine, book_id="book-1")
+    console = _make_console(engine=engine, book_id="book-1")  # noqa: F841
 
     initial_count = engine.get_tasks.call_count
     engine.tasks_changed.emit("book-2")
@@ -331,7 +331,7 @@ def test_refresh_recomputes_action_buttons_when_selection_unchanged():
     assert console._run_btn.isEnabled()
 
     # Change preflight to deny RUN
-    def _deny_run(task_id, action):
+    def _deny_run(task_id, action):  # noqa: ARG001
         if action == TaskAction.RUN:
             return Decision(allowed=False, reason="Cooldown active")
         return Decision(allowed=True, reason="")
@@ -385,7 +385,7 @@ def test_language_change_preserves_preflight_reason_tooltips():
     r = _make_record()
     engine = _make_engine(records=[r])
 
-    def _deny_cancel(task_id, action):
+    def _deny_cancel(task_id, action):  # noqa: ARG001
         if action == TaskAction.CANCEL:
             return Decision(allowed=False, reason="Task is not running")
         return Decision(allowed=True, reason="")

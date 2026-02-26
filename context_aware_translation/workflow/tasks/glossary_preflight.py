@@ -74,8 +74,7 @@ def compute_glossary_preflight(
                 selected_types.append(str(doc.get("document_type", "")))
 
         if selected_types and all(
-            can_build_glossary_without_prior_ocr_for_type(doc_type)
-            for doc_type in selected_types
+            can_build_glossary_without_prior_ocr_for_type(doc_type) for doc_type in selected_types
         ):
             return GlossaryPreflightResult(
                 target_doc_ids=target_doc_ids,
@@ -87,7 +86,6 @@ def compute_glossary_preflight(
 
     # Step 5: find OCR blockers in preflight set
     if preflight_doc_ids:
-
         blocking_ocr_doc_ids: list[int] = []
         for doc_id in preflight_doc_ids:
             doc = docs_by_id.get(doc_id)

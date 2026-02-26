@@ -3,8 +3,7 @@
 import json
 import logging
 import sqlite3
-
-logger = logging.getLogger(__name__)
+from contextlib import suppress
 
 from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QCloseEvent, QColor, QTextCharFormat, QTextCursor
@@ -39,6 +38,8 @@ from ..i18n import qarg
 from ..utils import create_tip_label, translate_document_type
 from ..workers.operation_tracker import DocumentOperationTracker
 from .manga_review_widget import MangaReviewWidget
+
+logger = logging.getLogger(__name__)
 
 PREVIEW_TRUNCATION_LENGTH = 50
 
@@ -687,7 +688,10 @@ class TranslationView(QWidget):
         if for_batch_submit:
             preflight_params = {"document_ids": document_ids}
             decision = self._task_engine.preflight(
-                "batch_translation", self.book_id, preflight_params, TaskAction.RUN,
+                "batch_translation",
+                self.book_id,
+                preflight_params,
+                TaskAction.RUN,
             )
             if not decision.allowed:
                 QMessageBox.warning(self, self.tr("Not Supported"), decision.reason)
@@ -756,11 +760,11 @@ class TranslationView(QWidget):
             return
         document_ids, force = resolved
 
-        params = dict(
-            document_ids=document_ids,
-            force=force,
-            skip_context=self.skip_context_cb.isChecked(),
-        )
+        params = {
+            "document_ids": document_ids,
+            "force": force,
+            "skip_context": self.skip_context_cb.isChecked(),
+        }
 
         # Preflight advisory check before committing to storage
         decision = self._task_engine.preflight("sync_translation", self.book_id, params, TaskAction.RUN)
@@ -892,11 +896,7 @@ class TranslationView(QWidget):
             return
         records_by_id = {record.task_id: record for record in sync_tasks}
         live_ids = set(records_by_id.keys())
-        active_ids = {
-            record.task_id
-            for record in sync_tasks
-            if record.status not in TERMINAL_TASK_STATUSES
-        }
+        active_ids = {record.task_id for record in sync_tasks if record.status not in TERMINAL_TASK_STATUSES}
         current_sync_id = getattr(self, "_sync_task_id", None)
         if current_sync_id is not None and current_sync_id in live_ids:
             tracked.add(current_sync_id)
@@ -1448,10 +1448,8 @@ class TranslationView(QWidget):
         if self._is_cleaned_up:
             return
         self._is_cleaned_up = True
-        try:
+        with suppress(TypeError, RuntimeError):
             self._task_engine.tasks_changed.disconnect(self._on_tasks_changed)
-        except (TypeError, RuntimeError):
-            pass
         # Engine-managed tasks (sync_translation, chunk_retranslation) are NOT cancelled
         # here — they continue running in background, consistent with batch_translation.
         # Results are written to DB and visible when the book is reopened.

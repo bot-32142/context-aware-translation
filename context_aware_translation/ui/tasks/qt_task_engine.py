@@ -23,11 +23,11 @@ logger = logging.getLogger(__name__)
 class TaskEngine(QObject):
     """QObject orchestrator that drives the task lifecycle."""
 
-    tasks_changed = Signal(str)           # book_id
-    status_message = Signal(str, str)     # style, message
-    error_occurred = Signal(str)          # message
-    running_work_changed = Signal(bool)   # is_running
-    enqueue_task_changed = Signal(str)    # internal — connected via QueuedConnection to _emit_task_changed
+    tasks_changed = Signal(str)  # book_id
+    status_message = Signal(str, str)  # style, message
+    error_occurred = Signal(str)  # message
+    running_work_changed = Signal(bool)  # is_running
+    enqueue_task_changed = Signal(str)  # internal — connected via QueuedConnection to _emit_task_changed
 
     def __init__(self, *, store: TaskStore, deps: WorkerDeps, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -278,12 +278,12 @@ class TaskEngine(QObject):
     def close(self) -> None:
         self.stop_autorun()
         # Request interruption for all active workers
-        for task_id, worker in self._core.active_worker_items():
+        for _task_id, worker in self._core.active_worker_items():
             if hasattr(worker, "requestInterruption"):
                 worker.requestInterruption()  # type: ignore[attr-defined]
         # Wait up to 5000ms for workers to finish
         deadline = time.monotonic() + 5.0
-        for task_id, worker in self._core.active_worker_items():
+        for _task_id, worker in self._core.active_worker_items():
             if hasattr(worker, "wait"):
                 remaining_ms = max(0, int((deadline - time.monotonic()) * 1000))
                 worker.wait(remaining_ms)  # type: ignore[attr-defined]

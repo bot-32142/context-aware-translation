@@ -28,6 +28,7 @@ from context_aware_translation.workflow.tasks.models import (
 
 if TYPE_CHECKING:
     from context_aware_translation.storage.task_store import TaskRecord
+    from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy, CancelOutcome
     from context_aware_translation.workflow.tasks.models import ActionSnapshot
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
@@ -140,7 +141,7 @@ class ChunkRetranslationHandler:
             return Decision(allowed=False, reason="document_id missing from task payload")
         return Decision(allowed=True)
 
-    def build_worker(self, action: TaskAction, record: TaskRecord, payload: Any, deps: WorkerDeps):
+    def build_worker(self, action: TaskAction, record: TaskRecord, payload: Any, deps: WorkerDeps) -> object:
         from context_aware_translation.ui.workers.chunk_retranslation_task_worker import ChunkRetranslationTaskWorker
 
         p = payload or {}
@@ -176,12 +177,14 @@ class ChunkRetranslationHandler:
 
         raise ValueError(f"Unsupported action for ChunkRetranslationHandler: {action!r}")
 
-    def cancel_dispatch_policy(self, record: TaskRecord, payload: Any):
+    def cancel_dispatch_policy(self, record: TaskRecord, payload: Any) -> CancelDispatchPolicy:
         from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy
+
         return CancelDispatchPolicy.LOCAL_TERMINALIZE
 
-    def classify_cancel_outcome(self, record: TaskRecord, payload: Any, provider_result: Any):
+    def classify_cancel_outcome(self, record: TaskRecord, payload: Any, provider_result: Any) -> CancelOutcome:
         from context_aware_translation.workflow.tasks.handlers.base import CancelOutcome
+
         return CancelOutcome.CONFIRMED_CANCELLED
 
     def pre_delete(self, record: TaskRecord, payload: Any, deps: WorkerDeps) -> list[str]:

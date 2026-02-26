@@ -637,8 +637,9 @@ def test_update_export_button_state_both_modes_blocked():
 
 def test_on_task_console_refreshed_shows_export_completion_dialog():
     """Console refresh detects completed export tasks and shows dialog with count and path."""
-    from context_aware_translation.workflow.tasks.models import STATUS_COMPLETED
     from types import SimpleNamespace
+
+    from context_aware_translation.workflow.tasks.models import STATUS_COMPLETED
 
     view = _make_view()
     view._completed_task_ids = set()
@@ -671,8 +672,9 @@ def test_on_task_console_refreshed_shows_export_completion_dialog():
 
 def test_seed_completed_task_ids_from_console_skips_historical_terminal_rows():
     """Existing terminal tasks should be treated as already-notified on startup."""
-    from context_aware_translation.workflow.tasks.models import STATUS_COMPLETED
     from types import SimpleNamespace
+
+    from context_aware_translation.workflow.tasks.models import STATUS_COMPLETED
 
     view = _make_view()
     view._completed_task_ids = set()
@@ -689,8 +691,9 @@ def test_seed_completed_task_ids_from_console_skips_historical_terminal_rows():
 
 def test_on_task_console_refreshed_reemits_export_dialog_after_rerun():
     """A rerun should clear prior completion tracking and notify again on next terminal state."""
-    from context_aware_translation.workflow.tasks.models import STATUS_COMPLETED
     from types import SimpleNamespace
+
+    from context_aware_translation.workflow.tasks.models import STATUS_COMPLETED
 
     view = _make_view()
     view._completed_task_ids = {"export-1"}

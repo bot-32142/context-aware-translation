@@ -113,25 +113,30 @@ def test_scope_some_documents_with_ids():
 def test_claims_wildcard_for_all_documents():
     record = _make_record(document_ids_json=None)
     claims = handler.claims(record, {})
-    assert claims == frozenset({
-        ResourceClaim("doc", "book-1", "*"),
-        ResourceClaim("glossary_state", "book-1", "*", ClaimMode.READ_SHARED),
-        ResourceClaim("context_tree", "book-1", "*", ClaimMode.WRITE_COOPERATIVE),
-    })
+    assert claims == frozenset(
+        {
+            ResourceClaim("doc", "book-1", "*"),
+            ResourceClaim("glossary_state", "book-1", "*", ClaimMode.READ_SHARED),
+            ResourceClaim("context_tree", "book-1", "*", ClaimMode.WRITE_COOPERATIVE),
+        }
+    )
 
 
 def test_claims_per_doc_for_some_documents():
     record = _make_record(document_ids_json="[5, 7]")
     claims = handler.claims(record, {})
-    assert claims == frozenset({
-        ResourceClaim("doc", "book-1", "5"),
-        ResourceClaim("doc", "book-1", "7"),
-        ResourceClaim("glossary_state", "book-1", "*", ClaimMode.READ_SHARED),
-        ResourceClaim("context_tree", "book-1", "*", ClaimMode.WRITE_COOPERATIVE),
-    })
+    assert claims == frozenset(
+        {
+            ResourceClaim("doc", "book-1", "5"),
+            ResourceClaim("doc", "book-1", "7"),
+            ResourceClaim("glossary_state", "book-1", "*", ClaimMode.READ_SHARED),
+            ResourceClaim("context_tree", "book-1", "*", ClaimMode.WRITE_COOPERATIVE),
+        }
+    )
 
 
 # --- can(RUN) ---
+
 
 def test_can_run_allows_queued():
     record = _make_record(status=STATUS_QUEUED)
@@ -190,6 +195,7 @@ def test_can_run_denies_completed():
 
 # --- can(CANCEL) ---
 
+
 def test_can_cancel_allows_running():
     record = _make_record(status=STATUS_RUNNING)
     decision = handler.can(TaskAction.CANCEL, record, {}, _make_snapshot())
@@ -223,6 +229,7 @@ def test_can_cancel_denies_failed():
 
 # --- can(DELETE) ---
 
+
 def test_can_delete_allows_completed():
     record = _make_record(status=STATUS_COMPLETED)
     decision = handler.can(TaskAction.DELETE, record, {}, _make_snapshot())
@@ -255,6 +262,7 @@ def test_can_delete_denies_cancelling():
 
 
 # --- can_autorun ---
+
 
 def test_can_autorun_allows_queued_no_conflicts():
     record = _make_record(status=STATUS_QUEUED, task_id="t1")
@@ -301,11 +309,11 @@ def test_can_autorun_allows_when_different_book_claims():
 # config_snapshot_json tests
 # ---------------------------------------------------------------------------
 
+
 def test_build_worker_run_passes_config_snapshot_to_worker():
     """build_worker(RUN) must forward config_snapshot_json from record to the worker."""
-    from unittest.mock import MagicMock
-
     import json
+    from unittest.mock import MagicMock
 
     snapshot = json.dumps({"snapshot_version": 1, "config": {"key": "val"}})
     deps = MagicMock()
@@ -318,15 +326,15 @@ def test_build_worker_run_passes_config_snapshot_to_worker():
     worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
 
     from context_aware_translation.ui.workers.batch_translation_task_worker import BatchTranslationTaskWorker
+
     assert isinstance(worker, BatchTranslationTaskWorker)
     assert worker.config_snapshot_json == snapshot
 
 
 def test_build_worker_cancel_passes_config_snapshot_to_worker():
     """build_worker(CANCEL) must forward config_snapshot_json to the cancel worker."""
-    from unittest.mock import MagicMock
-
     import json
+    from unittest.mock import MagicMock
 
     snapshot = json.dumps({"snapshot_version": 1, "config": {"key": "val"}})
     deps = MagicMock()
@@ -337,15 +345,15 @@ def test_build_worker_cancel_passes_config_snapshot_to_worker():
     worker = handler.build_worker(TaskAction.CANCEL, record, {}, deps)
 
     from context_aware_translation.ui.workers.batch_translation_task_worker import BatchTranslationTaskWorker
+
     assert isinstance(worker, BatchTranslationTaskWorker)
     assert worker.config_snapshot_json == snapshot
 
 
 def test_pre_delete_uses_snapshot_when_available():
     """pre_delete() should use from_snapshot() when config_snapshot_json is set."""
-    from unittest.mock import MagicMock, patch
-
     import json
+    from unittest.mock import MagicMock, patch
 
     snapshot = json.dumps({"snapshot_version": 1, "config": {}})
     deps = MagicMock()
@@ -357,12 +365,15 @@ def test_pre_delete_uses_snapshot_when_available():
 
     record = _make_record(status=STATUS_COMPLETED, config_snapshot_json=snapshot)
 
-    with patch(
-        "context_aware_translation.workflow.session.WorkflowSession.from_snapshot",
-        return_value=mock_session,
-    ) as mock_from_snapshot, patch(
-        "context_aware_translation.workflow.tasks.execution.batch_translation_executor.BatchTranslationExecutor.from_workflow",
-        return_value=mock_executor,
+    with (
+        patch(
+            "context_aware_translation.workflow.session.WorkflowSession.from_snapshot",
+            return_value=mock_session,
+        ) as mock_from_snapshot,
+        patch(
+            "context_aware_translation.workflow.tasks.execution.batch_translation_executor.BatchTranslationExecutor.from_workflow",
+            return_value=mock_executor,
+        ),
     ):
         warnings = handler.pre_delete(record, {}, deps)
 
@@ -372,9 +383,8 @@ def test_pre_delete_uses_snapshot_when_available():
 
 def test_pre_delete_falls_back_to_live_config_when_from_snapshot_raises():
     """pre_delete() should fall back to create_workflow_session when from_snapshot fails."""
-    from unittest.mock import MagicMock, patch
-
     import json
+    from unittest.mock import MagicMock, patch
 
     snapshot = json.dumps({"snapshot_version": 1, "config": {}})
     deps = MagicMock()
@@ -387,12 +397,15 @@ def test_pre_delete_falls_back_to_live_config_when_from_snapshot_raises():
 
     record = _make_record(status=STATUS_COMPLETED, config_snapshot_json=snapshot)
 
-    with patch(
-        "context_aware_translation.workflow.session.WorkflowSession.from_snapshot",
-        side_effect=ValueError("bad snapshot"),
-    ), patch(
-        "context_aware_translation.workflow.tasks.execution.batch_translation_executor.BatchTranslationExecutor.from_workflow",
-        return_value=mock_executor,
+    with (
+        patch(
+            "context_aware_translation.workflow.session.WorkflowSession.from_snapshot",
+            side_effect=ValueError("bad snapshot"),
+        ),
+        patch(
+            "context_aware_translation.workflow.tasks.execution.batch_translation_executor.BatchTranslationExecutor.from_workflow",
+            return_value=mock_executor,
+        ),
     ):
         warnings = handler.pre_delete(record, {}, deps)
 

@@ -47,15 +47,13 @@ def _make_workspace():
 
 
 def test_get_running_operations_detects_all_supported_views():
-    from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES
-
     workspace = _make_workspace()
     # Engine-managed tasks (sync_translation, batch_translation) continue in
     # background and are NOT reported as running operations on leave-book.
     # Glossary operations are now fully engine-managed — simulate a running extraction.
     _running_task = SimpleNamespace(status="running")
 
-    def _mock_get_tasks(book_id, task_type=None):
+    def _mock_get_tasks(_book_id, task_type=None):
         if task_type == "glossary_extraction":
             return [_running_task]
         return []

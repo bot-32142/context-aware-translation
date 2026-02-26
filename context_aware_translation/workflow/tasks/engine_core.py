@@ -28,7 +28,7 @@ class EngineCore:
         self._handlers: dict[str, TaskTypeHandler] = {}
         self._store: TaskStore = store
         self._deps: WorkerDeps = deps
-        self._active_workers: dict[str, object] = {}      # task_id -> worker
+        self._active_workers: dict[str, object] = {}  # task_id -> worker
         self._active_claims: dict[str, frozenset[ResourceClaim]] = {}
         self._retry_after_by_book: dict[str, float] = {}
         self._book_locks: dict[str, threading.RLock] = {}
@@ -102,11 +102,7 @@ class EngineCore:
         """Unlocked snapshot for tick scanning."""
         return ActionSnapshot(
             running_task_ids=frozenset(self._active_workers.keys()),
-            active_claims=frozenset(
-                claim
-                for claims in self._active_claims.values()
-                for claim in claims
-            ),
+            active_claims=frozenset(claim for claims in self._active_claims.values() for claim in claims),
             now_monotonic=time.monotonic(),
             retry_after_by_book=dict(self._retry_after_by_book),
         )
@@ -133,9 +129,7 @@ class EngineCore:
 
     def has_active_claims(self, book_id: str, wanted: frozenset[ResourceClaim]) -> bool:
         all_active: frozenset[ResourceClaim] = frozenset(
-            claim
-            for claims in self._active_claims.values()
-            for claim in claims
+            claim for claims in self._active_claims.values() for claim in claims
         )
         return self._arbiter.conflicts(wanted, all_active)
 
@@ -161,7 +155,7 @@ class EngineCore:
         task_type: str,
         document_ids_json: str | None,
         payload_json: str | None,
-    ):
+    ) -> TaskRecord:
         from context_aware_translation.storage.task_store import TaskRecord
 
         now = time.time()
@@ -218,9 +212,7 @@ class EngineCore:
                 return decision
             wanted = handler.claims(draft, payload)
             all_active: frozenset[ResourceClaim] = frozenset(
-                claim
-                for claims_set in self._active_claims.values()
-                for claim in claims_set
+                claim for claims_set in self._active_claims.values() for claim in claims_set
             )
             if self._arbiter.conflicts(wanted, all_active):
                 return Decision(allowed=False, code="blocked_claim_conflict", reason="Blocked by active task claims")
@@ -246,13 +238,11 @@ class EngineCore:
             # Check claim conflicts for RUN action
             if action == TaskAction.RUN:
                 wanted = handler.claims(record, payload)
-                all_active = frozenset(
-                    claim
-                    for claims_set in self._active_claims.values()
-                    for claim in claims_set
-                )
+                all_active = frozenset(claim for claims_set in self._active_claims.values() for claim in claims_set)
                 if self._arbiter.conflicts(wanted, all_active):
-                    return Decision(allowed=False, code="blocked_claim_conflict", reason="Blocked by active task claims")
+                    return Decision(
+                        allowed=False, code="blocked_claim_conflict", reason="Blocked by active task claims"
+                    )
             return Decision(allowed=True)
 
     # ------------------------------------------------------------------
@@ -282,9 +272,7 @@ class EngineCore:
             decision = handler.can(action, record, payload, snapshot)
             if not decision.allowed:
                 if action == TaskAction.CANCEL:
-                    raise CancelDispatchRaceError(
-                        f"Cancel not allowed for task {task_id}: {decision.reason}"
-                    )
+                    raise CancelDispatchRaceError(f"Cancel not allowed for task {task_id}: {decision.reason}")
                 raise RuntimeError(f"Action {action} not allowed for task {task_id}: {decision.reason}")
 
             # RUN-specific domain validation
@@ -303,9 +291,7 @@ class EngineCore:
 
             claims = handler.claims(record, payload)
             all_active: frozenset[ResourceClaim] = frozenset(
-                claim
-                for claims_set in self._active_claims.values()
-                for claim in claims_set
+                claim for claims_set in self._active_claims.values() for claim in claims_set
             )
             if self._arbiter.conflicts(claims, all_active):
                 raise RuntimeError(f"Resource conflict for task {task_id}")
@@ -319,7 +305,7 @@ class EngineCore:
         self._active_workers[task_id] = worker
         self._active_claims[task_id] = claims
 
-    def submit(self, task_type: str, book_id: str, **params) -> TaskRecord:
+    def submit(self, task_type: str, book_id: str, **params: object) -> TaskRecord:
         """Create a new task row (does not start worker — caller handles that)."""
         handler = self._handler_or_raise(task_type)
         submit_decision = handler.validate_submit(book_id, params, self._deps)
@@ -466,6 +452,7 @@ class EngineCore:
             handler = self._handler_or_raise(record.task_type)
             payload = handler.decode_payload(record)
             from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy
+
             policy = handler.cancel_dispatch_policy(record, payload)
             if policy == CancelDispatchPolicy.LOCAL_TERMINALIZE:
                 if record.status in {"cancel_requested", "cancelling", "queued", "paused"}:
@@ -480,7 +467,7 @@ class EngineCore:
         Returns list of workers to interrupt.
         """
         workers_to_interrupt: list[object] = []
-        for task_id, worker in list(self._active_workers.items()):
+        for task_id, _worker in list(self._active_workers.items()):
             record = self._store.get(task_id)
             if record is None or record.book_id != book_id:
                 continue
@@ -524,8 +511,7 @@ class EngineCore:
     def cleanup_finished_workers(self) -> list[str]:
         """Clean up finished workers. Returns list of cleaned-up task_ids."""
         finished = [
-            tid for tid, w in list(self._active_workers.items())
-            if hasattr(w, "isRunning") and not w.isRunning()  # type: ignore[attr-defined]
+            tid for tid, w in list(self._active_workers.items()) if hasattr(w, "isRunning") and not w.isRunning()
         ]
         for task_id in finished:
             self.release_task_resources(task_id)

@@ -254,7 +254,7 @@ class GlossaryView(QWidget):
 
     def _on_task_console_refreshed(self) -> None:
         """Handle task console refresh — sync term DB, table, stats, and button state."""
-        import json
+
         from context_aware_translation.workflow.tasks.models import (
             STATUS_CANCELLED,
             STATUS_COMPLETED,
@@ -286,7 +286,6 @@ class GlossaryView(QWidget):
                         try:
                             record = self._task_engine.get_task(vm.task_id)
                             if record:
-                                payload = json.loads(record.payload_json) if record.payload_json else {}
                                 count = vm.completed_items or 0
                                 QMessageBox.information(
                                     self,
@@ -352,9 +351,11 @@ class GlossaryView(QWidget):
 
     def _has_glossary_mutation_claim_conflict(self) -> bool:
         """Return True when active task claims block local glossary mutations."""
-        wanted = frozenset({
-            ResourceClaim("glossary_state", self.book_id, "*", ClaimMode.WRITE_EXCLUSIVE),
-        })
+        wanted = frozenset(
+            {
+                ResourceClaim("glossary_state", self.book_id, "*", ClaimMode.WRITE_EXCLUSIVE),
+            }
+        )
         return bool(self._task_engine.has_active_claims(self.book_id, wanted))
 
     def _update_filter_rare_button_state(self) -> None:
@@ -365,7 +366,9 @@ class GlossaryView(QWidget):
             return
         self.filter_rare_button.setEnabled(True)
         self.filter_rare_button.setToolTip(
-            self.tr("Automatically ignore terms that occurred only once or were recognized by the LLM in only one chunk.")
+            self.tr(
+                "Automatically ignore terms that occurred only once or were recognized by the LLM in only one chunk."
+            )
         )
 
     def _update_translate_button_state(self) -> None:

@@ -16,10 +16,11 @@ class ClaimMode(StrEnum):
 
 @dataclass(frozen=True)
 class ResourceClaim:
-    namespace: str   # e.g. "doc", "glossary", "embedding_index"
+    namespace: str  # e.g. "doc", "glossary", "embedding_index"
     book_id: str
-    key: str         # e.g. "*", "42", "default"
+    key: str  # e.g. "*", "42", "default"
     mode: ClaimMode = ClaimMode.WRITE_EXCLUSIVE
+
 
 # ---------------------------------------------------------------------------
 # ClaimArbiter (from claim_arbiter.py)
@@ -34,10 +35,8 @@ class ClaimArbiter:
                     continue
                 if w.book_id != a.book_id:
                     continue
-                if w.key == a.key or w.key == "*" or a.key == "*":
-                    # Key overlap established — check mode compatibility
-                    if self._modes_conflict(w.mode, a.mode):
-                        return True
+                if (w.key == a.key or w.key == "*" or a.key == "*") and self._modes_conflict(w.mode, a.mode):
+                    return True
         return False
 
     @staticmethod
@@ -45,11 +44,8 @@ class ClaimArbiter:
         # READ_SHARED vs READ_SHARED: no conflict
         if m1 == ClaimMode.READ_SHARED and m2 == ClaimMode.READ_SHARED:
             return False
-        # WRITE_COOPERATIVE vs WRITE_COOPERATIVE: no conflict
-        if m1 == ClaimMode.WRITE_COOPERATIVE and m2 == ClaimMode.WRITE_COOPERATIVE:
-            return False
-        # All other combinations conflict
-        return True
+        return not (m1 == ClaimMode.WRITE_COOPERATIVE and m2 == ClaimMode.WRITE_COOPERATIVE)
+
 
 # ---------------------------------------------------------------------------
 # DocumentScope (from document_scope.py)

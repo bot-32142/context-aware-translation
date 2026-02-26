@@ -69,11 +69,13 @@ handler = GlossaryReviewHandler()
 
 # --- task_type ---
 
+
 def test_task_type():
     assert handler.task_type == "glossary_review"
 
 
 # --- decode_payload ---
+
 
 def test_decode_payload_empty():
     record = _make_record(payload_json=None)
@@ -88,6 +90,7 @@ def test_decode_payload_valid():
 
 # --- scope ---
 
+
 def test_scope_returns_no_documents():
     record = _make_record()
     scope = handler.scope(record, {})
@@ -96,6 +99,7 @@ def test_scope_returns_no_documents():
 
 
 # --- claims ---
+
 
 def test_claims_returns_glossary_state_write_exclusive():
     record = _make_record()
@@ -106,6 +110,7 @@ def test_claims_returns_glossary_state_write_exclusive():
 
 
 # --- can() RUN ---
+
 
 def test_can_run_queued():
     record = _make_record(status=STATUS_QUEUED)
@@ -164,6 +169,7 @@ def test_cannot_run_cancelling():
 
 # --- can() CANCEL ---
 
+
 def test_can_cancel_running():
     record = _make_record(status=STATUS_RUNNING)
     result = handler.can(TaskAction.CANCEL, record, {}, _make_snapshot())
@@ -189,6 +195,7 @@ def test_cannot_cancel_failed():
 
 
 # --- can() DELETE ---
+
 
 def test_can_delete_queued():
     record = _make_record(status=STATUS_QUEUED)
@@ -221,6 +228,7 @@ def test_cannot_delete_cancelling():
 
 
 # --- can_autorun() ---
+
 
 def test_can_autorun_queued_no_conflicts():
     record = _make_record(status=STATUS_QUEUED)
@@ -260,6 +268,7 @@ def test_cannot_autorun_with_claim_conflict():
 
 
 # --- validate_submit() ---
+
 
 def test_validate_submit_denied_when_book_not_found():
     deps = MagicMock()
@@ -360,6 +369,7 @@ def test_validate_submit_allowed_when_pending_terms_exist(tmp_path):
 
 # --- validate_run() ---
 
+
 def test_validate_run_denied_when_book_not_found():
     record = _make_record()
     deps = MagicMock()
@@ -426,6 +436,7 @@ def test_validate_run_allowed_when_pending_terms_exist(tmp_path):
 
 # --- build_worker() ---
 
+
 def test_build_worker_run_returns_glossary_review_task_worker():
     from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 
@@ -468,6 +479,7 @@ def test_build_worker_unsupported_action_raises():
 
 # --- cancel_dispatch_policy ---
 
+
 def test_cancel_dispatch_policy_local_terminalize():
     from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy
 
@@ -477,6 +489,7 @@ def test_cancel_dispatch_policy_local_terminalize():
 
 
 # --- pre_delete ---
+
 
 def test_pre_delete_returns_empty_list():
     record = _make_record()

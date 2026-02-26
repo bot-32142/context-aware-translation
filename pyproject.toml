@@ -82,6 +82,7 @@ select = [
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
+    "ARG002", # unused method argument (pervasive in handler interface implementations)
 ]
 
 [tool.ruff.lint.per-file-ignores]

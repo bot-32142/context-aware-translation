@@ -168,7 +168,7 @@ class BatchTranslationExecutor:
     # Internal persistence helper
     # ------------------------------------------------------------------
 
-    def _persist(self, task_id: str, **kwargs) -> TaskRecord:
+    def _persist(self, task_id: str, **kwargs: object) -> TaskRecord:
         record = self.task_store.update(task_id, **kwargs)
         if self._notify_task_changed is not None:
             book_id = record.book_id if hasattr(record, "book_id") else self._book_id
