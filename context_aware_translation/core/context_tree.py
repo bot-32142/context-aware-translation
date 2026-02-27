@@ -431,22 +431,6 @@ class ContextTree:
             nodes = self._tile_context_nodes_locked(term, query_index)
             return [node.content for node in nodes]
 
-    def summarize_contents(
-        self,
-        contents: list[str],
-        cancel_check: Callable[[], bool] | None = None,
-    ) -> str:
-        """Summarize arbitrary content list using the configured summarizer."""
-        texts = [text for text in contents if text and text.strip()]
-        if not texts:
-            return ""
-        if len(texts) == 1:
-            return texts[0]
-
-        raise_if_cancelled(cancel_check)
-        summary = self._run_async(self._summarize_async(texts, cancel_check=cancel_check))
-        return summary if isinstance(summary, str) else ""
-
     def summarize_term_fully(
         self,
         term: str,

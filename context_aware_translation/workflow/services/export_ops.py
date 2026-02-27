@@ -20,9 +20,7 @@ def get_lines_with_original_fallback(workflow: WorkflowService, document: Docume
         return document.get_text().splitlines()
 
     if document.document_type == "manga":
-        return [
-            chunk.translation if chunk.is_translated and chunk.translation is not None else "" for chunk in chunks
-        ]
+        return [chunk.translation if chunk.is_translated and chunk.translation is not None else "" for chunk in chunks]
 
     merged_chunks = [
         chunk.translation if chunk.is_translated and chunk.translation is not None else chunk.text for chunk in chunks
@@ -158,9 +156,7 @@ async def export_preserve_structure(
 
     for document in documents:
         if not document.supports_preserve_structure:
-            raise NotImplementedError(
-                f"{type(document).__name__} documents do not support structure-preserving export"
-            )
+            raise NotImplementedError(f"{type(document).__name__} documents do not support structure-preserving export")
 
     for document in documents:
         workflow._check_cancel(cancel_check)

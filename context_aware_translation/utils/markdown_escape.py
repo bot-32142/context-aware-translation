@@ -193,31 +193,3 @@ def clean_llm_output(
     result = "\n".join(line.rstrip() for line in result.split("\n"))
 
     return result.rstrip()
-
-
-# Backwards compatibility alias
-def escape_markdown_text(
-    text: str,
-    preserve_pandoc_formats: bool = True,  # noqa: ARG001 - kept for compatibility
-    strip_llm_artifacts_flag: bool = True,
-) -> str:
-    """Clean LLM output for Pandoc processing.
-
-    DEPRECATED: This function no longer escapes markdown. Use clean_llm_output() instead.
-
-    The escaping approach was removed because intent is ambiguous - the LLM
-    should escape special characters when it doesn't intend formatting.
-
-    Args:
-        text: Raw LLM output text
-        preserve_pandoc_formats: Ignored (kept for backwards compatibility)
-        strip_llm_artifacts_flag: If True, remove LLM tokens
-
-    Returns:
-        Cleaned text (artifacts stripped, math cleaned)
-    """
-    return clean_llm_output(
-        text,
-        strip_artifacts=strip_llm_artifacts_flag,
-        clean_math=True,
-    )

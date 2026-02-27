@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from context_aware_translation.documents import Document
+from context_aware_translation.documents.base import Document
 
 
 def test_document_is_importable():

@@ -8,7 +8,6 @@ This module tests the LLM output cleaning functions:
 from context_aware_translation.utils.markdown_escape import (
     clean_latex_math,
     clean_llm_output,
-    escape_markdown_text,
     strip_llm_artifacts,
 )
 
@@ -212,33 +211,3 @@ class TestCleanLlmOutput:
         result = clean_llm_output("Hello 👋 World 🌍")
         assert "👋" in result
         assert "🌍" in result
-
-
-class TestEscapeMarkdownTextBackwardsCompat:
-    """Tests for backwards compatibility of escape_markdown_text."""
-
-    def test_strips_artifacts(self):
-        result = escape_markdown_text("<pad>Hello<pad>")
-        assert result == "Hello"
-
-    def test_cleans_math(self):
-        result = escape_markdown_text(r"$\hfill x$")
-        assert r"\hfill" not in result
-
-    def test_preserve_pandoc_formats_ignored(self):
-        """The preserve_pandoc_formats param is ignored but accepted."""
-        result1 = escape_markdown_text("**bold**", preserve_pandoc_formats=True)
-        result2 = escape_markdown_text("**bold**", preserve_pandoc_formats=False)
-        # Both should pass through unchanged now
-        assert "**bold**" in result1
-        assert "**bold**" in result2
-
-    def test_strip_artifacts_flag(self):
-        result = escape_markdown_text("<pad>text", strip_llm_artifacts_flag=False)
-        assert "<pad>" in result
-
-    def test_empty_string(self):
-        assert escape_markdown_text("") == ""
-
-    def test_whitespace_only(self):
-        assert escape_markdown_text("   ") == ""

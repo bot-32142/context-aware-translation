@@ -24,7 +24,6 @@ class TaskEngine(QObject):
     """QObject orchestrator that drives the task lifecycle."""
 
     tasks_changed = Signal(str)  # book_id
-    status_message = Signal(str, str)  # style, message
     error_occurred = Signal(str)  # message
     running_work_changed = Signal(bool)  # is_running
     enqueue_task_changed = Signal(str)  # internal — connected via QueuedConnection to _emit_task_changed

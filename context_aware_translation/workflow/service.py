@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 from pathlib import Path
 
@@ -30,7 +31,7 @@ class WorkflowService:
     _bootstrap_locks = bootstrap_ops.BOOTSTRAP_LOCKS
 
     @classmethod
-    def _get_bootstrap_lock(cls, book_id: str | None):
+    def _get_bootstrap_lock(cls, book_id: str | None) -> threading.Lock:
         """Return a per-book lock for serializing bootstrap operations."""
         return bootstrap_ops.get_bootstrap_lock(
             book_id,

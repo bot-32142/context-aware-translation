@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QComboBox,
@@ -33,9 +33,6 @@ from ..utils import create_tip_label, translate_document_type
 
 class ImportView(QWidget):
     """View for importing documents into a book."""
-
-    import_completed = Signal(int)  # document_id
-    documents_changed = Signal()
 
     def __init__(
         self,
@@ -383,7 +380,6 @@ class ImportView(QWidget):
         """Handle successful import."""
         imported = result.get("imported", 0)
         skipped = result.get("skipped", 0)
-        document_id = result.get("document_id")
 
         message = qarg(self.tr("Import completed: %1 imported, %2 skipped"), imported, skipped)
         self.result_label.setText(message)
@@ -392,9 +388,6 @@ class ImportView(QWidget):
 
         # Refresh documents list
         self._load_documents()
-
-        if document_id is not None:
-            self.import_completed.emit(document_id)
 
     def _on_import_error(self, error_msg: str) -> None:
         """Handle import error."""
@@ -607,7 +600,6 @@ class ImportView(QWidget):
             )
 
             self._load_documents()
-            self.documents_changed.emit()
 
         except Exception as e:
             QMessageBox.critical(self, self.tr("Error"), qarg(self.tr("Failed to reset document: %1"), e))
@@ -679,7 +671,6 @@ class ImportView(QWidget):
             )
 
             self._load_documents()
-            self.documents_changed.emit()
 
         except Exception as e:
             QMessageBox.critical(self, self.tr("Error"), qarg(self.tr("Failed to delete document: %1"), e))

@@ -6,7 +6,7 @@ import time
 from collections.abc import Sequence
 from contextlib import suppress
 
-from PySide6.QtCore import QEvent, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QListWidget,
@@ -57,8 +57,6 @@ class TaskConsole(QWidget):
     The widget owns its own refresh timer, connects to the engine's
     ``tasks_changed`` signal, and calls ``preflight_task`` to gate buttons.
     """
-
-    console_refreshed = Signal()
 
     def __init__(
         self,
@@ -131,7 +129,6 @@ class TaskConsole(QWidget):
                 del self._start_times[stale_id]
 
         self._repopulate_list()
-        self.console_refreshed.emit()
 
     def cleanup(self) -> None:
         """Stop timer and disconnect engine signal."""

@@ -812,9 +812,7 @@ class ReembeddingView(QWidget):
 
         elif status == "failed":
             error_msg = record.last_error or self.tr("Unknown error")
-            QMessageBox.critical(
-                self, self.tr("Reembedding Error"), qarg(self.tr("Reembedding failed: %1"), error_msg)
-            )
+            QMessageBox.critical(self, self.tr("Reembedding Error"), qarg(self.tr("Reembedding failed: %1"), error_msg))
 
         elif status == "cancelled":
             QMessageBox.information(self, self.tr("Cancelled"), self.tr("Reembedding cancelled."))
@@ -998,6 +996,4 @@ class ReembeddingView(QWidget):
         self._update_navigation()
 
     def _tip_text(self) -> str:
-        return self.tr(
-            "Compare original images with their reembedded versions side by side."
-        )
+        return self.tr("Compare original images with their reembedded versions side by side.")

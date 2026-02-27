@@ -332,21 +332,6 @@ def test_run_error_shows_warning_dialog():
 
 
 # ---------------------------------------------------------------------------
-# 16. test_panel_refreshed_emitted_after_refresh
-# ---------------------------------------------------------------------------
-
-
-def test_panel_refreshed_emitted_after_refresh():
-    engine = _make_engine(records=[])
-    panel = _make_panel(engine=engine)
-
-    received = []
-    panel.panel_refreshed.connect(lambda: received.append(True))
-
-    received.clear()
-    panel.refresh()
-
-    assert len(received) == 1
 
 
 # ---------------------------------------------------------------------------

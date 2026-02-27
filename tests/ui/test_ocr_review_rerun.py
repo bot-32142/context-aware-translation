@@ -129,7 +129,6 @@ def test_on_tasks_changed_uses_captured_run_context_for_reload():
     view._update_ocr_action_button_states = MagicMock()
     view._clear_ocr_run_context = MagicMock()
     view._rerun_backup = {"source_id": 10}
-    view.ocr_completed = MagicMock()
     view.document_id = 99
     view.current_index = 0
     view._ocr_run_document_id = 7
@@ -160,7 +159,6 @@ def test_on_tasks_changed_uses_captured_run_context_for_reload():
     view._load_document_sources.assert_called_once_with(7)
     view._go_to_page.assert_called_once_with(2)
     assert view._rerun_backup is None
-    view.ocr_completed.emit.assert_called_once()
 
 
 def test_active_task_id_cleared_on_terminal_state():

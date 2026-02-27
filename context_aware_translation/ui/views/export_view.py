@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -39,8 +39,6 @@ from ..workers.export_worker import ExportWorker
 
 class ExportView(QWidget):
     """View for exporting translated content."""
-
-    export_completed = Signal(str)  # output path
 
     def __init__(
         self,
@@ -488,8 +486,6 @@ class ExportView(QWidget):
         self.result_label.setStyleSheet("color: green;")
         self.result_label.show()
         self.open_folder_btn.show()
-
-        self.export_completed.emit(output_path)
 
     def _on_export_cancelled(self) -> None:
         """Handle cancelled export."""

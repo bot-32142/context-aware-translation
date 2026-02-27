@@ -139,8 +139,6 @@ class RegistryDB:
             with contextlib.suppress(sqlite3.OperationalError):
                 cur.execute("ALTER TABLE endpoint_profiles ADD COLUMN uncached_input_tokens_used INTEGER DEFAULT 0")
             with contextlib.suppress(sqlite3.OperationalError):
-                cur.execute("ALTER TABLE endpoint_profiles ADD COLUMN enable_thinking INTEGER DEFAULT 1")
-            with contextlib.suppress(sqlite3.OperationalError):
                 cur.execute("ALTER TABLE endpoint_profiles ADD COLUMN kwargs TEXT DEFAULT '{}'")
             self.conn.commit()
             self._checkpoint()

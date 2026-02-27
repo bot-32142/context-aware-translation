@@ -518,16 +518,6 @@ def _parse_ncx_navpoints(parent: Any) -> list[TocEntry]:
     return entries
 
 
-def _normalize_nav_types(value: str) -> set[str]:
-    tokens: set[str] = set()
-    for token in value.split():
-        normalized = token.strip().lower()
-        if not normalized:
-            continue
-        tokens.add(normalized.rsplit(":", 1)[-1])
-    return tokens
-
-
 def _parse_nav_toc(
     zf: zipfile.ZipFile,
     manifest: dict[str, dict[str, str]],
@@ -551,9 +541,13 @@ def _parse_nav_toc(
     except Exception:
         return []
 
+    from context_aware_translation.documents.epub_support.nav_ops import (
+        normalize_nav_types,  # local import avoids circular dependency
+    )
+
     for nav_el in nav_root.iter(f"{{{XHTML_NS}}}nav"):
         epub_type = nav_el.get(f"{{{EPUB_NS}}}type", "") or nav_el.get("type", "")
-        if "toc" not in _normalize_nav_types(epub_type):
+        if "toc" not in normalize_nav_types(epub_type):
             continue
         ol = nav_el.find(f"{{{XHTML_NS}}}ol")
         if ol is not None:

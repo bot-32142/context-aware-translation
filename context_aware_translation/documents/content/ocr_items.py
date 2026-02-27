@@ -13,7 +13,7 @@ from context_aware_translation.utils.compression_marker import (
     decode_compressed_lines,
     is_compressed_line,
 )
-from context_aware_translation.utils.markdown_escape import escape_markdown_text
+from context_aware_translation.utils.markdown_escape import clean_llm_output
 
 
 class OCRItem(Protocol):
@@ -256,9 +256,9 @@ class ChapterItem(OCRItem):
         res = ""
         if ctx.insert_new_page_before_chapter:
             res = "\\newpage\n"
-        escaped_text = escape_markdown_text(
+        escaped_text = clean_llm_output(
             "  ".join(translated_lines),
-            strip_llm_artifacts_flag=ctx.strip_llm_artifacts,
+            strip_artifacts=ctx.strip_llm_artifacts,
         )
         return res + f"# {escaped_text}"
 
@@ -293,9 +293,9 @@ class SectionItem(OCRItem):
         if not _has_non_compressed_line(self.translated_lines):
             return ""
         translated_lines = _drop_compressed_lines(self.translated_lines)
-        escaped_text = escape_markdown_text(
+        escaped_text = clean_llm_output(
             "  ".join(translated_lines),
-            strip_llm_artifacts_flag=ctx.strip_llm_artifacts,
+            strip_artifacts=ctx.strip_llm_artifacts,
         )
         return f"## {escaped_text}"
 
@@ -330,9 +330,9 @@ class SubsectionItem(OCRItem):
         if not _has_non_compressed_line(self.translated_lines):
             return ""
         translated_lines = _drop_compressed_lines(self.translated_lines)
-        escaped_text = escape_markdown_text(
+        escaped_text = clean_llm_output(
             "  ".join(translated_lines),
-            strip_llm_artifacts_flag=ctx.strip_llm_artifacts,
+            strip_artifacts=ctx.strip_llm_artifacts,
         )
         return f"### {escaped_text}"
 
@@ -373,9 +373,9 @@ class ParagraphItem(OCRItem):
         if not joined and translated_lines:
             # Preserve true empty source lines (not compression markers).
             return "\n"
-        return escape_markdown_text(
+        return clean_llm_output(
             joined,
-            strip_llm_artifacts_flag=ctx.strip_llm_artifacts,
+            strip_artifacts=ctx.strip_llm_artifacts,
         )
 
     def merge_continuation(self, other: OCRItem) -> bool:  # noqa: ARG002
@@ -438,7 +438,7 @@ class ListItem(OCRItem):
 
             # Join lines back together, escape the whole item, then add list formatting
             item_text = "\n".join(item_lines)
-            escaped = escape_markdown_text(item_text, strip_llm_artifacts_flag=ctx.strip_llm_artifacts)
+            escaped = clean_llm_output(item_text, strip_artifacts=ctx.strip_llm_artifacts)
 
             # First line gets "- ", continuation lines get "  " indent for proper markdown list
             lines = escaped.splitlines()
@@ -538,8 +538,7 @@ class ImageItem(OCRItem):
         if self.translated_lines is not None and _has_non_compressed_line(self.translated_lines):
             translated_lines = _drop_compressed_lines(self.translated_lines)
             escaped_caption = "<br/>".join(
-                escape_markdown_text(line, strip_llm_artifacts_flag=ctx.strip_llm_artifacts)
-                for line in translated_lines
+                clean_llm_output(line, strip_artifacts=ctx.strip_llm_artifacts) for line in translated_lines
             )
 
         return f"![{escaped_caption}]({str(img_path)})"
@@ -622,9 +621,9 @@ class TableItem(OCRItem):
         res = "\n".join(translated_lines)
         if self.translated_caption and _has_non_compressed_line(self.translated_caption):
             translated_caption = _drop_compressed_lines(self.translated_caption)
-            escaped_caption = escape_markdown_text(
+            escaped_caption = clean_llm_output(
                 "  ".join(translated_caption),
-                strip_llm_artifacts_flag=ctx.strip_llm_artifacts,
+                strip_artifacts=ctx.strip_llm_artifacts,
             )
             res += f"\n\nTable: {escaped_caption}"
         return res
@@ -686,9 +685,9 @@ class QuoteItem(OCRItem):
         if not joined and translated_lines:
             # Preserve true empty source lines (not compression markers).
             return "\n"
-        escaped_text = escape_markdown_text(
+        escaped_text = clean_llm_output(
             joined,
-            strip_llm_artifacts_flag=ctx.strip_llm_artifacts,
+            strip_artifacts=ctx.strip_llm_artifacts,
         )
         # Each line in a blockquote needs "> " prefix
         lines = escaped_text.splitlines()

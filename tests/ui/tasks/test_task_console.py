@@ -406,17 +406,3 @@ def test_language_change_preserves_preflight_reason_tooltips():
 # ---------------------------------------------------------------------------
 # 18. test_console_refreshed_emitted_after_refresh
 # ---------------------------------------------------------------------------
-
-
-def test_console_refreshed_emitted_after_refresh():
-    engine = _make_engine(records=[])
-    console = _make_console(engine=engine)
-
-    received = []
-    console.console_refreshed.connect(lambda: received.append(True))
-
-    # Construction already triggered one refresh; clear and re-check
-    received.clear()
-    console.refresh()
-
-    assert len(received) == 1

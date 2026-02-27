@@ -35,18 +35,6 @@ class LLMAuthError(LLMError):
     pass
 
 
-class LLMRateLimitError(LLMError):
-    pass
-
-
-class LLMTimeoutError(LLMError):
-    pass
-
-
-class LLMServerError(LLMError):
-    pass
-
-
 def _to_int(value: Any) -> int:
     """Safely coerce provider usage fields to int."""
     if isinstance(value, bool):
@@ -394,18 +382,18 @@ class LLMClient:
             except OperationCancelledError:
                 raise
             except RateLimitError as e:
-                raise LLMRateLimitError(f"[llm_session={session_id}] Rate limit exceeded: {e}") from e
+                raise LLMError(f"[llm_session={session_id}] Rate limit exceeded: {e}") from e
             except APITimeoutError as e:
-                raise LLMTimeoutError(f"[llm_session={session_id}] Request timeout: {e}") from e
+                raise LLMError(f"[llm_session={session_id}] Request timeout: {e}") from e
             except APIConnectionError as e:
-                raise LLMServerError(f"[llm_session={session_id}] Connection error: {e}") from e
+                raise LLMError(f"[llm_session={session_id}] Connection error: {e}") from e
             except APIError as e:
                 status_code = getattr(e, "status_code", None)
                 if status_code == 401:
                     raise LLMAuthError(f"[llm_session={session_id}] Authentication failed: {e}") from e
                 if status_code == 403:
                     raise LLMAuthError(f"[llm_session={session_id}] Forbidden - check API key permissions: {e}") from e
-                raise LLMServerError(f"[llm_session={session_id}] API error (status {status_code}): {e}") from e
+                raise LLMError(f"[llm_session={session_id}] API error (status {status_code}): {e}") from e
             except Exception as e:
                 raise LLMError(f"[llm_session={session_id}] Unexpected error: {e}") from e
             raise AssertionError("Unreachable")

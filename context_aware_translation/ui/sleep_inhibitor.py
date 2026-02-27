@@ -130,13 +130,6 @@ class SleepInhibitor:
             pass
 
     @classmethod
-    def is_active(cls) -> bool:
-        """Return True if sleep prevention is currently active."""
-        if _SYSTEM == "Windows":
-            return cls._count > 0
-        return cls._process is not None and cls._process.poll() is None
-
-    @classmethod
     def _is_supported(cls) -> bool:
         """Return True if this platform supports sleep inhibition."""
         return _SYSTEM in ("Darwin", "Linux", "Windows")

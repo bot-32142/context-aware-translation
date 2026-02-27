@@ -693,15 +693,6 @@ class SQLiteBookDB:
                 result[doc_id].append(chunk)
         return result
 
-    def apply_renames(self) -> int:
-        """
-        Apply all rename values. No-op since metadata is removed.
-
-        Returns:
-            Number of terms updated (always 0)
-        """
-        return 0
-
     def set_source_language(self, source_language: str) -> None:
         """Set the source language in the meta table."""
         cur = self.conn.cursor()

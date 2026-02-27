@@ -147,7 +147,3 @@ def build_normalized_key_mapping(
                 result[expected] = llm_key
 
     return result
-
-
-# Backward-compatible alias
-cjk_normalize = normalize_for_matching

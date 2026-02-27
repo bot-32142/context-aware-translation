@@ -110,8 +110,8 @@ def test_release_without_acquire_is_noop(caplog):
 
 @patch(f"{_MODULE}.subprocess")
 @patch(f"{_MODULE}._SYSTEM", "Darwin")
-def test_is_active_reflects_state(mock_subprocess):
-    """is_active() returns correct state through lifecycle."""
+def test_acquire_release_lifecycle(mock_subprocess):
+    """acquire/release cycle works correctly."""
     from context_aware_translation.ui.sleep_inhibitor import SleepInhibitor
 
     mock_proc = MagicMock()
@@ -121,13 +121,11 @@ def test_is_active_reflects_state(mock_subprocess):
     mock_subprocess.DEVNULL = -1
     mock_subprocess.PIPE = -2
 
-    assert not SleepInhibitor.is_active()
-
     SleepInhibitor.acquire()
-    assert SleepInhibitor.is_active()
+    assert SleepInhibitor._count == 1
 
     SleepInhibitor.release()
-    assert not SleepInhibitor.is_active()
+    assert SleepInhibitor._count == 0
 
 
 @patch(f"{_MODULE}.subprocess")
@@ -269,17 +267,17 @@ def test_windows_uses_set_thread_execution_state(mock_ctypes):
 
 @patch(f"{_MODULE}.ctypes")
 @patch(f"{_MODULE}._SYSTEM", "Windows")
-def test_windows_is_active_uses_count(mock_ctypes):  # noqa: ARG001
-    """On Windows, is_active() is based on count, not subprocess."""
+def test_windows_acquire_release_uses_count(mock_ctypes):  # noqa: ARG001
+    """On Windows, acquire/release tracks count correctly."""
     from context_aware_translation.ui.sleep_inhibitor import SleepInhibitor
 
-    assert not SleepInhibitor.is_active()
+    assert SleepInhibitor._count == 0
 
     SleepInhibitor.acquire()
-    assert SleepInhibitor.is_active()
+    assert SleepInhibitor._count == 1
 
     SleepInhibitor.release()
-    assert not SleepInhibitor.is_active()
+    assert SleepInhibitor._count == 0
 
 
 @patch(f"{_MODULE}.ctypes")

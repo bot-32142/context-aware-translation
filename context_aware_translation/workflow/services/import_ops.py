@@ -20,7 +20,9 @@ def resolve_imported_document_id(
         return None
 
     after_documents = workflow.document_repo.list_documents()
-    new_ids = sorted(int(doc["document_id"]) for doc in after_documents if int(doc["document_id"]) not in existing_document_ids)
+    new_ids = sorted(
+        int(doc["document_id"]) for doc in after_documents if int(doc["document_id"]) not in existing_document_ids
+    )
     if not new_ids:
         return None
     return new_ids[-1]

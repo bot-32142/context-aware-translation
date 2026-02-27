@@ -147,8 +147,7 @@ def parse_ocr_json(
     # Propagate page-level continuation flags to the appropriate content items.
     if items and (page_continues_from or page_continues_to):
         logger.warning(
-            "OCR returned continuation flags at page level instead of content item level; "
-            "normalizing to item level"
+            "OCR returned continuation flags at page level instead of content item level; normalizing to item level"
         )
         if page_continues_from and hasattr(items[0], "continues_from_previous"):
             items[0].continues_from_previous = True

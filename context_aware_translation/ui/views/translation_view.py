@@ -54,7 +54,6 @@ def _is_closed_database_error(exc: Exception) -> bool:
 class TranslationView(QWidget):
     """View for translating chunks with progress and review modes."""
 
-    translation_completed = Signal()
     open_activity_requested = Signal()
 
     def __init__(
@@ -854,7 +853,6 @@ class TranslationView(QWidget):
 
         self._update_stats()
         self._refresh_document_selector()
-        self.translation_completed.emit()
 
     def _on_translation_error(self, error_msg: str) -> None:
         """Handle translation error."""

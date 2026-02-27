@@ -149,10 +149,3 @@ class BookTableModel(QAbstractTableModel):
         if 0 <= row < len(self._books):
             return self._books[row]
         return None
-
-    def get_book_by_id(self, book_id: str) -> Book | None:
-        """Get book by ID using indexed lookup."""
-        row = self._id_to_row.get(book_id)
-        if row is not None and 0 <= row < len(self._books):
-            return self._books[row]
-        return None

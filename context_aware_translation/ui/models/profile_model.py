@@ -101,10 +101,3 @@ class ConfigProfileModel(QAbstractTableModel):
         if 0 <= row < len(self._profiles):
             return self._profiles[row]
         return None
-
-    def get_profile_by_id(self, profile_id: str) -> ConfigProfile | None:
-        """Get profile by ID using indexed lookup."""
-        row = self._id_to_row.get(profile_id)
-        if row is not None and 0 <= row < len(self._profiles):
-            return self._profiles[row]
-        return None

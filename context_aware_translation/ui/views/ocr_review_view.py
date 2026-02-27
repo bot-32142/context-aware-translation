@@ -38,7 +38,6 @@ logger = logging.getLogger(__name__)
 class OCRReviewView(QWidget):
     """View for reviewing and editing OCR results from document images."""
 
-    ocr_completed = Signal()
     open_activity_requested = Signal()
 
     def __init__(
@@ -870,8 +869,6 @@ class OCRReviewView(QWidget):
                 if self.sources and saved_page_index >= 0:
                     restored_index = min(saved_page_index, len(self.sources) - 1)
                     self._go_to_page(restored_index)
-
-            self.ocr_completed.emit()
 
         elif status == "failed":
             self._restore_rerun_backup()

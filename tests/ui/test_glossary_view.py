@@ -194,7 +194,6 @@ def test_filter_rare_ignores_terms_occurring_once_or_recognized_in_one_chunk():
     )
     view.table_model.refresh.assert_called_once()
     view._update_stats.assert_called_once()
-    view.glossary_changed.emit.assert_called_once()
     assert info_mock.call_count == 1
 
 

@@ -71,10 +71,6 @@ def parse_inline_close(token: str) -> tuple[str, str] | None:
     return tag, match.group(2)
 
 
-INLINE_OPEN_RE = _INLINE_OPEN_RE
-INLINE_CLOSE_RE = _INLINE_CLOSE_RE
-
-
 def normalize_alt_inline_marker_delimiters(text: str) -> str:
     """Normalize known marker tokens wrapped in 《》/〈〉/＜＞ to canonical ⟪⟫."""
 

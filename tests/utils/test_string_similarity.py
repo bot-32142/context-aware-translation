@@ -3,7 +3,7 @@ from __future__ import annotations
 from context_aware_translation.utils.string_similarity import string_similarity
 
 
-def teststring_similarity():
+def test_string_similarity():
     """Test string similarity computation."""
     # Exact match
     assert string_similarity("John Smith", "John Smith") == 1.0

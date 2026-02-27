@@ -82,7 +82,6 @@ class _TranslationDelegate(QStyledItemDelegate):
 class GlossaryView(QWidget):
     """Glossary editor view with filtering, sorting, and bulk operations."""
 
-    glossary_changed = Signal()
     open_activity_requested = Signal()
 
     def __init__(
@@ -387,8 +386,6 @@ class GlossaryView(QWidget):
                         self.tr("Glossary Build Complete"),
                         qarg(self.tr("Glossary build completed. %1 term(s) extracted."), count),
                     )
-                    self.glossary_changed.emit()
-
         self._update_review_button_state()
         self._update_export_button_state()
 
@@ -693,7 +690,6 @@ class GlossaryView(QWidget):
             self.term_db.refresh()
             self.table_model.refresh()
             self._update_stats()
-            self.glossary_changed.emit()
 
             QMessageBox.information(
                 self,
@@ -1088,7 +1084,6 @@ class GlossaryView(QWidget):
         count = self.term_db.update_terms_bulk(keys, is_reviewed=True)
         self.table_model.refresh()
         self._update_stats()
-        self.glossary_changed.emit()
 
         QMessageBox.information(
             self,
@@ -1108,7 +1103,6 @@ class GlossaryView(QWidget):
         count = self.term_db.update_terms_bulk(keys, is_reviewed=False)
         self.table_model.refresh()
         self._update_stats()
-        self.glossary_changed.emit()
 
         QMessageBox.information(
             self,
@@ -1128,7 +1122,6 @@ class GlossaryView(QWidget):
         count = self.term_db.update_terms_bulk(keys, ignored=True)
         self.table_model.refresh()
         self._update_stats()
-        self.glossary_changed.emit()
 
         QMessageBox.information(
             self,
@@ -1148,7 +1141,6 @@ class GlossaryView(QWidget):
         count = self.term_db.update_terms_bulk(keys, ignored=False)
         self.table_model.refresh()
         self._update_stats()
-        self.glossary_changed.emit()
 
         QMessageBox.information(
             self,
@@ -1163,10 +1155,6 @@ class GlossaryView(QWidget):
     def _votes_label(self) -> str:
         """Return localized glossary votes column label."""
         return self.tr("Votes")
-
-    def _occurrence_votes_label(self, separator: str = "/") -> str:
-        """Return localized combined occurrence/votes label."""
-        return f"{self._occurrence_label()}{separator}{self._votes_label()}"
 
     def _on_filter_rare(self) -> None:
         """Ignore terms that occurred only once or were recognized in only one chunk."""
@@ -1206,7 +1194,6 @@ class GlossaryView(QWidget):
         count = self.term_db.update_terms_bulk(rare_keys, ignored=True, is_reviewed=True)
         self.table_model.refresh()
         self._update_stats()
-        self.glossary_changed.emit()
 
         QMessageBox.information(
             self,
@@ -1255,7 +1242,6 @@ class GlossaryView(QWidget):
         count = self.term_db.delete_terms(keys)
         self.table_model.refresh()
         self._update_stats()
-        self.glossary_changed.emit()
 
         QMessageBox.information(
             self,

@@ -8,7 +8,7 @@ from contextvars import ContextVar
 _LLM_SESSION_ID: ContextVar[str | None] = ContextVar("llm_session_id", default=None)
 
 
-def new_llm_session_id() -> str:
+def _new_llm_session_id() -> str:
     """Generate a new opaque ID for tracing one LLM processing session."""
     return uuid.uuid4().hex
 
@@ -30,7 +30,7 @@ def llm_session_scope(session_id: str | None = None) -> Iterator[str]:
         yield existing
         return
 
-    sid = session_id or new_llm_session_id()
+    sid = session_id or _new_llm_session_id()
     token = _LLM_SESSION_ID.set(sid)
     try:
         yield sid

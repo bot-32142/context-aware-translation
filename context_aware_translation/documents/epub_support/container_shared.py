@@ -32,7 +32,7 @@ def serialize_section(elem: Any | None) -> str:
     return _ET.tostring(elem, encoding="unicode")
 
 
-def zip_path_to_file_url(path: str) -> str:
+def _zip_path_to_file_url(path: str) -> str:
     normalized = normalize_zip_path(path)
     return f"file:///{normalized}" if normalized else "file:///"
 
@@ -47,7 +47,7 @@ def manifest_href_to_zip_path(href: str) -> str:
 
 def resolve_manifest_href(*, opf_path: str, href: str, bases: list[str]) -> str:
     """Resolve href against OPF location and xml:base ancestors."""
-    base_url = zip_path_to_file_url(opf_path)
+    base_url = _zip_path_to_file_url(opf_path)
     for base in bases:
         if base:
             base_url = urljoin(base_url, base)

@@ -213,15 +213,6 @@ class TermRepository:
         records = self.keyed_context_db.get_terms_to_translate()
         return [self._record_to_term(record) for record in records]
 
-    def apply_renames(self) -> int:
-        """
-        Apply all rename values: move renamed to translated_name where renamed is not null.
-
-        Returns:
-            Number of terms updated
-        """
-        return self.keyed_context_db.apply_renames()
-
     def get_next_chunk_id(self) -> int:
         """
         Get the next available chunk_id.
@@ -307,27 +298,6 @@ class TermRepository:
 
     def list_term_records(self) -> list[TermRecord]:
         return self.keyed_context_db.list_terms()
-
-    def begin_transaction(self) -> None:
-        with self._lock:
-            if self._closed:
-                raise RuntimeError("StorageManager is closed")
-            if self._in_transaction:
-                raise RuntimeError("Transaction already in progress")
-            self.keyed_context_db.begin()
-            self._in_transaction = True
-
-    def commit_transaction(self) -> None:
-        with self._lock:
-            if self._closed:
-                raise RuntimeError("StorageManager is closed")
-            self.keyed_context_db.commit()
-            self._in_transaction = False
-
-    def rollback_transaction(self) -> None:
-        with self._lock:
-            self.keyed_context_db.rollback()
-            self._in_transaction = False
 
     def update_terms_bulk(
         self,

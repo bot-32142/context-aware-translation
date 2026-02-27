@@ -750,12 +750,6 @@ def test_translate_terms_empty_descriptions_key_error():
         _ = term.descriptions[0]
 
 
-def test_build_occurrence_mapping_typo_in_method_name():
-    """Test that both correct and legacy occurrence method names exist."""
-    assert hasattr(TranslationContextManager, "build_occurrence_mapping")
-    assert hasattr(TranslationContextManager, "build_occruance_mapping")
-
-
 def test_mark_noise_terms_division_by_zero():
     """Test that mark_noise_terms can divide by zero."""
     # BUG: Line 204: len(term.occurrence)/len(term.descriptions)

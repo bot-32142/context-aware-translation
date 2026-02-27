@@ -292,10 +292,6 @@ class TranslationBatchTaskStore:
             self.conn.execute("DELETE FROM translation_batch_tasks WHERE task_id = ?", (task_id,))
             self.conn.commit()
 
-    def delete_task(self, task_id: str) -> None:
-        """Alias for delete(). Provided for semantic clarity in test and UI code."""
-        self.delete(task_id)
-
     @staticmethod
     def _row_to_record(row: sqlite3.Row) -> TranslationBatchTaskRecord:
         return TranslationBatchTaskRecord(

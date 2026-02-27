@@ -226,12 +226,9 @@ class TaskActivityPanel(QWidget):
     -------
     close_requested
         Emitted when the user clicks the Close button in the header.
-    panel_refreshed
-        Emitted after each refresh cycle (useful for testing).
     """
 
     close_requested = Signal()
-    panel_refreshed = Signal()
 
     def __init__(self, task_engine, book_id: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -261,7 +258,6 @@ class TaskActivityPanel(QWidget):
         self._vms = map_tasks_to_row_vms(records)
         self._repopulate_rows()
         self._apply_preflight_to_all_rows()
-        self.panel_refreshed.emit()
 
     def cleanup(self) -> None:
         """Disconnect engine signal."""

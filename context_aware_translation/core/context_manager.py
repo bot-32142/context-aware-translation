@@ -510,10 +510,6 @@ class TranslationContextManager(ContextManager):
             chunk.is_occurrence_mapped = True
         self._state_update(occurrence_updates, relevant_chunks)
 
-    async def build_occruance_mapping(self) -> None:
-        """Backward-compatible alias for build_occurrence_mapping()."""
-        await self.build_occurrence_mapping()
-
     async def mark_noise_terms(self, cancel_check: Callable[[], bool] | None = None) -> int:
         """
         Auto-mark obvious noise terms as ignored and reviewed before LLM review.
