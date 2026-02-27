@@ -635,10 +635,11 @@ def test_update_export_button_state_both_modes_blocked():
     assert "No terms" in view.export_button.toolTip()
 
 
-def test_on_task_console_refreshed_shows_export_completion_dialog():
-    """Console refresh detects completed export tasks and shows dialog with count and path."""
-    from types import SimpleNamespace
+def test_on_tasks_changed_shows_export_completion_dialog():
+    """tasks_changed detects completed export tasks and shows dialog with count."""
+    import time
 
+    from context_aware_translation.storage.task_store import TaskRecord
     from context_aware_translation.workflow.tasks.models import STATUS_COMPLETED
 
     view = _make_view()
@@ -650,49 +651,98 @@ def test_on_task_console_refreshed_shows_export_completion_dialog():
     view._update_export_button_state = MagicMock()
     view._refresh_document_selector = MagicMock()
 
-    task_vm = SimpleNamespace(
+    now = time.time()
+    export_record = TaskRecord(
+        task_id="export-1",
+        book_id="test-book",
         task_type="glossary_export",
         status=STATUS_COMPLETED,
-        task_id="export-1",
+        phase=None,
+        document_ids_json=None,
+        payload_json=None,
+        config_snapshot_json=None,
+        cancel_requested=False,
+        total_items=0,
         completed_items=42,
+        failed_items=0,
+        last_error=None,
+        created_at=now,
+        updated_at=now,
     )
-    view.task_console = MagicMock()
-    view.task_console.task_vms.return_value = [task_vm]
-
+    view._task_engine.get_tasks.side_effect = lambda _book_id, task_type=None: (
+        [export_record] if task_type == "glossary_export" else []
+    )
     mock_record = MagicMock()
     mock_record.payload_json = '{"output_path": "/tmp/glossary.json", "skip_context": true}'
     view._task_engine.get_task.return_value = mock_record
 
     with patch("context_aware_translation.ui.views.glossary_view.QMessageBox.information") as info_mock:
-        view._on_task_console_refreshed()
+        view._on_tasks_changed("test-book")
 
     info_mock.assert_called_once()
     assert "export-1" in view._completed_task_ids
 
 
-def test_seed_completed_task_ids_from_console_skips_historical_terminal_rows():
+def test_seed_completed_task_ids_skips_historical_terminal_rows():
     """Existing terminal tasks should be treated as already-notified on startup."""
-    from types import SimpleNamespace
+    import time
 
+    from context_aware_translation.storage.task_store import TaskRecord
     from context_aware_translation.workflow.tasks.models import STATUS_COMPLETED
 
     view = _make_view()
     view._completed_task_ids = set()
-    view.task_console = MagicMock()
-    view.task_console.task_vms.return_value = [
-        SimpleNamespace(task_id="old-terminal", status=STATUS_COMPLETED),
-        SimpleNamespace(task_id="still-running", status="running"),
-    ]
 
-    view._seed_completed_task_ids_from_console()
+    now = time.time()
+    terminal_record = TaskRecord(
+        task_id="old-terminal",
+        book_id="test-book",
+        task_type="glossary_extraction",
+        status=STATUS_COMPLETED,
+        phase=None,
+        document_ids_json=None,
+        payload_json=None,
+        config_snapshot_json=None,
+        cancel_requested=False,
+        total_items=0,
+        completed_items=0,
+        failed_items=0,
+        last_error=None,
+        created_at=now,
+        updated_at=now,
+    )
+    running_record = TaskRecord(
+        task_id="still-running",
+        book_id="test-book",
+        task_type="glossary_extraction",
+        status="running",
+        phase=None,
+        document_ids_json=None,
+        payload_json=None,
+        config_snapshot_json=None,
+        cancel_requested=False,
+        total_items=0,
+        completed_items=0,
+        failed_items=0,
+        last_error=None,
+        created_at=now,
+        updated_at=now,
+    )
+    view._task_engine.get_tasks.side_effect = lambda _book_id, task_type=None: (
+        [terminal_record, running_record] if task_type == "glossary_extraction" else []
+    )
 
-    assert view._completed_task_ids == {"old-terminal"}
+    view._seed_completed_task_ids()
+
+    assert "old-terminal" in view._completed_task_ids
+    assert "still-running" not in view._completed_task_ids
 
 
-def test_on_task_console_refreshed_reemits_export_dialog_after_rerun():
+def test_on_tasks_changed_reemits_export_dialog_after_rerun():
     """A rerun should clear prior completion tracking and notify again on next terminal state."""
-    from types import SimpleNamespace
+    import time
 
+    from context_aware_translation.storage.task_store import TaskRecord
     from context_aware_translation.workflow.tasks.models import STATUS_COMPLETED
 
     view = _make_view()
@@ -704,26 +754,42 @@ def test_on_task_console_refreshed_reemits_export_dialog_after_rerun():
     view._update_export_button_state = MagicMock()
     view._refresh_document_selector = MagicMock()
 
-    running_vm = SimpleNamespace(
-        task_type="glossary_export",
-        status="running",
-        task_id="export-1",
-        completed_items=0,
+    now = time.time()
+
+    def _make_export_record(status: str) -> TaskRecord:
+        return TaskRecord(
+            task_id="export-1",
+            book_id="test-book",
+            task_type="glossary_export",
+            status=status,
+            phase=None,
+            document_ids_json=None,
+            payload_json=None,
+            config_snapshot_json=None,
+            cancel_requested=False,
+            total_items=0,
+            completed_items=7 if status == STATUS_COMPLETED else 0,
+            failed_items=0,
+            last_error=None,
+            created_at=now,
+            updated_at=now,
+        )
+
+    # First call: task is running (should clear completed tracking)
+    view._task_engine.get_tasks.side_effect = lambda _book_id, task_type=None: (
+        [_make_export_record("running")] if task_type == "glossary_export" else []
     )
-    completed_vm = SimpleNamespace(
-        task_type="glossary_export",
-        status=STATUS_COMPLETED,
-        task_id="export-1",
-        completed_items=7,
-    )
-    view.task_console = MagicMock()
-    view.task_console.task_vms.side_effect = [[running_vm], [completed_vm]]
     view._task_engine.get_task.return_value = MagicMock(payload_json='{"output_path": "/tmp/out.json"}')
 
     with patch("context_aware_translation.ui.views.glossary_view.QMessageBox.information") as info_mock:
-        view._on_task_console_refreshed()
+        view._on_tasks_changed("test-book")
         assert "export-1" not in view._completed_task_ids
-        view._on_task_console_refreshed()
+
+        # Second call: task is now completed (should show dialog)
+        view._task_engine.get_tasks.side_effect = lambda _book_id, task_type=None: (
+            [_make_export_record(STATUS_COMPLETED)] if task_type == "glossary_export" else []
+        )
+        view._on_tasks_changed("test-book")
 
     info_mock.assert_called_once()
     assert "export-1" in view._completed_task_ids
@@ -764,16 +830,16 @@ def test_import_glossary_claim_guard_blocks_when_tasks_running():
     assert "Cannot import glossary while glossary tasks are running" in warning_mock.call_args.args[2]
 
 
-def test_glossary_view_cleanup_calls_task_console_cleanup():
+def test_glossary_view_cleanup_calls_task_status_card_cleanup():
     from context_aware_translation.ui.views.glossary_view import GlossaryView
 
     with patch.object(GlossaryView, "__init__", _noop_init):
         view = GlossaryView(None, "")
 
-    view.task_console = MagicMock()
+    view.task_status_card = MagicMock()
     view.term_db = MagicMock()
 
     view.cleanup()
 
-    view.task_console.cleanup.assert_called_once()
+    view.task_status_card.cleanup.assert_called_once()
     view.term_db.close.assert_called_once()

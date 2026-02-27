@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 from collections.abc import Callable
 from pathlib import Path
@@ -63,10 +64,8 @@ class GlossaryExportTaskWorker(BaseWorker):
             session_ctx = WorkflowSession.from_book(self._book_manager, self._book_id)
             with session_ctx as session:
                 session.db.refresh()
-                summarized_descriptions = session.manager.build_fully_summarized_descriptions(
-                    cancel_check=self._is_cancelled,
-                    progress_callback=self._on_progress,
-                    skip_context=self._skip_context,
+                summarized_descriptions = self._build_summaries_with_compatible_kwargs(
+                    session.manager.build_fully_summarized_descriptions
                 )
                 self._raise_if_cancelled()
                 count = export_glossary(
@@ -121,3 +120,32 @@ class GlossaryExportTaskWorker(BaseWorker):
     def _notify(self) -> None:
         if self._notify_task_changed is not None:
             self._notify_task_changed(self._book_id)
+
+    def _build_summaries_with_compatible_kwargs(self, build_fn: Callable):
+        """Call build_fully_summarized_descriptions with compatible kwarg names.
+
+        Supports both current (`cancel_check`, `progress_callback`, `skip_context`)
+        and legacy/underscore-style test doubles.
+        """
+        try:
+            params = inspect.signature(build_fn).parameters
+        except (TypeError, ValueError):
+            # Unknown callable signature: fall back to positional ordering.
+            return build_fn(self._is_cancelled, self._on_progress, self._skip_context)
+
+        has_varkw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
+        kwargs: dict[str, object] = {}
+
+        def put(canonical: str, legacy: str, value: object) -> None:
+            if canonical in params or has_varkw:
+                kwargs[canonical] = value
+            elif legacy in params:
+                kwargs[legacy] = value
+
+        put("cancel_check", "_cancel_check", self._is_cancelled)
+        put("progress_callback", "_progress_callback", self._on_progress)
+        put("skip_context", "_skip_context", self._skip_context)
+
+        if kwargs:
+            return build_fn(**kwargs)
+        return build_fn(self._is_cancelled, self._on_progress, self._skip_context)

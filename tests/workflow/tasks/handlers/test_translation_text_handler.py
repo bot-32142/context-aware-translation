@@ -10,7 +10,7 @@ from context_aware_translation.workflow.tasks.claims import (
     ResourceClaim,
     SomeDocuments,
 )
-from context_aware_translation.workflow.tasks.handlers.sync_translation import SyncTranslationHandler
+from context_aware_translation.workflow.tasks.handlers.translation_text import TranslationTextHandler
 from context_aware_translation.workflow.tasks.models import (
     STATUS_CANCEL_REQUESTED,
     STATUS_CANCELLED,
@@ -28,7 +28,7 @@ def _make_record(
     status: str = STATUS_QUEUED,
     document_ids_json: str | None = None,
     payload_json: str | None = None,
-    task_id: str = "task-sync",
+    task_id: str = "task-text",
     book_id: str = "book-1",
     config_snapshot_json: str | None = None,
 ) -> TaskRecord:
@@ -36,7 +36,7 @@ def _make_record(
     return TaskRecord(
         task_id=task_id,
         book_id=book_id,
-        task_type="sync_translation",
+        task_type="translation_text",
         status=status,
         phase=None,
         document_ids_json=document_ids_json,
@@ -64,11 +64,11 @@ def _make_snapshot(
     )
 
 
-handler = SyncTranslationHandler()
+handler = TranslationTextHandler()
 
 
 def test_task_type():
-    assert handler.task_type == "sync_translation"
+    assert handler.task_type == "translation_text"
 
 
 def test_decode_payload_empty():
@@ -216,14 +216,13 @@ def test_cannot_autorun_running():
 
 
 def test_cannot_autorun_already_in_running_set():
-    record = _make_record(status=STATUS_QUEUED, task_id="task-sync")
-    result = handler.can_autorun(record, {}, _make_snapshot(running_task_ids=frozenset({"task-sync"})))
+    record = _make_record(status=STATUS_QUEUED, task_id="task-text")
+    result = handler.can_autorun(record, {}, _make_snapshot(running_task_ids=frozenset({"task-text"})))
     assert not result.allowed
 
 
 def test_cannot_autorun_with_claim_conflict():
     record = _make_record(status=STATUS_QUEUED, document_ids_json=None)
-    # Active all-doc claim for book-1 conflicts with sync translation's all-doc claim
     active_claim = ResourceClaim("doc", "book-1", "*")
     result = handler.can_autorun(record, {}, _make_snapshot(active_claims=frozenset({active_claim})))
     assert not result.allowed
@@ -232,16 +231,21 @@ def test_cannot_autorun_with_claim_conflict():
 # --- validate_submit() tests ---
 
 
-def _deps_with_documents(tmp_path, documents):
+def _deps_with_documents(tmp_path, documents, ocr_sources_by_doc_id: dict | None = None):
     """Create WorkerDeps mock with a fake book DB returning *documents*."""
     from unittest.mock import MagicMock, patch
+
+    ocr_sources_by_doc_id = ocr_sources_by_doc_id or {}
 
     deps = MagicMock()
     deps.book_manager.get_book_db_path.return_value = tmp_path / "book.db"
     fake_db = MagicMock()
     fake_repo = MagicMock()
     fake_repo.list_documents.return_value = documents
-    # Attach patches so caller can use them in a with block
+    fake_repo.get_document_sources_needing_ocr.side_effect = lambda doc_id: ocr_sources_by_doc_id.get(doc_id, [])
+    fake_repo.get_document_by_id.side_effect = lambda doc_id: next(
+        (d for d in documents if d["document_id"] == doc_id), None
+    )
     deps._patches = (
         patch("context_aware_translation.storage.book_db.SQLiteBookDB", return_value=fake_db),
         patch(
@@ -252,7 +256,7 @@ def _deps_with_documents(tmp_path, documents):
     return deps
 
 
-def test_validate_submit_with_documents(tmp_path):
+def test_validate_submit_with_text_documents(tmp_path):
     deps = _deps_with_documents(tmp_path, [{"document_id": 1, "document_type": "text"}])
     with deps._patches[0], deps._patches[1]:
         result = handler.validate_submit("book-1", {}, deps)
@@ -267,11 +271,56 @@ def test_validate_submit_rejects_empty_book(tmp_path):
     assert "no documents" in result.reason.lower()
 
 
-def test_validate_submit_allows_manga(tmp_path):
-    """Sync translation supports all document types including manga."""
+def test_validate_submit_rejects_manga_documents(tmp_path):
+    """TranslationTextHandler must reject manga document types."""
     deps = _deps_with_documents(tmp_path, [{"document_id": 1, "document_type": "manga"}])
     with deps._patches[0], deps._patches[1]:
+        result = handler.validate_submit("book-1", {}, deps)
+    assert not result.allowed
+    assert "manga" in result.reason.lower()
+
+
+def test_validate_submit_rejects_selected_manga_document(tmp_path):
+    """When specific IDs are requested, only selected docs are checked."""
+    docs = [
+        {"document_id": 1, "document_type": "text"},
+        {"document_id": 2, "document_type": "manga"},
+    ]
+    deps = _deps_with_documents(tmp_path, docs)
+    with deps._patches[0], deps._patches[1]:
+        result = handler.validate_submit("book-1", {"document_ids": [2]}, deps)
+    assert not result.allowed
+    assert "manga" in result.reason.lower()
+
+
+def test_validate_submit_allows_non_selected_manga(tmp_path):
+    """Manga docs not in the selection must not block submission."""
+    docs = [
+        {"document_id": 1, "document_type": "text"},
+        {"document_id": 2, "document_type": "manga"},
+    ]
+    deps = _deps_with_documents(tmp_path, docs)
+    with deps._patches[0], deps._patches[1]:
         result = handler.validate_submit("book-1", {"document_ids": [1]}, deps)
+    assert result.allowed
+
+
+def test_validate_submit_rejects_ocr_blocker(tmp_path):
+    """validate_submit must reject if a selected doc has pending OCR sources."""
+    docs = [{"document_id": 3, "document_type": "scanned_book"}]
+    deps = _deps_with_documents(tmp_path, docs, ocr_sources_by_doc_id={3: [{"source_id": 10}]})
+    with deps._patches[0], deps._patches[1]:
+        result = handler.validate_submit("book-1", {}, deps)
+    assert not result.allowed
+    assert "ocr" in result.reason.lower()
+
+
+def test_validate_submit_allows_completed_ocr(tmp_path):
+    """validate_submit passes when OCR is complete (no pending sources)."""
+    docs = [{"document_id": 3, "document_type": "scanned_book"}]
+    deps = _deps_with_documents(tmp_path, docs, ocr_sources_by_doc_id={3: []})
+    with deps._patches[0], deps._patches[1]:
+        result = handler.validate_submit("book-1", {}, deps)
     assert result.allowed
 
 
@@ -286,7 +335,7 @@ def test_validate_run_always_allowed():
 # --- build_worker() tests ---
 
 
-def test_build_worker_run_returns_sync_translation_task_worker():
+def test_build_worker_run_returns_translation_text_task_worker():
     from unittest.mock import MagicMock
 
     deps = MagicMock()
@@ -297,36 +346,36 @@ def test_build_worker_run_returns_sync_translation_task_worker():
     )
     payload = handler.decode_payload(record)
     worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
-    from context_aware_translation.ui.workers.sync_translation_task_worker import SyncTranslationTaskWorker
+    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
 
-    assert isinstance(worker, SyncTranslationTaskWorker)
+    assert isinstance(worker, TranslationTextTaskWorker)
 
 
-def test_build_worker_run_preserves_manga_document_ids():
-    """build_worker wires document_ids into the worker unchanged — manga docs must not be filtered."""
+def test_build_worker_run_filters_to_non_manga_document_ids():
+    """build_worker passes document_ids as-is; worker filters manga at runtime."""
     from unittest.mock import MagicMock
 
     deps = MagicMock()
-    manga_doc_ids = [10, 20]
+    doc_ids = [1, 2, 3]
     record = _make_record(
         status=STATUS_QUEUED,
-        document_ids_json=json.dumps(manga_doc_ids),
+        document_ids_json=json.dumps(doc_ids),
         payload_json=json.dumps({"force": False, "skip_context": False}),
     )
     payload = handler.decode_payload(record)
     worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
-    assert worker._document_ids == manga_doc_ids
+    assert worker._document_ids == doc_ids
 
 
-def test_build_worker_cancel_returns_sync_translation_task_worker():
+def test_build_worker_cancel_returns_translation_text_task_worker():
     from unittest.mock import MagicMock
 
     deps = MagicMock()
     record = _make_record(status=STATUS_RUNNING)
     worker = handler.build_worker(TaskAction.CANCEL, record, {}, deps)
-    from context_aware_translation.ui.workers.sync_translation_task_worker import SyncTranslationTaskWorker
+    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
 
-    assert isinstance(worker, SyncTranslationTaskWorker)
+    assert isinstance(worker, TranslationTextTaskWorker)
 
 
 def test_pre_delete_returns_empty_list():
@@ -334,11 +383,6 @@ def test_pre_delete_returns_empty_list():
 
     record = _make_record()
     assert handler.pre_delete(record, {}, MagicMock()) == []
-
-
-# ---------------------------------------------------------------------------
-# config_snapshot_json tests
-# ---------------------------------------------------------------------------
 
 
 def test_build_worker_run_passes_config_snapshot_to_worker():
@@ -356,7 +400,7 @@ def test_build_worker_run_passes_config_snapshot_to_worker():
     payload = handler.decode_payload(record)
     worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
 
-    from context_aware_translation.ui.workers.sync_translation_task_worker import SyncTranslationTaskWorker
+    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
 
-    assert isinstance(worker, SyncTranslationTaskWorker)
+    assert isinstance(worker, TranslationTextTaskWorker)
     assert worker._config_snapshot_json == snapshot

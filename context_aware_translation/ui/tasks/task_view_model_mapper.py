@@ -14,8 +14,9 @@ _TASK_TYPE_TITLES: dict[str, str] = {
     "glossary_export": "Glossary Export",
     "glossary_review": "Glossary Review",
     "glossary_translation": "Glossary Translation",
-    "sync_translation": "Sync Translation",
     "chunk_retranslation": "Chunk Retranslation",
+    "translation_text": "Text Translation",
+    "translation_manga": "Manga Translation",
 }
 
 

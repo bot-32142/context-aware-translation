@@ -23,7 +23,7 @@ def _make_record(
     return TaskRecord(
         task_id=task_id,
         book_id=book_id,
-        task_type="sync_translation",
+        task_type="batch_translation",
         status=status,
         phase=None,
         document_ids_json=None,
@@ -37,67 +37,6 @@ def _make_record(
         created_at=now,
         updated_at=now,
     )
-
-
-# ---------------------------------------------------------------------------
-# SyncTranslationTaskWorker
-# ---------------------------------------------------------------------------
-
-
-class TestSyncTranslationTaskWorkerSnapshot:
-    def _make_worker(self, snapshot: str | None = None, **kwargs):
-        from context_aware_translation.ui.workers.sync_translation_task_worker import SyncTranslationTaskWorker
-
-        book_manager = MagicMock()
-        return SyncTranslationTaskWorker(
-            book_manager,
-            "book-1",
-            action="run",
-            config_snapshot_json=snapshot,
-            **kwargs,
-        )
-
-    def test_uses_from_snapshot_when_snapshot_provided(self):
-        worker = self._make_worker(snapshot=_VALID_SNAPSHOT)
-        mock_session = MagicMock()
-        mock_session.__enter__ = MagicMock(return_value=MagicMock())
-        mock_session.__exit__ = MagicMock(return_value=False)
-
-        with (
-            patch(
-                "context_aware_translation.ui.workers.sync_translation_task_worker.WorkflowSession.from_snapshot",
-                return_value=mock_session,
-            ) as mock_from_snapshot,
-            patch(
-                "context_aware_translation.ui.workers.sync_translation_task_worker.WorkflowSession.from_book",
-            ) as mock_from_book,
-            patch("asyncio.run"),
-        ):
-            worker._run_translation()
-
-        mock_from_snapshot.assert_called_once_with(_VALID_SNAPSHOT, "book-1")
-        mock_from_book.assert_not_called()
-
-    def test_falls_back_to_from_book_when_snapshot_is_none(self):
-        worker = self._make_worker(snapshot=None)
-        mock_session = MagicMock()
-        mock_session.__enter__ = MagicMock(return_value=MagicMock())
-        mock_session.__exit__ = MagicMock(return_value=False)
-
-        with (
-            patch(
-                "context_aware_translation.ui.workers.sync_translation_task_worker.WorkflowSession.from_book",
-                return_value=mock_session,
-            ) as mock_from_book,
-            patch(
-                "context_aware_translation.ui.workers.sync_translation_task_worker.WorkflowSession.from_snapshot",
-            ) as mock_from_snapshot,
-            patch("asyncio.run"),
-        ):
-            worker._run_translation()
-
-        mock_from_book.assert_called_once()
-        mock_from_snapshot.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

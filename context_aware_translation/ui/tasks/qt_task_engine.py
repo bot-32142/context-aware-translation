@@ -109,29 +109,51 @@ class TaskEngine(QObject):
         return record
 
     def run_task(self, task_id: str) -> TaskRecord:
-        """Run a task: atomically resets to queued if terminal, then starts it.
+        """Run a task: atomically resets to queued if terminal, then starts it (strict).
 
         Raises ``ValueError`` if the task cannot be requeued (e.g. config snapshot
         capture fails or the handler denies the RUN action).
+
+        If the worker fails to start, the task is immediately marked failed so it
+        is never left stranded in ``queued`` state.
         """
         record = self._core.ensure_runnable(task_id)  # may raise ValueError
         try:
             self._start_action(task_id, TaskAction.RUN)
-        except Exception:
-            logger.debug("Best-effort run start failed for task %s", task_id)
+        except Exception as exc:
+            reason = f"strict-start failed: {type(exc).__name__}: {exc}"
+            logger.warning("run_task: marking task %s failed — %s", task_id, reason)
+            try:
+                self._store.update(task_id, status="failed", last_error=reason)
+            except Exception:
+                logger.exception("run_task: could not mark task %s failed", task_id)
+            self.enqueue_task_changed.emit(record.book_id)
+            updated = self._core.get_task(task_id)
+            return updated if updated is not None else record
         return record
 
     def rerun(self, task_id: str) -> TaskRecord:
-        """Reset a terminal task to queued then start it.
+        """Reset a terminal task to queued then start it (strict).
 
         Raises ``ValueError`` if the task cannot be rerun (e.g. config snapshot
         capture fails or the handler denies the RUN action).
+
+        If the worker fails to start, the task is immediately marked failed so it
+        is never left stranded in ``queued`` state.
         """
         record = self._core.rerun(task_id)  # may raise ValueError
         try:
             self._start_action(task_id, TaskAction.RUN)
-        except Exception:
-            logger.debug("Best-effort rerun start failed for task %s", task_id)
+        except Exception as exc:
+            reason = f"strict-start failed: {type(exc).__name__}: {exc}"
+            logger.warning("rerun: marking task %s failed — %s", task_id, reason)
+            try:
+                self._store.update(task_id, status="failed", last_error=reason)
+            except Exception:
+                logger.exception("rerun: could not mark task %s failed", task_id)
+            self.enqueue_task_changed.emit(record.book_id)
+            updated = self._core.get_task(task_id)
+            return updated if updated is not None else record
         return record
 
     def cancel(self, task_id: str) -> None:

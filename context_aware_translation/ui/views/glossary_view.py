@@ -1,5 +1,6 @@
 """Glossary editor view for managing translation terms."""
 
+from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -39,9 +40,16 @@ if TYPE_CHECKING:
 
 from ..i18n import qarg, translate_progress_message
 from ..models.term_model import TermTableModel
-from ..tasks.task_console import TaskConsole
 from ..utils import create_tip_label, translate_document_type
-from ..widgets import ProgressWidget
+from ..widgets import ProgressWidget, TaskStatusCard
+
+_GLOSSARY_MUTATING_TASK_TYPES: tuple[str, ...] = (
+    "glossary_extraction",
+    "glossary_translation",
+    "glossary_review",
+    "glossary_export",
+)
+_GLOSSARY_DIALOG_TASK_TYPES: tuple[str, ...] = ("glossary_extraction", "glossary_export")
 
 
 class _TranslationDelegate(QStyledItemDelegate):
@@ -75,6 +83,7 @@ class GlossaryView(QWidget):
     """Glossary editor view with filtering, sorting, and bulk operations."""
 
     glossary_changed = Signal()
+    open_activity_requested = Signal()
 
     def __init__(
         self, book_manager: BookManager, book_id: str, task_engine: "TaskEngine", parent: QWidget | None = None
@@ -99,6 +108,7 @@ class GlossaryView(QWidget):
 
         # Track completed tasks for one-time completion dialogs
         self._completed_task_ids: set[str] = set()
+        self._last_glossary_task_signature: tuple[tuple[object, ...], ...] = ()
 
         self._setup_ui()
         self._update_stats()
@@ -202,16 +212,18 @@ class GlossaryView(QWidget):
         self.progress_widget.hide()
         layout.addWidget(self.progress_widget)
 
-        # Unified task console for all glossary engine tasks
-        self.task_console = TaskConsole(
+        # Inline status card for glossary_extraction tasks
+        self.task_status_card = TaskStatusCard(
             task_engine=self._task_engine,
             book_id=self.book_id,
-            task_type=["glossary_extraction", "glossary_translation", "glossary_review", "glossary_export"],
+            task_types=["glossary_extraction"],
+            display_label=self.tr("Glossary Build Status"),
             parent=self,
         )
-        layout.addWidget(self.task_console)
-        self.task_console.console_refreshed.connect(self._on_task_console_refreshed)
-        self._seed_completed_task_ids_from_console()
+        self.task_status_card.open_activity_requested.connect(self.open_activity_requested)
+        layout.addWidget(self.task_status_card)
+        self._seed_completed_task_ids()
+        self._task_engine.tasks_changed.connect(self._on_tasks_changed)
 
         # Table view
         self.table_view = QTableView()
@@ -244,16 +256,47 @@ class GlossaryView(QWidget):
         self.status_label = QLabel()
         layout.addWidget(self.status_label)
 
-    def _seed_completed_task_ids_from_console(self) -> None:
+    def _collect_task_records(self, task_types: tuple[str, ...]) -> list:
+        records = []
+        for task_type in task_types:
+            records.extend(self._task_engine.get_tasks(self.book_id, task_type=task_type))
+        return records
+
+    @staticmethod
+    def _task_signature(records: list) -> tuple[tuple[object, ...], ...]:
+        items: list[tuple[object, ...]] = []
+        for rec in records:
+            items.append(
+                (
+                    rec.task_id,
+                    rec.task_type,
+                    rec.status,
+                    rec.updated_at,
+                    rec.completed_items,
+                    rec.total_items,
+                    rec.failed_items,
+                    rec.last_error,
+                )
+            )
+        return tuple(sorted(items))
+
+    def _seed_completed_task_ids(self) -> None:
         """Treat already-terminal rows as historical so startup doesn't replay dialogs."""
         from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES
 
-        for vm in self.task_console.task_vms():
+        from ..tasks.task_view_model_mapper import map_tasks_to_row_vms
+
+        all_records = self._collect_task_records(_GLOSSARY_MUTATING_TASK_TYPES)
+        self._last_glossary_task_signature = self._task_signature(all_records)
+        records = [rec for rec in all_records if rec.task_type in _GLOSSARY_DIALOG_TASK_TYPES]
+        for vm in map_tasks_to_row_vms(records):
             if vm.status in TERMINAL_TASK_STATUSES:
                 self._completed_task_ids.add(vm.task_id)
 
-    def _on_task_console_refreshed(self) -> None:
-        """Handle task console refresh — sync term DB, table, stats, and button state."""
+    def _on_tasks_changed(self, book_id: str) -> None:
+        """Handle task engine tasks_changed — sync term DB, table, stats, and button state."""
+        if book_id != self.book_id:
+            return
 
         from context_aware_translation.workflow.tasks.models import (
             STATUS_CANCELLED,
@@ -263,18 +306,34 @@ class GlossaryView(QWidget):
             TERMINAL_TASK_STATUSES,
         )
 
+        from ..tasks.task_view_model_mapper import map_tasks_to_row_vms
+
+        all_records = self._collect_task_records(_GLOSSARY_MUTATING_TASK_TYPES)
+        signature = self._task_signature(all_records)
+        if signature == getattr(self, "_last_glossary_task_signature", ()):
+            # Fast path: unrelated task updates should not trigger full table refresh.
+            self._update_action_button_states()
+            return
+        self._last_glossary_task_signature = signature
+
         self.term_db.refresh()
         self.table_model.refresh()
         self._update_stats()
         self._refresh_document_selector()
 
         _SUCCESS_TERMINAL = {STATUS_COMPLETED, STATUS_COMPLETED_WITH_ERRORS}
-        task_vms = self.task_console.task_vms()
+
+        # Only check task types that have completion dialogs
+        records = [rec for rec in all_records if rec.task_type in _GLOSSARY_DIALOG_TASK_TYPES]
+        task_vms = map_tasks_to_row_vms(records)
         live_ids = {vm.task_id for vm in task_vms}
+
+        # Prune removed task IDs
         self._completed_task_ids &= live_ids
 
         for vm in task_vms:
             if vm.status not in TERMINAL_TASK_STATUSES:
+                # Task returned to non-terminal (rerun): allow future dialog
                 self._completed_task_ids.discard(vm.task_id)
                 continue
 
@@ -319,7 +378,14 @@ class GlossaryView(QWidget):
                             self.tr("Export Cancelled"),
                             self.tr("Glossary export was cancelled."),
                         )
-                elif vm.status in _SUCCESS_TERMINAL:
+                elif vm.task_type == "glossary_extraction" and vm.status in _SUCCESS_TERMINAL:
+                    # Show extraction completion dialog
+                    count = vm.completed_items or 0
+                    QMessageBox.information(
+                        self,
+                        self.tr("Glossary Build Complete"),
+                        qarg(self.tr("Glossary build completed. %1 term(s) extracted."), count),
+                    )
                     self.glossary_changed.emit()
 
         self._update_review_button_state()
@@ -1221,8 +1287,12 @@ class GlossaryView(QWidget):
 
     def cleanup(self) -> None:
         """Clean up resources."""
-        if hasattr(self, "task_console"):
-            self.task_console.cleanup()
+        if hasattr(self, "_task_engine"):
+            with suppress(TypeError, RuntimeError):
+                self._task_engine.tasks_changed.disconnect(self._on_tasks_changed)
+
+        if hasattr(self, "task_status_card"):
+            self.task_status_card.cleanup()
 
         if hasattr(self, "term_db"):
             self.term_db.close()

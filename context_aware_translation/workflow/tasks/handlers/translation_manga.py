@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
+from context_aware_translation.config import Config
+from context_aware_translation.storage.book_db import SQLiteBookDB
+from context_aware_translation.storage.document_repository import DocumentRepository
 from context_aware_translation.workflow.tasks.claims import (
     AllDocuments,
-    ClaimArbiter,
     ClaimMode,
     DocumentScope,
     ResourceClaim,
@@ -36,11 +38,10 @@ if TYPE_CHECKING:
 
 _RERUNNABLE_TERMINAL_STATUSES = frozenset({STATUS_CANCELLED, STATUS_FAILED, STATUS_COMPLETED_WITH_ERRORS})
 _NON_DELETABLE_STATUSES = frozenset({STATUS_RUNNING, STATUS_CANCEL_REQUESTED, STATUS_CANCELLING})
-_AUTORUN_STATUSES = frozenset({STATUS_QUEUED, STATUS_PAUSED})
 
 
-class SyncTranslationHandler:
-    task_type = "sync_translation"
+class TranslationMangaHandler:
+    task_type = "translation_manga"
 
     def decode_payload(self, record: TaskRecord) -> dict[str, Any]:
         return decode_task_payload(record)
@@ -65,6 +66,7 @@ class SyncTranslationHandler:
         elif isinstance(doc_scope, SomeDocuments):
             claims.update(ResourceClaim("doc", book_id, str(doc_id)) for doc_id in doc_scope.doc_ids)
         claims.add(ResourceClaim("glossary_state", book_id, "*", ClaimMode.READ_SHARED))
+        # Keep context_tree claim aligned with workflow.translate() behavior.
         claims.add(ResourceClaim("context_tree", book_id, "*", ClaimMode.WRITE_COOPERATIVE))
         return frozenset(claims)
 
@@ -99,20 +101,22 @@ class SyncTranslationHandler:
         raise ValueError(f"Unknown action: {action!r}")
 
     def can_autorun(self, record: TaskRecord, payload: Any, snapshot: ActionSnapshot) -> Decision:
-        if record.status not in _AUTORUN_STATUSES:
-            return Decision(allowed=False, reason=f"Status {record.status!r} is not autorunnable")
-        if record.task_id in snapshot.running_task_ids:
-            return Decision(allowed=False, reason="Already running")
-        wanted = self.claims(record, payload)
-        arbiter = ClaimArbiter()
-        if arbiter.conflicts(wanted, snapshot.active_claims):
-            return Decision(allowed=False, reason="Claims conflict with active tasks")
-        return Decision(allowed=True)
+        # Manga translation always requires explicit user initiation
+        return Decision(allowed=False, reason="Manga translation requires explicit user initiation")
 
     def validate_submit(self, book_id: str, params: dict, deps: WorkerDeps) -> Decision:
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        # Check manga_translator_config exists
+        book = deps.book_manager.get_book(book_id)
+        if book is None:
+            return Decision(allowed=False, reason=f"Book not found: {book_id}")
+        config = Config.from_book(book, deps.book_manager.library_root, deps.book_manager.registry)
+        if config.manga_translator_config is None:
+            return Decision(
+                allowed=False,
+                reason="manga_translator_config is required to translate manga documents. Please configure it in your book settings.",
+            )
 
+        # Check all selected documents are manga type
         db_path = deps.book_manager.get_book_db_path(book_id)
         try:
             db = SQLiteBookDB(db_path)
@@ -122,16 +126,79 @@ class SyncTranslationHandler:
             doc_repo = DocumentRepository(db)
             documents = doc_repo.list_documents()
             if not documents:
-                return Decision(allowed=False, reason="Book has no documents to translate.")
+                return Decision(allowed=False, reason="Book has no documents.")
+
+            doc_ids = params.get("document_ids")
+            if doc_ids:
+                id_set = set(doc_ids)
+                selected_docs = [d for d in documents if d["document_id"] in id_set]
+            else:
+                selected_docs = documents
+
+            if not selected_docs:
+                return Decision(allowed=False, reason="No documents selected.")
+
+            non_manga = [d for d in selected_docs if d.get("document_type") != "manga"]
+            if non_manga:
+                return Decision(
+                    allowed=False,
+                    reason="All selected documents must be manga type for manga translation.",
+                )
         finally:
             db.close()
+
         return Decision(allowed=True)
 
     def validate_run(self, record: TaskRecord, payload: Any, deps: WorkerDeps) -> Decision:
+        # Re-check config
+        book = deps.book_manager.get_book(record.book_id)
+        if book is None:
+            return Decision(allowed=False, reason=f"Book not found: {record.book_id}")
+        config = Config.from_book(book, deps.book_manager.library_root, deps.book_manager.registry)
+        if config.manga_translator_config is None:
+            return Decision(
+                allowed=False,
+                reason="manga_translator_config is required to translate manga documents.",
+            )
+
+        # Re-check docs remain manga type
+        db_path = deps.book_manager.get_book_db_path(record.book_id)
+        try:
+            db = SQLiteBookDB(db_path)
+        except Exception:
+            return Decision(allowed=False, reason="Cannot open book database.")
+        try:
+            doc_repo = DocumentRepository(db)
+            documents = doc_repo.list_documents()
+
+            doc_ids: list[int] | None = None
+            if record.document_ids_json:
+                try:
+                    parsed = json.loads(record.document_ids_json)
+                    if isinstance(parsed, list):
+                        doc_ids = [int(i) for i in parsed]
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    doc_ids = None
+
+            if doc_ids:
+                id_set = set(doc_ids)
+                selected_docs = [d for d in documents if d["document_id"] in id_set]
+            else:
+                selected_docs = documents
+
+            non_manga = [d for d in selected_docs if d.get("document_type") != "manga"]
+            if non_manga:
+                return Decision(
+                    allowed=False,
+                    reason="All selected documents must be manga type for manga translation.",
+                )
+        finally:
+            db.close()
+
         return Decision(allowed=True)
 
     def build_worker(self, action: TaskAction, record: TaskRecord, payload: Any, deps: WorkerDeps) -> object:
-        from context_aware_translation.ui.workers.sync_translation_task_worker import SyncTranslationTaskWorker
+        from context_aware_translation.ui.workers.translation_manga_task_worker import TranslationMangaTaskWorker
 
         doc_ids: list[int] | None = None
         if record.document_ids_json:
@@ -146,7 +213,7 @@ class SyncTranslationHandler:
         skip_context: bool = bool((payload or {}).get("skip_context", False))
 
         if action == TaskAction.RUN:
-            return SyncTranslationTaskWorker(
+            return TranslationMangaTaskWorker(
                 deps.book_manager,
                 record.book_id,
                 action="run",
@@ -160,7 +227,7 @@ class SyncTranslationHandler:
             )
 
         if action == TaskAction.CANCEL:
-            return SyncTranslationTaskWorker(
+            return TranslationMangaTaskWorker(
                 deps.book_manager,
                 record.book_id,
                 action="cancel",
@@ -169,7 +236,7 @@ class SyncTranslationHandler:
                 notify_task_changed=deps.notify_task_changed,
             )
 
-        raise ValueError(f"Unsupported action for SyncTranslationHandler: {action!r}")
+        raise ValueError(f"Unsupported action for TranslationMangaHandler: {action!r}")
 
     def cancel_dispatch_policy(self, record: TaskRecord, payload: Any) -> CancelDispatchPolicy:
         from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy

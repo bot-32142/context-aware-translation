@@ -58,39 +58,6 @@ def _book_manager_with_db(tmp_path: Path) -> MagicMock:
     return manager
 
 
-def test_sync_translation_task_worker_late_interrupt_still_emits_success(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
-    from context_aware_translation.ui.workers.sync_translation_task_worker import SyncTranslationTaskWorker
-
-    task_store = MagicMock()
-    task_store.update = MagicMock()
-    worker = SyncTranslationTaskWorker(
-        _book_manager_with_db(tmp_path),
-        "book-id",
-        action="run",
-        task_id="task-1",
-        task_store=task_store,
-    )
-
-    class _Session:
-        async def translate(self, **kwargs) -> None:  # noqa: ANN003
-            _ = kwargs
-            worker.requestInterruption()
-
-    monkeypatch.setattr(
-        "context_aware_translation.ui.workers.sync_translation_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _TranslatorContext(_Session()),
-    )
-
-    success, cancelled, errors = _capture_signals(worker)
-    worker.run()
-
-    assert cancelled == []
-    assert success[0]["action"] == "run"
-    assert errors == []
-
-
 def test_import_worker_late_interrupt_still_emits_success(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     from context_aware_translation.ui.workers.import_worker import ImportWorker
 
@@ -160,72 +127,6 @@ def test_export_worker_late_interrupt_still_emits_success(monkeypatch: pytest.Mo
     assert cancelled == []
     assert success == ["/tmp/output.txt"]
     assert errors == []
-
-
-def test_sync_translation_task_worker_does_not_emit_success_when_session_exit_fails(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
-    from context_aware_translation.ui.workers.sync_translation_task_worker import SyncTranslationTaskWorker
-
-    task_store = MagicMock()
-    task_store.update = MagicMock()
-    worker = SyncTranslationTaskWorker(
-        _book_manager_with_db(tmp_path),
-        "book-id",
-        action="run",
-        task_id="task-2",
-        task_store=task_store,
-    )
-
-    class _Session:
-        async def translate(self, **kwargs) -> None:  # noqa: ANN003
-            _ = kwargs
-
-    monkeypatch.setattr(
-        "context_aware_translation.ui.workers.sync_translation_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _TranslatorContext(_Session(), exit_error=RuntimeError("close failed")),
-    )
-
-    success, cancelled, errors = _capture_signals(worker)
-    worker.run()
-
-    assert success == []
-    assert cancelled == []
-    assert len(errors) == 1
-    assert "RuntimeError: close failed" in errors[0]
-
-
-def test_sync_translation_task_worker_forwards_skip_context(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    from context_aware_translation.ui.workers.sync_translation_task_worker import SyncTranslationTaskWorker
-
-    task_store = MagicMock()
-    task_store.update = MagicMock()
-    worker = SyncTranslationTaskWorker(
-        _book_manager_with_db(tmp_path),
-        "book-id",
-        action="run",
-        task_id="task-3",
-        skip_context=True,
-        task_store=task_store,
-    )
-    captured: dict[str, object] = {}
-
-    class _Session:
-        async def translate(self, **kwargs) -> None:  # noqa: ANN003
-            captured.update(kwargs)
-
-    monkeypatch.setattr(
-        "context_aware_translation.ui.workers.sync_translation_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _TranslatorContext(_Session()),
-    )
-
-    success, cancelled, errors = _capture_signals(worker)
-    worker.run()
-
-    assert success[0]["action"] == "run"
-    assert cancelled == []
-    assert errors == []
-    assert captured.get("skip_context") is True
 
 
 def test_import_worker_does_not_emit_success_when_import_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -388,47 +289,3 @@ def test_glossary_review_task_worker_does_not_emit_success_when_session_exit_fai
     assert cancelled == []
     assert len(errors) == 1
     assert "RuntimeError: close failed" in errors[0]
-
-
-# ------------------------------------------------------------------
-# Sync translation worker: manga document passthrough
-# ------------------------------------------------------------------
-
-
-def test_sync_translation_task_worker_passes_manga_document_ids(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    """Sync translation worker passes document_ids through to session.translate unchanged.
-
-    Manga documents must not be filtered — session.translate dispatches per doc_type internally.
-    """
-    from context_aware_translation.ui.workers.sync_translation_task_worker import SyncTranslationTaskWorker
-
-    task_store = MagicMock()
-    manga_doc_ids = [10, 20]  # simulate manga document IDs
-    worker = SyncTranslationTaskWorker(
-        _book_manager_with_db(tmp_path),
-        "book-id",
-        action="run",
-        task_id="task-manga",
-        document_ids=manga_doc_ids,
-        task_store=task_store,
-    )
-
-    captured_kwargs: dict = {}
-
-    class _Session:
-        async def translate(self, **kwargs) -> None:  # noqa: ANN003
-            captured_kwargs.update(kwargs)
-
-    monkeypatch.setattr(
-        "context_aware_translation.ui.workers.sync_translation_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _TranslatorContext(_Session()),
-    )
-
-    success, cancelled, errors = _capture_signals(worker)
-    worker.run()
-
-    assert success[0]["action"] == "run"
-    assert cancelled == []
-    assert errors == []
-    assert captured_kwargs["document_ids"] == manga_doc_ids
-    task_store.update.assert_any_call("task-manga", status="completed")

@@ -180,12 +180,12 @@ def test_claim_mode_no_conflict_different_namespace():
 
 
 # ---------------------------------------------------------------------------
-# sync_translation / chunk_retranslation interaction scenarios
+# translation_text / chunk_retranslation interaction scenarios
 # ---------------------------------------------------------------------------
 
 
-def test_sync_translation_conflicts_with_active_sync_translation():
-    """Two sync_translation tasks on the same book conflict via all-doc W_E claim."""
+def test_all_doc_claim_conflicts_with_active_all_doc_claim():
+    """Two all-doc W_E claims on the same book conflict."""
     arbiter = ClaimArbiter()
     # Both claim doc/* W_E for the same book
     wanted = frozenset({ResourceClaim("doc", "book-1", "*")})
@@ -193,10 +193,10 @@ def test_sync_translation_conflicts_with_active_sync_translation():
     assert arbiter.conflicts(wanted, active) is True
 
 
-def test_chunk_retranslation_conflicts_with_sync_translation_all_docs():
-    """chunk_retranslation (specific doc W_E) conflicts with sync_translation (all-doc W_E)."""
+def test_chunk_retranslation_conflicts_with_all_doc_claim():
+    """chunk_retranslation (specific doc W_E) conflicts with an all-doc W_E holder."""
     arbiter = ClaimArbiter()
-    # chunk_retranslation wants doc/5 W_E; sync_translation holds doc/* W_E
+    # chunk_retranslation wants doc/5 W_E; all-doc holder holds doc/* W_E
     wanted = frozenset({ResourceClaim("doc", "book-1", "5")})
     active = frozenset({ResourceClaim("doc", "book-1", "*")})
     assert arbiter.conflicts(wanted, active) is True
@@ -234,8 +234,8 @@ def test_chunk_retranslation_context_tree_write_cooperative_no_conflict():
     assert arbiter.conflicts(wanted, active) is False
 
 
-def test_sync_translation_different_books_no_conflict():
-    """sync_translation tasks on different books never conflict."""
+def test_all_doc_claims_different_books_no_conflict():
+    """All-doc W_E claims on different books never conflict."""
     arbiter = ClaimArbiter()
     wanted = frozenset({ResourceClaim("doc", "book-1", "*")})
     active = frozenset({ResourceClaim("doc", "book-2", "*")})

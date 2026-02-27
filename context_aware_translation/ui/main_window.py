@@ -27,7 +27,8 @@ from context_aware_translation.workflow.tasks.handlers.glossary_export import Gl
 from context_aware_translation.workflow.tasks.handlers.glossary_extraction import GlossaryExtractionHandler
 from context_aware_translation.workflow.tasks.handlers.glossary_review import GlossaryReviewHandler
 from context_aware_translation.workflow.tasks.handlers.glossary_translation import GlossaryTranslationHandler
-from context_aware_translation.workflow.tasks.handlers.sync_translation import SyncTranslationHandler
+from context_aware_translation.workflow.tasks.handlers.translation_manga import TranslationMangaHandler
+from context_aware_translation.workflow.tasks.handlers.translation_text import TranslationTextHandler
 from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
 from . import i18n
@@ -89,9 +90,10 @@ class MainWindow(QMainWindow):
         self._task_engine.register_handler(GlossaryExtractionHandler())
         self._task_engine.register_handler(GlossaryReviewHandler())
         self._task_engine.register_handler(GlossaryTranslationHandler())
-        self._task_engine.register_handler(SyncTranslationHandler())
         self._task_engine.register_handler(ChunkRetranslationHandler())
         self._task_engine.register_handler(GlossaryExportHandler())
+        self._task_engine.register_handler(TranslationTextHandler())
+        self._task_engine.register_handler(TranslationMangaHandler())
         self._task_engine.running_work_changed.connect(self._on_engine_running_work_changed)
 
         self._sleep_check_timer = QTimer(self)
@@ -287,8 +289,8 @@ class MainWindow(QMainWindow):
             qarg(
                 self.tr(
                     "The following operations are currently running: %1.\n\n"
-                    "Leaving the book will stop local processing.\n\n"
-                    "Submitted async batch tasks will continue at the provider and can be resumed later.\n\n"
+                    "Leaving the book may stop local non-task processing.\n\n"
+                    "Engine-managed tasks continue in background and can be resumed later.\n\n"
                     "All completed results are already saved and won't be lost."
                 ),
                 operations_text,

@@ -49,9 +49,13 @@ class TestTitleMapping:
         vm = map_task_to_row_vm(_make_record(task_type="glossary_review"))
         assert vm.title == "Glossary Review #abcd1234"
 
-    def test_sync_translation_title(self):
-        vm = map_task_to_row_vm(_make_record(task_type="sync_translation"))
-        assert vm.title == "Sync Translation #abcd1234"
+    def test_translation_text_title(self):
+        vm = map_task_to_row_vm(_make_record(task_type="translation_text"))
+        assert vm.title == "Text Translation #abcd1234"
+
+    def test_translation_manga_title(self):
+        vm = map_task_to_row_vm(_make_record(task_type="translation_manga"))
+        assert vm.title == "Manga Translation #abcd1234"
 
     def test_chunk_retranslation_title(self):
         vm = map_task_to_row_vm(_make_record(task_type="chunk_retranslation"))

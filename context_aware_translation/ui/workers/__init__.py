@@ -6,7 +6,6 @@ from .chunk_retranslation_task_worker import ChunkRetranslationTaskWorker
 from .export_worker import ExportWorker
 from .import_worker import ImportWorker
 from .ocr_worker import OCRWorker
-from .sync_translation_task_worker import SyncTranslationTaskWorker
 
 __all__ = [
     "BaseWorker",
@@ -15,5 +14,4 @@ __all__ = [
     "ExportWorker",
     "ImportWorker",
     "OCRWorker",
-    "SyncTranslationTaskWorker",
 ]

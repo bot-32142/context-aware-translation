@@ -50,13 +50,11 @@ def _make_view():
     view._is_cleaned_up = False
     view._task_engine = MagicMock()
     view._task_engine.get_task.return_value = None
-    view.task_console = MagicMock()
-    view._sync_task_id = None
     view._pending_retranslations = {}
-    view._emitted_sync_translation_done = set()
     view.book_id = "test-book"
     view.book_manager = _make_book_manager()
     view.term_db = MagicMock()
+    view._document_type_cache = {}
     return view
 
 
@@ -79,7 +77,6 @@ def test_refresh_reloads_review_content_when_review_page_is_active():
 
     assert view._document_type_cache == {}
     view._on_review_document_changed.assert_called_once_with(2)
-    view.task_console.refresh.assert_called_once()
 
 
 def test_refresh_does_not_reload_review_content_when_progress_page_is_active():
@@ -97,7 +94,6 @@ def test_refresh_does_not_reload_review_content_when_progress_page_is_active():
     view.refresh()
 
     view._on_review_document_changed.assert_not_called()
-    view.task_console.refresh.assert_called_once()
 
 
 def test_load_chunks_list_clears_selection_when_no_chunks():
@@ -162,6 +158,8 @@ def test_start_translation_forwards_skip_context_to_engine():
     view.book_id = "book-id"
     view._resolve_trigger_conditions = MagicMock(return_value=([1], False))
     view._has_document_reservation = MagicMock(return_value=False)
+    # Text-only document (no manga)
+    view._split_doc_ids_by_type = MagicMock(return_value=([1], []))
     view.start_btn = QPushButton()
     view.doc_combo = QComboBox()
     view.skip_context_cb = QCheckBox()
@@ -176,35 +174,18 @@ def test_start_translation_forwards_skip_context_to_engine():
     submitted_record.task_id = "task-1"
     submitted_record.status = "running"
     submitted_record.last_error = None
-    view._task_engine.submit.return_value = submitted_record
+    view._task_engine.submit_and_start.return_value = submitted_record
 
     view._start_translation()
 
     view._resolve_trigger_conditions.assert_called_once_with(for_batch_submit=False)
-    view._task_engine.submit.assert_called_once_with(
-        "sync_translation",
+    view._task_engine.submit_and_start.assert_called_once_with(
+        "translation_text",
         "book-id",
         document_ids=[1],
         force=False,
         skip_context=True,
     )
-    assert view._sync_task_id == "task-1"
-
-
-def test_submit_batch_task_returns_when_sync_translation_running():
-    from context_aware_translation.workflow.tasks.models import STATUS_RUNNING
-
-    view = _make_view()
-    # Simulate a running sync_translation task
-    view._sync_task_id = "task-running"
-    running_record = MagicMock()
-    running_record.status = STATUS_RUNNING
-    view._task_engine.get_task.return_value = running_record
-    view._get_preflight_docs_with_pending_ocr = MagicMock(return_value=[])
-
-    view._submit_batch_task()
-
-    view._get_preflight_docs_with_pending_ocr.assert_not_called()
 
 
 def test_submit_batch_task_does_not_require_translated_glossary_terms():
@@ -535,32 +516,32 @@ def test_handle_chunk_retrans_keeps_non_terminal_task_in_pending():
 # ------------------------------------------------------------------
 
 
-def test_translation_completed_emitted_only_once_per_task_terminal_transition():
-    """translation_completed signal emitted once per task_id terminal transition (dedupe via set)."""
+def test_pending_retranslations_not_emitted_twice_for_same_task():
+    """Completed chunk tasks are removed from _pending_retranslations — prevents double-handling."""
     from context_aware_translation.workflow.tasks.models import STATUS_COMPLETED
 
     view = _make_view()
     completed_record = MagicMock()
-    completed_record.task_id = "sync-task-dedupe"
+    completed_record.task_id = "chunk-dedupe"
     completed_record.status = STATUS_COMPLETED
+    completed_record.payload_json = None
     completed_record.last_error = None
     view._task_engine.get_task.return_value = completed_record
-    view._task_engine.get_tasks.return_value = [completed_record]
 
-    view._sync_task_id = "sync-task-dedupe"
-    view._on_sync_task_finished = MagicMock()
-    success_calls: list[object] = []
-    view._on_translation_success = MagicMock(side_effect=lambda r: success_calls.append(r))
+    view._pending_retranslations = {"chunk-dedupe": (3, 7)}
+    view._on_retranslate_success = MagicMock()
+    view._on_retranslate_error = MagicMock()
+    view._on_retranslate_finished = MagicMock()
 
-    # First call — should call _on_translation_success and add to emitted set
-    view._handle_sync_task_update()
-    # _sync_task_id is now None — second call is a no-op
-    view._handle_sync_task_update()
+    # First call — task is terminal, removed from pending
+    view._handle_chunk_retrans_task_update()
+    assert "chunk-dedupe" not in view._pending_retranslations
 
-    # _on_translation_success called exactly once
-    assert len(success_calls) == 1
-    # ID is tracked in emitted set
-    assert "sync-task-dedupe" in view._emitted_sync_translation_done
+    # Second call — no pending tasks, no-op
+    view._handle_chunk_retrans_task_update()
+
+    # _on_retranslate_finished called exactly once (only on first call when pending was non-empty)
+    view._on_retranslate_finished.assert_called_once()
 
 
 # ------------------------------------------------------------------
@@ -605,3 +586,207 @@ def test_retranslate_current_chunk_uses_strict_submit_and_tracks_task():
     )
     assert "chunk-task-new" in view._pending_retranslations
     assert view._pending_retranslations["chunk-task-new"] == (5, 3)
+
+
+# ------------------------------------------------------------------
+# _split_doc_ids_by_type tests
+# ------------------------------------------------------------------
+
+
+def test_split_doc_ids_by_type_separates_manga_from_text():
+    view = _make_view()
+    view.document_repo = MagicMock()
+    view.document_repo.list_documents.return_value = [
+        {"document_id": 1, "document_type": "text"},
+        {"document_id": 2, "document_type": "manga"},
+        {"document_id": 3, "document_type": "pdf"},
+    ]
+
+    text_ids, manga_ids = view._split_doc_ids_by_type(None)
+
+    assert set(text_ids) == {1, 3}
+    assert set(manga_ids) == {2}
+
+
+def test_split_doc_ids_by_type_filters_by_document_ids():
+    view = _make_view()
+    view.document_repo = MagicMock()
+    view.document_repo.list_documents.return_value = [
+        {"document_id": 1, "document_type": "text"},
+        {"document_id": 2, "document_type": "manga"},
+        {"document_id": 3, "document_type": "text"},
+    ]
+
+    text_ids, manga_ids = view._split_doc_ids_by_type([1, 2])
+
+    assert text_ids == [1]
+    assert manga_ids == [2]
+
+
+def test_split_doc_ids_by_type_returns_empty_for_empty_selection():
+    view = _make_view()
+    view.document_repo = MagicMock()
+    view.document_repo.list_documents.return_value = [
+        {"document_id": 1, "document_type": "text"},
+    ]
+
+    text_ids, manga_ids = view._split_doc_ids_by_type([])
+
+    assert text_ids == []
+    assert manga_ids == []
+
+
+# ------------------------------------------------------------------
+# Mixed-selection / bucket submit tests
+# ------------------------------------------------------------------
+
+
+def test_start_translation_submits_manga_task_for_manga_documents():
+    """_start_translation submits translation_manga for manga docs via submit_and_start."""
+    view = _make_view()
+    view.book_manager = _make_book_manager()
+    view.book_id = "book-id"
+    view._resolve_trigger_conditions = MagicMock(return_value=([2], False))
+    view._has_document_reservation = MagicMock(return_value=False)
+    view._split_doc_ids_by_type = MagicMock(return_value=([], [2]))
+    view.start_btn = QPushButton()
+    view.doc_combo = QComboBox()
+    view.skip_context_cb = QCheckBox()
+    view.skip_context_cb.setChecked(False)
+    view.status_label = MagicMock()
+
+    preflight_decision = MagicMock()
+    preflight_decision.allowed = True
+    view._task_engine.preflight.return_value = preflight_decision
+
+    submitted_record = MagicMock()
+    submitted_record.task_id = "task-manga-1"
+    submitted_record.status = "running"
+    submitted_record.last_error = None
+    view._task_engine.submit_and_start.return_value = submitted_record
+
+    view._start_translation()
+
+    view._task_engine.submit_and_start.assert_called_once_with(
+        "translation_manga",
+        "book-id",
+        document_ids=[2],
+        force=False,
+        skip_context=False,
+    )
+
+
+def test_start_translation_submits_both_buckets_for_mixed_documents():
+    """_start_translation submits two tasks for mixed text+manga selection."""
+    view = _make_view()
+    view.book_manager = _make_book_manager()
+    view.book_id = "book-id"
+    view._resolve_trigger_conditions = MagicMock(return_value=([1, 2], False))
+    view._has_document_reservation = MagicMock(return_value=False)
+    view._split_doc_ids_by_type = MagicMock(return_value=([1], [2]))
+    view.start_btn = QPushButton()
+    view.doc_combo = QComboBox()
+    view.skip_context_cb = QCheckBox()
+    view.skip_context_cb.setChecked(False)
+    view.status_label = MagicMock()
+
+    preflight_decision = MagicMock()
+    preflight_decision.allowed = True
+    view._task_engine.preflight.return_value = preflight_decision
+
+    submitted_record = MagicMock()
+    submitted_record.task_id = "task-x"
+    submitted_record.status = "running"
+    submitted_record.last_error = None
+    view._task_engine.submit_and_start.return_value = submitted_record
+
+    view._start_translation()
+
+    assert view._task_engine.submit_and_start.call_count == 2
+    submitted_types = {c.args[0] for c in view._task_engine.submit_and_start.call_args_list}
+    assert "translation_text" in submitted_types
+    assert "translation_manga" in submitted_types
+
+
+def test_start_translation_aborts_all_if_any_preflight_denied():
+    """_start_translation submits nothing when any bucket preflight is denied."""
+    view = _make_view()
+    view.book_manager = _make_book_manager()
+    view.book_id = "book-id"
+    view._resolve_trigger_conditions = MagicMock(return_value=([1, 2], False))
+    view._has_document_reservation = MagicMock(return_value=False)
+    view._split_doc_ids_by_type = MagicMock(return_value=([1], [2]))
+    view.start_btn = QPushButton()
+    view.doc_combo = QComboBox()
+    view.skip_context_cb = QCheckBox()
+    view.status_label = MagicMock()
+
+    denied_decision = MagicMock()
+    denied_decision.allowed = False
+    denied_decision.reason = "Not allowed"
+    view._task_engine.preflight.return_value = denied_decision
+
+    with patch("context_aware_translation.ui.views.translation_view.QMessageBox.warning") as mock_warning:
+        view._start_translation()
+
+    view._task_engine.submit_and_start.assert_not_called()
+    mock_warning.assert_called_once()
+
+
+def test_cancel_translation_cancels_text_and_manga_active_tasks():
+    """_cancel_translation requests cancel for active translation_text and translation_manga tasks."""
+    from context_aware_translation.workflow.tasks.models import STATUS_RUNNING
+
+    view = _make_view()
+    text_record = MagicMock(task_id="text-task-1", status=STATUS_RUNNING)
+    manga_record = MagicMock(task_id="manga-task-1", status=STATUS_RUNNING)
+    completed_record = MagicMock(task_id="text-task-done", status=STATUS_COMPLETED)
+
+    def get_tasks(_book_id, task_type=None):
+        if task_type == "translation_text":
+            return [text_record, completed_record]
+        if task_type == "translation_manga":
+            return [manga_record]
+        return []
+
+    view._task_engine.get_tasks.side_effect = get_tasks
+
+    view._cancel_translation()
+
+    cancelled = {c.args[0] for c in view._task_engine.cancel.call_args_list}
+    assert "text-task-1" in cancelled
+    assert "manga-task-1" in cancelled
+    assert "text-task-done" not in cancelled
+
+
+# ------------------------------------------------------------------
+# No legacy sync worker attributes
+# ------------------------------------------------------------------
+
+
+def test_translation_view_has_open_activity_requested_signal():
+    """TranslationView exposes open_activity_requested signal."""
+    from context_aware_translation.ui.views.translation_view import TranslationView
+
+    assert hasattr(TranslationView, "open_activity_requested")
+
+
+def test_translation_view_has_no_sync_task_id_attribute():
+    """TranslationView no longer tracks _sync_task_id (legacy sync translation removed)."""
+    import inspect
+
+    from context_aware_translation.ui.views.translation_view import TranslationView
+
+    source = inspect.getsource(TranslationView)
+    assert "_sync_task_id" not in source
+
+
+def test_translation_view_has_no_task_console_attribute():
+    """TranslationView no longer uses TaskConsole widget."""
+    import inspect
+
+    from context_aware_translation.ui.views.translation_view import TranslationView
+
+    source = inspect.getsource(TranslationView)
+    assert "TaskConsole" not in source
+    assert "task_console" not in source

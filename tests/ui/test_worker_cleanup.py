@@ -92,9 +92,6 @@ def test_translation_view_cleanup_does_not_cancel_engine_tasks():
 
     view._is_cleaned_up = False
     view._task_engine = task_engine
-    view._sync_task_id = "sync-task-1"
-    view._pending_retranslations = {"chunk-task-1": (3, 7)}
-    view._emitted_sync_translation_done = set()
     view.term_db = MagicMock()
     view.cleanup()
 
@@ -111,15 +108,11 @@ def test_translation_view_cleanup_with_task_console_calls_console_cleanup():
 
     view._is_cleaned_up = False
     view._task_engine = MagicMock()
-    view._task_engine.get_task.return_value = None
-    view._sync_task_id = None
-    view._pending_retranslations = {}
-    view._emitted_sync_translation_done = set()
-    view.task_console = MagicMock()
+    view.task_status_strip = MagicMock()
     view.term_db = MagicMock()
     view.cleanup()
 
-    view.task_console.cleanup.assert_called_once()
+    view.task_status_strip.cleanup.assert_called_once()
     view.term_db.close.assert_called_once()
 
 
@@ -131,10 +124,6 @@ def test_translation_view_cleanup_closes_term_db():
 
     view._is_cleaned_up = False
     view._task_engine = MagicMock()
-    view._task_engine.get_task.return_value = None
-    view._sync_task_id = None
-    view._pending_retranslations = {}
-    view._emitted_sync_translation_done = set()
     view.term_db = MagicMock()
 
     view.cleanup()

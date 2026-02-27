@@ -1,4 +1,4 @@
-"""Worker for async sync-translation task run/cancel operations."""
+"""Worker for async manga translation task run/cancel operations."""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ from .base_worker import BaseWorker
 logger = logging.getLogger(__name__)
 
 
-class SyncTranslationTaskWorker(BaseWorker):
-    """Worker to run/cancel persistent sync-translation tasks."""
+class TranslationMangaTaskWorker(BaseWorker):
+    """Worker to run/cancel persistent manga translation tasks."""
 
     def __init__(
         self,

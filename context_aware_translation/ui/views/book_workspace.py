@@ -8,11 +8,13 @@ from PySide6.QtCore import QEvent, QTimer, Signal
 
 if TYPE_CHECKING:
     from context_aware_translation.ui.tasks.qt_task_engine import TaskEngine
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
+    QSplitter,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -59,6 +61,9 @@ class BookWorkspace(QWidget):
     def _init_ui(self) -> None:
         """Initialize the user interface."""
         layout = QVBoxLayout(self)
+        self._activity_panel_min_width = 320
+        self._activity_panel_default_width = 460
+        self._activity_panel_last_width = self._activity_panel_default_width
 
         # Header with book name and close button
         header_layout = QHBoxLayout()
@@ -70,6 +75,12 @@ class BookWorkspace(QWidget):
         self.close_btn.setToolTip(self.tr("Close this book and return to library"))
         self.close_btn.clicked.connect(self._on_close_requested)
         header_layout.addWidget(self.close_btn)
+
+        self.activity_btn = QPushButton(self.tr("Activity"))
+        self.activity_btn.setToolTip(self.tr("Show/hide task activity panel"))
+        self.activity_btn.setCheckable(True)
+        self.activity_btn.clicked.connect(self._on_activity_toggled)
+        header_layout.addWidget(self.activity_btn)
 
         layout.addLayout(header_layout)
 
@@ -103,7 +114,26 @@ class BookWorkspace(QWidget):
         # Connect signal after tabs are added
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
 
-        layout.addWidget(self.tab_widget)
+        # Activity panel (right-side collapsible, hidden by default)
+        from ..widgets.task_activity_panel import TaskActivityPanel
+
+        self._activity_panel = TaskActivityPanel(self._task_engine, self.book_id)
+        self._activity_panel.close_requested.connect(self._on_activity_panel_close)
+        self._activity_panel.setMinimumWidth(self._activity_panel_min_width)
+        self._activity_panel.setVisible(False)
+
+        # Splitter holds tab widget + activity panel
+        self._main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._main_splitter.addWidget(self.tab_widget)
+        self._main_splitter.addWidget(self._activity_panel)
+        self._main_splitter.setStretchFactor(0, 3)
+        self._main_splitter.setStretchFactor(1, 1)
+        self._main_splitter.setCollapsible(0, False)
+        self._main_splitter.setCollapsible(1, True)
+        self._main_splitter.splitterMoved.connect(self._on_splitter_moved)
+        self._main_splitter.setSizes([1, 0])
+
+        layout.addWidget(self._main_splitter)
 
         # Initialize the first tab immediately
         self._on_tab_changed(0)
@@ -160,11 +190,15 @@ class BookWorkspace(QWidget):
 
     def _create_glossary_view(self) -> QWidget:
         """Create the glossary view."""
-        return GlossaryView(self.book_manager, self.book_id, self._task_engine)
+        view = GlossaryView(self.book_manager, self.book_id, self._task_engine)
+        view.open_activity_requested.connect(self.show_activity_panel)
+        return view
 
     def _create_translation_view(self) -> QWidget:
         """Create the translation view."""
-        return TranslationView(self.book_manager, self.book_id, task_engine=self._task_engine)
+        view = TranslationView(self.book_manager, self.book_id, task_engine=self._task_engine)
+        view.open_activity_requested.connect(self.show_activity_panel)
+        return view
 
     def _create_export_view(self) -> QWidget:
         """Create the export view."""
@@ -185,6 +219,60 @@ class BookWorkspace(QWidget):
             and hasattr(worker, "requestInterruption")
         ):
             worker.requestInterruption()
+
+    # ------------------------------------------------------------------
+    # Activity panel public API
+    # ------------------------------------------------------------------
+
+    def show_activity_panel(self) -> None:
+        """Show the activity panel (callable by child views)."""
+        self._activity_panel.setVisible(True)
+        self.activity_btn.setChecked(True)
+        self._restore_activity_panel_width()
+
+    def hide_activity_panel(self) -> None:
+        """Hide the activity panel."""
+        sizes = self._main_splitter.sizes()
+        if len(sizes) >= 2 and sizes[1] > 0:
+            self._activity_panel_last_width = max(self._activity_panel_min_width, sizes[1])
+        self._activity_panel.setVisible(False)
+        if len(sizes) >= 2:
+            self._main_splitter.setSizes([sizes[0] + sizes[1], 0])
+        self.activity_btn.setChecked(False)
+
+    # ------------------------------------------------------------------
+    # Activity panel slots
+    # ------------------------------------------------------------------
+
+    def _on_activity_toggled(self, checked: bool) -> None:
+        if checked:
+            self.show_activity_panel()
+        else:
+            self.hide_activity_panel()
+
+    def _on_activity_panel_close(self) -> None:
+        self.hide_activity_panel()
+
+    def _restore_activity_panel_width(self) -> None:
+        """Restore panel to a usable non-zero width when opening."""
+        sizes = self._main_splitter.sizes()
+        total = sum(sizes)
+        if total <= 0:
+            total = max(self.width(), 900)
+
+        panel_width = max(self._activity_panel_min_width, self._activity_panel_last_width)
+        max_panel = max(self._activity_panel_min_width, total - 320)
+        panel_width = min(panel_width, max_panel)
+        main_width = max(320, total - panel_width)
+
+        self._main_splitter.setSizes([main_width, panel_width])
+
+    def _on_splitter_moved(self, _pos: int, _index: int) -> None:
+        """Persist panel width while user drags the splitter handle."""
+        if self._activity_panel.isVisible():
+            sizes = self._main_splitter.sizes()
+            if len(sizes) >= 2 and sizes[1] > 0:
+                self._activity_panel_last_width = max(self._activity_panel_min_width, sizes[1])
 
     def get_translation_view(self) -> TranslationView | None:
         """Return the translation view if it has been created, else None."""
@@ -219,9 +307,8 @@ class BookWorkspace(QWidget):
         if glossary_running:
             running.append(self.tr("Glossary"))
 
-        # Translation tab (index 3) — engine-managed tasks (sync_translation,
-        # chunk_retranslation, batch_translation) continue in background and are
-        # not included here.  Results are written to DB and visible on reopen.
+        # Translation tab (index 3) — engine-managed translation tasks are background-capable.
+        # Intentionally exclude them from leave-book warnings.
 
         # Export tab (index 4)
         export_view = self._view_cache.get(4)
@@ -302,6 +389,8 @@ class BookWorkspace(QWidget):
         self._cleaned_up = True
         if hasattr(self, "_token_timer"):
             self._token_timer.stop()
+        if hasattr(self, "_activity_panel"):
+            self._activity_panel.cleanup()
         for view in self._view_cache.values():
             if hasattr(view, "cleanup"):
                 view.cleanup()
@@ -320,6 +409,8 @@ class BookWorkspace(QWidget):
         self.title_label.setText(f"<h2>{self.book_name}</h2>")
         self.close_btn.setText("\u2190 " + self.tr("Back to Library"))
         self.close_btn.setToolTip(self.tr("Close this book and return to library"))
+        self.activity_btn.setText(self.tr("Activity"))
+        self.activity_btn.setToolTip(self.tr("Show/hide task activity panel"))
         self.tip_label.setText(self._workflow_tip_text())
         self.token_usage_label.setToolTip(self._token_usage_tooltip())
         self.tab_widget.setTabText(0, self.tr("Import"))
