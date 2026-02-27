@@ -132,6 +132,15 @@ class BookWorkspace(QWidget):
         self._main_splitter.setCollapsible(1, True)
         self._main_splitter.splitterMoved.connect(self._on_splitter_moved)
         self._main_splitter.setSizes([1, 0])
+        self._main_splitter.setHandleWidth(6)
+        # Style the handle widget directly to avoid stylesheet cascading to children
+        handle = self._main_splitter.handle(1)
+        if handle is not None:
+            handle.setStyleSheet("""
+                background-color: #d0d0d0;
+                border-radius: 2px;
+                margin: 4px 0;
+            """)
 
         layout.addWidget(self._main_splitter)
 
