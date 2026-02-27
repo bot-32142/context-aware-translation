@@ -107,7 +107,7 @@ class GlossaryTranslationHandler:
         db = SQLiteBookDB(db_path)
         try:
             term_repo = TermRepository(db)
-            to_translate = term_repo.get_terms_to_translate()
+            to_translate = [term for term in term_repo.get_terms_to_translate() if not term.ignored]
             if not to_translate:
                 return Decision(
                     allowed=False,
@@ -133,7 +133,7 @@ class GlossaryTranslationHandler:
         db = SQLiteBookDB(db_path)
         try:
             term_repo = TermRepository(db)
-            to_translate = term_repo.get_terms_to_translate()
+            to_translate = [term for term in term_repo.get_terms_to_translate() if not term.ignored]
             if not to_translate:
                 return Decision(
                     allowed=False,

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import time
 from contextlib import suppress
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -16,10 +17,60 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from context_aware_translation.workflow.tasks.models import TaskAction
+from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, TaskAction
 
 from ..tasks.task_view_model_mapper import map_tasks_to_row_vms
 from ..tasks.task_view_models import TaskRowVM
+
+_AUTO_REFRESH_INTERVAL_MS = 3000
+
+_RUNNING_STAGE_BY_TASK_TYPE: dict[str, str] = {
+    "batch_translation": "Batch translation",
+    "glossary_extraction": "Glossary extraction",
+    "glossary_translation": "Glossary translation",
+    "glossary_review": "Glossary review",
+    "glossary_export": "Glossary export",
+    "translation_text": "Text translation",
+    "translation_manga": "Manga translation",
+    "chunk_retranslation": "Chunk retranslation",
+    "ocr": "OCR",
+    "image_reembedding": "Image reembedding",
+}
+
+_PHASE_LABELS: dict[str, str] = {
+    "ocr": "OCR",
+    "extract_terms": "Extracting terms",
+    "review": "Reviewing terms",
+    "translate_glossary": "Translating glossary",
+    "translate_chunks": "Translating chunks",
+    "reembed": "Reembedding images",
+    "export": "Exporting",
+    "prepare": "Preparing",
+    "translation_submit": "Submitting batch jobs",
+    "translation_poll": "Polling batch jobs",
+    "translation_validate": "Validating batch output",
+    "translation_fallback": "Fallback translation",
+    "apply": "Applying results",
+    "done": "Done",
+}
+
+
+def _humanize_token(value: str) -> str:
+    return " ".join(part for part in value.replace("_", " ").strip().split()).title()
+
+
+def _format_duration(total_seconds: float) -> str:
+    seconds = max(0, int(round(total_seconds)))
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes, sec = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{minutes}m {sec}s"
+    hours, minute = divmod(minutes, 60)
+    if hours < 24:
+        return f"{hours}h {minute}m"
+    days, hour = divmod(hours, 24)
+    return f"{days}d {hour}h"
 
 
 class _TaskRow(QWidget):
@@ -32,6 +83,7 @@ class _TaskRow(QWidget):
     def __init__(self, vm: TaskRowVM, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._task_id = vm.task_id
+        self._vm = vm
         self._init_ui(vm)
 
     def _init_ui(self, vm: TaskRowVM) -> None:
@@ -52,12 +104,15 @@ class _TaskRow(QWidget):
 
         # Middle row: phase + progress
         mid = QHBoxLayout()
-        self._phase_label = QLabel(vm.phase or "")
+        self._phase_label = QLabel("")
         mid.addWidget(self._phase_label)
         mid.addStretch()
 
-        self._progress_label = QLabel(f"{vm.completed_items}/{vm.total_items}")
+        self._progress_label = QLabel("")
         mid.addWidget(self._progress_label)
+
+        self._timing_label = QLabel("")
+        mid.addWidget(self._timing_label)
         layout.addLayout(mid)
 
         # Error row (only shown when non-empty)
@@ -83,13 +138,25 @@ class _TaskRow(QWidget):
 
         btn_row.addStretch()
         layout.addLayout(btn_row)
+        self.update_from_vm(vm)
 
     def update_from_vm(self, vm: TaskRowVM) -> None:
         """Refresh display labels from an updated view-model."""
+        self._vm = vm
         self._title_label.setText(vm.title)
         self._status_label.setText(vm.status)
-        self._phase_label.setText(vm.phase or "")
-        self._progress_label.setText(f"{vm.completed_items}/{vm.total_items}")
+        stage = self._stage_text(vm)
+        self._phase_label.setText(stage)
+        self._phase_label.setVisible(bool(stage))
+
+        progress = self._progress_text(vm)
+        self._progress_label.setText(progress)
+        self._progress_label.setVisible(bool(progress))
+
+        timing = self._timing_text(vm)
+        self._timing_label.setText(timing)
+        self._timing_label.setVisible(bool(timing))
+
         self._error_label.setText(vm.last_error or "")
         self._error_label.setVisible(bool(vm.last_error))
 
@@ -106,6 +173,50 @@ class _TaskRow(QWidget):
         self._run_btn.setText(self.tr("Run"))
         self._cancel_btn.setText(self.tr("Cancel"))
         self._delete_btn.setText(self.tr("Delete"))
+        self.update_from_vm(self._vm)
+
+    def _stage_text(self, vm: TaskRowVM) -> str:
+        if vm.phase:
+            phase_label = _PHASE_LABELS.get(vm.phase) or _humanize_token(vm.phase)
+            return self.tr("Stage: {0}").format(phase_label)
+        if vm.status == "running":
+            default_stage = _RUNNING_STAGE_BY_TASK_TYPE.get(vm.task_type)
+            if default_stage:
+                return self.tr("Stage: {0}").format(default_stage)
+        return ""
+
+    @staticmethod
+    def _progress_text(vm: TaskRowVM) -> str:
+        if vm.total_items > 0:
+            return f"{vm.completed_items}/{vm.total_items}"
+        return ""
+
+    def _timing_text(self, vm: TaskRowVM) -> str:
+        if vm.created_at <= 0:
+            return ""
+
+        now = time.time()
+        end_time = vm.updated_at if vm.status in TERMINAL_TASK_STATUSES else max(vm.updated_at, now)
+        elapsed_seconds = max(0.0, end_time - vm.created_at)
+        elapsed = _format_duration(elapsed_seconds)
+
+        if vm.status == "running":
+            if vm.total_items > 0 and vm.completed_items > 0 and vm.completed_items < vm.total_items:
+                remaining_items = vm.total_items - vm.completed_items
+                eta_seconds = (elapsed_seconds / vm.completed_items) * remaining_items
+                return self.tr("ETA {0} (elapsed {1})").format(_format_duration(eta_seconds), elapsed)
+            if vm.total_items > 0 and vm.completed_items == 0:
+                if elapsed_seconds >= 1:
+                    return self.tr("ETA calculating... (elapsed {0})").format(elapsed)
+                return self.tr("ETA calculating...")
+            if elapsed_seconds >= 1:
+                return self.tr("Elapsed {0}").format(elapsed)
+            return ""
+
+        if vm.status in TERMINAL_TASK_STATUSES and elapsed_seconds >= 1:
+            return self.tr("Duration {0}").format(elapsed)
+
+        return ""
 
 
 class TaskActivityPanel(QWidget):
@@ -132,6 +243,10 @@ class TaskActivityPanel(QWidget):
         self._init_ui()
         self.retranslate_ui()
         self._engine.tasks_changed.connect(self._on_tasks_changed)
+        self._auto_timer = QTimer(self)
+        self._auto_timer.setInterval(_AUTO_REFRESH_INTERVAL_MS)
+        self._auto_timer.timeout.connect(self._on_auto_refresh)
+        self._auto_timer.start()
 
         # Initial data load
         self.refresh()
@@ -150,6 +265,7 @@ class TaskActivityPanel(QWidget):
 
     def cleanup(self) -> None:
         """Disconnect engine signal."""
+        self._auto_timer.stop()
         with suppress(TypeError, RuntimeError):
             self._engine.tasks_changed.disconnect(self._on_tasks_changed)
 
@@ -258,6 +374,12 @@ class TaskActivityPanel(QWidget):
 
     def _on_tasks_changed(self, book_id: str) -> None:
         if book_id == self._book_id:
+            self.refresh()
+
+    def _on_auto_refresh(self) -> None:
+        # Avoid background churn while panel is hidden; BookWorkspace triggers
+        # an explicit refresh when opening the panel.
+        if self.isVisible():
             self.refresh()
 
     def _on_run_clicked(self, task_id: str) -> None:

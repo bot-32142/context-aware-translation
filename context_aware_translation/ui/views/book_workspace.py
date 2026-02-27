@@ -4,21 +4,21 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QEvent, QTimer, Signal
-
-if TYPE_CHECKING:
-    from context_aware_translation.ui.tasks.qt_task_engine import TaskEngine
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QSplitter,
     QTabWidget,
     QVBoxLayout,
     QWidget,
 )
+
+if TYPE_CHECKING:
+    from context_aware_translation.ui.tasks.qt_task_engine import TaskEngine
 
 from context_aware_translation.storage.book_manager import BookManager
 
@@ -62,7 +62,7 @@ class BookWorkspace(QWidget):
     def _init_ui(self) -> None:
         """Initialize the user interface."""
         layout = QVBoxLayout(self)
-        self._activity_panel_min_width = 320
+        self._activity_panel_min_width = 260
         self._activity_panel_default_width = 460
         self._activity_panel_last_width = self._activity_panel_default_width
 
@@ -104,6 +104,10 @@ class BookWorkspace(QWidget):
 
         # Tab widget for different views
         self.tab_widget = QTabWidget()
+        # Let splitter negotiation own horizontal sizing; prevents tabs from
+        # pinning the activity panel in narrow windows.
+        self.tab_widget.setMinimumWidth(0)
+        self.tab_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         # Add tabs (before connecting signal to avoid premature triggers)
         self._add_tab(self.tr("Import"), self._create_import_view)
@@ -122,6 +126,7 @@ class BookWorkspace(QWidget):
         self._activity_panel = TaskActivityPanel(self._task_engine, self.book_id)
         self._activity_panel.close_requested.connect(self._on_activity_panel_close)
         self._activity_panel.setMinimumWidth(self._activity_panel_min_width)
+        self._activity_panel.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         self._activity_panel.setVisible(False)
 
         # Splitter holds tab widget + activity panel
@@ -130,8 +135,9 @@ class BookWorkspace(QWidget):
         self._main_splitter.addWidget(self._activity_panel)
         self._main_splitter.setStretchFactor(0, 3)
         self._main_splitter.setStretchFactor(1, 1)
+        self._main_splitter.setChildrenCollapsible(False)
         self._main_splitter.setCollapsible(0, False)
-        self._main_splitter.setCollapsible(1, True)
+        self._main_splitter.setCollapsible(1, False)
         self._main_splitter.splitterMoved.connect(self._on_splitter_moved)
         self._main_splitter.setSizes([1, 0])
         self._main_splitter.setHandleWidth(6)
@@ -245,15 +251,22 @@ class BookWorkspace(QWidget):
 
     def show_activity_panel(self) -> None:
         """Show the activity panel (callable by child views)."""
+        self._activity_panel.setMinimumWidth(self._activity_panel_min_width)
         self._activity_panel.setVisible(True)
         self.activity_btn.setChecked(True)
+        self._activity_panel.refresh()
         self._restore_activity_panel_width()
+        # Re-apply once after layout settles to avoid first-open zero-size races.
+        QTimer.singleShot(0, self._restore_activity_panel_width)
+        QTimer.singleShot(50, self._restore_activity_panel_width)
 
     def hide_activity_panel(self) -> None:
         """Hide the activity panel."""
         sizes = self._main_splitter.sizes()
         if len(sizes) >= 2 and sizes[1] > 0:
             self._activity_panel_last_width = max(self._activity_panel_min_width, sizes[1])
+        # Allow full collapse while hidden even though splitter children are non-collapsible.
+        self._activity_panel.setMinimumWidth(0)
         self._activity_panel.setVisible(False)
         if len(sizes) >= 2:
             self._main_splitter.setSizes([sizes[0] + sizes[1], 0])
@@ -277,12 +290,20 @@ class BookWorkspace(QWidget):
         sizes = self._main_splitter.sizes()
         total = sum(sizes)
         if total <= 0:
-            total = max(self.width(), 900)
+            total = self._main_splitter.width()
+        if total <= 0:
+            total = self.width()
+        if total <= 0:
+            return
 
-        panel_width = max(self._activity_panel_min_width, self._activity_panel_last_width)
-        max_panel = max(self._activity_panel_min_width, total - 320)
-        panel_width = min(panel_width, max_panel)
-        main_width = max(320, total - panel_width)
+        min_main_width = 200
+        min_panel_floor = 120
+        min_panel_width = min(self._activity_panel_min_width, max(min_panel_floor, total - min_main_width))
+        self._activity_panel.setMinimumWidth(min_panel_width)
+
+        max_panel_width = max(min_panel_width, total - min_main_width)
+        panel_width = max(min_panel_width, min(self._activity_panel_last_width, max_panel_width))
+        main_width = max(1, total - panel_width)
 
         self._main_splitter.setSizes([main_width, panel_width])
 

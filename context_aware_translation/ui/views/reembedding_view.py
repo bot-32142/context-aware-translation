@@ -344,9 +344,10 @@ class ReembeddingView(QWidget):
         self._go_to_page(0)
 
     def _get_translated_lines_with_fallback(self, document_id: int) -> list[str]:
-        """Get translated lines for a document, falling back to original text.
+        """Get translated lines for a document.
 
-        Mirrors WorkflowService._resolve_export_lines with allow_original_fallback.
+        For text-based documents, if nothing is translated yet, return an empty
+        set of lines so the view does not present source text as translated.
         """
         chunks = self.term_db.list_chunks(document_id=document_id)
         if not chunks:
@@ -357,6 +358,10 @@ class ReembeddingView(QWidget):
             # Keep manga behavior aligned with workflow fallback semantics:
             # untranslated chunks become empty so reembedding skips those pages.
             return [c.translation if c.is_translated and c.translation is not None else "" for c in sorted_chunks]
+
+        # Avoid showing source text as "Translated Text" for fully untranslated docs.
+        if not any(c.is_translated and c.translation is not None for c in sorted_chunks):
+            return []
 
         # Text-based types (epub, pdf, scanned_book): concatenate and split by newline
         translated_text = "".join(

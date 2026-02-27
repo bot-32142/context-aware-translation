@@ -212,12 +212,12 @@ class GlossaryView(QWidget):
         self.progress_widget.hide()
         layout.addWidget(self.progress_widget)
 
-        # Inline status card for glossary_extraction tasks
+        # Inline status card for glossary tasks
         self.task_status_card = TaskStatusCard(
             task_engine=self._task_engine,
             book_id=self.book_id,
-            task_types=["glossary_extraction"],
-            display_label=self.tr("Glossary Build Status"),
+            task_types=list(_GLOSSARY_MUTATING_TASK_TYPES),
+            display_label=self.tr("Glossary Task Status"),
             parent=self,
         )
         self.task_status_card.open_activity_requested.connect(self.open_activity_requested)
@@ -229,6 +229,7 @@ class GlossaryView(QWidget):
         self.table_view = QTableView()
         self.table_model = TermTableModel(self.term_db)
         self.table_view.setModel(self.table_model)
+        self.table_model.dataChanged.connect(self._on_table_data_changed)
 
         # Table settings
         self.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -545,6 +546,10 @@ class GlossaryView(QWidget):
     def _on_refresh(self) -> None:
         """Handle refresh button click."""
         self.table_model.refresh()
+        self._update_stats()
+
+    def _on_table_data_changed(self, *_args) -> None:
+        """Refresh stats/action state after direct in-table edits."""
         self._update_stats()
 
     def _confirm_export_glossary(self) -> bool | None:

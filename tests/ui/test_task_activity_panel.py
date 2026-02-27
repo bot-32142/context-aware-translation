@@ -473,3 +473,36 @@ def test_scroll_area_exists():
     panel = _make_panel()
     assert panel._scroll_area is not None
     assert panel._scroll_area.widgetResizable()
+
+
+def test_row_shows_stage_for_running_task_without_phase():
+    r = _make_record(
+        task_id="stage-task",
+        task_type="glossary_translation",
+        status="running",
+        phase=None,
+    )
+    engine = _make_engine(records=[r])
+    panel = _make_panel(engine=engine)
+
+    row = panel._rows["stage-task"]
+    assert "Stage:" in row._phase_label.text()
+    assert "Glossary translation" in row._phase_label.text()
+
+
+def test_row_shows_eta_for_partial_running_progress():
+    now = time.time()
+    r = _make_record(
+        task_id="eta-task",
+        task_type="ocr",
+        status="running",
+        completed_items=2,
+        total_items=10,
+        created_at=now - 20,
+        updated_at=now,
+    )
+    engine = _make_engine(records=[r])
+    panel = _make_panel(engine=engine)
+
+    row = panel._rows["eta-task"]
+    assert "ETA" in row._timing_label.text()
