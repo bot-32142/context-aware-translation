@@ -219,30 +219,6 @@ def test_import_worker_forwards_progress_callback_when_supported(monkeypatch: py
     assert progress_events[-1] == (1, 1, "Import complete")
 
 
-def test_ocr_worker_does_not_emit_success_when_session_exit_fails(monkeypatch: pytest.MonkeyPatch):
-    from context_aware_translation.ui.workers.ocr_worker import OCRWorker
-
-    worker = OCRWorker(MagicMock(), "book-id", source_ids=[1])
-
-    class _Session:
-        async def run_ocr(self, **kwargs) -> int:  # noqa: ANN003
-            _ = kwargs
-            return 1
-
-    monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _TranslatorContext(_Session(), exit_error=RuntimeError("close failed")),
-    )
-
-    success, cancelled, errors = _capture_signals(worker)
-    worker.run()
-
-    assert success == []
-    assert cancelled == []
-    assert len(errors) == 1
-    assert "RuntimeError: close failed" in errors[0]
-
-
 def test_glossary_translate_task_worker_does_not_emit_success_when_session_exit_fails(monkeypatch: pytest.MonkeyPatch):
     from context_aware_translation.ui.workers.glossary_translation_task_worker import GlossaryTranslationTaskWorker
 

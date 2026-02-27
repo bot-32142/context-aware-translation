@@ -61,6 +61,10 @@ class TestTitleMapping:
         vm = map_task_to_row_vm(_make_record(task_type="chunk_retranslation"))
         assert vm.title == "Chunk Retranslation #abcd1234"
 
+    def test_ocr_title(self):
+        vm = map_task_to_row_vm(_make_record(task_type="ocr"))
+        assert vm.title == "OCR #abcd1234"
+
     def test_unknown_type_raises(self):
         with pytest.raises(RuntimeError, match="Unknown task type"):
             map_task_to_row_vm(_make_record(task_type="unknown_type"))

@@ -19,7 +19,7 @@ Background QThread workers for async operations. Each worker wraps a workflow ta
 | `glossary_review_task_worker.py` | Worker for glossary_review task (human review and approval). |
 | `glossary_translation_task_worker.py` | Worker for glossary_translation task. |
 | `import_worker.py` | Worker for importing documents (read file, create document records). |
-| `ocr_worker.py` | Worker for OCR (extract text from images). |
+| `ocr_task_worker.py` | Task worker for OCR (extract text from images via TaskEngine). |
 | `operation_tracker.py` | Tracks currently running operations per book/document (prevents overlapping work). |
 | `translation_manga_task_worker.py` | Worker for translation_manga workflow task. |
 | `translation_text_task_worker.py` | Worker for translation_text workflow task. |
@@ -40,7 +40,7 @@ Background QThread workers for async operations. Each worker wraps a workflow ta
 - Convert workflow progress events to Qt signals via `_emit_progress()`
 - Handle task state transitions in handler (pending → running → completed)
 
-**I/O Workers (import_worker, export_worker, ocr_worker):**
+**I/O Workers (import_worker, export_worker):**
 - No workflow task involvement
 - Direct file I/O or API calls
 - Emit progress for long operations

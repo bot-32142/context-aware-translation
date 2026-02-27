@@ -131,17 +131,15 @@ def test_translation_view_cleanup_closes_term_db():
     view.term_db.close.assert_called_once()
 
 
-def test_ocr_review_view_cleanup_waits_without_timeout():
+def test_ocr_review_view_cleanup_calls_task_status_card_and_closes_db():
     from context_aware_translation.ui.views.ocr_review_view import OCRReviewView
 
     with patch.object(OCRReviewView, "__init__", _noop_init):
         view = OCRReviewView(None, "")
 
-    worker = _FakeWorker()
-    view.ocr_worker = worker
+    view.task_status_card = MagicMock()
     view.term_db = MagicMock()
     view.cleanup()
 
-    assert worker.interruption_requested
-    assert worker.wait_calls == [()]
+    view.task_status_card.cleanup.assert_called_once()
     view.term_db.close.assert_called_once()

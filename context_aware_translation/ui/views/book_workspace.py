@@ -195,7 +195,9 @@ class BookWorkspace(QWidget):
 
     def _create_ocr_review_view(self) -> QWidget:
         """Create the OCR review view."""
-        return OCRReviewView(self.book_manager, self.book_id)
+        view = OCRReviewView(self.book_manager, self.book_id, task_engine=self._task_engine)
+        view.open_activity_requested.connect(self.show_activity_panel)
+        return view
 
     def _create_glossary_view(self) -> QWidget:
         """Create the glossary view."""
@@ -297,14 +299,15 @@ class BookWorkspace(QWidget):
         if import_view is not None and self._is_worker_running(getattr(import_view, "worker", None)):
             running.append(self.tr("Import"))
 
-        # OCR Review tab (index 1)
-        ocr_view = self._view_cache.get(1)
-        if ocr_view is not None and self._is_worker_running(getattr(ocr_view, "ocr_worker", None)):
+        from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES
+
+        # OCR Review tab (index 1) — now engine-managed
+        ocr_tasks = self._task_engine.get_tasks(self.book_id, task_type="ocr")
+        if any(t.status not in TERMINAL_TASK_STATUSES for t in ocr_tasks):
             running.append(self.tr("OCR"))
 
         # Glossary tab (index 2) — engine-managed tasks
         glossary_running = False
-        from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES
 
         for task_type in ("glossary_extraction", "glossary_translation", "glossary_review", "glossary_export"):
             for rec in self._task_engine.get_tasks(self.book_id, task_type=task_type):
@@ -346,10 +349,7 @@ class BookWorkspace(QWidget):
         if import_view is not None:
             self._request_worker_interruption(getattr(import_view, "worker", None))
 
-        # OCR Review tab (index 1)
-        ocr_view = self._view_cache.get(1)
-        if ocr_view is not None:
-            self._request_worker_interruption(getattr(ocr_view, "ocr_worker", None))
+        # OCR Review tab (index 1) — engine-managed, covered by cancel_running_tasks above
 
         # Translation tab (index 3) — sync/chunk tasks are cancelled via engine above
 

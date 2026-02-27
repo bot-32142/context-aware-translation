@@ -48,20 +48,18 @@ def _make_workspace():
 
 def test_get_running_operations_detects_all_supported_views():
     workspace = _make_workspace()
-    # Engine-managed tasks (sync_translation, batch_translation) continue in
-    # background and are NOT reported as running operations on leave-book.
-    # Glossary operations are now fully engine-managed — simulate a running extraction.
+    # Engine-managed tasks (sync_translation, batch_translation, ocr) continue in
+    # background and are reported via task_engine.get_tasks.
     _running_task = SimpleNamespace(status="running")
 
     def _mock_get_tasks(_book_id, task_type=None):
-        if task_type == "glossary_extraction":
+        if task_type in ("glossary_extraction", "ocr"):
             return [_running_task]
         return []
 
     workspace._task_engine.get_tasks.side_effect = _mock_get_tasks
     workspace._view_cache = {
         0: SimpleNamespace(worker=_Worker(True)),  # Import
-        1: SimpleNamespace(ocr_worker=_Worker(True)),  # OCR
         4: SimpleNamespace(worker=_Worker(False)),  # Export
     }
 
@@ -110,7 +108,11 @@ def test_close_requested_without_running_operations_emits_without_warning():
 
 def test_close_requested_with_running_operation_shows_warning_and_can_cancel():
     workspace = _make_workspace()
-    workspace._view_cache = {1: SimpleNamespace(ocr_worker=_Worker(True))}
+    workspace._view_cache = {}
+    _running_task = SimpleNamespace(status="running")
+    workspace._task_engine.get_tasks.side_effect = lambda _book_id, task_type=None: (
+        [_running_task] if task_type == "ocr" else []
+    )
     emitted: list[bool] = []
     workspace.close_requested.connect(lambda: emitted.append(True))
 
@@ -196,12 +198,11 @@ def test_refresh_token_usage_sets_label_and_handles_errors():
 def test_request_cancel_running_operations_requests_interruption_for_all_running_workers():
     workspace = _make_workspace()
     import_worker = _Worker(True)
-    ocr_worker = _Worker(True)
     export_worker = _Worker(True)
 
     workspace._view_cache = {
         0: SimpleNamespace(worker=import_worker),
-        1: SimpleNamespace(ocr_worker=ocr_worker),
+        # OCR tab (index 1): engine-managed, cancelled via cancel_running_tasks
         # Translation tab (index 3): no direct worker — cancelled via engine
         4: SimpleNamespace(worker=export_worker),
     }
@@ -209,7 +210,6 @@ def test_request_cancel_running_operations_requests_interruption_for_all_running
     workspace.request_cancel_running_operations()
 
     assert import_worker.interruption_requested is True
-    assert ocr_worker.interruption_requested is True
     assert export_worker.interruption_requested is True
-    # Engine cancel_running_tasks is called for engine-managed translation tasks
+    # Engine cancel_running_tasks is called for engine-managed tasks (OCR + translation)
     workspace._task_engine.cancel_running_tasks.assert_called_once_with("book-id")

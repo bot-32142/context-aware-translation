@@ -240,3 +240,36 @@ def test_all_doc_claims_different_books_no_conflict():
     wanted = frozenset({ResourceClaim("doc", "book-1", "*")})
     active = frozenset({ResourceClaim("doc", "book-2", "*")})
     assert arbiter.conflicts(wanted, active) is False
+
+
+# ---------------------------------------------------------------------------
+# OCR claim interaction tests
+# ---------------------------------------------------------------------------
+
+
+def test_ocr_vs_ocr_same_doc_conflicts():
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("ocr", "b1", "42"), ResourceClaim("doc", "b1", "42")})
+    active = frozenset({ResourceClaim("ocr", "b1", "42"), ResourceClaim("doc", "b1", "42")})
+    assert arbiter.conflicts(wanted, active) is True
+
+
+def test_ocr_vs_translation_same_doc_conflicts():
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("ocr", "b1", "42"), ResourceClaim("doc", "b1", "42")})
+    active = frozenset({ResourceClaim("doc", "b1", "42")})
+    assert arbiter.conflicts(wanted, active) is True
+
+
+def test_ocr_vs_translation_different_doc_no_conflict():
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("ocr", "b1", "42"), ResourceClaim("doc", "b1", "42")})
+    active = frozenset({ResourceClaim("doc", "b1", "99")})
+    assert arbiter.conflicts(wanted, active) is False
+
+
+def test_ocr_vs_glossary_extraction_no_conflict():
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("ocr", "b1", "42"), ResourceClaim("doc", "b1", "42")})
+    active = frozenset({ResourceClaim("glossary_state", "b1", "*", ClaimMode.WRITE_EXCLUSIVE)})
+    assert arbiter.conflicts(wanted, active) is False

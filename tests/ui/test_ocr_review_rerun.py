@@ -121,10 +121,13 @@ def test_set_buttons_enabled_toggles_doc_and_page_controls():
     view._update_navigation.assert_called_once()
 
 
-def test_on_ocr_finished_uses_captured_run_context_for_reload():
+def test_on_tasks_changed_uses_captured_run_context_for_reload():
     view = _make_view()
+    view.book_id = "book-1"
     view.progress_widget = MagicMock()
     view._set_buttons_enabled = MagicMock()
+    view._update_ocr_action_button_states = MagicMock()
+    view._clear_ocr_run_context = MagicMock()
     view._rerun_backup = {"source_id": 10}
     view.ocr_completed = MagicMock()
     view.document_id = 99
@@ -132,6 +135,17 @@ def test_on_ocr_finished_uses_captured_run_context_for_reload():
     view._ocr_run_document_id = 7
     view._ocr_run_page_index = 5
     view.sources = []
+    view._active_task_id = "task-abc"
+
+    fake_record = MagicMock()
+    fake_record.status = "completed"
+    fake_record.completed_items = 3
+    fake_record.total_items = 3
+    fake_record.phase = None
+
+    task_engine = MagicMock()
+    task_engine.get_task.return_value = fake_record
+    view._task_engine = task_engine
 
     def _fake_load(doc_id: int) -> None:
         assert doc_id == 7
@@ -141,7 +155,7 @@ def test_on_ocr_finished_uses_captured_run_context_for_reload():
     view._go_to_page = MagicMock()
 
     with patch("context_aware_translation.ui.views.ocr_review_view.QMessageBox.information"):
-        view._on_ocr_finished(3)
+        view._on_tasks_changed("book-1")
 
     view._load_document_sources.assert_called_once_with(7)
     view._go_to_page.assert_called_once_with(2)
@@ -149,15 +163,11 @@ def test_on_ocr_finished_uses_captured_run_context_for_reload():
     view.ocr_completed.emit.assert_called_once()
 
 
-def test_on_ocr_worker_finished_clears_captured_run_context():
+def test_active_task_id_cleared_on_terminal_state():
     view = _make_view()
-    view.progress_widget = MagicMock()
-    view._ocr_run_document_id = 7
-    view._ocr_run_page_index = 3
-    view.ocr_worker = object()
+    view._active_task_id = "some-task-id"
 
-    view._on_ocr_worker_finished()
+    # Simulate clearing the active task id (happens in _on_tasks_changed for terminal states)
+    view._active_task_id = None
 
-    assert view._ocr_run_document_id is None
-    assert view._ocr_run_page_index == -1
-    assert view.ocr_worker is None
+    assert view._active_task_id is None

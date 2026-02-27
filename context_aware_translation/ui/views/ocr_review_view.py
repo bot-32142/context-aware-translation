@@ -1,5 +1,6 @@
 """OCR Review View for reviewing and editing OCR results."""
 
+import contextlib
 import json
 import logging
 
@@ -24,11 +25,12 @@ from context_aware_translation.documents.content.ocr_items import ImageItem
 from context_aware_translation.storage.book_db import SQLiteBookDB
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.document_repository import DocumentRepository
+from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, TaskAction
 
 from ..i18n import qarg, translate_progress_message
 from ..utils import create_tip_label, translate_document_type
 from ..widgets import ImageViewer, OCRElementList, ProgressWidget
-from ..workers.ocr_worker import OCRWorker
+from ..widgets.task_status_card import TaskStatusCard
 
 logger = logging.getLogger(__name__)
 
@@ -37,18 +39,28 @@ class OCRReviewView(QWidget):
     """View for reviewing and editing OCR results from document images."""
 
     ocr_completed = Signal()
+    open_activity_requested = Signal()
 
-    def __init__(self, book_manager: BookManager, book_id: str, parent: QWidget | None = None):
+    def __init__(
+        self,
+        book_manager: BookManager,
+        book_id: str,
+        *,
+        task_engine,
+        parent: QWidget | None = None,
+    ):
         """Initialize OCR review view.
 
         Args:
             book_manager: BookManager instance
             book_id: Current book ID
+            task_engine: TaskEngine instance
             parent: Parent widget
         """
         super().__init__(parent)
         self.book_manager = book_manager
         self.book_id = book_id
+        self._task_engine = task_engine
 
         # Get database connection
         book = book_manager.get_book(book_id)
@@ -63,7 +75,7 @@ class OCRReviewView(QWidget):
         self.sources: list[dict] = []
         self.current_index: int = -1
         self.document_id: int | None = None
-        self.ocr_worker: OCRWorker | None = None
+        self._active_task_id: str | None = None
         self._rerun_backup: dict[str, object] | None = None
         self._ocr_run_document_id: int | None = None
         self._ocr_run_page_index: int = -1
@@ -79,6 +91,9 @@ class OCRReviewView(QWidget):
         # Create UI
         self._setup_ui()
         self._load_data()
+
+        # Connect task engine signal
+        self._task_engine.tasks_changed.connect(self._on_tasks_changed)
 
     def _setup_ui(self) -> None:
         """Set up the user interface."""
@@ -190,6 +205,16 @@ class OCRReviewView(QWidget):
         toolbar_layout.addWidget(self.save_button)
 
         layout.addLayout(toolbar_layout)
+
+        # Task status card (shown when OCR tasks exist for this book)
+        self.task_status_card = TaskStatusCard(
+            self._task_engine,
+            self.book_id,
+            task_types=["ocr"],
+            display_label=self.tr("OCR"),
+        )
+        self.task_status_card.open_activity_requested.connect(self.open_activity_requested)
+        layout.addWidget(self.task_status_card)
 
         # Progress widget (initially hidden)
         self.progress_widget = ProgressWidget()
@@ -437,24 +462,7 @@ class OCRReviewView(QWidget):
         # Update navigation
         self._update_navigation()
 
-        # Disable editing when glossary has been built (chunks exist for this document)
-        if self.document_id is not None:
-            chunk_count = self.document_repo.get_chunk_count(self.document_id)
-            if chunk_count > 0:
-                glossary_tip = self.tr(
-                    "Disabled after text has been added to the translation stack "
-                    "(glossary build or translation start). Reset from the Import tab to make changes."
-                )
-                self.save_button.setEnabled(False)
-                self.save_button.setToolTip(glossary_tip)
-                self.run_ocr_button.setEnabled(False)
-                self.run_ocr_button.setToolTip(glossary_tip)
-                self.run_all_ocr_button.setEnabled(False)
-                self.run_all_ocr_button.setToolTip(glossary_tip)
-            else:
-                self.save_button.setToolTip(self.tr("Save edited OCR text"))
-                self.run_ocr_button.setToolTip(self.tr("Run or re-run OCR on the current page"))
-                self.run_all_ocr_button.setToolTip(self.tr("Run OCR on all pending pages in this document"))
+        self._update_ocr_action_button_states()
 
     def _update_navigation(self) -> None:
         """Update navigation button states, page label, and OCR status."""
@@ -512,12 +520,12 @@ class OCRReviewView(QWidget):
             self._go_to_page(page_num - 1)  # Convert to 0-based index
 
     def _on_element_selected(self, element_index: int) -> None:
-        """Handle element card selection \u2014 highlight corresponding bbox if any."""
+        """Handle element card selection — highlight corresponding bbox if any."""
         bbox_index = self._element_to_bbox.get(element_index, -1)
         self.image_viewer.highlight_bbox(bbox_index)
 
     def _on_bbox_clicked(self, bbox_index: int) -> None:
-        """Handle bbox click on image \u2014 select corresponding element card."""
+        """Handle bbox click on image — select corresponding element card."""
         element_index = self._bbox_to_element.get(bbox_index, -1)
         if element_index >= 0:
             self.element_list.select_element(element_index)
@@ -528,11 +536,19 @@ class OCRReviewView(QWidget):
         if self.current_index < 0 or self.current_index >= len(self.sources):
             return
 
+        if self._is_current_document_ocr_running():
+            QMessageBox.warning(
+                self,
+                self.tr("Cannot Save"),
+                self.tr("Cannot save OCR text while an OCR task is running for this document."),
+            )
+            return
+
         source = self.sources[self.current_index]
         source_id = source["source_id"]
 
         if self._is_structured_mode and self._current_ocr_content is not None:
-            # Structured OCR format \u2014 collect texts from element cards
+            # Structured OCR format — collect texts from element cards
             if self.element_list.is_placeholder_mode():
                 QMessageBox.information(self, self.tr("Info"), self.tr("No editable content on this page."))
                 return
@@ -623,7 +639,10 @@ class OCRReviewView(QWidget):
         if self.current_index < 0 or self.current_index >= len(self.sources):
             return
 
-        if self.ocr_worker and self.ocr_worker.isRunning():
+        if self.document_id is None:
+            return
+
+        if self._active_task_id is not None:
             QMessageBox.warning(self, self.tr("Warning"), self.tr("OCR is already running."))
             return
 
@@ -648,7 +667,8 @@ class OCRReviewView(QWidget):
         self._save_rerun_backup(source)
         self._capture_ocr_run_context()
 
-        # Reset OCR flags so it will be re-processed
+        # Reset OCR flags before preflight so rerun of an already-completed page
+        # is admitted as pending work.
         try:
             self.document_repo.reset_source_ocr(source_id)
             # Update local copy
@@ -657,13 +677,26 @@ class OCRReviewView(QWidget):
             self.text_edit.clear()
             self.element_list.clear()
 
-            # Create worker with only the current source_id
-            self.ocr_worker = OCRWorker(self.book_manager, self.book_id, source_ids=[source_id])
-            self.ocr_worker.progress.connect(self._on_ocr_progress)
-            self.ocr_worker.finished_success.connect(self._on_ocr_finished)
-            self.ocr_worker.cancelled.connect(self._on_ocr_cancelled)
-            self.ocr_worker.error.connect(self._on_ocr_error)
-            self.ocr_worker.finished.connect(self._on_ocr_worker_finished)
+            # Preflight check after reset
+            decision = self._task_engine.preflight(
+                "ocr",
+                self.book_id,
+                {"document_ids": [self.document_id], "source_ids": [source_id]},
+                TaskAction.RUN,
+            )
+            if not decision.allowed:
+                self._clear_ocr_run_context()
+                self._restore_rerun_backup()
+                QMessageBox.warning(self, self.tr("Cannot Run OCR"), decision.reason)
+                return
+
+            record = self._task_engine.submit_and_start(
+                "ocr",
+                self.book_id,
+                document_ids=[self.document_id],
+                source_ids=[source_id],
+            )
+            self._active_task_id = record.task_id
 
             # Show progress
             self.progress_widget.reset()
@@ -673,15 +706,15 @@ class OCRReviewView(QWidget):
             # Disable buttons during OCR
             self._set_buttons_enabled(False)
 
-            self.ocr_worker.start()
         except Exception as e:
             self._clear_ocr_run_context()
             self._restore_rerun_backup()
+            self._active_task_id = None
             QMessageBox.critical(self, self.tr("Error"), qarg(self.tr("Failed to run OCR: %1"), e))
 
     def _run_ocr_all(self) -> None:
         """Run OCR on all pages in the current document that need it."""
-        if self.ocr_worker and self.ocr_worker.isRunning():
+        if self._active_task_id is not None:
             QMessageBox.warning(self, self.tr("Warning"), self.tr("OCR is already running."))
             return
 
@@ -689,28 +722,43 @@ class OCRReviewView(QWidget):
             QMessageBox.warning(self, self.tr("Warning"), self.tr("No image sources to process."))
             return
 
+        if self.document_id is None:
+            return
+
+        # Preflight check
+        decision = self._task_engine.preflight(
+            "ocr",
+            self.book_id,
+            {"document_ids": [self.document_id], "source_ids": None},
+            TaskAction.RUN,
+        )
+        if not decision.allowed:
+            QMessageBox.warning(self, self.tr("Cannot Run OCR"), decision.reason)
+            return
+
         self._capture_ocr_run_context()
 
-        # Get source IDs for the current document only
-        source_ids = [s["source_id"] for s in self.sources]
+        try:
+            record = self._task_engine.submit_and_start(
+                "ocr",
+                self.book_id,
+                document_ids=[self.document_id],
+                source_ids=None,
+            )
+            self._active_task_id = record.task_id
 
-        # Create and start worker with filtered source_ids
-        self.ocr_worker = OCRWorker(self.book_manager, self.book_id, source_ids=source_ids)
-        self.ocr_worker.progress.connect(self._on_ocr_progress)
-        self.ocr_worker.finished_success.connect(self._on_ocr_finished)
-        self.ocr_worker.cancelled.connect(self._on_ocr_cancelled)
-        self.ocr_worker.error.connect(self._on_ocr_error)
-        self.ocr_worker.finished.connect(self._on_ocr_worker_finished)
+            # Show progress
+            self.progress_widget.reset()
+            self.progress_widget.setVisible(True)
+            self.progress_widget.set_cancellable(True)
 
-        # Show progress
-        self.progress_widget.reset()
-        self.progress_widget.setVisible(True)
-        self.progress_widget.set_cancellable(True)
+            # Disable buttons during OCR
+            self._set_buttons_enabled(False)
 
-        # Disable buttons during OCR
-        self._set_buttons_enabled(False)
-
-        self.ocr_worker.start()
+        except Exception as e:
+            self._clear_ocr_run_context()
+            self._active_task_id = None
+            QMessageBox.critical(self, self.tr("Error"), qarg(self.tr("Failed to run OCR: %1"), e))
 
     def _capture_ocr_run_context(self) -> None:
         """Capture active document/page so completion can restore deterministic state."""
@@ -770,76 +818,128 @@ class OCRReviewView(QWidget):
 
     def _cancel_ocr(self) -> None:
         """Cancel running OCR operation."""
-        if self.ocr_worker and self.ocr_worker.isRunning():
-            self.ocr_worker.requestInterruption()
-            self.progress_widget.message_label.setText(self.tr("Cancelling..."))
-            self.progress_widget.set_cancellable(False)
+        if self._active_task_id:
+            self._task_engine.cancel(self._active_task_id)
 
-    def _on_ocr_progress(self, current: int, total: int, message: str) -> None:
-        """Handle OCR progress updates.
+    def _on_tasks_changed(self, book_id: str) -> None:
+        """React to engine task-changed events for this book."""
+        if book_id != self.book_id:
+            return
 
-        Args:
-            current: Current progress
-            total: Total items
-            message: Progress message
-        """
-        translated_message = translate_progress_message(message)
-        self.progress_widget.set_progress(current, total, translated_message)
+        # Keep controls in sync even when OCR tasks are started externally
+        # (e.g. from TaskStatusCard/Activity panel).
+        self._update_ocr_action_button_states()
+        if not self._active_task_id:
+            return
 
-    def _on_ocr_finished(self, count: int) -> None:
-        """Handle OCR completion.
+        record = self._task_engine.get_task(self._active_task_id)
+        if record is None:
+            return
 
-        Args:
-            count: Number of pages processed
-        """
-        self.progress_widget.setVisible(False)
-        self._set_buttons_enabled(True)
-        self._rerun_backup = None
+        # Update progress widget
+        completed = record.completed_items or 0
+        total = record.total_items or 0
+        phase = record.phase or ""
+        translated_message = translate_progress_message(phase)
+        self.progress_widget.set_progress(completed, total, translated_message)
 
-        QMessageBox.information(
-            self,
-            self.tr("OCR Complete"),
-            qarg(self.tr("OCR completed successfully. %1 pages processed."), count),
-        )
+        # Check for terminal states
+        if record.status not in TERMINAL_TASK_STATUSES:
+            return
 
-        # Restore the document/page context captured at OCR start.
+        # Task is done — capture run context before clearing
+        status = record.status
         saved_document_id = self._ocr_run_document_id if self._ocr_run_document_id is not None else self.document_id
         saved_page_index = self._ocr_run_page_index if self._ocr_run_page_index >= 0 else self.current_index
-
-        # Reload document sources to get updated OCR results
-        if saved_document_id is not None:
-            self._load_document_sources(saved_document_id)
-            # Restore page position (clamped to valid range)
-            if self.sources and saved_page_index >= 0:
-                restored_index = min(saved_page_index, len(self.sources) - 1)
-                self._go_to_page(restored_index)
-
-        self.ocr_completed.emit()
-
-    def _on_ocr_error(self, error: str) -> None:
-        """Handle OCR error.
-
-        Args:
-            error: Error message
-        """
+        self._active_task_id = None
         self.progress_widget.setVisible(False)
-        self._set_buttons_enabled(True)
-        self._restore_rerun_backup()
-
-        QMessageBox.critical(self, self.tr("OCR Error"), qarg(self.tr("OCR failed: %1"), error))
-
-    def _on_ocr_cancelled(self) -> None:
-        """Handle OCR cancellation."""
-        self.progress_widget.setVisible(False)
-        self._set_buttons_enabled(True)
-        self._restore_rerun_backup()
-        QMessageBox.information(self, self.tr("Cancelled"), self.tr("OCR cancelled."))
-
-    def _on_ocr_worker_finished(self) -> None:
-        """Reset worker state after completion."""
-        self.progress_widget.set_cancellable(True)
         self._clear_ocr_run_context()
-        self.ocr_worker = None
+
+        if status == "completed" or status == "completed_with_errors":
+            self._rerun_backup = None
+            count = record.completed_items or 0
+
+            QMessageBox.information(
+                self,
+                self.tr("OCR Complete"),
+                qarg(self.tr("OCR completed successfully. %1 pages processed."), count),
+            )
+
+            if saved_document_id is not None:
+                self._load_document_sources(saved_document_id)
+                if self.sources and saved_page_index >= 0:
+                    restored_index = min(saved_page_index, len(self.sources) - 1)
+                    self._go_to_page(restored_index)
+
+            self.ocr_completed.emit()
+
+        elif status == "failed":
+            self._restore_rerun_backup()
+            error_msg = record.last_error or self.tr("Unknown error")
+            QMessageBox.critical(self, self.tr("OCR Error"), qarg(self.tr("OCR failed: %1"), error_msg))
+
+        elif status == "cancelled":
+            self._restore_rerun_backup()
+            QMessageBox.information(self, self.tr("Cancelled"), self.tr("OCR cancelled."))
+
+        self._set_buttons_enabled(True)
+        self._update_ocr_action_button_states()
+
+    def _update_ocr_action_button_states(self) -> None:
+        """Sync OCR button enabled states after task completion."""
+        if self.document_id is None:
+            return
+
+        if self._is_current_document_ocr_running():
+            running_tip = self.tr("Disabled while OCR is running for this document.")
+            self.run_ocr_button.setEnabled(False)
+            self.run_ocr_button.setToolTip(running_tip)
+            self.run_all_ocr_button.setEnabled(False)
+            self.run_all_ocr_button.setToolTip(running_tip)
+            self.save_button.setEnabled(False)
+            self.save_button.setToolTip(running_tip)
+            return
+
+        chunk_count = self.document_repo.get_chunk_count(self.document_id)
+        if chunk_count > 0:
+            glossary_tip = self.tr(
+                "Disabled after text has been added to the translation stack "
+                "(glossary build or translation start). Reset from the Import tab to make changes."
+            )
+            self.run_ocr_button.setEnabled(False)
+            self.run_ocr_button.setToolTip(glossary_tip)
+            self.run_all_ocr_button.setEnabled(False)
+            self.run_all_ocr_button.setToolTip(glossary_tip)
+            self.save_button.setEnabled(False)
+            self.save_button.setToolTip(glossary_tip)
+            return
+
+        # Default (eligible) tooltips when no run-time locks apply.
+        has_sources = bool(self.sources)
+        self.run_ocr_button.setEnabled(has_sources)
+        self.run_all_ocr_button.setEnabled(has_sources)
+        self.save_button.setEnabled(has_sources)
+        self.save_button.setToolTip(self.tr("Save edited OCR text"))
+        self.run_ocr_button.setToolTip(self.tr("Run or re-run OCR on the current page"))
+        self.run_all_ocr_button.setToolTip(self.tr("Run OCR on all pending pages in this document"))
+
+    def _is_current_document_ocr_running(self) -> bool:
+        """Return True if there is any non-terminal OCR task for current document."""
+        if self.document_id is None:
+            return False
+
+        for record in self._task_engine.get_tasks(self.book_id, task_type="ocr"):
+            if record.status in TERMINAL_TASK_STATUSES:
+                continue
+            if not record.document_ids_json:
+                continue
+            try:
+                ids = json.loads(record.document_ids_json)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if isinstance(ids, list) and len(ids) == 1 and int(ids[0]) == int(self.document_id):
+                return True
+        return False
 
     def _set_buttons_enabled(self, enabled: bool) -> None:
         """Enable or disable all buttons.
@@ -871,9 +971,11 @@ class OCRReviewView(QWidget):
 
     def cleanup(self) -> None:
         """Clean up background worker and database resources."""
-        if self.ocr_worker and self.ocr_worker.isRunning():
-            self.ocr_worker.requestInterruption()
-            self.ocr_worker.wait()
+        if hasattr(self, "_task_engine"):
+            with contextlib.suppress(TypeError, RuntimeError):
+                self._task_engine.tasks_changed.disconnect(self._on_tasks_changed)
+        if hasattr(self, "task_status_card"):
+            self.task_status_card.cleanup()
         if hasattr(self, "term_db"):
             self.term_db.close()
 

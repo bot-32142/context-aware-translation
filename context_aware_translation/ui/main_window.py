@@ -27,6 +27,7 @@ from context_aware_translation.workflow.tasks.handlers.glossary_export import Gl
 from context_aware_translation.workflow.tasks.handlers.glossary_extraction import GlossaryExtractionHandler
 from context_aware_translation.workflow.tasks.handlers.glossary_review import GlossaryReviewHandler
 from context_aware_translation.workflow.tasks.handlers.glossary_translation import GlossaryTranslationHandler
+from context_aware_translation.workflow.tasks.handlers.ocr import OCRHandler
 from context_aware_translation.workflow.tasks.handlers.translation_manga import TranslationMangaHandler
 from context_aware_translation.workflow.tasks.handlers.translation_text import TranslationTextHandler
 from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
@@ -94,6 +95,7 @@ class MainWindow(QMainWindow):
         self._task_engine.register_handler(GlossaryExportHandler())
         self._task_engine.register_handler(TranslationTextHandler())
         self._task_engine.register_handler(TranslationMangaHandler())
+        self._task_engine.register_handler(OCRHandler())
         self._task_engine.running_work_changed.connect(self._on_engine_running_work_changed)
 
         self._sleep_check_timer = QTimer(self)
