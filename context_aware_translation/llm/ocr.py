@@ -49,13 +49,14 @@ Use markdown where appropriate. Escape special characters when not intending for
 
 ## Rules
 - IGNORE: page numbers, headers, footers, printer marks, table of contents
-- Cross-page content: set "continues_to_next" or "continues_from_previous" to true
+- Cross-page content: set "continues_to_next": true on the LAST content item, or "continues_from_previous": true on the FIRST content item. These flags go on the content items, NOT on the page object.
 - Output only visible content. Never include tokenizer artifacts.
 
 ## Example
 [{"page_type": "content", "content": [
   {"type": "paragraph", "text": "The sun^[First observed in 1923] cast shadows..."},
-  {"type": "image", "bbox": {"x": 0.1, "y": 0.4, "width": 0.8, "height": 0.3}, "embedded_text": "Text in image", "caption": "Figure 1"}
+  {"type": "image", "bbox": {"x": 0.1, "y": 0.4, "width": 0.8, "height": 0.3}, "embedded_text": "Text in image", "caption": "Figure 1"},
+  {"type": "paragraph", "text": "This paragraph continues on the next page...", "continues_to_next": true}
 ]}]
 
 Return ONLY valid JSON array."""

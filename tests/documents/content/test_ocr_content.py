@@ -229,6 +229,98 @@ class TestParseOcrJson:
         assert isinstance(items[3], TableItem)
         assert isinstance(items[4], ImageItem)
 
+    def test_page_level_continues_from_previous_normalized_to_first_item(self):
+        """Page-level continues_from_previous should propagate to the first content item."""
+        data = {
+            "page_type": "content",
+            "continues_from_previous": True,
+            "content": [
+                {"type": "paragraph", "text": "Continued text"},
+                {"type": "paragraph", "text": "Next paragraph"},
+            ],
+        }
+        _, items = parse_ocr_json(data, None)
+
+        assert len(items) == 2
+        assert items[0].continues_from_previous is True
+        assert items[1].continues_from_previous is False
+
+    def test_page_level_continues_to_next_normalized_to_last_item(self):
+        """Page-level continues_to_next should propagate to the last content item."""
+        data = {
+            "page_type": "content",
+            "continues_to_next": True,
+            "content": [
+                {"type": "paragraph", "text": "First paragraph"},
+                {"type": "paragraph", "text": "Text that continues..."},
+            ],
+        }
+        _, items = parse_ocr_json(data, None)
+
+        assert len(items) == 2
+        assert items[0].continues_to_next is False
+        assert items[1].continues_to_next is True
+
+    def test_page_level_both_continuation_flags(self):
+        """Both page-level flags should propagate to first and last items respectively."""
+        data = {
+            "page_type": "content",
+            "continues_from_previous": True,
+            "continues_to_next": True,
+            "content": [
+                {"type": "paragraph", "text": "Continued from prev"},
+                {"type": "section", "text": "Section"},
+                {"type": "paragraph", "text": "Continues to next"},
+            ],
+        }
+        _, items = parse_ocr_json(data, None)
+
+        assert len(items) == 3
+        assert items[0].continues_from_previous is True
+        # SectionItem doesn't have continues_to_next, so the last paragraph should NOT
+        # get it since it's not the last item — the section is a middle item.
+        # Actually items[-1] is the last paragraph which does have the attr.
+        assert items[2].continues_to_next is True
+
+    def test_page_level_single_item_gets_both_flags(self):
+        """A single content item should receive both page-level flags."""
+        data = {
+            "page_type": "content",
+            "continues_from_previous": True,
+            "continues_to_next": True,
+            "content": [
+                {"type": "paragraph", "text": "Middle of a long passage"},
+            ],
+        }
+        _, items = parse_ocr_json(data, None)
+
+        assert len(items) == 1
+        assert items[0].continues_from_previous is True
+        assert items[0].continues_to_next is True
+
+    def test_page_level_flags_ignored_for_empty_content(self):
+        """Page-level flags on empty content should not cause errors."""
+        data = {
+            "page_type": "content",
+            "continues_from_previous": True,
+            "content": [],
+        }
+        _, items = parse_ocr_json(data, None)
+        assert len(items) == 0
+
+    def test_page_level_flags_skipped_for_items_without_attr(self):
+        """Page-level flags should be skipped if the target item lacks the attribute."""
+        data = {
+            "page_type": "content",
+            "continues_from_previous": True,
+            "content": [
+                {"type": "section", "text": "A Section Heading"},
+            ],
+        }
+        _, items = parse_ocr_json(data, None)
+        assert len(items) == 1
+        assert not hasattr(items[0], "continues_from_previous")
+
 
 # ============================================================================
 # MergedOCRContent Tests
@@ -696,6 +788,88 @@ class TestMergedOCRContent:
         assert isinstance(content.elements[0], TableItem)
         assert content.elements[0].text == "| A | B |\n| 1 | 2 |"
         assert content.elements[0].caption == "Table 1"
+
+    def test_from_raw_ocr_merge_with_page_level_continuation_flags(self):
+        """Page-level continuation flags should be normalized and enable merging."""
+        pages = [
+            (
+                [
+                    {
+                        "page_type": "content",
+                        "continues_to_next": True,
+                        "content": [
+                            {
+                                "type": "paragraph",
+                                "text": "First part",
+                            }
+                        ],
+                    }
+                ],
+                None,
+            ),
+            (
+                [
+                    {
+                        "page_type": "content",
+                        "continues_from_previous": True,
+                        "content": [
+                            {
+                                "type": "paragraph",
+                                "text": "Second part",
+                            }
+                        ],
+                    }
+                ],
+                None,
+            ),
+        ]
+        content = MergedOCRContent.from_raw_ocr(pages)
+
+        # Should merge into single paragraph despite flags being at page level
+        assert len(content.elements) == 1
+        assert isinstance(content.elements[0], ParagraphItem)
+        assert content.elements[0].text == "First partSecond part"
+
+    def test_from_raw_ocr_merge_mixed_page_and_item_level_flags(self):
+        """Merging should work when one page uses page-level and the other item-level flags."""
+        pages = [
+            (
+                [
+                    {
+                        "page_type": "content",
+                        "continues_to_next": True,
+                        "content": [
+                            {
+                                "type": "paragraph",
+                                "text": "First part",
+                            }
+                        ],
+                    }
+                ],
+                None,
+            ),
+            (
+                [
+                    {
+                        "page_type": "content",
+                        "content": [
+                            {
+                                "type": "paragraph",
+                                "text": "Second part",
+                                "continues_from_previous": True,
+                            }
+                        ],
+                    }
+                ],
+                None,
+            ),
+        ]
+        content = MergedOCRContent.from_raw_ocr(pages)
+
+        # Should merge even with mixed flag placement
+        assert len(content.elements) == 1
+        assert isinstance(content.elements[0], ParagraphItem)
+        assert content.elements[0].text == "First partSecond part"
 
     def test_from_raw_ocr_no_merge_without_continuation_flags(self):
         pages = [

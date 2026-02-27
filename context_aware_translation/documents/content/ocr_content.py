@@ -120,6 +120,11 @@ def parse_ocr_json(
 
     content_data = data.get("content", [])
 
+    # Detect page-level continuation flags (LLM sometimes misplaces them here
+    # instead of on the content items). We'll propagate them to the right items.
+    page_continues_from = bool(data.get("continues_from_previous"))
+    page_continues_to = bool(data.get("continues_to_next"))
+
     # Parse items based on page type
     items: list[OCRItem]
     if page_type == "cover":
@@ -138,6 +143,17 @@ def parse_ocr_json(
         if not isinstance(content_data, list):
             raise ValueError(f"Invalid content: expected list, got {type(content_data).__name__}")
         items = [ocr_item_from_dict(item) for item in content_data]
+
+    # Propagate page-level continuation flags to the appropriate content items.
+    if items and (page_continues_from or page_continues_to):
+        logger.warning(
+            "OCR returned continuation flags at page level instead of content item level; "
+            "normalizing to item level"
+        )
+        if page_continues_from and hasattr(items[0], "continues_from_previous"):
+            items[0].continues_from_previous = True
+        if page_continues_to and hasattr(items[-1], "continues_to_next"):
+            items[-1].continues_to_next = True
 
     return (page_type, items)
 
