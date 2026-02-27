@@ -76,7 +76,6 @@ def test_document_abstract_methods_have_correct_signatures():
     assert list(set_text_sig.parameters.keys()) == [
         "self",
         "lines",
-        "image_reembedding_config",
         "cancel_check",
         "progress_callback",
     ]

@@ -162,15 +162,10 @@ class Document(ABC):
     async def set_text(
         self,
         lines: list[str],
-        image_reembedding_config: ImageReembeddingConfig | None = None,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> int:
-        """Distribute translated lines to sources. Returns lines consumed.
-
-        If image_reembedding_config is provided and enable_image_reembedding is True
-        in ocr_config, will also reembed translations into images with embedded text.
-        """
+        """Distribute translated lines to sources. Returns lines consumed."""
         ...
 
     @abstractmethod
@@ -179,6 +174,7 @@ class Document(ABC):
         image_reembedding_config: ImageReembeddingConfig,
         *,
         force: bool = False,
+        source_ids: list[int] | None = None,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> int:
@@ -191,6 +187,7 @@ class Document(ABC):
         Args:
             image_reembedding_config: Config for the image generator backend.
             force: If True, regenerate all items even if already cached in DB.
+            source_ids: If provided, only process sources with these IDs. If None, process all sources.
             cancel_check: Optional cooperative cancellation callback.
             progress_callback: Optional callback for progress updates.
 

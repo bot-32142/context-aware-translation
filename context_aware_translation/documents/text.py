@@ -162,13 +162,12 @@ class TextDocument(Document):
     async def set_text(
         self,
         lines: list[str],
-        image_reembedding_config: ImageReembeddingConfig | None = None,  # noqa: ARG002
         cancel_check: Callable[[], bool] | None = None,  # noqa: ARG002
         progress_callback: ProgressCallback | None = None,  # noqa: ARG002
     ) -> int:
         """Store translated lines for export. Returns lines consumed.
 
-        Note: image_reembedding_config and progress_callback are ignored for text documents (no images to reembed).
+        Note: progress_callback is ignored for text documents (no images to reembed).
         """
         self._translated_lines = lines
         return len(lines)
@@ -178,6 +177,7 @@ class TextDocument(Document):
         image_reembedding_config: ImageReembeddingConfig,  # noqa: ARG002
         *,
         force: bool = False,  # noqa: ARG002
+        source_ids: list[int] | None = None,  # noqa: ARG002
         cancel_check: Callable[[], bool] | None = None,  # noqa: ARG002
         progress_callback: ProgressCallback | None = None,  # noqa: ARG002
     ) -> int:

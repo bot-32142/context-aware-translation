@@ -295,7 +295,6 @@ class MangaDocument(Document):
     async def set_text(
         self,
         lines: list[str],
-        image_reembedding_config: ImageReembeddingConfig | None = None,  # noqa: ARG002
         cancel_check: Callable[[], bool] | None = None,  # noqa: ARG002
         progress_callback: ProgressCallback | None = None,  # noqa: ARG002
     ) -> int:
@@ -306,8 +305,7 @@ class MangaDocument(Document):
         Elements MAY contain internal newlines (multi-line dialogue).
 
         Loads any previously-generated reembedded images from DB so that export still
-        applies them. image_reembedding_config is accepted for API compatibility but
-        ignored; generation is now done via reembed().
+        applies them.
         """
         sources_with_text = self._get_sources_with_text()
 
@@ -333,6 +331,7 @@ class MangaDocument(Document):
         image_reembedding_config: ImageReembeddingConfig,
         *,
         force: bool = False,
+        source_ids: list[int] | None = None,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> int:
@@ -349,13 +348,22 @@ class MangaDocument(Document):
         sources = self.repo.get_document_sources(self.document_id)
         sources_sorted = sorted(sources, key=lambda s: s["sequence_number"])
 
+        # Build mapping from source_id to positional index in the FULL list
+        # (DB keys must be stable regardless of source_ids filtering)
+        source_id_to_idx = {s["source_id"]: idx for idx, s in enumerate(sources_sorted)}
+
+        if source_ids is not None:
+            source_ids_set = frozenset(source_ids)
+            sources_sorted = [s for s in sources_sorted if s["source_id"] in source_ids_set]
+
         # Load existing to skip already-processed items (unless force=True)
         existing = self.repo.load_reembedded_images(self.document_id) if not force else {}
 
         total = sum(
             1
-            for idx, source in enumerate(sources_sorted)
-            if self._page_translations.get(source["source_id"], "").strip() and idx not in existing
+            for source in sources_sorted
+            if self._page_translations.get(source["source_id"], "").strip()
+            and source_id_to_idx[source["source_id"]] not in existing
         )
         if total == 0:
             return 0
@@ -363,24 +371,25 @@ class MangaDocument(Document):
         completed = 0
         progress_lock = asyncio.Lock()
 
-        async def process_page(idx: int, source: dict) -> None:
+        async def process_page(source: dict) -> None:
             nonlocal completed
             async with semaphore:
                 raise_if_cancelled(cancel_check)
                 source_id = source["source_id"]
+                original_idx = source_id_to_idx[source_id]
                 translated = self._page_translations.get(source_id, "")
                 if not translated.strip():
                     return
-                if idx in existing:
+                if original_idx in existing:
                     # Already cached — populate in-memory but don't count as newly generated
-                    self._reembedded_pages[source_id] = existing[idx][0]
+                    self._reembedded_pages[source_id] = existing[original_idx][0]
                     return
                 image_bytes = source["binary_content"]
                 mime_type = source.get("mime_type", "image/png")
                 new_bytes = await generator.edit_image(image_bytes, mime_type, translated, cancel_check=cancel_check)
                 raise_if_cancelled(cancel_check)
                 self._reembedded_pages[source_id] = new_bytes
-                self.repo.save_reembedded_image(self.document_id, idx, new_bytes, "image/png")
+                self.repo.save_reembedded_image(self.document_id, original_idx, new_bytes, "image/png")
 
                 async with progress_lock:
                     completed += 1
@@ -395,14 +404,14 @@ class MangaDocument(Document):
                         )
 
         results = await asyncio.gather(
-            *[process_page(i, s) for i, s in enumerate(sources_sorted)],
+            *[process_page(s) for s in sources_sorted],
             return_exceptions=True,
         )
-        for (idx, _), result in zip(enumerate(sources_sorted), results, strict=True):
+        for source, result in zip(sources_sorted, results, strict=True):
             if isinstance(result, OperationCancelledError):
                 raise result
             if isinstance(result, Exception):
-                raise RuntimeError(f"Failed to reembed manga page at index {idx}: {result}")
+                raise RuntimeError(f"Failed to reembed manga page (source {source['source_id']}): {result}")
 
         return completed
 

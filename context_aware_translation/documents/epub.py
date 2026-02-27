@@ -1130,7 +1130,6 @@ class EPUBDocument(Document):
     async def set_text(
         self,
         lines: list[str],
-        image_reembedding_config: ImageReembeddingConfig | None = None,  # noqa: ARG002
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,  # noqa: ARG002
     ) -> int:
@@ -1139,8 +1138,6 @@ class EPUBDocument(Document):
         Args:
             lines: Translated text lines from the translation pipeline.
                 Must match exactly the number of blocks returned by get_text().
-            image_reembedding_config: Accepted for API compatibility but ignored;
-                generation is now done via reembed().
 
         Returns:
             Number of lines consumed from the input.
@@ -1533,6 +1530,7 @@ class EPUBDocument(Document):
         image_reembedding_config: ImageReembeddingConfig,
         *,
         force: bool = False,
+        source_ids: list[int] | None = None,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> int:
@@ -1547,6 +1545,10 @@ class EPUBDocument(Document):
 
         sources = self.repo.get_document_sources(self.document_id)
         sources_sorted = sorted(sources, key=lambda s: s["sequence_number"])
+
+        if source_ids is not None:
+            source_ids_set = frozenset(source_ids)
+            sources_sorted = [s for s in sources_sorted if s["source_id"] in source_ids_set]
 
         generator = create_image_generator(image_reembedding_config)
         existing = self.repo.load_reembedded_images(self.document_id) if not force else {}

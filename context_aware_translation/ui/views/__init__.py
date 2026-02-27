@@ -10,6 +10,7 @@ from .library_view import LibraryView
 from .manga_review_widget import MangaReviewWidget
 from .ocr_review_view import OCRReviewView
 from .profile_view import ProfileView
+from .reembedding_view import ReembeddingView
 from .translation_view import TranslationView
 
 __all__ = [
@@ -23,5 +24,6 @@ __all__ = [
     "MangaReviewWidget",
     "OCRReviewView",
     "ProfileView",
+    "ReembeddingView",
     "TranslationView",
 ]

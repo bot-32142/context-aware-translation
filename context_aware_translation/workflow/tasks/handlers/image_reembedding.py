@@ -180,6 +180,26 @@ class ImageReembeddingHandler:
                     allowed=False,
                     reason="No translated chunks found. Translate documents before running image reembedding.",
                 )
+
+            source_ids_raw = params.get("source_ids")
+            if source_ids_raw is not None:
+                if not isinstance(source_ids_raw, list):
+                    return Decision(allowed=False, reason="source_ids must be a list[int] or null.")
+                try:
+                    source_id_set = {int(i) for i in source_ids_raw}
+                except (TypeError, ValueError):
+                    return Decision(allowed=False, reason="source_ids must contain only integers.")
+                all_source_ids: set[int] = set()
+                for d in selected_docs:
+                    doc_sources = doc_repo.get_document_sources(int(d["document_id"]))
+                    for s in doc_sources:
+                        all_source_ids.add(int(s["source_id"]))
+                missing = source_id_set - all_source_ids
+                if missing:
+                    return Decision(
+                        allowed=False,
+                        reason=f"source_ids not found in selected documents: {sorted(missing)}",
+                    )
         finally:
             db.close()
 
@@ -270,6 +290,18 @@ class ImageReembeddingHandler:
             except (json.JSONDecodeError, TypeError, ValueError):
                 doc_ids = None
 
+        source_ids: list[int] | None = None
+        force: bool = False
+        if record.payload_json:
+            try:
+                payload_data = json.loads(record.payload_json)
+                raw = payload_data.get("source_ids")
+                if isinstance(raw, list):
+                    source_ids = [int(i) for i in raw]
+                force = bool(payload_data.get("force", False))
+            except (json.JSONDecodeError, TypeError, ValueError):
+                source_ids = None
+
         if action == TaskAction.RUN:
             return ImageReembeddingTaskWorker(
                 deps.book_manager,
@@ -277,6 +309,8 @@ class ImageReembeddingHandler:
                 action="run",
                 task_id=record.task_id,
                 document_ids=doc_ids,
+                source_ids=source_ids,
+                force=force,
                 task_store=deps.task_store,
                 notify_task_changed=deps.notify_task_changed,
             )

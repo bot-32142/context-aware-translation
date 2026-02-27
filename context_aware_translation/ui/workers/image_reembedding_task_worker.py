@@ -28,6 +28,8 @@ class ImageReembeddingTaskWorker(BaseWorker):
         action: str,
         task_id: str | None = None,
         document_ids: list[int] | None = None,
+        source_ids: list[int] | None = None,
+        force: bool = False,
         task_store: TaskStore | None = None,
         notify_task_changed: Callable[[str], None] | None = None,
     ) -> None:
@@ -37,6 +39,8 @@ class ImageReembeddingTaskWorker(BaseWorker):
         self._action = action
         self._task_id = task_id
         self._document_ids = document_ids
+        self._source_ids = source_ids
+        self._force = force
         self._task_store = task_store
         self._notify_task_changed = notify_task_changed
 
@@ -85,6 +89,8 @@ class ImageReembeddingTaskWorker(BaseWorker):
             )
             await doc.reembed(
                 svc.config.image_reembedding_config,
+                force=self._force,
+                source_ids=self._source_ids,
                 cancel_check=self._is_cancelled,
                 progress_callback=self._on_progress,
             )

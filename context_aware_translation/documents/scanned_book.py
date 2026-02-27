@@ -228,15 +228,13 @@ class ScannedBookDocument(Document):
     async def set_text(
         self,
         lines: list[str],
-        image_reembedding_config: ImageReembeddingConfig | None = None,  # noqa: ARG002
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,  # noqa: ARG002
     ) -> int:
         """Distribute translated lines to merged OCR content. Returns lines consumed.
 
         Loads any previously-generated reembedded images from DB so that export still
-        applies them. image_reembedding_config is accepted for API compatibility but
-        ignored; generation is now done via reembed().
+        applies them.
         """
         merged = self._get_merged_content()
         line_count = merged.set_texts(lines)
@@ -257,6 +255,7 @@ class ScannedBookDocument(Document):
         image_reembedding_config: ImageReembeddingConfig,
         *,
         force: bool = False,
+        source_ids: list[int] | None = None,  # noqa: ARG002
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> int:

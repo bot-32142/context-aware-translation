@@ -28,6 +28,7 @@ from .export_view import ExportView
 from .glossary_view import GlossaryView
 from .import_view import ImportView
 from .ocr_review_view import OCRReviewView
+from .reembedding_view import ReembeddingView
 from .translation_view import TranslationView
 
 logger = logging.getLogger(__name__)
@@ -109,6 +110,7 @@ class BookWorkspace(QWidget):
         self._add_tab(self.tr("OCR Review"), self._create_ocr_review_view)
         self._add_tab(self.tr("Glossary"), self._create_glossary_view)
         self._add_tab(self.tr("Translate"), self._create_translation_view)
+        self._add_tab(self.tr("Reembedding"), self._create_reembedding_view)
         self._add_tab(self.tr("Export"), self._create_export_view)
 
         # Connect signal after tabs are added
@@ -208,6 +210,12 @@ class BookWorkspace(QWidget):
     def _create_translation_view(self) -> QWidget:
         """Create the translation view."""
         view = TranslationView(self.book_manager, self.book_id, task_engine=self._task_engine)
+        view.open_activity_requested.connect(self.show_activity_panel)
+        return view
+
+    def _create_reembedding_view(self) -> QWidget:
+        """Create the reembedding review view."""
+        view = ReembeddingView(self.book_manager, self.book_id, task_engine=self._task_engine)
         view.open_activity_requested.connect(self.show_activity_panel)
         return view
 
@@ -322,8 +330,13 @@ class BookWorkspace(QWidget):
         # Translation tab (index 3) — engine-managed translation tasks are background-capable.
         # Intentionally exclude them from leave-book warnings.
 
-        # Export tab (index 4)
-        export_view = self._view_cache.get(4)
+        # Reembedding tab (index 4) — engine-managed
+        reembed_tasks = self._task_engine.get_tasks(self.book_id, task_type="image_reembedding")
+        if any(t.status not in TERMINAL_TASK_STATUSES for t in reembed_tasks):
+            running.append(self.tr("Reembedding"))
+
+        # Export tab (index 5)
+        export_view = self._view_cache.get(5)
         if export_view is not None and self._is_worker_running(getattr(export_view, "worker", None)):
             running.append(self.tr("Export"))
 
@@ -353,8 +366,10 @@ class BookWorkspace(QWidget):
 
         # Translation tab (index 3) — sync/chunk tasks are cancelled via engine above
 
-        # Export tab (index 4)
-        export_view = self._view_cache.get(4)
+        # Reembedding tab (index 4) — engine-managed, covered by cancel_running_tasks above
+
+        # Export tab (index 5)
+        export_view = self._view_cache.get(5)
         if export_view is not None:
             self._request_worker_interruption(getattr(export_view, "worker", None))
 
@@ -426,12 +441,13 @@ class BookWorkspace(QWidget):
         self.tab_widget.setTabText(1, self.tr("OCR Review"))
         self.tab_widget.setTabText(2, self.tr("Glossary"))
         self.tab_widget.setTabText(3, self.tr("Translate"))
-        self.tab_widget.setTabText(4, self.tr("Export"))
+        self.tab_widget.setTabText(4, self.tr("Reembedding"))
+        self.tab_widget.setTabText(5, self.tr("Export"))
         self._refresh_token_usage()
 
     def _workflow_tip_text(self) -> str:
         return self.tr(
-            "Suggested flow: Import \u2192 OCR Review (if needed) \u2192 Glossary (optional) \u2192 Translate \u2192 Export."
+            "Suggested flow: Import \u2192 OCR Review (if needed) \u2192 Glossary (optional) \u2192 Translate \u2192 Reembedding (if needed) \u2192 Export."
         )
 
     def _token_usage_tooltip(self) -> str:

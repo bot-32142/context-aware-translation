@@ -192,7 +192,7 @@ class MergedOCRContent:
                    page_list is a list of page dicts from OCR.
 
         Returns:
-            MergedOCRContent with merged cross-page continuations
+            MergedOCRContent with merged cross-page continuations.
         """
         elements: list[OCRItem] = []
         pending: OCRItem | None = None

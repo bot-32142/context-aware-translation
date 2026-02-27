@@ -366,7 +366,6 @@ class WorkflowService:
 
         await document.set_text(
             all_lines,
-            image_reembedding_config=None,
             cancel_check=cancel_check,
             progress_callback=progress_callback,
         )

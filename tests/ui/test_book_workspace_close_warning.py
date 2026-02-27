@@ -60,7 +60,7 @@ def test_get_running_operations_detects_all_supported_views():
     workspace._task_engine.get_tasks.side_effect = _mock_get_tasks
     workspace._view_cache = {
         0: SimpleNamespace(worker=_Worker(True)),  # Import
-        4: SimpleNamespace(worker=_Worker(False)),  # Export
+        5: SimpleNamespace(worker=_Worker(False)),  # Export
     }
 
     assert workspace.get_running_operations() == [
@@ -130,7 +130,7 @@ def test_close_requested_with_running_operation_shows_warning_and_can_cancel():
 
 def test_close_requested_with_running_operation_confirmed_emits():
     workspace = _make_workspace()
-    workspace._view_cache = {4: SimpleNamespace(worker=_Worker(True))}
+    workspace._view_cache = {5: SimpleNamespace(worker=_Worker(True))}
     emitted: list[bool] = []
     workspace.close_requested.connect(lambda: emitted.append(True))
 
@@ -204,7 +204,7 @@ def test_request_cancel_running_operations_requests_interruption_for_all_running
         0: SimpleNamespace(worker=import_worker),
         # OCR tab (index 1): engine-managed, cancelled via cancel_running_tasks
         # Translation tab (index 3): no direct worker — cancelled via engine
-        4: SimpleNamespace(worker=export_worker),
+        5: SimpleNamespace(worker=export_worker),
     }
 
     workspace.request_cancel_running_operations()
