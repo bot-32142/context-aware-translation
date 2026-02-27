@@ -208,6 +208,14 @@ _PROGRESS_PATTERNS: list[tuple[re.Pattern, str]] = [
         re.compile(r"Translating manga batch (\d+)/(\d+)"),
         QT_TRANSLATE_NOOP("ProgressMessages", "Translating manga batch %1/%2"),
     ),
+    (
+        re.compile(r"Reembedding image (\d+)/(\d+)"),
+        QT_TRANSLATE_NOOP("ProgressMessages", "Reembedding image %1/%2"),
+    ),
+    (
+        re.compile(r"Reembedding manga page (\d+)/(\d+)"),
+        QT_TRANSLATE_NOOP("ProgressMessages", "Reembedding manga page %1/%2"),
+    ),
 ]
 
 

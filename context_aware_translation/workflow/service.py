@@ -334,15 +334,26 @@ class WorkflowService:
                 raise
             return self._get_lines_with_original_fallback(document)
 
-    async def _apply_export_text(
+    async def materialize_document_translation_state(
         self,
         document: Document,
         *,
-        allow_original_fallback: bool,
-        cancel_check: Callable[[], bool] | None,
-        progress_callback: ProgressCallback | None,
+        allow_original_fallback: bool = False,
+        cancel_check: Callable[[], bool] | None = None,
+        progress_callback: ProgressCallback | None = None,
     ) -> None:
-        """Apply export text lines to a document, with fallback semantics."""
+        """Apply translated lines to a document so it is ready for export or reembedding.
+
+        Sets EPUB target language metadata if applicable. Does NOT trigger image
+        reembedding — that is handled separately via document.reembed().
+
+        Args:
+            document: The document instance to populate.
+            allow_original_fallback: If True, untranslated chunks fall back to
+                original text.
+            cancel_check: Optional cooperative cancellation callback.
+            progress_callback: Optional callback for progress updates.
+        """
         all_lines = self._resolve_export_lines(
             document,
             allow_original_fallback=allow_original_fallback,
@@ -355,11 +366,27 @@ class WorkflowService:
 
         await document.set_text(
             all_lines,
-            image_reembedding_config=self.config.image_reembedding_config,
+            image_reembedding_config=None,
             cancel_check=cancel_check,
             progress_callback=progress_callback,
         )
         self._check_cancel(cancel_check)
+
+    async def _apply_export_text(
+        self,
+        document: Document,
+        *,
+        allow_original_fallback: bool,
+        cancel_check: Callable[[], bool] | None,
+        progress_callback: ProgressCallback | None,
+    ) -> None:
+        """Apply export text lines to a document, with fallback semantics."""
+        await self.materialize_document_translation_state(
+            document,
+            allow_original_fallback=allow_original_fallback,
+            cancel_check=cancel_check,
+            progress_callback=progress_callback,
+        )
 
     def _resolve_import_class(
         self,

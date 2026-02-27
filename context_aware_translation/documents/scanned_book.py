@@ -6,7 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from context_aware_translation.core.cancellation import raise_if_cancelled
+from context_aware_translation.core.cancellation import OperationCancelledError, raise_if_cancelled
 from context_aware_translation.core.progress import ProgressCallback, ProgressUpdate, WorkflowStep
 from context_aware_translation.documents.base import Document
 from context_aware_translation.documents.content.ocr_content import MergedOCRContent
@@ -228,66 +228,68 @@ class ScannedBookDocument(Document):
     async def set_text(
         self,
         lines: list[str],
-        image_reembedding_config: ImageReembeddingConfig | None = None,
+        image_reembedding_config: ImageReembeddingConfig | None = None,  # noqa: ARG002
         cancel_check: Callable[[], bool] | None = None,
-        progress_callback: ProgressCallback | None = None,
+        progress_callback: ProgressCallback | None = None,  # noqa: ARG002
     ) -> int:
         """Distribute translated lines to merged OCR content. Returns lines consumed.
 
-        If reembedding is enabled and configured, calls _reembed_translations() at the end.
+        Loads any previously-generated reembedded images from DB so that export still
+        applies them. image_reembedding_config is accepted for API compatibility but
+        ignored; generation is now done via reembed().
         """
         merged = self._get_merged_content()
         line_count = merged.set_texts(lines)
         self._merged_content = merged
 
-        # Reembed translations if enabled and configured
-        if (
-            self._ocr_config is not None
-            and self._ocr_config.enable_image_reembedding
-            and image_reembedding_config is not None
-        ):
-            await self._reembed_translations(image_reembedding_config, cancel_check, progress_callback)
+        # Load cached reembedded images from DB so export applies them
+        from context_aware_translation.documents.content.ocr_items import ImageItem
+
+        existing = self.repo.load_reembedded_images(self.document_id)
+        for idx, elem in enumerate(self._merged_content.elements):
+            if isinstance(elem, ImageItem) and idx in existing:
+                elem.reembedded_image_bytes = existing[idx][0]
 
         return line_count
 
-    async def _reembed_translations(
+    async def reembed(
         self,
-        config: ImageReembeddingConfig,
+        image_reembedding_config: ImageReembeddingConfig,
+        *,
+        force: bool = False,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
-    ) -> None:
-        """Reembed translated text into images with embedded_text (internal helper)."""
+    ) -> int:
+        """Generate reembedded images for all ImageItems with translated text.
+
+        Uses existing DB cache to skip already-done items unless force=True.
+        Returns count of items newly generated.
+        """
         import asyncio
 
         from context_aware_translation.documents.content.ocr_items import ImageItem
         from context_aware_translation.llm.image_generator import create_image_generator
 
         if self._merged_content is None:
-            return
+            return 0
 
-        # Create the appropriate image generator backend
-        generator = create_image_generator(config)
+        generator = create_image_generator(image_reembedding_config)
 
-        # Load any already-persisted reembedded images (crash recovery)
-        existing = self.repo.load_reembedded_images(self.document_id)
+        # Load existing to skip already-processed items (unless force=True)
+        existing = self.repo.load_reembedded_images(self.document_id) if not force else {}
 
-        # Find ImageItems that need reembedding
         items_to_process: list[tuple[int, ImageItem]] = []
         for idx, elem in enumerate(self._merged_content.elements):
-            if isinstance(elem, ImageItem) and elem.needs_reembedding():
-                # Apply existing reembedded image if available
-                if idx in existing:
-                    elem.reembedded_image_bytes = existing[idx][0]
-                else:
-                    items_to_process.append((idx, elem))
+            if isinstance(elem, ImageItem) and elem.needs_reembedding() and idx not in existing:
+                items_to_process.append((idx, elem))
 
         if not items_to_process:
-            return  # All done (either no items or all recovered from DB)
+            return 0
 
         total = len(items_to_process)
         completed = 0
         progress_lock = asyncio.Lock()
-        semaphore = asyncio.Semaphore(config.concurrency)
+        semaphore = asyncio.Semaphore(image_reembedding_config.concurrency)
 
         async def process_item(idx: int, item: ImageItem) -> None:
             nonlocal completed
@@ -297,10 +299,8 @@ class ScannedBookDocument(Document):
                 if translated is None or item.image_bytes is None:
                     return
 
-                # Detect MIME type from image bytes
                 mime_type = detect_mime_type(item.image_bytes)
 
-                # Use pluggable backend to edit image
                 new_bytes = await generator.edit_image(
                     image_bytes=item.image_bytes,
                     mime_type=mime_type,
@@ -309,13 +309,9 @@ class ScannedBookDocument(Document):
                 )
                 raise_if_cancelled(cancel_check)
 
-                # Update in-memory
                 item.reembedded_image_bytes = new_bytes
-
-                # Persist to DB immediately for crash recovery (atomic update)
                 self.repo.save_reembedded_image(self.document_id, idx, new_bytes, "image/png")
 
-                # Report progress
                 async with progress_lock:
                     completed += 1
                     if progress_callback:
@@ -328,16 +324,18 @@ class ScannedBookDocument(Document):
                             )
                         )
 
-        # Process all items concurrently with error handling for partial failures
         results = await asyncio.gather(
             *[process_item(idx, item) for idx, item in items_to_process],
-            return_exceptions=True,  # Don't fail entire batch if one image fails
+            return_exceptions=True,
         )
 
-        # Check for any failures (items already persisted individually on success)
         for (_idx, _), result in zip(items_to_process, results, strict=True):
+            if isinstance(result, OperationCancelledError):
+                raise result
             if isinstance(result, Exception):
                 raise RuntimeError(f"Failed to reembed image at index {_idx}: {result}. Please try again or skip it.")
+
+        return completed
 
     def can_export(self, export_format: str) -> bool:
         """Check if this document can be exported to the given format."""

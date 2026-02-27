@@ -184,6 +184,7 @@ class TranslationTextHandler:
                 task_store=deps.task_store,
                 notify_task_changed=deps.notify_task_changed,
                 config_snapshot_json=record.config_snapshot_json,
+                enqueue_followup=deps.enqueue_followup,
             )
 
         if action == TaskAction.CANCEL:

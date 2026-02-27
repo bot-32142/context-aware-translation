@@ -7,7 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from context_aware_translation.core.cancellation import raise_if_cancelled
+from context_aware_translation.core.cancellation import OperationCancelledError, raise_if_cancelled
 from context_aware_translation.core.progress import ProgressCallback, ProgressUpdate, WorkflowStep
 from context_aware_translation.documents.base import Document
 from context_aware_translation.documents.manga_alignment import get_sources_with_nonempty_ocr_text
@@ -295,15 +295,19 @@ class MangaDocument(Document):
     async def set_text(
         self,
         lines: list[str],
-        image_reembedding_config: ImageReembeddingConfig | None = None,
-        cancel_check: Callable[[], bool] | None = None,
-        progress_callback: ProgressCallback | None = None,
+        image_reembedding_config: ImageReembeddingConfig | None = None,  # noqa: ARG002
+        cancel_check: Callable[[], bool] | None = None,  # noqa: ARG002
+        progress_callback: ProgressCallback | None = None,  # noqa: ARG002
     ) -> int:
-        """Store translations and optionally reembed into page images.
+        """Store translations for manga pages.
 
         For manga, 'lines' contains one block of translated text per page.
         Each element in lines corresponds to a source (page) in sequence order.
         Elements MAY contain internal newlines (multi-line dialogue).
+
+        Loads any previously-generated reembedded images from DB so that export still
+        applies them. image_reembedding_config is accepted for API compatibility but
+        ignored; generation is now done via reembed().
         """
         sources_with_text = self._get_sources_with_text()
 
@@ -314,40 +318,48 @@ class MangaDocument(Document):
             self._page_translations[source["source_id"]] = lines[consumed]
             consumed += 1
 
-        # Reembed if configured
+        # Load cached reembedded images from DB so export applies them
         sources = self.repo.get_document_sources(self.document_id)
         sources_sorted = sorted(sources, key=lambda s: s["sequence_number"])
-        if (
-            self._ocr_config is not None
-            and self._ocr_config.enable_image_reembedding
-            and image_reembedding_config is not None
-        ):
-            await self._reembed_manga_pages(image_reembedding_config, sources_sorted, cancel_check, progress_callback)
+        existing = self.repo.load_reembedded_images(self.document_id)
+        for idx, source in enumerate(sources_sorted):
+            if idx in existing:
+                self._reembedded_pages[source["source_id"]] = existing[idx][0]
 
         return consumed
 
-    async def _reembed_manga_pages(
+    async def reembed(
         self,
-        config: ImageReembeddingConfig,
-        sources_sorted: list[dict],
+        image_reembedding_config: ImageReembeddingConfig,
+        *,
+        force: bool = False,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
-    ) -> None:
-        """Reembed translated text into manga page images."""
+    ) -> int:
+        """Generate reembedded images for manga pages with translations.
+
+        Uses existing DB cache to skip already-done items unless force=True.
+        Returns count of pages newly generated.
+        """
         from context_aware_translation.llm.image_generator import create_image_generator
 
-        generator = create_image_generator(config)
-        semaphore = asyncio.Semaphore(config.concurrency)
+        generator = create_image_generator(image_reembedding_config)
+        semaphore = asyncio.Semaphore(image_reembedding_config.concurrency)
 
-        # Check for existing reembedded images (crash recovery)
-        existing = self.repo.load_reembedded_images(self.document_id)
+        sources = self.repo.get_document_sources(self.document_id)
+        sources_sorted = sorted(sources, key=lambda s: s["sequence_number"])
 
-        # Count pages that will actually be processed (have translations)
+        # Load existing to skip already-processed items (unless force=True)
+        existing = self.repo.load_reembedded_images(self.document_id) if not force else {}
+
         total = sum(
             1
             for idx, source in enumerate(sources_sorted)
             if self._page_translations.get(source["source_id"], "").strip() and idx not in existing
         )
+        if total == 0:
+            return 0
+
         completed = 0
         progress_lock = asyncio.Lock()
 
@@ -360,6 +372,7 @@ class MangaDocument(Document):
                 if not translated.strip():
                     return
                 if idx in existing:
+                    # Already cached — populate in-memory but don't count as newly generated
                     self._reembedded_pages[source_id] = existing[idx][0]
                     return
                 image_bytes = source["binary_content"]
@@ -369,7 +382,6 @@ class MangaDocument(Document):
                 self._reembedded_pages[source_id] = new_bytes
                 self.repo.save_reembedded_image(self.document_id, idx, new_bytes, "image/png")
 
-                # Report progress
                 async with progress_lock:
                     completed += 1
                     if progress_callback:
@@ -387,8 +399,12 @@ class MangaDocument(Document):
             return_exceptions=True,
         )
         for (idx, _), result in zip(enumerate(sources_sorted), results, strict=True):
+            if isinstance(result, OperationCancelledError):
+                raise result
             if isinstance(result, Exception):
                 raise RuntimeError(f"Failed to reembed manga page at index {idx}: {result}")
+
+        return completed
 
     def can_export(self, export_format: str) -> bool:
         return export_format.lower() in self.supported_export_formats

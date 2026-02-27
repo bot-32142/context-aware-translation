@@ -29,6 +29,7 @@ from context_aware_translation.documents.base import (
 from context_aware_translation.storage.book_db import SQLiteBookDB
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.document_repository import DocumentRepository
+from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 
 from ..i18n import qarg, translate_progress_message
 from ..utils import create_tip_label, translate_document_type
@@ -41,10 +42,18 @@ class ExportView(QWidget):
 
     export_completed = Signal(str)  # output path
 
-    def __init__(self, book_manager: BookManager, book_id: str, parent: QWidget | None = None):
+    def __init__(
+        self,
+        book_manager: BookManager,
+        book_id: str,
+        parent: QWidget | None = None,
+        *,
+        task_engine=None,
+    ):
         super().__init__(parent)
         self.book_manager = book_manager
         self.book_id = book_id
+        self._task_engine = task_engine
         self.worker: ExportWorker | None = None
         self.documents: list[dict] = []
 
@@ -376,6 +385,16 @@ class ExportView(QWidget):
             if file_path:
                 self.output_path_edit.setText(file_path)
 
+    def _has_doc_read_conflict(self, document_ids: list[int]) -> bool:
+        if self._task_engine is None:
+            return False
+        wanted = frozenset(
+            ResourceClaim("doc", self.book_id, str(doc_id), ClaimMode.READ_SHARED) for doc_id in document_ids
+        )
+        if not wanted:
+            return False
+        return bool(self._task_engine.has_active_claims(self.book_id, wanted))
+
     def _start_export(self) -> None:
         """Start the export process."""
         if self.worker and self.worker.isRunning():
@@ -415,6 +434,14 @@ class ExportView(QWidget):
 
         # Get document IDs
         document_ids = [doc["document_id"] for doc in selected_docs]
+
+        if self._has_doc_read_conflict(document_ids):
+            QMessageBox.warning(
+                self,
+                self.tr("Export Unavailable"),
+                self.tr("Cannot export while selected documents are being modified by active tasks."),
+            )
+            return
 
         # Hide result, show progress
         self.result_label.hide()

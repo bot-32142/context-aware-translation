@@ -25,6 +25,7 @@ from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.document_repository import DocumentRepository
 from context_aware_translation.ui.widgets import ProgressWidget
 from context_aware_translation.ui.workers.import_worker import ImportWorker
+from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 
 from ..i18n import qarg
 from ..utils import create_tip_label, translate_document_type
@@ -36,10 +37,18 @@ class ImportView(QWidget):
     import_completed = Signal(int)  # document_id
     documents_changed = Signal()
 
-    def __init__(self, book_manager: BookManager, book_id: str, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        book_manager: BookManager,
+        book_id: str,
+        parent: QWidget | None = None,
+        *,
+        task_engine=None,
+    ) -> None:
         super().__init__(parent)
         self.book_manager = book_manager
         self.book_id = book_id
+        self._task_engine = task_engine
         self.selected_path: Path | None = None
         self.worker: ImportWorker | None = None
         self._config_valid = False
@@ -131,6 +140,11 @@ class ImportView(QWidget):
         can_import = enabled and has_selected_path and has_valid_type
         self.import_btn.setEnabled(can_import)
         self.type_combo.setEnabled(can_import)
+
+    def _has_claim_conflict(self, wanted: frozenset[ResourceClaim]) -> bool:
+        if self._task_engine is None:
+            return False
+        return bool(self._task_engine.has_active_claims(self.book_id, wanted))
 
     def _init_ui(self) -> None:
         """Initialize the user interface."""
@@ -313,6 +327,14 @@ class ImportView(QWidget):
             return
 
         if not self.selected_path:
+            return
+
+        if self._has_claim_conflict(frozenset({ResourceClaim("doc", self.book_id, "*", ClaimMode.WRITE_EXCLUSIVE)})):
+            QMessageBox.warning(
+                self,
+                self.tr("Import Unavailable"),
+                self.tr("Cannot import while other tasks are modifying documents."),
+            )
             return
 
         # Import is intentionally allowed even if workflow endpoint profiles are incomplete.
@@ -524,6 +546,23 @@ class ImportView(QWidget):
         if doc_id is None:
             return
 
+        if self._has_claim_conflict(
+            frozenset(
+                {
+                    ResourceClaim("doc", self.book_id, "*", ClaimMode.WRITE_EXCLUSIVE),
+                    ResourceClaim("glossary_state", self.book_id, "*", ClaimMode.WRITE_EXCLUSIVE),
+                    ResourceClaim("context_tree", self.book_id, "*", ClaimMode.WRITE_EXCLUSIVE),
+                    ResourceClaim("ocr", self.book_id, "*", ClaimMode.WRITE_EXCLUSIVE),
+                }
+            )
+        ):
+            QMessageBox.warning(
+                self,
+                self.tr("Reset Unavailable"),
+                self.tr("Cannot reset documents while other tasks are active."),
+            )
+            return
+
         reply = QMessageBox.warning(
             self,
             self.tr("Reset Document"),
@@ -577,6 +616,23 @@ class ImportView(QWidget):
         """Delete selected document and all documents after it (stack-based)."""
         doc_id = self._get_selected_document_id()
         if doc_id is None:
+            return
+
+        if self._has_claim_conflict(
+            frozenset(
+                {
+                    ResourceClaim("doc", self.book_id, "*", ClaimMode.WRITE_EXCLUSIVE),
+                    ResourceClaim("glossary_state", self.book_id, "*", ClaimMode.WRITE_EXCLUSIVE),
+                    ResourceClaim("context_tree", self.book_id, "*", ClaimMode.WRITE_EXCLUSIVE),
+                    ResourceClaim("ocr", self.book_id, "*", ClaimMode.WRITE_EXCLUSIVE),
+                }
+            )
+        ):
+            QMessageBox.warning(
+                self,
+                self.tr("Delete Unavailable"),
+                self.tr("Cannot delete documents while other tasks are active."),
+            )
             return
 
         reply = QMessageBox.warning(

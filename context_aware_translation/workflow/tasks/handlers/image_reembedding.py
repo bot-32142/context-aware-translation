@@ -8,7 +8,7 @@ from context_aware_translation.storage.book_db import SQLiteBookDB
 from context_aware_translation.storage.document_repository import DocumentRepository
 from context_aware_translation.workflow.tasks.claims import (
     AllDocuments,
-    ClaimMode,
+    ClaimArbiter,
     DocumentScope,
     ResourceClaim,
     SomeDocuments,
@@ -38,10 +38,13 @@ if TYPE_CHECKING:
 
 _RERUNNABLE_TERMINAL_STATUSES = frozenset({STATUS_CANCELLED, STATUS_FAILED, STATUS_COMPLETED_WITH_ERRORS})
 _NON_DELETABLE_STATUSES = frozenset({STATUS_RUNNING, STATUS_CANCEL_REQUESTED, STATUS_CANCELLING})
+_AUTORUN_STATUSES = frozenset({STATUS_QUEUED, STATUS_PAUSED})
+
+_REEMBEDDABLE_DOCUMENT_TYPES = frozenset({"pdf", "scanned_book", "manga", "epub"})
 
 
-class TranslationMangaHandler:
-    task_type = "translation_manga"
+class ImageReembeddingHandler:
+    task_type = "image_reembedding"
 
     def decode_payload(self, record: TaskRecord) -> dict[str, Any]:
         return decode_task_payload(record)
@@ -65,9 +68,7 @@ class TranslationMangaHandler:
             claims.add(ResourceClaim("doc", book_id, "*"))
         elif isinstance(doc_scope, SomeDocuments):
             claims.update(ResourceClaim("doc", book_id, str(doc_id)) for doc_id in doc_scope.doc_ids)
-        claims.add(ResourceClaim("glossary_state", book_id, "*", ClaimMode.READ_SHARED))
-        # Keep context_tree claim aligned with workflow.translate() behavior.
-        claims.add(ResourceClaim("context_tree", book_id, "*", ClaimMode.WRITE_COOPERATIVE))
+        # No glossary or context_tree claims needed for reembedding
         return frozenset(claims)
 
     def can(self, action: TaskAction, record: TaskRecord, payload: Any, snapshot: ActionSnapshot) -> Decision:
@@ -101,22 +102,33 @@ class TranslationMangaHandler:
         raise ValueError(f"Unknown action: {action!r}")
 
     def can_autorun(self, record: TaskRecord, payload: Any, snapshot: ActionSnapshot) -> Decision:
-        # Manga translation always requires explicit user initiation
-        return Decision(allowed=False, reason="Manga translation requires explicit user initiation")
+        if record.status not in _AUTORUN_STATUSES:
+            return Decision(allowed=False, reason=f"Status {record.status!r} is not autorunnable")
+        if record.task_id in snapshot.running_task_ids:
+            return Decision(allowed=False, reason="Already running")
+        wanted = self.claims(record, payload)
+        arbiter = ClaimArbiter()
+        if arbiter.conflicts(wanted, snapshot.active_claims):
+            return Decision(allowed=False, reason="Claims conflict with active tasks")
+        return Decision(allowed=True)
 
     def validate_submit(self, book_id: str, params: dict, deps: WorkerDeps) -> Decision:
-        # Check manga_translator_config exists
         book = deps.book_manager.get_book(book_id)
         if book is None:
             return Decision(allowed=False, reason=f"Book not found: {book_id}")
+
         config = Config.from_book(book, deps.book_manager.library_root, deps.book_manager.registry)
-        if config.manga_translator_config is None:
+        if config.image_reembedding_config is None:
             return Decision(
                 allowed=False,
-                reason="manga_translator_config is required to translate manga documents. Please configure it in your book settings.",
+                reason="image_reembedding_config is required for image reembedding. Please configure it in your book settings.",
+            )
+        if config.ocr_config is None or not config.ocr_config.enable_image_reembedding:
+            return Decision(
+                allowed=False,
+                reason="Image reembedding is disabled. Enable OCR image reembedding in your book config.",
             )
 
-        # Check all selected documents are manga type
         db_path = deps.book_manager.get_book_db_path(book_id)
         try:
             db = SQLiteBookDB(db_path)
@@ -128,21 +140,45 @@ class TranslationMangaHandler:
             if not documents:
                 return Decision(allowed=False, reason="Book has no documents.")
 
-            doc_ids = params.get("document_ids")
-            if doc_ids:
-                id_set = set(doc_ids)
-                selected_docs = [d for d in documents if d["document_id"] in id_set]
+            doc_ids_raw = params.get("document_ids")
+            if doc_ids_raw is not None:
+                if not isinstance(doc_ids_raw, list):
+                    return Decision(allowed=False, reason="document_ids must be a list[int] or null.")
+                if not doc_ids_raw:
+                    return Decision(allowed=False, reason="No documents selected.")
+                try:
+                    id_set = {int(i) for i in doc_ids_raw}
+                except (TypeError, ValueError):
+                    return Decision(allowed=False, reason="document_ids must contain only integers.")
+                selected_docs = [d for d in documents if int(d["document_id"]) in id_set]
+                if len(selected_docs) != len(id_set):
+                    return Decision(allowed=False, reason="Selected documents no longer exist.")
             else:
                 selected_docs = documents
 
             if not selected_docs:
                 return Decision(allowed=False, reason="No documents selected.")
 
-            non_manga = [d for d in selected_docs if d.get("document_type") != "manga"]
-            if non_manga:
+            non_reembeddable = [d for d in selected_docs if d.get("document_type") not in _REEMBEDDABLE_DOCUMENT_TYPES]
+            if non_reembeddable:
+                types = {d.get("document_type") for d in non_reembeddable}
                 return Decision(
                     allowed=False,
-                    reason="All selected documents must be manga type for manga translation.",
+                    reason=f"Document type(s) {types} do not support image reembedding. Supported types: {_REEMBEDDABLE_DOCUMENT_TYPES}",
+                )
+
+            # Check at least one doc has translated chunks
+            doc_id_set = {int(d["document_id"]) for d in selected_docs}
+            chunks_by_doc = db.list_chunks_grouped_by_document()
+            has_translated = any(
+                any(chunk.is_translated for chunk in chunks)
+                for doc_id, chunks in chunks_by_doc.items()
+                if doc_id in doc_id_set
+            )
+            if not has_translated:
+                return Decision(
+                    allowed=False,
+                    reason="No translated chunks found. Translate documents before running image reembedding.",
                 )
         finally:
             db.close()
@@ -150,18 +186,22 @@ class TranslationMangaHandler:
         return Decision(allowed=True)
 
     def validate_run(self, record: TaskRecord, payload: Any, deps: WorkerDeps) -> Decision:
-        # Re-check config
         book = deps.book_manager.get_book(record.book_id)
         if book is None:
             return Decision(allowed=False, reason=f"Book not found: {record.book_id}")
+
         config = Config.from_book(book, deps.book_manager.library_root, deps.book_manager.registry)
-        if config.manga_translator_config is None:
+        if config.image_reembedding_config is None:
             return Decision(
                 allowed=False,
-                reason="manga_translator_config is required to translate manga documents.",
+                reason="image_reembedding_config is required for image reembedding.",
+            )
+        if config.ocr_config is None or not config.ocr_config.enable_image_reembedding:
+            return Decision(
+                allowed=False,
+                reason="Image reembedding is disabled in current config.",
             )
 
-        # Re-check docs remain manga type
         db_path = deps.book_manager.get_book_db_path(record.book_id)
         try:
             db = SQLiteBookDB(db_path)
@@ -180,17 +220,38 @@ class TranslationMangaHandler:
                 except (json.JSONDecodeError, TypeError, ValueError):
                     doc_ids = None
 
-            if doc_ids:
+            if doc_ids is not None:
+                if not doc_ids:
+                    return Decision(allowed=False, reason="No documents selected.")
                 id_set = set(doc_ids)
-                selected_docs = [d for d in documents if d["document_id"] in id_set]
+                selected_docs = [d for d in documents if int(d["document_id"]) in id_set]
+                if len(selected_docs) != len(id_set):
+                    return Decision(allowed=False, reason="Selected documents no longer exist.")
             else:
                 selected_docs = documents
 
-            non_manga = [d for d in selected_docs if d.get("document_type") != "manga"]
-            if non_manga:
+            if not selected_docs:
+                return Decision(allowed=False, reason="Book has no documents.")
+
+            non_reembeddable = [d for d in selected_docs if d.get("document_type") not in _REEMBEDDABLE_DOCUMENT_TYPES]
+            if non_reembeddable:
+                types = {d.get("document_type") for d in non_reembeddable}
                 return Decision(
                     allowed=False,
-                    reason="All selected documents must be manga type for manga translation.",
+                    reason=f"Document type(s) {types} do not support image reembedding.",
+                )
+
+            doc_id_set = {int(d["document_id"]) for d in selected_docs}
+            chunks_by_doc = db.list_chunks_grouped_by_document()
+            has_translated = any(
+                any(chunk.is_translated for chunk in chunks)
+                for doc_id, chunks in chunks_by_doc.items()
+                if doc_id in doc_id_set
+            )
+            if not has_translated:
+                return Decision(
+                    allowed=False,
+                    reason="No translated chunks found. Translate documents before running image reembedding.",
                 )
         finally:
             db.close()
@@ -198,7 +259,7 @@ class TranslationMangaHandler:
         return Decision(allowed=True)
 
     def build_worker(self, action: TaskAction, record: TaskRecord, payload: Any, deps: WorkerDeps) -> object:
-        from context_aware_translation.ui.workers.translation_manga_task_worker import TranslationMangaTaskWorker
+        from context_aware_translation.ui.workers.image_reembedding_task_worker import ImageReembeddingTaskWorker
 
         doc_ids: list[int] | None = None
         if record.document_ids_json:
@@ -209,26 +270,19 @@ class TranslationMangaHandler:
             except (json.JSONDecodeError, TypeError, ValueError):
                 doc_ids = None
 
-        force: bool = bool((payload or {}).get("force", False))
-        skip_context: bool = bool((payload or {}).get("skip_context", False))
-
         if action == TaskAction.RUN:
-            return TranslationMangaTaskWorker(
+            return ImageReembeddingTaskWorker(
                 deps.book_manager,
                 record.book_id,
                 action="run",
                 task_id=record.task_id,
                 document_ids=doc_ids,
-                force=force,
-                skip_context=skip_context,
                 task_store=deps.task_store,
                 notify_task_changed=deps.notify_task_changed,
-                config_snapshot_json=record.config_snapshot_json,
-                enqueue_followup=deps.enqueue_followup,
             )
 
         if action == TaskAction.CANCEL:
-            return TranslationMangaTaskWorker(
+            return ImageReembeddingTaskWorker(
                 deps.book_manager,
                 record.book_id,
                 action="cancel",
@@ -237,7 +291,7 @@ class TranslationMangaHandler:
                 notify_task_changed=deps.notify_task_changed,
             )
 
-        raise ValueError(f"Unsupported action for TranslationMangaHandler: {action!r}")
+        raise ValueError(f"Unsupported action for ImageReembeddingHandler: {action!r}")
 
     def cancel_dispatch_policy(self, record: TaskRecord, payload: Any) -> CancelDispatchPolicy:
         from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy

@@ -173,6 +173,17 @@ class TextDocument(Document):
         self._translated_lines = lines
         return len(lines)
 
+    async def reembed(
+        self,
+        image_reembedding_config: ImageReembeddingConfig,  # noqa: ARG002
+        *,
+        force: bool = False,  # noqa: ARG002
+        cancel_check: Callable[[], bool] | None = None,  # noqa: ARG002
+        progress_callback: ProgressCallback | None = None,  # noqa: ARG002
+    ) -> int:
+        """No-op for text documents — they have no images to reembed."""
+        return 0
+
     def can_export(self, export_format: str) -> bool:
         """Check if this document can be exported to the given format."""
         return export_format.lower() in self.supported_export_formats

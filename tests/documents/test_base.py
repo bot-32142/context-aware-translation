@@ -39,6 +39,7 @@ def test_document_has_all_abstract_methods():
         "is_text_added",
         "mark_text_added",
         "set_text",
+        "reembed",
         "export_preserve_structure",
         "can_export",
         "is_ocr_completed",

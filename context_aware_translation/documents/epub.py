@@ -23,7 +23,7 @@ from urllib.parse import unquote
 
 import defusedxml.ElementTree as DefusedET
 
-from context_aware_translation.core.cancellation import raise_if_cancelled
+from context_aware_translation.core.cancellation import OperationCancelledError, raise_if_cancelled
 from context_aware_translation.core.progress import ProgressCallback, ProgressUpdate, WorkflowStep
 from context_aware_translation.documents.base import Document
 from context_aware_translation.documents.epub_container import (
@@ -1130,16 +1130,17 @@ class EPUBDocument(Document):
     async def set_text(
         self,
         lines: list[str],
-        image_reembedding_config: ImageReembeddingConfig | None = None,
+        image_reembedding_config: ImageReembeddingConfig | None = None,  # noqa: ARG002
         cancel_check: Callable[[], bool] | None = None,
-        progress_callback: ProgressCallback | None = None,
+        progress_callback: ProgressCallback | None = None,  # noqa: ARG002
     ) -> int:
         """Distribute translated lines back into XHTML chapters.
 
         Args:
             lines: Translated text lines from the translation pipeline.
                 Must match exactly the number of blocks returned by get_text().
-            image_reembedding_config: Optional config for image reembedding.
+            image_reembedding_config: Accepted for API compatibility but ignored;
+                generation is now done via reembed().
 
         Returns:
             Number of lines consumed from the input.
@@ -1234,13 +1235,18 @@ class EPUBDocument(Document):
                 cursor += count
             self._translated_nav_label_specs = translated_specs
 
-        # Image reembedding
-        if (
-            self._ocr_config is not None
-            and self._ocr_config.enable_image_reembedding
-            and image_reembedding_config is not None
-        ):
-            await self._reembed_translations(image_reembedding_config, cancel_check, progress_callback)
+        # Load cached reembedded images from DB so export applies them without regeneration
+        existing = self.repo.load_reembedded_images(self.document_id)
+        for source in sources_sorted:
+            if source["source_type"] != "image" or not source.get("binary_content"):
+                continue
+            source_id = int(source["source_id"])
+            if source_id in existing:
+                self._translated_resource_images[source_id] = existing[source_id]
+            else:
+                legacy_idx = source_id * 1_000_000
+                if legacy_idx in existing:
+                    self._translated_resource_images[source_id] = existing[legacy_idx]
 
         return cursor
 
@@ -1522,13 +1528,19 @@ class EPUBDocument(Document):
     # Image reembedding
     # =========================================================================
 
-    async def _reembed_translations(
+    async def reembed(
         self,
-        config: ImageReembeddingConfig,
+        image_reembedding_config: ImageReembeddingConfig,
+        *,
+        force: bool = False,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
-    ) -> None:
-        """Reembed translated embedded text into whole image resources."""
+    ) -> int:
+        """Generate reembedded images for EPUB image sources with translated text.
+
+        Uses existing DB cache to skip already-done items unless force=True.
+        Returns count of images newly generated.
+        """
         import asyncio
 
         from context_aware_translation.llm.image_generator import create_image_generator
@@ -1536,9 +1548,9 @@ class EPUBDocument(Document):
         sources = self.repo.get_document_sources(self.document_id)
         sources_sorted = sorted(sources, key=lambda s: s["sequence_number"])
 
-        generator = create_image_generator(config)
-        existing = self.repo.load_reembedded_images(self.document_id)
-        semaphore = asyncio.Semaphore(config.concurrency)
+        generator = create_image_generator(image_reembedding_config)
+        existing = self.repo.load_reembedded_images(self.document_id) if not force else {}
+        semaphore = asyncio.Semaphore(image_reembedding_config.concurrency)
 
         # Pre-filter sources to count only those that will actually be processed
         sources_to_process = []
@@ -1549,7 +1561,6 @@ class EPUBDocument(Document):
             translated_text = self._translated_image_texts.get(source_id, "")
             if not translated_text.strip():
                 continue
-            # Skip if already in existing (either direct ID or legacy ID)
             if source_id in existing:
                 continue
             legacy_idx = source_id * 1_000_000
@@ -1558,6 +1569,9 @@ class EPUBDocument(Document):
             sources_to_process.append(source)
 
         total = len(sources_to_process)
+        if total == 0:
+            return 0
+
         completed = 0
         progress_lock = asyncio.Lock()
 
@@ -1593,7 +1607,6 @@ class EPUBDocument(Document):
                 self._translated_resource_images[source_id] = (new_bytes, "image/png")
                 self.repo.save_reembedded_image(self.document_id, source_id, new_bytes, "image/png")
 
-                # Report progress
                 async with progress_lock:
                     completed += 1
                     if progress_callback:
@@ -1608,10 +1621,14 @@ class EPUBDocument(Document):
 
         results = await asyncio.gather(*[process_source(source) for source in sources_sorted], return_exceptions=True)
         for source, result in zip(sources_sorted, results, strict=True):
+            if isinstance(result, OperationCancelledError):
+                raise result
             if isinstance(result, Exception):
                 raise RuntimeError(
                     f"Failed to reembed EPUB image source {source.get('source_id', '?')}: {result}"
                 ) from result
+
+        return completed
 
     @classmethod
     def _compose_source_image_from_persisted_reembeds(

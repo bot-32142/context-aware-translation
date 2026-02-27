@@ -27,6 +27,7 @@ from context_aware_translation.workflow.tasks.handlers.glossary_export import Gl
 from context_aware_translation.workflow.tasks.handlers.glossary_extraction import GlossaryExtractionHandler
 from context_aware_translation.workflow.tasks.handlers.glossary_review import GlossaryReviewHandler
 from context_aware_translation.workflow.tasks.handlers.glossary_translation import GlossaryTranslationHandler
+from context_aware_translation.workflow.tasks.handlers.image_reembedding import ImageReembeddingHandler
 from context_aware_translation.workflow.tasks.handlers.ocr import OCRHandler
 from context_aware_translation.workflow.tasks.handlers.translation_manga import TranslationMangaHandler
 from context_aware_translation.workflow.tasks.handlers.translation_text import TranslationTextHandler
@@ -80,13 +81,23 @@ class MainWindow(QMainWindow):
 
         # Initialize centralized TaskEngine
         self._task_store = TaskStore(self.book_manager.library_root / "task_store.db")
-        self._worker_deps = WorkerDeps(
+        # Bootstrap WorkerDeps without enqueue_followup so TaskEngine can be constructed first,
+        # then rebuild with the enqueue_followup reference and patch the core.
+        _deps_bootstrap = WorkerDeps(
             book_manager=self.book_manager,
             task_store=self._task_store,
             create_workflow_session=lambda book_id: WorkflowSession.from_book(self.book_manager, book_id),
             notify_task_changed=self._enqueue_task_changed,
         )
-        self._task_engine = TaskEngine(store=self._task_store, deps=self._worker_deps, parent=self)
+        self._task_engine = TaskEngine(store=self._task_store, deps=_deps_bootstrap, parent=self)
+        self._worker_deps = WorkerDeps(
+            book_manager=self.book_manager,
+            task_store=self._task_store,
+            create_workflow_session=lambda book_id: WorkflowSession.from_book(self.book_manager, book_id),
+            notify_task_changed=self._enqueue_task_changed,
+            enqueue_followup=self._task_engine.enqueue_followup_task,
+        )
+        self._task_engine._core._deps = self._worker_deps
         self._task_engine.register_handler(BatchTranslationHandler())
         self._task_engine.register_handler(GlossaryExtractionHandler())
         self._task_engine.register_handler(GlossaryReviewHandler())
@@ -96,6 +107,7 @@ class MainWindow(QMainWindow):
         self._task_engine.register_handler(TranslationTextHandler())
         self._task_engine.register_handler(TranslationMangaHandler())
         self._task_engine.register_handler(OCRHandler())
+        self._task_engine.register_handler(ImageReembeddingHandler())
         self._task_engine.running_work_changed.connect(self._on_engine_running_work_changed)
 
         self._sleep_check_timer = QTimer(self)

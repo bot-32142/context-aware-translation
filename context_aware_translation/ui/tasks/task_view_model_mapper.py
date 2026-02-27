@@ -18,6 +18,7 @@ _TASK_TYPE_TITLES: dict[str, str] = {
     "translation_text": "Text Translation",
     "translation_manga": "Manga Translation",
     "ocr": "OCR",
+    "image_reembedding": "Image Reembedding",
 }
 
 

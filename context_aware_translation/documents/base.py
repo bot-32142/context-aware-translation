@@ -174,6 +174,32 @@ class Document(ABC):
         ...
 
     @abstractmethod
+    async def reembed(
+        self,
+        image_reembedding_config: ImageReembeddingConfig,
+        *,
+        force: bool = False,
+        cancel_check: Callable[[], bool] | None = None,
+        progress_callback: ProgressCallback | None = None,
+    ) -> int:
+        """Generate reembedded images for this document using the image generator backend.
+
+        This is the new generation path — it creates reembedded images and persists them
+        to the DB. It uses already-persisted images as a skip-already-done optimization
+        unless force=True.
+
+        Args:
+            image_reembedding_config: Config for the image generator backend.
+            force: If True, regenerate all items even if already cached in DB.
+            cancel_check: Optional cooperative cancellation callback.
+            progress_callback: Optional callback for progress updates.
+
+        Returns:
+            Count of items newly generated (not counting cached hits).
+        """
+        ...
+
+    @abstractmethod
     def can_export(self, export_format: str) -> bool:
         """Check if this document can be exported to the given format.
 

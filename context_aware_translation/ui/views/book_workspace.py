@@ -191,7 +191,7 @@ class BookWorkspace(QWidget):
 
     def _create_import_view(self) -> QWidget:
         """Create the import view."""
-        return ImportView(self.book_manager, self.book_id)
+        return ImportView(self.book_manager, self.book_id, task_engine=self._task_engine)
 
     def _create_ocr_review_view(self) -> QWidget:
         """Create the OCR review view."""
@@ -213,7 +213,7 @@ class BookWorkspace(QWidget):
 
     def _create_export_view(self) -> QWidget:
         """Create the export view."""
-        return ExportView(self.book_manager, self.book_id)
+        return ExportView(self.book_manager, self.book_id, task_engine=self._task_engine)
 
     @staticmethod
     def _is_worker_running(worker: object | None) -> bool:

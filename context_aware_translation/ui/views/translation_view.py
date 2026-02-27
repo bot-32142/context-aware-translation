@@ -28,6 +28,7 @@ from context_aware_translation.documents.base import is_ocr_required_for_type
 from context_aware_translation.storage.book_db import SQLiteBookDB, TranslationChunkRecord
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.document_repository import DocumentRepository
+from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 from context_aware_translation.workflow.tasks.models import (
     TERMINAL_TASK_STATUSES,
     TaskAction,
@@ -1082,6 +1083,17 @@ class TranslationView(QWidget):
     def _save_chunk_translation(self) -> None:
         """Save edited translation to database."""
         if not self._current_chunk:
+            return
+
+        doc_id = getattr(self._current_chunk, "document_id", None)
+        claim_key = str(doc_id) if doc_id is not None else "*"
+        wanted = frozenset({ResourceClaim("doc", self.book_id, claim_key, ClaimMode.WRITE_EXCLUSIVE)})
+        if self._task_engine.has_active_claims(self.book_id, wanted):
+            QMessageBox.warning(
+                self,
+                self.tr("Save Unavailable"),
+                self.tr("Cannot save while tasks are actively modifying this document."),
+            )
             return
 
         new_translation = self.translation_text.toPlainText()

@@ -73,6 +73,21 @@ class TaskEngine(QObject):
     # Mutation APIs
     # ------------------------------------------------------------------
 
+    def enqueue_followup_task(self, task_type: str, book_id: str, **params: object) -> None:
+        """Submit a follow-up task (queued only, no immediate start).
+
+        Used by workers to chain tasks (e.g., translation -> reembedding).
+        Failures are logged and re-raised so caller workers can surface
+        partial-success state (e.g. completed_with_errors).
+        """
+        try:
+            record = self._core.submit(task_type, book_id, **params)
+            logger.info("Follow-up %s task %s enqueued for book %s", task_type, record.task_id, book_id)
+            self.enqueue_task_changed.emit(book_id)
+        except Exception:
+            logger.warning("Failed to enqueue follow-up %s for book %s", task_type, book_id, exc_info=True)
+            raise
+
     def submit(self, task_type: str, book_id: str, **params) -> TaskRecord:
         """Create a new task row then best-effort start it."""
         record = self._core.submit(task_type, book_id, **params)

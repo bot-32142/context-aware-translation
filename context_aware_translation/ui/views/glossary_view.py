@@ -424,6 +424,16 @@ class GlossaryView(QWidget):
         )
         return bool(self._task_engine.has_active_claims(self.book_id, wanted))
 
+    def _guard_glossary_mutation(self, title: str) -> bool:
+        if not self._has_glossary_mutation_claim_conflict():
+            return True
+        QMessageBox.warning(
+            self,
+            title,
+            self.tr("Cannot modify glossary terms while other glossary tasks are active."),
+        )
+        return False
+
     def _update_filter_rare_button_state(self) -> None:
         """Enable/disable Filter Rare based on active glossary claim conflicts."""
         if self._has_glossary_mutation_claim_conflict():
@@ -1063,6 +1073,8 @@ class GlossaryView(QWidget):
 
     def _on_mark_reviewed(self) -> None:
         """Mark selected terms as reviewed."""
+        if not self._guard_glossary_mutation(self.tr("Action Unavailable")):
+            return
         keys = self._get_selected_keys()
         if not keys:
             QMessageBox.warning(self, self.tr("No Selection"), self.tr("Please select terms to mark as reviewed."))
@@ -1081,6 +1093,8 @@ class GlossaryView(QWidget):
 
     def _on_unmark_reviewed(self) -> None:
         """Unmark selected terms as reviewed."""
+        if not self._guard_glossary_mutation(self.tr("Action Unavailable")):
+            return
         keys = self._get_selected_keys()
         if not keys:
             QMessageBox.warning(self, self.tr("No Selection"), self.tr("Please select terms to unmark as reviewed."))
@@ -1099,6 +1113,8 @@ class GlossaryView(QWidget):
 
     def _on_mark_ignored(self) -> None:
         """Mark selected terms as ignored."""
+        if not self._guard_glossary_mutation(self.tr("Action Unavailable")):
+            return
         keys = self._get_selected_keys()
         if not keys:
             QMessageBox.warning(self, self.tr("No Selection"), self.tr("Please select terms to mark as ignored."))
@@ -1117,6 +1133,8 @@ class GlossaryView(QWidget):
 
     def _on_unmark_ignored(self) -> None:
         """Unmark selected terms as ignored."""
+        if not self._guard_glossary_mutation(self.tr("Action Unavailable")):
+            return
         keys = self._get_selected_keys()
         if not keys:
             QMessageBox.warning(self, self.tr("No Selection"), self.tr("Please select terms to unmark as ignored."))
@@ -1212,6 +1230,8 @@ class GlossaryView(QWidget):
 
     def _on_delete_selected(self) -> None:
         """Delete selected terms."""
+        if not self._guard_glossary_mutation(self.tr("Delete Unavailable")):
+            return
         keys = self._get_selected_keys()
         if not keys:
             QMessageBox.warning(self, self.tr("No Selection"), self.tr("Please select terms to delete."))
