@@ -25,6 +25,7 @@ from ..tasks.task_view_model_mapper import map_tasks_to_row_vms
 from ..tasks.task_view_models import TaskRowVM
 
 _AUTO_REFRESH_INTERVAL_MS = 3000
+_DEFAULT_STRIP_MAX_VISIBLE = 3
 
 # Status → CSS background color for the chip label
 _STATUS_COLORS: dict[str, str] = {
@@ -391,8 +392,8 @@ class _MiniCard(QFrame):
 class TaskStatusStrip(QWidget):
     """Vertical strip of mini-cards, one per active/recent task.
 
-    Shows ALL tasks matching task_types (not just the most recent).
-    Intended for the Translation tab where multiple task types may be active.
+    Shows only the newest N tasks matching task_types (default: 3), to keep
+    inline status readable. Full history remains available in Activity panel.
 
     Signals:
         open_activity_requested(): emitted when any mini-card's Open Activity is clicked.
@@ -405,12 +406,14 @@ class TaskStatusStrip(QWidget):
         task_engine,
         book_id: str,
         task_types: list[str],
+        max_visible: int = _DEFAULT_STRIP_MAX_VISIBLE,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._engine = task_engine
         self._book_id = book_id
         self._task_types = list(task_types)
+        self._max_visible = max(1, int(max_visible))
         self._cards: dict[str, _MiniCard] = {}  # task_id -> card
 
         self._init_ui()
@@ -434,7 +437,7 @@ class TaskStatusStrip(QWidget):
         for tt in self._task_types:
             records.extend(self._engine.get_tasks(self._book_id, task_type=tt))
         records.sort(key=lambda r: r.updated_at, reverse=True)
-        vms = map_tasks_to_row_vms(records)
+        vms = map_tasks_to_row_vms(records)[: self._max_visible]
 
         if not vms:
             self.setVisible(False)

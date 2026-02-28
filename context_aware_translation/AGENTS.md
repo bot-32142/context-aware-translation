@@ -40,7 +40,7 @@ Core package for LLM-powered document translation with context-aware glossary ma
 - `ocr_dpi`: 150 default (72-300 range)
 
 **Architecture:**
-- `workflow/service.py` is the main orchestrator (WorkflowService)
+- `workflow/ops/*.py` contains workflow domain operations (translation/glossary/ocr/export/bootstrap)
 - `workflow/tasks/engine_core.py` is the pure-Python task scheduling engine (no Qt)
 - Task handlers in `workflow/tasks/handlers/` implement task_type-specific logic
 - UI workers in `ui/workers/` bridge Qt signals to task engine
@@ -53,7 +53,7 @@ Core package for LLM-powered document translation with context-aware glossary ma
 
 **Entry Points:**
 - UI: `ui.main:main` (PySide6 GUI application)
-- Workflow: `workflow.service:WorkflowService` (programmatic translation)
+- Workflow ops: `workflow/ops/translation_ops.py` (programmatic translation operations)
 
 ### Testing Requirements
 

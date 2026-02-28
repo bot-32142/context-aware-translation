@@ -6,7 +6,7 @@ from pathlib import Path
 
 from context_aware_translation.core.progress import ProgressUpdate, WorkflowStep
 from context_aware_translation.storage.book_manager import BookManager
-from context_aware_translation.workflow.services import export_ops
+from context_aware_translation.workflow.ops import export_ops
 from context_aware_translation.workflow.session import WorkflowSession
 
 from .base_worker import BaseWorker

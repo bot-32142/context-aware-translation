@@ -466,3 +466,20 @@ def test_strip_multiple_task_types():
     engine.get_tasks.side_effect = _get_tasks
     strip = _make_strip(engine=engine, task_types=["batch_translation", "translation_text"])
     assert len(strip._cards) == 2
+
+
+def test_strip_shows_only_latest_three_tasks():
+    now = time.time()
+    r1 = _make_record(task_id="t1", status="running", updated_at=now + 5)
+    r2 = _make_record(task_id="t2", status="queued", updated_at=now + 4)
+    r3 = _make_record(task_id="t3", status="completed", updated_at=now + 3)
+    r4 = _make_record(task_id="t4", status="failed", updated_at=now + 2)
+    r5 = _make_record(task_id="t5", status="cancelled", updated_at=now + 1)
+    engine = _make_engine(records=[r1, r2, r3, r4, r5])
+
+    strip = _make_strip(engine=engine)
+
+    assert len(strip._cards) == 3
+    assert set(strip._cards.keys()) == {"t1", "t2", "t3"}
+    assert "t4" not in strip._cards
+    assert "t5" not in strip._cards

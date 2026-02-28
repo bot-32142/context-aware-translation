@@ -217,7 +217,7 @@ def claims(self, record, payload):
 - `context_aware_translation.workflow.tasks.execution.batch_translation_ops` - Batch operations utilities
 - `context_aware_translation.storage.task_store` - TaskRecord interface
 - `context_aware_translation.storage.book_manager` - BookManager for config snapshots
-- `context_aware_translation.workflow.service` - WorkflowService for domain operations
+- `context_aware_translation.workflow.ops` - Workflow operation modules for domain operations
 
 **External:**
 - `json` - payload serialization

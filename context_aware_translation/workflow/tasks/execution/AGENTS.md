@@ -99,7 +99,7 @@ new_payload = new_payload_stage(
 ### Key Dependencies
 
 **Internal:**
-- `context_aware_translation.workflow.service` - WorkflowService for batch translation operations
+- `context_aware_translation.workflow.ops` - Workflow operation modules for batch translation operations
 - `context_aware_translation.storage.task_store` - TaskStore, TaskRecord persistence
 - `context_aware_translation.storage.llm_batch_store` - LLMBatchStore for batch job persistence
 - `context_aware_translation.llm.batch_jobs` - GeminiBatchJobGateway for Gemini API

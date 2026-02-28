@@ -12,7 +12,7 @@ from context_aware_translation.storage.book_db import SQLiteBookDB
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.document_repository import DocumentRepository
 from context_aware_translation.storage.task_store import TaskStore
-from context_aware_translation.workflow.services import translation_ops
+from context_aware_translation.workflow.ops import translation_ops
 from context_aware_translation.workflow.session import WorkflowSession
 from context_aware_translation.workflow.tasks.models import STATUS_COMPLETED_WITH_ERRORS
 

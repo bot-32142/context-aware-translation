@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from context_aware_translation.workflow.ops import bootstrap_ops
 from context_aware_translation.workflow.runtime import WorkflowContext
-from context_aware_translation.workflow.services import bootstrap_ops
 
 
 @pytest.fixture(autouse=True)

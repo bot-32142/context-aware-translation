@@ -6,14 +6,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from context_aware_translation.config import TranslatorBatchConfig
-from context_aware_translation.workflow.runtime import WorkflowContext
-from context_aware_translation.workflow.services import (
+from context_aware_translation.workflow.ops import (
     bootstrap_ops,
     export_ops,
     glossary_ops,
     ocr_ops,
     translation_ops,
 )
+from context_aware_translation.workflow.runtime import WorkflowContext
 
 
 @pytest.mark.asyncio
@@ -219,7 +219,7 @@ async def test_translate_glossary_detects_source_language_from_terms_when_missin
         db=db,
         document_repo=MagicMock(),
     )
-    with patch("context_aware_translation.workflow.services.bootstrap_ops.load_documents", return_value=[]):
+    with patch("context_aware_translation.workflow.ops.bootstrap_ops.load_documents", return_value=[]):
         await glossary_ops.translate_glossary(service, cancel_check=None)
 
     detector.detect.assert_awaited_once()
@@ -270,7 +270,7 @@ async def test_translate_glossary_uses_ready_non_ocr_documents_for_language_dete
         document_repo=MagicMock(),
     )
     with patch(
-        "context_aware_translation.workflow.services.bootstrap_ops.load_documents",
+        "context_aware_translation.workflow.ops.bootstrap_ops.load_documents",
         return_value=[ready_text_doc, pending_ocr_doc],
     ):
         await glossary_ops.translate_glossary(service, cancel_check=None)
@@ -309,7 +309,7 @@ async def test_ensure_glossary_source_language_propagates_non_missing_detect_lan
         document_repo=MagicMock(),
     )
     with (
-        patch("context_aware_translation.workflow.services.bootstrap_ops.load_documents", return_value=[]),
+        patch("context_aware_translation.workflow.ops.bootstrap_ops.load_documents", return_value=[]),
         pytest.raises(ValueError, match="LLM unavailable"),
     ):
         await bootstrap_ops.ensure_glossary_source_language(service, cancel_check=None)
@@ -492,7 +492,7 @@ async def test_export_strict_mode_raises_for_untranslated_chunks(tmp_path):
         document_repo=MagicMock(),
     )
     with (
-        patch("context_aware_translation.workflow.services.bootstrap_ops.load_documents", return_value=[fake_doc]),
+        patch("context_aware_translation.workflow.ops.bootstrap_ops.load_documents", return_value=[fake_doc]),
         pytest.raises(ValueError, match="not translated"),
     ):
         await export_ops.export(
@@ -529,7 +529,7 @@ async def test_export_fallback_mode_merges_translated_and_original_chunks(tmp_pa
         db=db,
         document_repo=MagicMock(),
     )
-    with patch("context_aware_translation.workflow.services.bootstrap_ops.load_documents", return_value=[fake_doc]):
+    with patch("context_aware_translation.workflow.ops.bootstrap_ops.load_documents", return_value=[fake_doc]):
         await export_ops.export(
             service,
             file_path=tmp_path / "out.txt",
@@ -565,7 +565,7 @@ async def test_export_fallback_mode_for_manga_keeps_untranslated_pages_unreembed
         db=db,
         document_repo=MagicMock(),
     )
-    with patch("context_aware_translation.workflow.services.bootstrap_ops.load_documents", return_value=[fake_doc]):
+    with patch("context_aware_translation.workflow.ops.bootstrap_ops.load_documents", return_value=[fake_doc]):
         await export_ops.export(
             service,
             file_path=tmp_path / "out.cbz",

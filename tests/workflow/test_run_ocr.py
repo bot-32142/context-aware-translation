@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from context_aware_translation.documents.base import Document
+from context_aware_translation.workflow.ops import ocr_ops
 from context_aware_translation.workflow.runtime import WorkflowContext
-from context_aware_translation.workflow.services import ocr_ops
 
 
 @pytest.mark.asyncio

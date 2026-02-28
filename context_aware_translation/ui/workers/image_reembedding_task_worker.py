@@ -10,8 +10,8 @@ from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.core.progress import ProgressUpdate
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.task_store import TaskStore
+from context_aware_translation.workflow.ops import bootstrap_ops, export_ops
 from context_aware_translation.workflow.runtime import WorkflowContext
-from context_aware_translation.workflow.services import bootstrap_ops, export_ops
 from context_aware_translation.workflow.session import WorkflowSession
 
 from .base_worker import BaseWorker

@@ -4,7 +4,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from context_aware_translation.core.progress import ProgressCallback
-from context_aware_translation.workflow.services import bootstrap_ops
+from context_aware_translation.workflow.ops import bootstrap_ops
 
 if TYPE_CHECKING:
     from context_aware_translation.workflow.runtime import WorkflowContext

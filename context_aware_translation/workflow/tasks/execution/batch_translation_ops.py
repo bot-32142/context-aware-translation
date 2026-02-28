@@ -28,7 +28,7 @@ from context_aware_translation.llm.translator import (
 )
 from context_aware_translation.storage.llm_batch_store import STATUS_FAILED, STATUS_SUBMITTED
 from context_aware_translation.storage.task_store import TaskRecord
-from context_aware_translation.workflow.services import bootstrap_ops, translation_ops
+from context_aware_translation.workflow.ops import bootstrap_ops, translation_ops
 from context_aware_translation.workflow.tasks.models import (
     PHASE_APPLY,
     PHASE_DONE,

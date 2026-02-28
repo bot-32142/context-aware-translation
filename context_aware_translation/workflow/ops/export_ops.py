@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from context_aware_translation.core.progress import ProgressCallback, ProgressUpdate, WorkflowStep
 from context_aware_translation.documents.base import Document
-from context_aware_translation.workflow.services import bootstrap_ops
+from context_aware_translation.workflow.ops import bootstrap_ops
 
 if TYPE_CHECKING:
     from context_aware_translation.workflow.runtime import WorkflowContext

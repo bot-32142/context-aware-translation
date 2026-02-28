@@ -160,7 +160,7 @@ class TranslationView(QWidget):
         batch_action_layout.addWidget(self.submit_batch_btn)
         layout.addLayout(batch_action_layout)
 
-        # Inline status strip — shows all active/recent translation tasks
+        # Inline status strip — show only a small recent slice (full list in Activity panel)
         self.task_status_strip = TaskStatusStrip(
             task_engine=self._task_engine,
             book_id=self.book_id,

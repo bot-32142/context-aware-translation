@@ -12,8 +12,8 @@ from context_aware_translation.documents.manga import MangaDocument
 from context_aware_translation.documents.pdf import PDFDocument
 from context_aware_translation.documents.scanned_book import ScannedBookDocument
 from context_aware_translation.documents.text import TextDocument
+from context_aware_translation.workflow.ops import bootstrap_ops
 from context_aware_translation.workflow.runtime import WorkflowContext
-from context_aware_translation.workflow.services import bootstrap_ops
 
 # =========================================================================
 # Flag value tests
@@ -74,7 +74,7 @@ async def test_epub_with_pending_ocr_proceeds_through_process_document():
     document.get_text.return_value = "Hello world"
     document.mark_text_added = MagicMock()
 
-    with patch("context_aware_translation.workflow.services.bootstrap_ops.load_documents", return_value=[document]):
+    with patch("context_aware_translation.workflow.ops.bootstrap_ops.load_documents", return_value=[document]):
         await bootstrap_ops.process_document(context)
 
     document.get_text.assert_called_once()
@@ -93,7 +93,7 @@ async def test_non_epub_with_pending_ocr_raises_error():
     document.is_ocr_completed.return_value = False
 
     with (
-        patch("context_aware_translation.workflow.services.bootstrap_ops.load_documents", return_value=[document]),
+        patch("context_aware_translation.workflow.ops.bootstrap_ops.load_documents", return_value=[document]),
         pytest.raises(ValueError, match="has not completed OCR"),
     ):
         await bootstrap_ops.process_document(context)
@@ -113,7 +113,7 @@ async def test_epub_with_completed_ocr_also_works():
     document.get_text.return_value = "Hello world"
     document.mark_text_added = MagicMock()
 
-    with patch("context_aware_translation.workflow.services.bootstrap_ops.load_documents", return_value=[document]):
+    with patch("context_aware_translation.workflow.ops.bootstrap_ops.load_documents", return_value=[document]):
         await bootstrap_ops.process_document(context)
 
     document.get_text.assert_called_once()

@@ -5392,38 +5392,38 @@ Do you want to continue?</source>
 <context>
     <name>TaskStatusCard</name>
     <message>
-        <location filename="../widgets/task_status_card.py" line="151"/>
+        <location filename="../widgets/task_status_card.py" line="152"/>
         <source>Open Activity</source>
         <translation>打开活动</translation>
     </message>
     <message>
-        <location filename="../widgets/task_status_card.py" line="152"/>
+        <location filename="../widgets/task_status_card.py" line="153"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
     <message>
-        <location filename="../widgets/task_status_card.py" line="153"/>
-        <location filename="../widgets/task_status_card.py" line="253"/>
+        <location filename="../widgets/task_status_card.py" line="154"/>
+        <location filename="../widgets/task_status_card.py" line="254"/>
         <source>Run</source>
         <translation>运行</translation>
     </message>
     <message>
-        <location filename="../widgets/task_status_card.py" line="54"/>
+        <location filename="../widgets/task_status_card.py" line="55"/>
         <source>{0}/{1} items</source>
         <translation>{0}/{1}项</translation>
     </message>
     <message>
-        <location filename="../widgets/task_status_card.py" line="224"/>
+        <location filename="../widgets/task_status_card.py" line="225"/>
         <source>Phase: {0}</source>
         <translation>阶段：{0}</translation>
     </message>
     <message>
-        <location filename="../widgets/task_status_card.py" line="236"/>
+        <location filename="../widgets/task_status_card.py" line="237"/>
         <source>Last error: {0}</source>
         <translation>最后错误：{0}</translation>
     </message>
     <message>
-        <location filename="../widgets/task_status_card.py" line="251"/>
+        <location filename="../widgets/task_status_card.py" line="252"/>
         <source>Retry</source>
         <translation>重试</translation>
     </message>
@@ -6397,12 +6397,12 @@ Non-empty OCR pages: %1, chunks: %2</source>
 <context>
     <name>_MiniCard</name>
     <message>
-        <location filename="../widgets/task_status_card.py" line="382"/>
+        <location filename="../widgets/task_status_card.py" line="383"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
     <message>
-        <location filename="../widgets/task_status_card.py" line="383"/>
+        <location filename="../widgets/task_status_card.py" line="384"/>
         <source>Open Activity</source>
         <translation>打开活动</translation>
     </message>
