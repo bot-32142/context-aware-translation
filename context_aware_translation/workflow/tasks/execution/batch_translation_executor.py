@@ -12,7 +12,16 @@ from context_aware_translation.config import TranslatorBatchConfig, TranslatorCo
 from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.core.progress import ProgressCallback
 from context_aware_translation.llm.batch_jobs import GeminiBatchJobGateway
-from context_aware_translation.storage.llm_batch_store import LLMBatchStore
+from context_aware_translation.llm.batch_jobs.base import POLL_STATUS_COMPLETED
+from context_aware_translation.storage.llm_batch_store import (
+    STATUS_COMPLETED as LLM_BATCH_STATUS_COMPLETED,
+)
+from context_aware_translation.storage.llm_batch_store import (
+    STATUS_FAILED as LLM_BATCH_STATUS_FAILED,
+)
+from context_aware_translation.storage.llm_batch_store import (
+    LLMBatchStore,
+)
 from context_aware_translation.storage.task_store import TaskRecord, TaskStore
 from context_aware_translation.workflow.service import WorkflowService
 from context_aware_translation.workflow.tasks.execution.batch_translation_ops import (
@@ -293,6 +302,7 @@ class BatchTranslationExecutor:
             )
 
         model = str(payload.get("model") or batch_config.model or "")
+        batch_hashes = self._collect_batch_request_hashes(payload)
         for display_name in display_names:
             try:
                 resolved_names = await self.gateway.find_batch_names(
@@ -318,6 +328,52 @@ class BatchTranslationExecutor:
         has_active_batches = False
         last_error: str | None = None
         for batch_name in batch_names:
+            request_hashes = batch_hashes.get(batch_name, set())
+            if request_hashes:
+                try:
+                    poll_result = await self.gateway.poll_once(
+                        batch_config=batch_config,
+                        batch_name=batch_name,
+                        request_hashes=set(request_hashes),
+                        batch_store=self.llm_batch_store,
+                    )
+                    if poll_result.status == POLL_STATUS_COMPLETED:
+                        logger.info(
+                            "Recovered %d cached responses from provider batch %s before cancellation.",
+                            len(request_hashes),
+                            batch_name,
+                        )
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to recover responses for provider batch %s before cancel of task %s: %s",
+                        batch_name,
+                        task_id,
+                        exc,
+                    )
+
+            try:
+                pre_state = await self.gateway.get_batch_state(
+                    batch_config=batch_config,
+                    batch_name=batch_name,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to inspect Gemini batch %s before cancel for task %s: %s",
+                    batch_name,
+                    task_id,
+                    exc,
+                )
+                has_active_batches = True
+                if last_error is None:
+                    last_error = f"{type(exc).__name__}: {exc}"
+                continue
+
+            # Never issue cancel for terminal provider states. Some providers
+            # surface terminal-completed jobs as cancelled when cancel is sent
+            # late; that is noisy and can confuse users.
+            if pre_state not in _ACTIVE_PROVIDER_BATCH_STATES:
+                continue
+
             try:
                 await self.gateway.cancel_batch(
                     batch_config=batch_config,
@@ -507,6 +563,91 @@ class BatchTranslationExecutor:
 
     def _decode_payload(self, task: TaskRecord) -> dict[str, Any]:
         return decode_task_payload(task)
+
+    def persist_poll_progress(
+        self,
+        task_id: str,
+        payload: dict[str, Any],
+        *,
+        stage: str,
+        phase: str,
+    ) -> TaskRecord:
+        """Persist poll-phase counters from llm_batch_store cache state.
+
+        This updates only row-level counters/phase/status and avoids rewriting
+        potentially large payload_json on every poll tick.
+        """
+        items = payload.get("items")
+        if not isinstance(items, list):
+            items = []
+
+        if stage == "polish":
+            relevant = [item for item in items if is_item_translation_success(item)]
+        else:
+            relevant = [item for item in items if isinstance(item, dict)]
+
+        total_items = len(relevant)
+        completed_items = 0
+        failed_items = 0
+
+        for item in relevant:
+            sd = item.get(stage) if isinstance(item, dict) else None
+            if not isinstance(sd, dict):
+                continue
+
+            # If in-memory payload already left "pending", trust that first.
+            state = str(sd.get("state") or "")
+            if state and state != "pending":
+                completed_items += 1
+                if state == "failed":
+                    failed_items += 1
+                continue
+
+            request_hash = sd.get("request_hash")
+            if not isinstance(request_hash, str) or not request_hash:
+                continue
+            record = self.llm_batch_store.get(request_hash)
+            if record is None:
+                continue
+            if record.status == LLM_BATCH_STATUS_COMPLETED:
+                completed_items += 1
+            elif record.status == LLM_BATCH_STATUS_FAILED:
+                completed_items += 1
+                failed_items += 1
+
+        return self._persist(
+            task_id,
+            status=STATUS_RUNNING,
+            phase=phase,
+            total_items=total_items,
+            completed_items=completed_items,
+            failed_items=failed_items,
+        )
+
+    @staticmethod
+    def _collect_batch_request_hashes(payload: dict[str, Any]) -> dict[str, set[str]]:
+        batch_hashes: dict[str, set[str]] = {}
+        for stage in ("translation", "polish"):
+            stage_meta = payload.get(stage)
+            if not isinstance(stage_meta, dict):
+                continue
+            jobs = stage_meta.get("jobs")
+            if not isinstance(jobs, list):
+                continue
+            for job in jobs:
+                if not isinstance(job, dict):
+                    continue
+                batch_name = job.get("batch_name")
+                request_hashes = job.get("request_hashes")
+                if not isinstance(batch_name, str) or not batch_name:
+                    continue
+                if not isinstance(request_hashes, list):
+                    continue
+                bucket = batch_hashes.setdefault(batch_name, set())
+                for request_hash in request_hashes:
+                    if isinstance(request_hash, str) and request_hash:
+                        bucket.add(request_hash)
+        return batch_hashes
 
     @staticmethod
     def _collect_remote_cleanup_targets(payload: dict[str, Any]) -> tuple[list[str], list[str]]:

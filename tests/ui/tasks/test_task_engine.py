@@ -247,6 +247,23 @@ def test_submit_emits_running_work_changed_immediately_without_tick(engine):
     assert emissions == [True]
 
 
+def test_rerun_emits_running_work_changed_immediately_without_tick(engine, tmp_store):
+    handler = _make_handler("rerunnable", can_run=True)
+    worker = handler.build_worker.return_value
+    worker.isRunning.return_value = True
+    engine.register_handler(handler)
+
+    # rerun() requires a terminal status task
+    record = tmp_store.create(book_id="book-rerun", task_type="rerunnable", status="failed")
+
+    emissions: list[bool] = []
+    engine.running_work_changed.connect(emissions.append)
+
+    engine.rerun(record.task_id)
+
+    assert emissions == [True]
+
+
 def test_cancel_emits_running_work_changed_when_cancel_worker_starts(engine, tmp_store):
     handler = _make_handler("cancelable", can_run=True)
     worker = handler.build_worker.return_value
@@ -260,6 +277,47 @@ def test_cancel_emits_running_work_changed_when_cancel_worker_starts(engine, tmp
     engine.cancel(record.task_id)
 
     assert emissions == [True]
+
+
+def test_delete_does_not_emit_running_work_changed_when_state_unchanged(engine, tmp_store):
+    handler = _make_handler("deletable", can_run=True)
+    engine.register_handler(handler)
+    record = tmp_store.create(book_id="book-delete", task_type="deletable", status="queued")
+
+    emissions: list[bool] = []
+    engine.running_work_changed.connect(emissions.append)
+
+    engine.delete(record.task_id)
+
+    # delete() must not emit when there was no running work transition.
+    assert emissions == []
+
+
+def test_cancel_running_tasks_emits_running_work_changed_when_worker_stops_immediately(engine, tmp_store):
+    handler = _make_handler("cancel-now", can_run=True)
+    engine.register_handler(handler)
+    record = tmp_store.create(book_id="book-cancel-now", task_type="cancel-now", status="running")
+
+    worker_mock = MagicMock()
+    worker_mock.isRunning.return_value = True
+
+    # Simulate immediate stop on interruption so running state flips in
+    # cancel_running_tasks() action path without waiting for tick().
+    def _stop_now():
+        engine._core._active_workers.pop(record.task_id, None)
+        engine._core._active_claims.pop(record.task_id, None)
+
+    worker_mock.requestInterruption.side_effect = _stop_now
+    engine._core._active_workers[record.task_id] = worker_mock
+    engine._core._active_claims[record.task_id] = frozenset()
+    engine._was_running = True
+
+    emissions: list[bool] = []
+    engine.running_work_changed.connect(emissions.append)
+
+    engine.cancel_running_tasks("book-cancel-now")
+
+    assert emissions == [False]
 
 
 # ------------------------------------------------------------------

@@ -5,7 +5,7 @@ import hashlib
 import json
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypedDict
 
@@ -497,6 +497,7 @@ async def _execute_stage(
     translator_config = service.translator_config()
     batch_config = service.batch_config()
     batch_size = max(1, int(batch_config.batch_size))
+    stage_concurrency = _resolve_stage_concurrency(translator_config)
 
     task = service.persist_payload(task_id, payload, phase=spec.phase_submit, status=STATUS_RUNNING)
     stage_meta: PayloadStage = payload[spec.stage]
@@ -521,6 +522,7 @@ async def _execute_stage(
                 task,
                 payload,
                 stage=spec.stage,
+                phase_poll=spec.phase_poll,
                 batch_name=batch_name,
                 request_hashes=job_hashes,
                 submitted_at=job["submitted_at"],
@@ -607,6 +609,7 @@ async def _execute_stage(
                 task,
                 payload,
                 stage=spec.stage,
+                phase_poll=spec.phase_poll,
                 batch_name=batch_name,
                 request_hashes=slice_hashes,
                 submitted_at=active_job["submitted_at"],
@@ -622,10 +625,12 @@ async def _execute_stage(
             unresolved = set(_ordered_pending_stage_hashes(service, items, spec=spec))
 
     task = service.persist_payload(task_id, payload, phase=spec.phase_validate, status=STATUS_RUNNING)
-    for item in items:
+
+    async def _validate_item(item: dict[str, Any]) -> None:
         sd: StageItemState = item[spec.stage]
         if sd.get("state") != "pending":
-            continue
+            return
+
         service.raise_if_local_pause(task_id, cancel_check)
 
         item_hash: str | None = sd["request_hash"]
@@ -633,7 +638,7 @@ async def _execute_stage(
             sd["state"] = "failed"
             sd["error"] = f"Missing {spec.stage} request hash."
             service.persist_payload(task_id, payload, phase=spec.phase_validate, status=STATUS_RUNNING)
-            continue
+            return
 
         raw = service.llm_batch_store.get_completed_response(item_hash)
         if raw is None:
@@ -645,10 +650,9 @@ async def _execute_stage(
                 sd["state"] = "failed"
                 sd["error"] = f"Batch {spec.stage} response unavailable."
             service.persist_payload(task_id, payload, phase=spec.phase_validate, status=STATUS_RUNNING)
-            continue
+            return
 
         messages = sd["messages"]
-
         try:
             blocks = await validated_chat(
                 list(messages or []),
@@ -670,16 +674,25 @@ async def _execute_stage(
             sd["error"] = f"{type(exc).__name__}: {exc}"
         service.persist_payload(task_id, payload, phase=spec.phase_validate, status=STATUS_RUNNING)
 
+    await _run_items_with_concurrency(
+        items=[item for item in items if item[spec.stage].get("state") == "pending"],
+        concurrency=stage_concurrency,
+        worker=_validate_item,
+    )
+
     task = service.persist_payload(task_id, payload, phase=spec.phase_fallback, status=STATUS_RUNNING)
-    for item in items:
+
+    async def _fallback_item(item: dict[str, Any]) -> None:
         sd_fb: StageItemState = item[spec.stage]
         if sd_fb.get("state") != "failed" or bool(sd_fb.get("fallback_attempted")):
-            continue
+            return
         if spec.fallback_requires_translation_success and not is_item_translation_success(item):
-            continue
+            return
+
         current = service.task_store.get(task_id)
         if current is not None and current.cancel_requested:
-            continue
+            return
+
         service.raise_if_local_pause(task_id, cancel_check)
         sd_fb["fallback_attempted"] = True
 
@@ -704,12 +717,75 @@ async def _execute_stage(
             sd_fb["error"] = f"{type(exc).__name__}: {exc}"
         service.persist_payload(task_id, payload, phase=spec.phase_fallback, status=STATUS_RUNNING)
 
+    await _run_items_with_concurrency(
+        items=[item for item in items if item[spec.stage].get("state") == "failed"],
+        concurrency=stage_concurrency,
+        worker=_fallback_item,
+    )
+
     # Always checkpoint final stage output before returning to the caller.
     # Without this boundary persist, app shutdown between stages can replay
     # validation/fallback work after restart.
     service.persist_payload(task_id, payload, phase=spec.phase_fallback, status=STATUS_RUNNING)
 
     return payload
+
+
+def _resolve_stage_concurrency(translator_config: Any) -> int:
+    raw_value = getattr(translator_config, "concurrency", 1)
+    try:
+        resolved = int(raw_value)
+    except (TypeError, ValueError):
+        logger.warning("Invalid translator concurrency %r; using 1 for batch validation/fallback.", raw_value)
+        return 1
+    return max(1, resolved)
+
+
+async def _run_items_with_concurrency(
+    *,
+    items: list[dict[str, Any]],
+    concurrency: int,
+    worker: Callable[[dict[str, Any]], Awaitable[None]],
+) -> None:
+    if not items:
+        return
+
+    limit = max(1, int(concurrency))
+    if limit == 1:
+        for item in items:
+            await worker(item)
+        return
+
+    iterator = iter(items)
+    in_flight: set[asyncio.Task[None]] = set()
+
+    def _start_next() -> bool:
+        try:
+            item = next(iterator)
+        except StopIteration:
+            return False
+        in_flight.add(asyncio.create_task(worker(item)))
+        return True
+
+    while len(in_flight) < limit and _start_next():
+        pass
+
+    while in_flight:
+        done, pending = await asyncio.wait(in_flight, return_when=asyncio.FIRST_COMPLETED)
+        in_flight = set(pending)
+
+        for completed in done:
+            try:
+                completed.result()
+            except Exception:
+                for task in in_flight:
+                    task.cancel()
+                if in_flight:
+                    await asyncio.gather(*in_flight, return_exceptions=True)
+                raise
+
+        while len(in_flight) < limit and _start_next():
+            pass
 
 
 _POLL_TIMEOUT_SEC = 24 * 60 * 60  # 24 hours
@@ -721,6 +797,7 @@ async def poll_until_terminal(
     payload: dict[str, Any],
     *,
     stage: str,
+    phase_poll: str,
     batch_name: str,
     request_hashes: set[str],
     submitted_at: float,
@@ -751,6 +828,15 @@ async def poll_until_terminal(
             batch_name=batch_name,
             request_hashes=request_hashes,
             batch_store=service.llm_batch_store,
+        )
+
+        # Keep UI counters live during poll by deriving completion from the
+        # cache (completed/failed request hashes), without payload rewrites.
+        service.persist_poll_progress(
+            task_id,
+            payload,
+            stage=stage,
+            phase=phase_poll,
         )
 
         if progress_callback:

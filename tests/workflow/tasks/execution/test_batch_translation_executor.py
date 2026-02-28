@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -23,6 +24,7 @@ from context_aware_translation.workflow.tasks.execution.batch_translation_ops im
 )
 from context_aware_translation.workflow.tasks.models import (
     PHASE_DONE,
+    PHASE_POLISH_POLL,
     PHASE_PREPARE,
     STATUS_CANCELLED,
     STATUS_CANCELLING,
@@ -108,6 +110,46 @@ def test_cleanup_remote_artifacts_returns_warnings_on_remote_failure(tmp_path):
         executor.close()
 
 
+def test_persist_poll_progress_uses_cached_polish_responses(tmp_path):
+    executor = _build_executor(tmp_path)
+    try:
+        created = _create_task(executor, book_id="book-1")
+        payload = {
+            "items": [
+                {
+                    "translation": {"state": "succeeded"},
+                    "polish": {"state": "pending", "request_hash": "h1"},
+                },
+                {
+                    "translation": {"state": "succeeded"},
+                    "polish": {"state": "pending", "request_hash": "h2"},
+                },
+                {
+                    "translation": {"state": "succeeded"},
+                    "polish": {"state": "pending", "request_hash": "h3"},
+                },
+            ]
+        }
+        executor.llm_batch_store.upsert_completed("h1", "gemini_ai_studio", '{"ok":1}', batch_name="batches/p")
+        executor.llm_batch_store.upsert_failed("h2", "gemini_ai_studio", "failed", batch_name="batches/p")
+        executor.llm_batch_store.upsert_submitted("h3", "gemini_ai_studio", "batches/p")
+
+        result = executor.persist_poll_progress(
+            created.task_id,
+            payload,
+            stage="polish",
+            phase=PHASE_POLISH_POLL,
+        )
+
+        assert result.phase == PHASE_POLISH_POLL
+        assert result.status == "running"
+        assert result.total_items == 3
+        assert result.completed_items == 2
+        assert result.failed_items == 1
+    finally:
+        executor.close()
+
+
 @pytest.mark.asyncio
 async def test_request_cancel_without_provider_batches_marks_task_cancelled(tmp_path):
     executor = _build_executor(tmp_path)
@@ -159,7 +201,7 @@ async def test_request_cancel_resolves_provider_batches_by_display_name(tmp_path
         )
         executor.gateway.find_batch_names = AsyncMock(return_value=["batches/a", "batches/b"])
         executor.gateway.cancel_batch = AsyncMock()
-        executor.gateway.get_batch_state = AsyncMock(side_effect=["CANCELLED", "CANCELLED"])
+        executor.gateway.get_batch_state = AsyncMock(side_effect=["RUNNING", "CANCELLED", "RUNNING", "CANCELLED"])
 
         result = await executor.request_cancel(created.task_id)
 
@@ -167,7 +209,34 @@ async def test_request_cancel_resolves_provider_batches_by_display_name(tmp_path
         assert result.phase == PHASE_DONE
         executor.gateway.find_batch_names.assert_awaited_once()
         assert executor.gateway.cancel_batch.await_count == 2
-        assert executor.gateway.get_batch_state.await_count == 2
+        assert executor.gateway.get_batch_state.await_count == 4
+    finally:
+        executor.close()
+
+
+@pytest.mark.asyncio
+async def test_request_cancel_recovers_known_batch_responses_before_cancel(tmp_path):
+    executor = _build_executor(tmp_path)
+    try:
+        created = _create_task(
+            executor,
+            book_id="book-1",
+            payload_json=(
+                '{"translation":{"jobs":[{"batch_name":"batches/active","request_hashes":["h1","h2"]}]}}'
+            ),
+        )
+        executor.gateway.poll_once = AsyncMock(return_value=BatchPollResult(status=POLL_STATUS_COMPLETED))
+        executor.gateway.cancel_batch = AsyncMock()
+        executor.gateway.get_batch_state = AsyncMock(side_effect=["RUNNING", "CANCELLED"])
+
+        result = await executor.request_cancel(created.task_id)
+
+        assert result.status == STATUS_CANCELLED
+        executor.gateway.poll_once.assert_awaited_once()
+        kwargs = executor.gateway.poll_once.await_args.kwargs
+        assert kwargs["batch_name"] == "batches/active"
+        assert kwargs["request_hashes"] == {"h1", "h2"}
+        executor.gateway.cancel_batch.assert_awaited_once()
     finally:
         executor.close()
 
@@ -182,14 +251,14 @@ async def test_request_cancel_keeps_cancelling_when_provider_batch_is_still_acti
             payload_json='{"translation":{"batch_name":"batches/active"}}',
         )
         executor.gateway.cancel_batch = AsyncMock()
-        executor.gateway.get_batch_state = AsyncMock(return_value="CANCELLING")
+        executor.gateway.get_batch_state = AsyncMock(side_effect=["RUNNING", "CANCELLING"])
 
         result = await executor.request_cancel(created.task_id)
 
         assert result.status == STATUS_CANCELLING
         assert result.phase != PHASE_DONE
         executor.gateway.cancel_batch.assert_awaited_once()
-        executor.gateway.get_batch_state.assert_awaited_once()
+        assert executor.gateway.get_batch_state.await_count == 2
     finally:
         executor.close()
 
@@ -224,13 +293,35 @@ async def test_run_task_cancel_requested_retries_provider_cancel_when_batch_exis
         )
         executor.task_store.mark_cancel_requested(created.task_id)
         executor.gateway.cancel_batch = AsyncMock()
-        executor.gateway.get_batch_state = AsyncMock(return_value="CANCELLED")
+        executor.gateway.get_batch_state = AsyncMock(side_effect=["RUNNING", "CANCELLED"])
 
         result = await executor.run_task(created.task_id)
 
         assert result.status == STATUS_CANCELLED
         assert result.phase == PHASE_DONE
         executor.gateway.cancel_batch.assert_awaited_once()
+        assert executor.gateway.get_batch_state.await_count == 2
+    finally:
+        executor.close()
+
+
+@pytest.mark.asyncio
+async def test_request_cancel_skips_terminal_provider_batches(tmp_path):
+    executor = _build_executor(tmp_path)
+    try:
+        created = _create_task(
+            executor,
+            book_id="book-1",
+            payload_json='{"translation":{"batch_name":"batches/succeeded"}}',
+        )
+        executor.gateway.cancel_batch = AsyncMock()
+        executor.gateway.get_batch_state = AsyncMock(return_value="SUCCEEDED")
+
+        result = await executor.request_cancel(created.task_id)
+
+        assert result.status == STATUS_CANCELLED
+        assert result.phase == PHASE_DONE
+        executor.gateway.cancel_batch.assert_not_awaited()
         executor.gateway.get_batch_state.assert_awaited_once()
     finally:
         executor.close()
@@ -1106,3 +1197,151 @@ async def test_execute_stage_persists_final_fallback_state_before_return(tmp_pat
     last_item = last_payload["items"][0]
     assert last_item["translation"]["state"] == "succeeded"
     assert last_item["translation"]["fallback_attempted"] is True
+
+
+@pytest.mark.asyncio
+async def test_execute_stage_validation_respects_translator_concurrency(tmp_path):
+    llm_batch_store = LLMBatchStore(tmp_path / "llm_batch_cache.db")
+
+    service = MagicMock()
+    service.llm_batch_store = llm_batch_store
+    service.gateway = MagicMock()
+    service.gateway.submit_batch = AsyncMock()
+    service.translator_config.return_value = SimpleNamespace(concurrency=2)
+    service.batch_config.return_value = SimpleNamespace(batch_size=500)
+    service.raise_if_local_pause = MagicMock()
+    service.persist_payload.return_value = SimpleNamespace(task_id="task-validate-concurrency")
+    service.workflow = SimpleNamespace(llm_client=MagicMock())
+
+    items: list[dict[str, object]] = []
+    for idx in range(4):
+        request_hash = f"hash-validate-{idx}"
+        llm_batch_store.upsert_completed(
+            request_hash,
+            "gemini_ai_studio",
+            '{"翻译文本":["ok"]}',
+            batch_name="batch/jobs/validate",
+        )
+        items.append(
+            {
+                "all_blocks": ["x"],
+                "translation": {
+                    "state": "pending",
+                    "error": None,
+                    "request_hash": request_hash,
+                    "inlined_request": {"model": "batch-model"},
+                    "messages": [{"role": "user", "content": f"x-{idx}"}],
+                    "output_blocks": None,
+                    "fallback_attempted": False,
+                },
+            }
+        )
+
+    payload = {
+        "model": "batch-model",
+        "translation": {"batch_name": None, "batch_display_name": None, "jobs": []},
+        "items": items,
+    }
+
+    active = 0
+    max_active = 0
+
+    async def _validated_chat(*_args, **_kwargs):  # noqa: ANN001
+        nonlocal active, max_active
+        active += 1
+        max_active = max(max_active, active)
+        await asyncio.sleep(0.02)
+        active -= 1
+        return ["ok"]
+
+    try:
+        with patch(
+            "context_aware_translation.workflow.tasks.execution.batch_translation_ops.validated_chat",
+            new=AsyncMock(side_effect=_validated_chat),
+        ):
+            result = await _execute_stage(
+                service,
+                "task-validate-concurrency",
+                payload,
+                items,
+                spec=_TRANSLATION_STAGE,
+                cancel_check=None,
+                progress_callback=None,
+            )
+    finally:
+        llm_batch_store.close()
+
+    assert max_active >= 2
+    assert all(item["translation"]["state"] == "succeeded" for item in result["items"])
+
+
+@pytest.mark.asyncio
+async def test_execute_stage_fallback_respects_translator_concurrency(tmp_path):
+    llm_batch_store = LLMBatchStore(tmp_path / "llm_batch_cache.db")
+
+    service = MagicMock()
+    service.llm_batch_store = llm_batch_store
+    service.gateway = MagicMock()
+    service.gateway.submit_batch = AsyncMock()
+    service.translator_config.return_value = SimpleNamespace(concurrency=2)
+    service.batch_config.return_value = SimpleNamespace(batch_size=500)
+    service.raise_if_local_pause = MagicMock()
+    service.persist_payload.return_value = SimpleNamespace(task_id="task-fallback-concurrency")
+    service.workflow = SimpleNamespace(llm_client=MagicMock())
+    service.task_store = MagicMock()
+    service.task_store.get.return_value = SimpleNamespace(cancel_requested=False)
+
+    items: list[dict[str, object]] = []
+    for idx in range(4):
+        items.append(
+            {
+                "all_blocks": ["x"],
+                "translation": {
+                    "state": "failed",
+                    "error": "bad-json",
+                    "request_hash": f"hash-fallback-{idx}",
+                    "inlined_request": {"model": "batch-model"},
+                    "messages": [{"role": "user", "content": f"x-{idx}"}],
+                    "output_blocks": None,
+                    "fallback_attempted": False,
+                },
+            }
+        )
+
+    payload = {
+        "model": "batch-model",
+        "translation": {"batch_name": None, "batch_display_name": None, "jobs": []},
+        "items": items,
+    }
+
+    active = 0
+    max_active = 0
+
+    async def _validated_chat(*_args, **_kwargs):  # noqa: ANN001
+        nonlocal active, max_active
+        active += 1
+        max_active = max(max_active, active)
+        await asyncio.sleep(0.02)
+        active -= 1
+        return ["ok"]
+
+    try:
+        with patch(
+            "context_aware_translation.workflow.tasks.execution.batch_translation_ops.validated_chat",
+            new=AsyncMock(side_effect=_validated_chat),
+        ):
+            result = await _execute_stage(
+                service,
+                "task-fallback-concurrency",
+                payload,
+                items,
+                spec=_TRANSLATION_STAGE,
+                cancel_check=None,
+                progress_callback=None,
+            )
+    finally:
+        llm_batch_store.close()
+
+    assert max_active >= 2
+    assert all(item["translation"]["state"] == "succeeded" for item in result["items"])
+    assert all(item["translation"]["fallback_attempted"] is True for item in result["items"])
