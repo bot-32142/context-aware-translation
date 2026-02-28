@@ -234,6 +234,34 @@ def test_running_work_changed_emits_on_state_change(engine):
     assert emissions == [True, False]
 
 
+def test_submit_emits_running_work_changed_immediately_without_tick(engine):
+    handler = _make_handler("immediate", can_run=True)
+    worker = handler.build_worker.return_value
+    worker.isRunning.return_value = True
+    engine.register_handler(handler)
+    emissions: list[bool] = []
+    engine.running_work_changed.connect(emissions.append)
+
+    engine.submit("immediate", "book-immediate")
+
+    assert emissions == [True]
+
+
+def test_cancel_emits_running_work_changed_when_cancel_worker_starts(engine, tmp_store):
+    handler = _make_handler("cancelable", can_run=True)
+    worker = handler.build_worker.return_value
+    worker.isRunning.return_value = True
+    engine.register_handler(handler)
+    record = tmp_store.create(book_id="book-cancel", task_type="cancelable", status="queued")
+
+    emissions: list[bool] = []
+    engine.running_work_changed.connect(emissions.append)
+
+    engine.cancel(record.task_id)
+
+    assert emissions == [True]
+
+
 # ------------------------------------------------------------------
 # _is_in_backoff
 # ------------------------------------------------------------------

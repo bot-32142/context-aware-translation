@@ -106,6 +106,7 @@ class TaskEngine(QObject):
             self._start_action(record.task_id, TaskAction.RUN)
         except Exception:
             logger.debug("Best-effort start failed for task %s; will retry on next tick", record.task_id)
+        self._emit_running_work_changed_if_needed()
         return record
 
     def submit_and_start(self, task_type: str, book_id: str, **params) -> TaskRecord:
@@ -132,6 +133,7 @@ class TaskEngine(QObject):
             # Re-fetch the record so the caller sees the failed status.
             updated = self._core.get_task(record.task_id)
             return updated if updated is not None else record
+        self._emit_running_work_changed_if_needed()
         return record
 
     def run_task(self, task_id: str) -> TaskRecord:
@@ -156,6 +158,7 @@ class TaskEngine(QObject):
             self.enqueue_task_changed.emit(record.book_id)
             updated = self._core.get_task(task_id)
             return updated if updated is not None else record
+        self._emit_running_work_changed_if_needed()
         return record
 
     def rerun(self, task_id: str) -> TaskRecord:
@@ -180,35 +183,42 @@ class TaskEngine(QObject):
             self.enqueue_task_changed.emit(record.book_id)
             updated = self._core.get_task(task_id)
             return updated if updated is not None else record
+        self._emit_running_work_changed_if_needed()
         return record
 
     def cancel(self, task_id: str) -> None:
         """Request cancellation only if handler policy allows it."""
-        worker = self._core.cancel(task_id)
-        if worker is not None and hasattr(worker, "requestInterruption"):
-            worker.requestInterruption()  # type: ignore[attr-defined]
-        elif worker is None:
-            # No active RUN worker — dispatch explicit cancel action worker
-            # Only if core.cancel() actually accepted the request (cancel_requested=True).
-            record_after = self._core.get_task(task_id)
-            if record_after is not None and record_after.cancel_requested:
-                try:
-                    self._start_action(task_id, TaskAction.CANCEL)
-                except (CancelDispatchRaceError, KeyError) as exc:
-                    logger.debug("Cancel action worker not started for task %s", task_id)
-                    self._core.handle_cancel_dispatch_failure(
-                        task_id,
-                        reason=f"cancel dispatch failed: {type(exc).__name__}: {exc}",
-                    )
-        record = self._core.get_task(task_id)
-        if record is not None:
-            self.enqueue_task_changed.emit(record.book_id)
+        try:
+            worker = self._core.cancel(task_id)
+            if worker is not None and hasattr(worker, "requestInterruption"):
+                worker.requestInterruption()  # type: ignore[attr-defined]
+            elif worker is None:
+                # No active RUN worker — dispatch explicit cancel action worker
+                # Only if core.cancel() actually accepted the request (cancel_requested=True).
+                record_after = self._core.get_task(task_id)
+                if record_after is not None and record_after.cancel_requested:
+                    try:
+                        self._start_action(task_id, TaskAction.CANCEL)
+                    except (CancelDispatchRaceError, KeyError) as exc:
+                        logger.debug("Cancel action worker not started for task %s", task_id)
+                        self._core.handle_cancel_dispatch_failure(
+                            task_id,
+                            reason=f"cancel dispatch failed: {type(exc).__name__}: {exc}",
+                        )
+            record = self._core.get_task(task_id)
+            if record is not None:
+                self.enqueue_task_changed.emit(record.book_id)
+        finally:
+            self._emit_running_work_changed_if_needed()
 
     def delete(self, task_id: str) -> None:
         """Delete a task if handler policy allows it and worker is not active."""
-        book_id = self._core.delete(task_id)
-        if book_id is not None:
-            self.enqueue_task_changed.emit(book_id)
+        try:
+            book_id = self._core.delete(task_id)
+            if book_id is not None:
+                self.enqueue_task_changed.emit(book_id)
+        finally:
+            self._emit_running_work_changed_if_needed()
 
     def cancel_running_tasks(self, book_id: str) -> None:
         """Interrupt active workers for the given book and mark them cancel_requested."""
@@ -216,6 +226,7 @@ class TaskEngine(QObject):
         for worker in workers:
             if hasattr(worker, "requestInterruption"):
                 worker.requestInterruption()  # type: ignore[attr-defined]
+        self._emit_running_work_changed_if_needed()
 
     # ------------------------------------------------------------------
     # Autorun timer
