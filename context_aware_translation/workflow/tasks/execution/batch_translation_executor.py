@@ -17,6 +17,7 @@ from context_aware_translation.storage.task_store import TaskRecord, TaskStore
 from context_aware_translation.workflow.service import WorkflowService
 from context_aware_translation.workflow.tasks.execution.batch_translation_ops import (
     apply_results,
+    compute_phase_progress,
     decode_task_payload,
     ensure_payload_prepared,
     is_item_translation_success,
@@ -169,7 +170,19 @@ class BatchTranslationExecutor:
     # ------------------------------------------------------------------
 
     def _persist(self, task_id: str, **kwargs: object) -> TaskRecord:
-        record = self.task_store.update(task_id, **kwargs)
+        current = self.task_store.get(task_id)
+        if current is None:
+            raise ValueError(f"Task not found: {task_id}")
+
+        changed: dict[str, object] = {}
+        for key, value in kwargs.items():
+            if getattr(current, key) != value:
+                changed[key] = value
+
+        if not changed:
+            return current
+
+        record = self.task_store.update(task_id, **changed)
         if self._notify_task_changed is not None:
             book_id = record.book_id if hasattr(record, "book_id") else self._book_id
             if book_id:
@@ -524,18 +537,9 @@ class BatchTranslationExecutor:
         status: str,
     ) -> TaskRecord:
         items = payload.get("items", [])
-        total_items = len(items) if isinstance(items, list) else 0
-        completed_items = 0
-        failed_items = 0
-        if isinstance(items, list):
-            completed_items = sum(1 for item in items if isinstance(item, dict) and bool(item.get("applied")))
-            failed_items = sum(
-                1
-                for item in items
-                if isinstance(item, dict)
-                and isinstance(item.get("translation"), dict)
-                and item["translation"].get("state") == "failed"
-            )
+        if not isinstance(items, list):
+            items = []
+        total_items, completed_items, failed_items = compute_phase_progress(items, phase)
         return self._persist(
             task_id,
             status=status,

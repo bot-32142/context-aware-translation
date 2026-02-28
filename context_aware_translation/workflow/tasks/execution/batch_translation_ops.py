@@ -30,10 +30,12 @@ from context_aware_translation.storage.llm_batch_store import STATUS_FAILED, STA
 from context_aware_translation.storage.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.models import (
     PHASE_APPLY,
+    PHASE_DONE,
     PHASE_POLISH_FALLBACK,
     PHASE_POLISH_POLL,
     PHASE_POLISH_SUBMIT,
     PHASE_POLISH_VALIDATE,
+    PHASE_PREPARE,
     PHASE_TRANSLATION_FALLBACK,
     PHASE_TRANSLATION_POLL,
     PHASE_TRANSLATION_SUBMIT,
@@ -43,6 +45,7 @@ from context_aware_translation.workflow.tasks.models import (
 
 logger = logging.getLogger(__name__)
 _PROVIDER_NAME = "gemini_ai_studio"
+_MID_LOOP_PERSIST_INTERVAL_SEC = 5
 
 
 def decode_task_payload(record: TaskRecord) -> dict[str, Any]:
@@ -132,6 +135,149 @@ def is_item_translation_success(item: dict[str, Any]) -> bool:
 
 def is_item_polish_success(item: dict[str, Any]) -> bool:
     return str(item.get("polish", {}).get("state", "")) == "succeeded"
+
+
+def compute_phase_progress(
+    items: list[dict[str, Any]], phase: str
+) -> tuple[int, int, int]:
+    """Return ``(total, completed, failed)`` scoped to the current pipeline *phase*.
+
+    Unlike the legacy approach (which always counted ``applied`` items), this
+    adapts the three counters to the active phase so that the UI can show
+    meaningful, growing progress at every stage.
+    """
+    all_count = len(items)
+
+    if phase == PHASE_PREPARE:
+        return (all_count, 0, 0)
+
+    # --- translation submit ---
+    if phase == PHASE_TRANSLATION_SUBMIT:
+        completed = sum(
+            1 for item in items
+            if isinstance(item.get("translation"), dict)
+            and item["translation"].get("request_hash")
+        )
+        return (all_count, completed, 0)
+
+    # --- translation poll ---
+    if phase == PHASE_TRANSLATION_POLL:
+        completed = sum(
+            1 for item in items
+            if isinstance(item.get("translation"), dict)
+            and item["translation"].get("state", "pending") != "pending"
+        )
+        failed = sum(
+            1 for item in items
+            if isinstance(item.get("translation"), dict)
+            and item["translation"].get("state") == "failed"
+        )
+        return (all_count, completed, failed)
+
+    # --- translation validate ---
+    if phase == PHASE_TRANSLATION_VALIDATE:
+        completed = sum(
+            1 for item in items
+            if isinstance(item.get("translation"), dict)
+            and item["translation"].get("state") in ("succeeded", "failed", "skipped")
+        )
+        failed = sum(
+            1 for item in items
+            if isinstance(item.get("translation"), dict)
+            and item["translation"].get("state") == "failed"
+        )
+        return (all_count, completed, failed)
+
+    # --- translation fallback (scoped to candidates only) ---
+    if phase == PHASE_TRANSLATION_FALLBACK:
+        candidates = [
+            item for item in items
+            if isinstance(item.get("translation"), dict)
+            and (
+                item["translation"].get("fallback_attempted")
+                or item["translation"].get("state") == "failed"
+            )
+        ]
+        total = len(candidates)
+        completed = sum(1 for c in candidates if c["translation"].get("fallback_attempted"))
+        failed = sum(1 for c in candidates if c["translation"].get("state") == "failed")
+        return (total, completed, failed)
+
+    # --- polish submit ---
+    if phase == PHASE_POLISH_SUBMIT:
+        eligible = [item for item in items if is_item_translation_success(item)]
+        total = len(eligible)
+        completed = sum(
+            1 for item in eligible
+            if isinstance(item.get("polish"), dict)
+            and item["polish"].get("request_hash")
+        )
+        return (total, completed, 0)
+
+    # --- polish poll ---
+    if phase == PHASE_POLISH_POLL:
+        eligible = [item for item in items if is_item_translation_success(item)]
+        total = len(eligible)
+        completed = sum(
+            1 for item in eligible
+            if isinstance(item.get("polish"), dict)
+            and item["polish"].get("state", "pending") != "pending"
+        )
+        failed = sum(
+            1 for item in eligible
+            if isinstance(item.get("polish"), dict)
+            and item["polish"].get("state") == "failed"
+        )
+        return (total, completed, failed)
+
+    # --- polish validate ---
+    if phase == PHASE_POLISH_VALIDATE:
+        eligible = [item for item in items if is_item_translation_success(item)]
+        total = len(eligible)
+        completed = sum(
+            1 for item in eligible
+            if isinstance(item.get("polish"), dict)
+            and item["polish"].get("state") in ("succeeded", "failed", "skipped")
+        )
+        failed = sum(
+            1 for item in eligible
+            if isinstance(item.get("polish"), dict)
+            and item["polish"].get("state") == "failed"
+        )
+        return (total, completed, failed)
+
+    # --- polish fallback (scoped to candidates only) ---
+    if phase == PHASE_POLISH_FALLBACK:
+        eligible = [item for item in items if is_item_translation_success(item)]
+        candidates = [
+            item for item in eligible
+            if isinstance(item.get("polish"), dict)
+            and (
+                item["polish"].get("fallback_attempted")
+                or item["polish"].get("state") == "failed"
+            )
+        ]
+        total = len(candidates)
+        completed = sum(1 for c in candidates if c["polish"].get("fallback_attempted"))
+        failed = sum(1 for c in candidates if c["polish"].get("state") == "failed")
+        return (total, completed, failed)
+
+    # --- apply / done ---
+    if phase in (PHASE_APPLY, PHASE_DONE):
+        completed = sum(1 for item in items if isinstance(item, dict) and bool(item.get("applied")))
+        failed = sum(1 for item in items if isinstance(item, dict) and not is_item_translation_success(item))
+        return (all_count, completed, failed)
+
+    # Unknown phase – fall back to legacy applied-count behaviour.
+    completed = sum(1 for item in items if isinstance(item, dict) and bool(item.get("applied")))
+    failed = sum(
+        1
+        for item in items
+        if isinstance(item, dict)
+        and isinstance(item.get("translation"), dict)
+        and item["translation"].get("state") == "failed"
+    )
+    return (all_count, completed, failed)
 
 
 def _stage_request_kwargs(payload: dict[str, Any]) -> dict[str, Any]:
@@ -479,6 +625,7 @@ async def _execute_stage(
             unresolved = set(_ordered_pending_stage_hashes(service, items, spec=spec))
 
     task = service.persist_payload(task_id, payload, phase=spec.phase_validate, status=STATUS_RUNNING)
+    last_persist_at = time.monotonic()
     for item in items:
         sd: StageItemState = item[spec.stage]
         if sd.get("state") != "pending":
@@ -524,7 +671,14 @@ async def _execute_stage(
             sd["state"] = "failed"
             sd["error"] = f"{type(exc).__name__}: {exc}"
 
+        # Periodic mid-loop persist so the UI sees validation progress.
+        now = time.monotonic()
+        if now - last_persist_at >= _MID_LOOP_PERSIST_INTERVAL_SEC:
+            service.persist_payload(task_id, payload, phase=spec.phase_validate, status=STATUS_RUNNING)
+            last_persist_at = now
+
     task = service.persist_payload(task_id, payload, phase=spec.phase_fallback, status=STATUS_RUNNING)
+    last_persist_at = time.monotonic()
     for item in items:
         sd_fb: StageItemState = item[spec.stage]
         if sd_fb.get("state") != "failed" or bool(sd_fb.get("fallback_attempted")):
@@ -557,6 +711,12 @@ async def _execute_stage(
         except Exception as exc:
             sd_fb["error"] = f"{type(exc).__name__}: {exc}"
 
+        # Periodic mid-loop persist so the UI sees fallback progress.
+        now = time.monotonic()
+        if now - last_persist_at >= _MID_LOOP_PERSIST_INTERVAL_SEC:
+            service.persist_payload(task_id, payload, phase=spec.phase_fallback, status=STATUS_RUNNING)
+            last_persist_at = now
+
     return payload
 
 
@@ -577,7 +737,6 @@ async def poll_until_terminal(
 ) -> BatchPollResult:
     """Poll one provider batch until terminal status, handling cancellation and state persistence."""
     task_id = task.task_id
-    phase = PHASE_TRANSLATION_POLL if stage == "translation" else PHASE_POLISH_POLL
 
     batch_config = service.batch_config()
 
@@ -628,7 +787,8 @@ async def poll_until_terminal(
                 return BatchPollResult(
                     status=POLL_STATUS_FAILED, error_text=f"{stage} batch timed out after {_POLL_TIMEOUT_SEC}s"
                 )
-            service.persist_payload(task_id, payload, phase=phase, status=STATUS_RUNNING)
+            # Do not rewrite large payload_json on every pending poll tick.
+            # The stage was already persisted before entering this loop.
             await asyncio.sleep(service.poll_interval_sec)
             continue
 
