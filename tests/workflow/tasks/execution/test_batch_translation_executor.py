@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -7,10 +8,14 @@ import httpx
 import pytest
 
 from context_aware_translation.config import TranslatorBatchConfig, TranslatorConfig
+from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.llm.batch_jobs.base import POLL_STATUS_COMPLETED, BatchPollResult, BatchSubmitResult
 from context_aware_translation.storage.llm_batch_store import LLMBatchStore
 from context_aware_translation.storage.task_store import TaskStore
-from context_aware_translation.workflow.tasks.execution.batch_translation_executor import BatchTranslationExecutor
+from context_aware_translation.workflow.tasks.execution.batch_translation_executor import (
+    BatchTranslationExecutor,
+    prepare_payload_for_rerun,
+)
 from context_aware_translation.workflow.tasks.execution.batch_translation_ops import (
     _TRANSLATION_STAGE,
     _execute_stage,
@@ -288,6 +293,79 @@ async def test_run_task_reruns_cancelled_task_with_reset_pending_payload(tmp_pat
         executor.close()
 
 
+def test_prepare_payload_for_rerun_preserves_final_stage_outputs():
+    payload = {
+        "items": [
+            {
+                "applied": False,
+                "translation": {
+                    "state": "succeeded",
+                    "messages": [{"role": "user", "content": "x"}],
+                    "output_blocks": ["ok"],
+                    "error": None,
+                    "fallback_attempted": False,
+                    "request_hash": "h1",
+                    "inlined_request": {"metadata": {"request_hash": "h1"}},
+                },
+                "polish": {
+                    "state": "pending",
+                    "messages": [{"role": "user", "content": "p"}],
+                    "output_blocks": None,
+                    "error": None,
+                    "fallback_attempted": False,
+                    "request_hash": "p1",
+                    "inlined_request": {"metadata": {"request_hash": "p1"}},
+                },
+            },
+            {
+                "applied": False,
+                "translation": {
+                    "state": "failed",
+                    "messages": [{"role": "user", "content": "y"}],
+                    "output_blocks": None,
+                    "error": "bad",
+                    "fallback_attempted": True,
+                    "request_hash": "h2",
+                    "inlined_request": {"metadata": {"request_hash": "h2"}},
+                },
+                "polish": {
+                    "state": "succeeded",
+                    "messages": [{"role": "user", "content": "p2"}],
+                    "output_blocks": ["polished"],
+                    "error": None,
+                    "fallback_attempted": False,
+                    "request_hash": "p2",
+                    "inlined_request": {"metadata": {"request_hash": "p2"}},
+                },
+            },
+        ],
+        "translation": {"batch_name": "b-old", "batch_display_name": "old", "jobs": [{"x": 1}]},
+        "polish": {"batch_name": "p-old", "batch_display_name": "old", "jobs": [{"y": 1}]},
+    }
+
+    reset = prepare_payload_for_rerun(payload)
+    first = reset["items"][0]
+    second = reset["items"][1]
+
+    # Final translation output must be preserved for unapplied items.
+    assert first["translation"]["state"] == "succeeded"
+    assert first["translation"]["output_blocks"] == ["ok"]
+    # Non-final polish should reset.
+    assert first["polish"]["state"] == "pending"
+    assert first["polish"]["output_blocks"] is None
+
+    # Non-final translation should reset.
+    assert second["translation"]["state"] == "pending"
+    assert second["translation"]["output_blocks"] is None
+    # When translation resets, polish resets too (avoid stale derived output).
+    assert second["polish"]["state"] == "pending"
+    assert second["polish"]["output_blocks"] is None
+
+    # Stage metadata is reset for fresh provider job tracking.
+    assert reset["translation"]["batch_name"] is None
+    assert reset["polish"]["batch_name"] is None
+
+
 @pytest.mark.asyncio
 async def test_run_task_pauses_on_transient_timeout(tmp_path):
     executor = _build_executor(tmp_path)
@@ -321,6 +399,224 @@ async def test_run_task_pauses_on_quota_error(tmp_path):
 
             assert result.status == STATUS_PAUSED
             assert "RESOURCE_EXHAUSTED" in (result.last_error or "")
+    finally:
+        executor.close()
+
+
+@pytest.mark.asyncio
+async def test_run_task_persists_latest_payload_when_interrupted_mid_stage(tmp_path):
+    executor = _build_executor(tmp_path)
+    try:
+        created = _create_task(executor, book_id="book-1")
+        prepared_payload = {
+            "model": "batch-model",
+            "items": [
+                {
+                    "index": 0,
+                    "chunk_ids": [1],
+                    "chunks": [],
+                    "all_blocks": ["x"],
+                    "chunk_boundaries": [1],
+                    "chunk_separators": "\n",
+                    "translation": {
+                        "state": "pending",
+                        "error": None,
+                        "request_hash": "h1",
+                        "inlined_request": {"metadata": {"request_hash": "h1"}},
+                        "messages": [{"role": "user", "content": "x"}],
+                        "output_blocks": None,
+                        "fallback_attempted": False,
+                    },
+                    "polish": {
+                        "state": "pending",
+                        "error": None,
+                        "request_hash": None,
+                        "inlined_request": None,
+                        "messages": None,
+                        "output_blocks": None,
+                        "fallback_attempted": False,
+                    },
+                    "applied": False,
+                }
+            ],
+            "translation": {"batch_name": None, "batch_display_name": None, "jobs": []},
+            "polish": {"batch_name": None, "batch_display_name": None, "jobs": []},
+        }
+
+        async def _interrupt_after_mutation(_service, _task_id, payload, **_kwargs):  # noqa: ANN001
+            payload["items"][0]["translation"]["state"] = "succeeded"
+            payload["items"][0]["translation"]["output_blocks"] = ["ok"]
+            raise OperationCancelledError("interrupted")
+
+        with (
+            patch(
+                "context_aware_translation.workflow.tasks.execution.batch_translation_executor.ensure_payload_prepared",
+                new_callable=AsyncMock,
+                return_value=prepared_payload,
+            ),
+            patch(
+                "context_aware_translation.workflow.tasks.execution.batch_translation_executor.run_translation_stage",
+                new_callable=AsyncMock,
+                side_effect=_interrupt_after_mutation,
+            ),
+        ):
+            result = await executor.run_task(created.task_id)
+
+        assert result.status == STATUS_PAUSED
+        reloaded = executor.task_store.get(created.task_id)
+        assert reloaded is not None
+        payload = json.loads(reloaded.payload_json or "{}")
+        assert payload["items"][0]["translation"]["state"] == "succeeded"
+        assert payload["items"][0]["translation"]["output_blocks"] == ["ok"]
+    finally:
+        executor.close()
+
+
+@pytest.mark.asyncio
+async def test_run_task_resume_keeps_existing_stage_state(tmp_path):
+    executor = _build_executor(tmp_path)
+    try:
+        payload_json = json.dumps(
+            {
+                "model": "batch-model",
+                "items": [
+                    {
+                        "index": 0,
+                        "chunk_ids": [1],
+                        "chunks": [],
+                        "all_blocks": ["x"],
+                        "chunk_boundaries": [1],
+                        "chunk_separators": "\n",
+                        "translation": {
+                            "state": "succeeded",
+                            "error": None,
+                            "request_hash": "h1",
+                            "inlined_request": {"metadata": {"request_hash": "h1"}},
+                            "messages": [{"role": "user", "content": "x"}],
+                            "output_blocks": ["ok"],
+                            "fallback_attempted": False,
+                        },
+                        "polish": {
+                            "state": "skipped",
+                            "error": None,
+                            "request_hash": None,
+                            "inlined_request": None,
+                            "messages": None,
+                            "output_blocks": None,
+                            "fallback_attempted": False,
+                        },
+                        "applied": False,
+                    }
+                ],
+                "translation": {"batch_name": "batch/jobs/1", "batch_display_name": "d1", "jobs": []},
+                "polish": {"batch_name": None, "batch_display_name": None, "jobs": []},
+            },
+            ensure_ascii=False,
+        )
+        created = _create_task(executor, book_id="book-1", payload_json=payload_json)
+        executor.task_store.update(created.task_id, status=STATUS_PAUSED)
+
+        async def _pass_translation(_service, _task_id, payload, **_kwargs):  # noqa: ANN001
+            assert payload["items"][0]["translation"]["state"] == "succeeded"
+            assert payload["items"][0]["translation"]["output_blocks"] == ["ok"]
+            return payload
+
+        async def _pass_polish(_service, _task_id, payload, **_kwargs):  # noqa: ANN001
+            return payload
+
+        def _pass_apply(_service, _task_id, payload, **_kwargs):  # noqa: ANN001
+            return payload
+
+        with (
+            patch(
+                "context_aware_translation.workflow.tasks.execution.batch_translation_executor.run_translation_stage",
+                new_callable=AsyncMock,
+                side_effect=_pass_translation,
+            ) as mock_translation,
+            patch(
+                "context_aware_translation.workflow.tasks.execution.batch_translation_executor.run_polish_stage",
+                new_callable=AsyncMock,
+                side_effect=_pass_polish,
+            ),
+            patch(
+                "context_aware_translation.workflow.tasks.execution.batch_translation_executor.apply_results",
+                side_effect=_pass_apply,
+            ),
+        ):
+            result = await executor.run_task(created.task_id)
+
+        assert result.status == STATUS_COMPLETED
+        assert mock_translation.await_count == 1
+    finally:
+        executor.close()
+
+
+@pytest.mark.asyncio
+async def test_run_task_persists_latest_payload_before_cancel_finalize(tmp_path):
+    executor = _build_executor(tmp_path)
+    try:
+        created = _create_task(executor, book_id="book-1")
+        prepared_payload = {
+            "model": "batch-model",
+            "items": [
+                {
+                    "index": 0,
+                    "chunk_ids": [1],
+                    "chunks": [],
+                    "all_blocks": ["x"],
+                    "chunk_boundaries": [1],
+                    "chunk_separators": "\n",
+                    "translation": {
+                        "state": "pending",
+                        "error": None,
+                        "request_hash": "h1",
+                        "inlined_request": {"metadata": {"request_hash": "h1"}},
+                        "messages": [{"role": "user", "content": "x"}],
+                        "output_blocks": None,
+                        "fallback_attempted": False,
+                    },
+                    "polish": {
+                        "state": "pending",
+                        "error": None,
+                        "request_hash": None,
+                        "inlined_request": None,
+                        "messages": None,
+                        "output_blocks": None,
+                        "fallback_attempted": False,
+                    },
+                    "applied": False,
+                }
+            ],
+            "translation": {"batch_name": None, "batch_display_name": None, "jobs": []},
+            "polish": {"batch_name": None, "batch_display_name": None, "jobs": []},
+        }
+
+        async def _cancel_after_mutation(_service, _task_id, payload, **_kwargs):  # noqa: ANN001
+            payload["items"][0]["translation"]["state"] = "succeeded"
+            payload["items"][0]["translation"]["output_blocks"] = ["ok"]
+            executor.task_store.mark_cancel_requested(created.task_id)
+            raise OperationCancelledError("cancel requested")
+
+        with (
+            patch(
+                "context_aware_translation.workflow.tasks.execution.batch_translation_executor.ensure_payload_prepared",
+                new_callable=AsyncMock,
+                return_value=prepared_payload,
+            ),
+            patch(
+                "context_aware_translation.workflow.tasks.execution.batch_translation_executor.run_translation_stage",
+                new_callable=AsyncMock,
+                side_effect=_cancel_after_mutation,
+            ),
+        ):
+            result = await executor.run_task(created.task_id)
+
+        assert result.status == STATUS_CANCELLED
+        reloaded = executor.task_store.get(created.task_id)
+        assert reloaded is not None
+        payload = json.loads(reloaded.payload_json or "{}")
+        assert payload["items"][0]["translation"]["state"] == "succeeded"
+        assert payload["items"][0]["translation"]["output_blocks"] == ["ok"]
     finally:
         executor.close()
 
@@ -736,3 +1032,77 @@ async def test_execute_stage_submits_sequential_slices_by_batch_size(tmp_path):
     jobs = result["translation"]["jobs"]
     assert isinstance(jobs, list)
     assert [len(job["request_hashes"]) for job in jobs] == [2, 2, 1]
+
+
+@pytest.mark.asyncio
+async def test_execute_stage_persists_final_fallback_state_before_return(tmp_path):
+    llm_batch_store = LLMBatchStore(tmp_path / "llm_batch_cache.db")
+    request_hash = "hash-fallback-final-persist"
+    llm_batch_store.upsert_completed(
+        request_hash,
+        "gemini_ai_studio",
+        '{"翻译文本":["raw"]}',
+        batch_name="batch/jobs/existing",
+    )
+
+    persisted_snapshots: list[tuple[str, dict[str, object]]] = []
+
+    def _persist_side_effect(task_id, payload, *, phase, status):  # noqa: ANN001
+        persisted_snapshots.append((phase, json.loads(json.dumps(payload))))
+        return SimpleNamespace(task_id=task_id, status=status, phase=phase)
+
+    service = MagicMock()
+    service.llm_batch_store = llm_batch_store
+    service.gateway = MagicMock()
+    service.gateway.submit_batch = AsyncMock()
+    service.translator_config.return_value = MagicMock()
+    service.batch_config.return_value = SimpleNamespace(batch_size=500)
+    service.raise_if_local_pause = MagicMock()
+    service.persist_payload.side_effect = _persist_side_effect
+    service.workflow = SimpleNamespace(llm_client=MagicMock())
+    service.task_store = MagicMock()
+    service.task_store.get.return_value = SimpleNamespace(cancel_requested=False)
+
+    item = {
+        "all_blocks": ["x"],
+        "translation": {
+            "state": "pending",
+            "error": None,
+            "request_hash": request_hash,
+            "inlined_request": {"model": "batch-model"},
+            "messages": [{"role": "user", "content": "x"}],
+            "output_blocks": None,
+            "fallback_attempted": False,
+        },
+    }
+    payload = {
+        "model": "batch-model",
+        "translation": {"batch_name": None, "batch_display_name": None, "jobs": []},
+        "items": [item],
+    }
+
+    try:
+        with patch(
+            "context_aware_translation.workflow.tasks.execution.batch_translation_ops.validated_chat",
+            new=AsyncMock(side_effect=[RuntimeError("bad-json"), ["ok"]]),
+        ):
+            result = await _execute_stage(
+                service,
+                "task-fallback-final",
+                payload,
+                [item],
+                spec=_TRANSLATION_STAGE,
+                cancel_check=None,
+                progress_callback=None,
+            )
+    finally:
+        llm_batch_store.close()
+
+    assert result["items"][0]["translation"]["state"] == "succeeded"
+    assert result["items"][0]["translation"]["fallback_attempted"] is True
+    assert persisted_snapshots
+    last_phase, last_payload = persisted_snapshots[-1]
+    assert last_phase == _TRANSLATION_STAGE.phase_fallback
+    last_item = last_payload["items"][0]
+    assert last_item["translation"]["state"] == "succeeded"
+    assert last_item["translation"]["fallback_attempted"] is True

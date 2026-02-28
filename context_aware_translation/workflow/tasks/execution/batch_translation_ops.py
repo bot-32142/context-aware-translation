@@ -45,9 +45,6 @@ from context_aware_translation.workflow.tasks.models import (
 
 logger = logging.getLogger(__name__)
 _PROVIDER_NAME = "gemini_ai_studio"
-_MID_LOOP_PERSIST_INTERVAL_SEC = 5
-
-
 def decode_task_payload(record: TaskRecord) -> dict[str, Any]:
     """Decode a task record's payload_json into a dict, returning {} on failure."""
     if not record.payload_json:
@@ -625,7 +622,6 @@ async def _execute_stage(
             unresolved = set(_ordered_pending_stage_hashes(service, items, spec=spec))
 
     task = service.persist_payload(task_id, payload, phase=spec.phase_validate, status=STATUS_RUNNING)
-    last_persist_at = time.monotonic()
     for item in items:
         sd: StageItemState = item[spec.stage]
         if sd.get("state") != "pending":
@@ -636,6 +632,7 @@ async def _execute_stage(
         if not item_hash:
             sd["state"] = "failed"
             sd["error"] = f"Missing {spec.stage} request hash."
+            service.persist_payload(task_id, payload, phase=spec.phase_validate, status=STATUS_RUNNING)
             continue
 
         raw = service.llm_batch_store.get_completed_response(item_hash)
@@ -647,6 +644,7 @@ async def _execute_stage(
             else:
                 sd["state"] = "failed"
                 sd["error"] = f"Batch {spec.stage} response unavailable."
+            service.persist_payload(task_id, payload, phase=spec.phase_validate, status=STATUS_RUNNING)
             continue
 
         messages = sd["messages"]
@@ -670,15 +668,9 @@ async def _execute_stage(
         except Exception as exc:
             sd["state"] = "failed"
             sd["error"] = f"{type(exc).__name__}: {exc}"
-
-        # Periodic mid-loop persist so the UI sees validation progress.
-        now = time.monotonic()
-        if now - last_persist_at >= _MID_LOOP_PERSIST_INTERVAL_SEC:
-            service.persist_payload(task_id, payload, phase=spec.phase_validate, status=STATUS_RUNNING)
-            last_persist_at = now
+        service.persist_payload(task_id, payload, phase=spec.phase_validate, status=STATUS_RUNNING)
 
     task = service.persist_payload(task_id, payload, phase=spec.phase_fallback, status=STATUS_RUNNING)
-    last_persist_at = time.monotonic()
     for item in items:
         sd_fb: StageItemState = item[spec.stage]
         if sd_fb.get("state") != "failed" or bool(sd_fb.get("fallback_attempted")):
@@ -710,12 +702,12 @@ async def _execute_stage(
             raise
         except Exception as exc:
             sd_fb["error"] = f"{type(exc).__name__}: {exc}"
+        service.persist_payload(task_id, payload, phase=spec.phase_fallback, status=STATUS_RUNNING)
 
-        # Periodic mid-loop persist so the UI sees fallback progress.
-        now = time.monotonic()
-        if now - last_persist_at >= _MID_LOOP_PERSIST_INTERVAL_SEC:
-            service.persist_payload(task_id, payload, phase=spec.phase_fallback, status=STATUS_RUNNING)
-            last_persist_at = now
+    # Always checkpoint final stage output before returning to the caller.
+    # Without this boundary persist, app shutdown between stages can replay
+    # validation/fallback work after restart.
+    service.persist_payload(task_id, payload, phase=spec.phase_fallback, status=STATUS_RUNNING)
 
     return payload
 

@@ -105,6 +105,15 @@ def _is_transient_batch_error(exc: Exception) -> bool:
 
 def prepare_payload_for_rerun(payload: dict[str, Any]) -> dict[str, Any]:
     """Reset a batch-task payload so unapplied items are retried."""
+    def _normalize_stage(existing: dict[str, Any]) -> dict[str, Any]:
+        base = new_stage_state(messages=existing.get("messages") if existing else None)
+        base.update(existing)
+        return base
+
+    def _is_stage_final(existing: dict[str, Any]) -> bool:
+        state = str(existing.get("state") or "")
+        return state in {"succeeded", "skipped"}
+
     payload = dict(payload)
     items = payload.get("items")
     if isinstance(items, list):
@@ -113,9 +122,21 @@ def prepare_payload_for_rerun(payload: dict[str, Any]) -> dict[str, Any]:
                 continue
             if bool(item.get("applied")):
                 continue
-            for stage in ("translation", "polish"):
-                existing = item.get(stage) if isinstance(item.get(stage), dict) else {}
-                item[stage] = new_stage_state(messages=existing.get("messages") if existing else None)
+            existing_translation = item.get("translation") if isinstance(item.get("translation"), dict) else {}
+            translation_final = _is_stage_final(existing_translation)
+            if translation_final:
+                item["translation"] = _normalize_stage(existing_translation)
+            else:
+                item["translation"] = new_stage_state(
+                    messages=existing_translation.get("messages") if existing_translation else None
+                )
+
+            existing_polish = item.get("polish") if isinstance(item.get("polish"), dict) else {}
+            polish_final = _is_stage_final(existing_polish)
+            if translation_final and polish_final:
+                item["polish"] = _normalize_stage(existing_polish)
+            else:
+                item["polish"] = new_stage_state(messages=existing_polish.get("messages") if existing_polish else None)
     payload["translation"] = new_payload_stage()
     payload["polish"] = new_payload_stage()
     return payload
@@ -361,13 +382,13 @@ class BatchTranslationExecutor:
         if task.cancel_requested:
             return await self.request_cancel(task_id)
 
+        payload: dict[str, Any] | None = None
         try:
             task = self._persist(task_id, status=STATUS_RUNNING)
             payload = self._decode_payload(task)
-            # If re-queued from a terminal state, reset stale payload items.
-            existing_items = payload.get("items")
-            if isinstance(existing_items, list) and existing_items:
-                payload = prepare_payload_for_rerun(payload)
+            # Do NOT reset payload for normal queued/paused resume. Resetting
+            # here would discard checkpointed stage state (e.g. validate
+            # outputs) and re-trigger avoidable LLM work on restart.
             payload = await ensure_payload_prepared(self, task, payload, cancel_check=cancel_check)
             task = self.persist_payload(task_id, payload, phase=PHASE_TRANSLATION_SUBMIT, status=STATUS_RUNNING)
 
@@ -435,21 +456,33 @@ class BatchTranslationExecutor:
         except _PauseRequestedError:
             refreshed = self.task_store.get(task_id)
             if refreshed is not None and refreshed.cancel_requested:
+                if payload is not None:
+                    self._persist(task_id, payload_json=json.dumps(payload, ensure_ascii=False))
                 return await self.request_cancel(task_id)
-            return self._persist(task_id, status=STATUS_PAUSED)
+            updates: dict[str, object] = {"status": STATUS_PAUSED}
+            if payload is not None:
+                updates["payload_json"] = json.dumps(payload, ensure_ascii=False)
+            return self._persist(task_id, **updates)
         except OperationCancelledError:
             refreshed = self.task_store.get(task_id)
             if refreshed is not None and refreshed.cancel_requested:
+                if payload is not None:
+                    self._persist(task_id, payload_json=json.dumps(payload, ensure_ascii=False))
                 return await self.request_cancel(task_id)
-            return self._persist(task_id, status=STATUS_PAUSED)
+            updates: dict[str, object] = {"status": STATUS_PAUSED}
+            if payload is not None:
+                updates["payload_json"] = json.dumps(payload, ensure_ascii=False)
+            return self._persist(task_id, **updates)
         except Exception as exc:
             if _is_transient_batch_error(exc):
                 logger.warning("Batch translation task paused on transient error: %s (%s)", task_id, exc)
-                return self._persist(
-                    task_id,
-                    status=STATUS_PAUSED,
-                    last_error=f"{type(exc).__name__}: {exc}",
-                )
+                updates: dict[str, object] = {
+                    "status": STATUS_PAUSED,
+                    "last_error": f"{type(exc).__name__}: {exc}",
+                }
+                if payload is not None:
+                    updates["payload_json"] = json.dumps(payload, ensure_ascii=False)
+                return self._persist(task_id, **updates)
             logger.exception("Batch translation task failed: %s", task_id)
             return self._persist(
                 task_id,
