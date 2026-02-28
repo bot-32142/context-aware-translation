@@ -485,6 +485,22 @@ class TranslationView(QWidget):
                 return True
         return False
 
+    def _preflight_chunk_retranslation(self, *, chunk_id: int, document_id: int) -> tuple[bool, str]:
+        """Return (allowed, reason) for chunk retranslation under current engine policy."""
+        skip_context = bool(self.skip_context_cb.isChecked()) if hasattr(self, "skip_context_cb") else False
+        decision = self._task_engine.preflight(
+            "chunk_retranslation",
+            self.book_id,
+            {"chunk_id": chunk_id, "document_id": document_id, "skip_context": skip_context},
+            TaskAction.RUN,
+        )
+        if decision.allowed:
+            return True, ""
+        reason = translate_task_block_reason(decision.reason, decision.code).strip()
+        if reason:
+            return False, reason
+        return False, self.tr("Retranslate is unavailable due to active task constraints.")
+
     def _update_retranslate_chunk_button_state(self) -> None:
         """Enable/disable chunk retranslate based on task state and selection."""
         if not hasattr(self, "retranslate_chunk_btn"):
@@ -492,34 +508,31 @@ class TranslationView(QWidget):
 
         current_chunk = getattr(self, "_current_chunk", None)
         has_selected_chunk = current_chunk is not None
-        blocked_by_batch_tasks = False
-        blocked_by_active_operation = False
         blocked_by_same_chunk = False
+        blocked_reason = ""
         if has_selected_chunk:
             current_doc_id = getattr(current_chunk, "document_id", None)
-            if current_doc_id is not None:
-                blocked_by_batch_tasks = self._has_batch_task_for_document(current_doc_id)
-                blocked_by_active_operation = DocumentOperationTracker.has_document_overlap(
-                    self.book_id,
-                    [current_doc_id],
-                )
             current_chunk_id = getattr(current_chunk, "chunk_id", None)
-            if current_chunk_id is not None:
+            if current_chunk_id is not None and current_doc_id is not None:
                 blocked_by_same_chunk = self._has_pending_retranslation_for_chunk(int(current_chunk_id))
-        self.retranslate_chunk_btn.setEnabled(
-            has_selected_chunk
-            and not blocked_by_batch_tasks
-            and not blocked_by_active_operation
-            and not blocked_by_same_chunk
-        )
-        if blocked_by_batch_tasks:
+                if not blocked_by_same_chunk:
+                    _allowed, blocked_reason = self._preflight_chunk_retranslation(
+                        chunk_id=int(current_chunk_id),
+                        document_id=int(current_doc_id),
+                    )
+                    if _allowed:
+                        blocked_reason = ""
+            elif current_doc_id is None:
+                blocked_reason = self.tr("Chunk has no associated document.")
+            else:
+                blocked_reason = self.tr("Chunk ID is missing.")
+        self.retranslate_chunk_btn.setEnabled(has_selected_chunk and not blocked_by_same_chunk and not blocked_reason)
+        if blocked_by_same_chunk:
             self.retranslate_chunk_btn.setToolTip(
-                self.tr("Retranslate is unavailable while a batch task covers this document.")
+                self.tr("Retranslate is unavailable while the selected chunk has an active retranslation.")
             )
-        elif blocked_by_active_operation or blocked_by_same_chunk:
-            self.retranslate_chunk_btn.setToolTip(
-                self.tr("Retranslate is unavailable while the selected document has an active operation.")
-            )
+        elif blocked_reason:
+            self.retranslate_chunk_btn.setToolTip(blocked_reason)
         else:
             self.retranslate_chunk_btn.setToolTip(
                 self.tr("Retranslate the selected chunk using the LLM (incurs API cost).")
@@ -1181,20 +1194,23 @@ class TranslationView(QWidget):
         """Retranslate the currently selected chunk using the LLM."""
         if not self._current_chunk:
             return
-        current_doc_id = getattr(self._current_chunk, "document_id", None)
-        if current_doc_id is not None and self._has_batch_task_for_document(current_doc_id):
-            QMessageBox.information(
-                self,
-                self.tr("Batch Task Running"),
-                self.tr("Retranslate is unavailable while a batch task covers this document."),
-            )
-            return
 
         chunk = self._current_chunk
         if chunk.document_id is None:
             QMessageBox.warning(self, self.tr("Error"), self.tr("Chunk has no associated document."))
             return
         if self._has_pending_retranslation_for_chunk(int(chunk.chunk_id)):
+            return
+        allowed, deny_reason = self._preflight_chunk_retranslation(
+            chunk_id=int(chunk.chunk_id),
+            document_id=int(chunk.document_id),
+        )
+        if not allowed:
+            QMessageBox.information(
+                self,
+                self.tr("Retranslate Unavailable"),
+                deny_reason,
+            )
             return
 
         reply = QMessageBox.question(

@@ -236,13 +236,22 @@ def test_submit_batch_task_calls_engine_submit_with_correct_args():
 def test_update_retranslate_chunk_button_state_disables_retranslate_when_batch_tasks_active():
     view = _make_view()
     view.retranslate_chunk_btn = QPushButton()
-    view._current_chunk = MagicMock()
-    view._task_engine.get_tasks.return_value = [MagicMock(status="running", document_ids_json=None)]
+    view._current_chunk = MagicMock(chunk_id=7, document_id=2)
+    denied = MagicMock()
+    denied.allowed = False
+    denied.reason = "Blocked by active task claims"
+    denied.code = "blocked_claim_conflict"
+    view._task_engine.preflight.return_value = denied
 
     view._update_retranslate_chunk_button_state()
 
     assert not view.retranslate_chunk_btn.isEnabled()
-    assert "batch task covers this document" in view.retranslate_chunk_btn.toolTip()
+    view._task_engine.preflight.assert_called_once_with(
+        "chunk_retranslation",
+        "test-book",
+        {"chunk_id": 7, "document_id": 2, "skip_context": False},
+        "run",
+    )
 
 
 def test_update_retranslate_chunk_button_state_enables_retranslate_when_only_terminal_tasks():
@@ -263,29 +272,40 @@ def test_update_retranslate_chunk_button_state_disables_when_selected_doc_has_ac
     view = _make_view()
     view.book_id = "book-1"
     view.retranslate_chunk_btn = QPushButton()
-    view._current_chunk = MagicMock(document_id=1)
-    view._task_engine.get_tasks.return_value = []
+    view._current_chunk = MagicMock(chunk_id=11, document_id=1)
+    denied = MagicMock()
+    denied.allowed = False
+    denied.reason = "Blocked by active task claims"
+    denied.code = "blocked_claim_conflict"
+    view._task_engine.preflight.return_value = denied
 
-    with patch(
-        "context_aware_translation.ui.views.translation_view.DocumentOperationTracker.has_document_overlap",
-        return_value=True,
-    ):
-        view._update_retranslate_chunk_button_state()
+    view._update_retranslate_chunk_button_state()
 
     assert not view.retranslate_chunk_btn.isEnabled()
-    assert "selected document has an active operation" in view.retranslate_chunk_btn.toolTip()
+    assert view.retranslate_chunk_btn.toolTip()
 
 
 def test_retranslate_current_chunk_blocks_when_batch_tasks_active():
+    from PySide6.QtWidgets import QMessageBox
+
     view = _make_view()
-    view._task_engine.get_tasks.return_value = [MagicMock(status="running", document_ids_json=None)]
-    view._current_chunk = MagicMock()
+    view._current_chunk = MagicMock(chunk_id=7, document_id=2)
+    view.skip_context_cb = QCheckBox()
+    view.skip_context_cb.setChecked(False)
+    denied = MagicMock()
+    denied.allowed = False
+    denied.reason = "Blocked by active task claims"
+    denied.code = "blocked_claim_conflict"
+    view._task_engine.preflight.return_value = denied
     view.book_manager = _make_book_manager()
     view.book_id = "book-id"
 
     with (
         patch("context_aware_translation.ui.views.translation_view.QMessageBox.information") as info_mock,
-        patch("context_aware_translation.ui.views.translation_view.QMessageBox.question") as question_mock,
+        patch(
+            "context_aware_translation.ui.views.translation_view.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Yes,
+        ) as question_mock,
     ):
         view._retranslate_current_chunk()
 

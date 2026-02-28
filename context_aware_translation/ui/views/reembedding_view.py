@@ -406,20 +406,24 @@ class ReembeddingView(QWidget):
     def _collect_manga_items(self, doc: object) -> list[_ReembedItem]:
         """Collect reembeddable items from a MangaDocument after set_text."""
         from context_aware_translation.documents.manga import MangaDocument
+        from context_aware_translation.documents.manga_alignment import get_sources_with_nonempty_ocr_text
 
         assert isinstance(doc, MangaDocument)
         sources = self.document_repo.get_document_sources(doc.document_id)
-        sources_sorted = sorted(sources, key=lambda s: s["sequence_number"])
 
         items: list[_ReembedItem] = []
-        for idx, source in enumerate(sources_sorted):
-            source_id = source["source_id"]
+        for source_idx, source, _ocr_text in get_sources_with_nonempty_ocr_text(sources):
+            source_id = int(source["source_id"])
             translated = doc._page_translations.get(source_id, "")
-            reembedded = self._reembedded_images.get(idx)
+            # Keep list aligned with actual reembedding candidates:
+            # pages without translated text are skipped by MangaDocument.reembed().
+            if not translated.strip():
+                continue
+            reembedded = self._reembedded_images.get(source_idx)
             items.append(
                 _ReembedItem(
                     source_id=source_id,
-                    element_idx=idx,  # manga uses positional index
+                    element_idx=source_idx,  # manga DB keys use full-source positional index
                     translated_text=translated,
                     original_image_bytes=source.get("binary_content"),
                     reembedded_image_bytes=reembedded[0] if reembedded else None,
