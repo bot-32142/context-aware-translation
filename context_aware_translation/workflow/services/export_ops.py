@@ -17,7 +17,7 @@ def get_lines_with_original_fallback(workflow: WorkflowService, document: Docume
     if not chunks:
         if document.document_type == "manga":
             return []
-        return document.get_text().splitlines()
+        return document.get_text().split("\n")
 
     if document.document_type == "manga":
         return [chunk.translation if chunk.is_translated and chunk.translation is not None else "" for chunk in chunks]
@@ -25,7 +25,7 @@ def get_lines_with_original_fallback(workflow: WorkflowService, document: Docume
     merged_chunks = [
         chunk.translation if chunk.is_translated and chunk.translation is not None else chunk.text for chunk in chunks
     ]
-    return "".join(merged_chunks).splitlines()
+    return "".join(merged_chunks).split("\n")
 
 
 def resolve_export_lines(

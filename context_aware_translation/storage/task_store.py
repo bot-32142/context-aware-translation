@@ -204,11 +204,10 @@ class TaskStore:
             self.conn.commit()
             if cur.rowcount == 0:
                 raise KeyError(f"Task not found: {task_id}")
-
-        record = self.get(task_id)
-        if record is None:
+            row = self.conn.execute("SELECT * FROM tasks WHERE task_id = ?", (task_id,)).fetchone()
+        if row is None:
             raise KeyError(f"Task not found: {task_id}")
-        return record
+        return self._row_to_record(row)
 
     def list_tasks(
         self,

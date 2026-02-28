@@ -824,6 +824,9 @@ class OCRReviewView(QWidget):
         """React to engine task-changed events for this book."""
         if book_id != self.book_id:
             return
+        if self._should_defer_task_refresh():
+            self._tasks_dirty = True
+            return
 
         # Keep controls in sync even when OCR tasks are started externally
         # (e.g. from TaskStatusCard/Activity panel).
@@ -985,6 +988,20 @@ class OCRReviewView(QWidget):
         if event.type() == QEvent.Type.LanguageChange:
             self.retranslateUi()
         super().changeEvent(event)
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        if getattr(self, "_tasks_dirty", False):
+            self._tasks_dirty = False
+            self._on_tasks_changed(self.book_id)
+
+    def _should_defer_task_refresh(self) -> bool:
+        """Return True when task-driven refresh should wait until widget is visible."""
+        with contextlib.suppress(RuntimeError):
+            if self.isVisible():
+                return False
+            return self.parentWidget() is not None
+        return False
 
     def retranslateUi(self) -> None:
         self.tip_label.setText(self._tip_text())

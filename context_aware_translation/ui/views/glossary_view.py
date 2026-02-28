@@ -297,6 +297,9 @@ class GlossaryView(QWidget):
         """Handle task engine tasks_changed — sync term DB, table, stats, and button state."""
         if book_id != self.book_id:
             return
+        if self._should_defer_task_refresh():
+            self._tasks_dirty = True
+            return
 
         from context_aware_translation.workflow.tasks.models import (
             STATUS_CANCELLED,
@@ -1317,6 +1320,20 @@ class GlossaryView(QWidget):
         if event.type() == QEvent.Type.LanguageChange:
             self.retranslateUi()
         super().changeEvent(event)
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        if getattr(self, "_tasks_dirty", False):
+            self._tasks_dirty = False
+            self._on_tasks_changed(self.book_id)
+
+    def _should_defer_task_refresh(self) -> bool:
+        """Return True when task-driven refresh should wait until widget is visible."""
+        with suppress(RuntimeError):
+            if self.isVisible():
+                return False
+            return self.parentWidget() is not None
+        return False
 
     def _apply_button_tooltips(self) -> None:
         """Apply hover explanations for toolbar buttons."""

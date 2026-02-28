@@ -1399,7 +1399,7 @@ class TranslationContextManager(ContextManager):
             raise ValueError(f"Cannot export: chunks {untranslated_ids} are not translated yet")
 
         translated_text = "".join(c.translation for c in sorted_chunks if c.translation)
-        return translated_text.splitlines()
+        return translated_text.split("\n")
 
 
 class TranslationContextManagerAdapter:

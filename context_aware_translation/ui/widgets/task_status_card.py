@@ -20,6 +20,7 @@ from context_aware_translation.workflow.tasks.models import (
     TaskAction,
 )
 
+from ..i18n import translate_task_phase, translate_task_status
 from ..tasks.task_view_model_mapper import map_tasks_to_row_vms
 from ..tasks.task_view_models import TaskRowVM
 
@@ -109,7 +110,7 @@ class TaskStatusCard(QWidget):
 
         self._auto_timer = QTimer(self)
         self._auto_timer.setInterval(_AUTO_REFRESH_INTERVAL_MS)
-        self._auto_timer.timeout.connect(self.refresh)
+        self._auto_timer.timeout.connect(self._on_auto_refresh)
         self._auto_timer.start()
 
         self.refresh()
@@ -214,12 +215,12 @@ class TaskStatusCard(QWidget):
     # ------------------------------------------------------------------
 
     def _update_display(self, vm: TaskRowVM) -> None:
-        self._chip.setText(vm.status)
+        self._chip.setText(translate_task_status(vm.status))
         self._chip.setStyleSheet(_chip_style(vm.status))
 
         parts = []
         if vm.phase:
-            parts.append(f"Phase: {vm.phase}")
+            parts.append(self.tr("Phase: {0}").format(translate_task_phase(vm.phase)))
         prog = _progress_text(vm)
         if prog:
             parts.append(prog)
@@ -254,9 +255,38 @@ class TaskStatusCard(QWidget):
     # Slots
     # ------------------------------------------------------------------
 
+    def _on_auto_refresh(self) -> None:
+        if self._should_defer_hidden_refresh():
+            return
+        self.refresh()
+
     def _on_tasks_changed(self, book_id: str) -> None:
-        if book_id == self._book_id:
+        if book_id != self._book_id:
+            return
+        if self._should_defer_hidden_refresh():
+            self._dirty = True
+            return
+        self.refresh()
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        if getattr(self, "_dirty", False):
+            self._dirty = False
             self.refresh()
+
+    def _should_defer_hidden_refresh(self) -> bool:
+        """Defer when the parent container (tab) is hidden.
+
+        Unlike simple widgets we cannot check ``self.isVisible()`` because
+        this widget calls ``setVisible(False)`` on itself when there are no
+        tasks to show.  Checking the *parent* distinguishes "hidden by parent
+        tab" from "self-hidden because no tasks".
+        """
+        with suppress(RuntimeError):
+            parent = self.parentWidget()
+            if parent is not None and not parent.isVisible():
+                return True
+        return False
 
     def _on_cancel_clicked(self) -> None:
         if self._current_vm is None:
@@ -326,7 +356,7 @@ class _MiniCard(QFrame):
         self.retranslate_ui()
 
     def _update(self, vm: TaskRowVM) -> None:
-        self._chip.setText(vm.status)
+        self._chip.setText(translate_task_status(vm.status))
         self._chip.setStyleSheet(_chip_style(vm.status))
         self._title_label.setText(vm.title)
 
@@ -388,7 +418,7 @@ class TaskStatusStrip(QWidget):
 
         self._auto_timer = QTimer(self)
         self._auto_timer.setInterval(_AUTO_REFRESH_INTERVAL_MS)
-        self._auto_timer.timeout.connect(self.refresh)
+        self._auto_timer.timeout.connect(self._on_auto_refresh)
         self._auto_timer.start()
 
         self.refresh()
@@ -464,6 +494,28 @@ class TaskStatusStrip(QWidget):
     # Slots
     # ------------------------------------------------------------------
 
+    def _on_auto_refresh(self) -> None:
+        if self._should_defer_hidden_refresh():
+            return
+        self.refresh()
+
     def _on_tasks_changed(self, book_id: str) -> None:
-        if book_id == self._book_id:
+        if book_id != self._book_id:
+            return
+        if self._should_defer_hidden_refresh():
+            self._dirty = True
+            return
+        self.refresh()
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        if getattr(self, "_dirty", False):
+            self._dirty = False
             self.refresh()
+
+    def _should_defer_hidden_refresh(self) -> bool:
+        with suppress(RuntimeError):
+            parent = self.parentWidget()
+            if parent is not None and not parent.isVisible():
+                return True
+        return False

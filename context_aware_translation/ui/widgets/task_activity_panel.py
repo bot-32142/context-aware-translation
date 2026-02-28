@@ -19,44 +19,11 @@ from PySide6.QtWidgets import (
 
 from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, TaskAction
 
+from ..i18n import translate_running_stage, translate_task_phase, translate_task_status
 from ..tasks.task_view_model_mapper import map_tasks_to_row_vms
 from ..tasks.task_view_models import TaskRowVM
 
 _AUTO_REFRESH_INTERVAL_MS = 3000
-
-_RUNNING_STAGE_BY_TASK_TYPE: dict[str, str] = {
-    "batch_translation": "Batch translation",
-    "glossary_extraction": "Glossary extraction",
-    "glossary_translation": "Glossary translation",
-    "glossary_review": "Glossary review",
-    "glossary_export": "Glossary export",
-    "translation_text": "Text translation",
-    "translation_manga": "Manga translation",
-    "chunk_retranslation": "Chunk retranslation",
-    "ocr": "OCR",
-    "image_reembedding": "Image reembedding",
-}
-
-_PHASE_LABELS: dict[str, str] = {
-    "ocr": "OCR",
-    "extract_terms": "Extracting terms",
-    "review": "Reviewing terms",
-    "translate_glossary": "Translating glossary",
-    "translate_chunks": "Translating chunks",
-    "reembed": "Reembedding images",
-    "export": "Exporting",
-    "prepare": "Preparing",
-    "translation_submit": "Submitting batch jobs",
-    "translation_poll": "Polling batch jobs",
-    "translation_validate": "Validating batch output",
-    "translation_fallback": "Fallback translation",
-    "apply": "Applying results",
-    "done": "Done",
-}
-
-
-def _humanize_token(value: str) -> str:
-    return " ".join(part for part in value.replace("_", " ").strip().split()).title()
 
 
 def _format_duration(total_seconds: float) -> str:
@@ -144,7 +111,7 @@ class _TaskRow(QWidget):
         """Refresh display labels from an updated view-model."""
         self._vm = vm
         self._title_label.setText(vm.title)
-        self._status_label.setText(vm.status)
+        self._status_label.setText(translate_task_status(vm.status))
         stage = self._stage_text(vm)
         self._phase_label.setText(stage)
         self._phase_label.setVisible(bool(stage))
@@ -177,10 +144,10 @@ class _TaskRow(QWidget):
 
     def _stage_text(self, vm: TaskRowVM) -> str:
         if vm.phase:
-            phase_label = _PHASE_LABELS.get(vm.phase) or _humanize_token(vm.phase)
+            phase_label = translate_task_phase(vm.phase)
             return self.tr("Stage: {0}").format(phase_label)
         if vm.status == "running":
-            default_stage = _RUNNING_STAGE_BY_TASK_TYPE.get(vm.task_type)
+            default_stage = translate_running_stage(vm.task_type)
             if default_stage:
                 return self.tr("Stage: {0}").format(default_stage)
         return ""
@@ -341,7 +308,6 @@ class TaskActivityPanel(QWidget):
             if vm.task_id in self._rows:
                 row = self._rows[vm.task_id]
                 row.update_from_vm(vm)
-                row.retranslate()
             else:
                 row = _TaskRow(vm, self._rows_container)
                 row.retranslate()
@@ -369,14 +335,32 @@ class TaskActivityPanel(QWidget):
     # ------------------------------------------------------------------
 
     def _on_tasks_changed(self, book_id: str) -> None:
-        if book_id == self._book_id:
-            self.refresh()
+        if book_id != self._book_id:
+            return
+        if self._should_defer_hidden_refresh():
+            self._dirty = True
+            return
+        self.refresh()
 
     def _on_auto_refresh(self) -> None:
         # Avoid background churn while panel is hidden; BookWorkspace triggers
         # an explicit refresh when opening the panel.
         if self.isVisible():
             self.refresh()
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        if getattr(self, "_dirty", False):
+            self._dirty = False
+            self.refresh()
+
+    def _should_defer_hidden_refresh(self) -> bool:
+        """Return True when refresh should wait until this panel is shown."""
+        with suppress(RuntimeError):
+            if self.isVisible():
+                return False
+            return self.parentWidget() is not None
+        return False
 
     def _on_run_clicked(self, task_id: str) -> None:
         try:

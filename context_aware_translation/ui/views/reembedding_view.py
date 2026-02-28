@@ -363,11 +363,14 @@ class ReembeddingView(QWidget):
         if not any(c.is_translated and c.translation is not None for c in sorted_chunks):
             return []
 
-        # Text-based types (epub, pdf, scanned_book): concatenate and split by newline
+        # Text-based types (epub, pdf, scanned_book): concatenate and split by newline.
+        # Use split("\n") instead of splitlines() because get_text() joins blocks
+        # with "\n".join(texts), and splitlines() drops trailing empty strings
+        # (e.g. "a\nb\n".splitlines() → ["a","b"] loses the trailing empty block).
         translated_text = "".join(
             c.translation if c.is_translated and c.translation is not None else c.text for c in sorted_chunks
         )
-        return translated_text.splitlines()
+        return translated_text.split("\n")
 
     def _build_items_via_document(self, document_id: int) -> list[_ReembedItem]:
         """Build reembeddable items by loading a Document and calling set_text.
@@ -769,6 +772,9 @@ class ReembeddingView(QWidget):
         """React to engine task-changed events for this book."""
         if book_id != self.book_id:
             return
+        if self._should_defer_task_refresh():
+            self._tasks_dirty = True
+            return
 
         self._update_action_button_states()
         if not self._active_task_id:
@@ -968,6 +974,20 @@ class ReembeddingView(QWidget):
         if event.type() == QEvent.Type.LanguageChange:
             self.retranslateUi()
         super().changeEvent(event)
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        if getattr(self, "_tasks_dirty", False):
+            self._tasks_dirty = False
+            self._on_tasks_changed(self.book_id)
+
+    def _should_defer_task_refresh(self) -> bool:
+        """Return True when task-driven refresh should wait until widget is visible."""
+        with contextlib.suppress(RuntimeError):
+            if self.isVisible():
+                return False
+            return self.parentWidget() is not None
+        return False
 
     def retranslateUi(self) -> None:
         self.tip_label.setText(self._tip_text())

@@ -224,6 +224,118 @@ def _translate_with_context(text: str) -> str:
     return QCoreApplication.translate("ProgressMessages", text)
 
 
+# ---- Task status labels ----
+_TASK_STATUS_LABELS: dict[str, str] = {
+    "queued": QT_TRANSLATE_NOOP("TaskLabels", "Queued"),
+    "running": QT_TRANSLATE_NOOP("TaskLabels", "Running"),
+    "paused": QT_TRANSLATE_NOOP("TaskLabels", "Paused"),
+    "cancel_requested": QT_TRANSLATE_NOOP("TaskLabels", "Cancel Requested"),
+    "cancelling": QT_TRANSLATE_NOOP("TaskLabels", "Cancelling"),
+    "cancelled": QT_TRANSLATE_NOOP("TaskLabels", "Cancelled"),
+    "completed": QT_TRANSLATE_NOOP("TaskLabels", "Completed"),
+    "completed_with_errors": QT_TRANSLATE_NOOP("TaskLabels", "Completed with Errors"),
+    "failed": QT_TRANSLATE_NOOP("TaskLabels", "Failed"),
+}
+
+# ---- Task type titles ----
+_TASK_TYPE_LABELS: dict[str, str] = {
+    "batch_translation": QT_TRANSLATE_NOOP("TaskLabels", "Batch Translation"),
+    "glossary_extraction": QT_TRANSLATE_NOOP("TaskLabels", "Glossary Extraction"),
+    "glossary_export": QT_TRANSLATE_NOOP("TaskLabels", "Glossary Export"),
+    "glossary_review": QT_TRANSLATE_NOOP("TaskLabels", "Glossary Review"),
+    "glossary_translation": QT_TRANSLATE_NOOP("TaskLabels", "Glossary Translation"),
+    "chunk_retranslation": QT_TRANSLATE_NOOP("TaskLabels", "Chunk Retranslation"),
+    "translation_text": QT_TRANSLATE_NOOP("TaskLabels", "Text Translation"),
+    "translation_manga": QT_TRANSLATE_NOOP("TaskLabels", "Manga Translation"),
+    "ocr": QT_TRANSLATE_NOOP("TaskLabels", "OCR"),
+    "image_reembedding": QT_TRANSLATE_NOOP("TaskLabels", "Image Reembedding"),
+}
+
+# ---- Task phase labels ----
+_TASK_PHASE_LABELS: dict[str, str] = {
+    "ocr": QT_TRANSLATE_NOOP("TaskLabels", "OCR"),
+    "extract_terms": QT_TRANSLATE_NOOP("TaskLabels", "Extracting terms"),
+    "review": QT_TRANSLATE_NOOP("TaskLabels", "Reviewing terms"),
+    "translate_glossary": QT_TRANSLATE_NOOP("TaskLabels", "Translating glossary"),
+    "translate_chunks": QT_TRANSLATE_NOOP("TaskLabels", "Translating chunks"),
+    "reembed": QT_TRANSLATE_NOOP("TaskLabels", "Reembedding images"),
+    "export": QT_TRANSLATE_NOOP("TaskLabels", "Exporting"),
+    "prepare": QT_TRANSLATE_NOOP("TaskLabels", "Preparing"),
+    "translation_submit": QT_TRANSLATE_NOOP("TaskLabels", "Submitting batch jobs"),
+    "translation_poll": QT_TRANSLATE_NOOP("TaskLabels", "Polling batch jobs"),
+    "translation_validate": QT_TRANSLATE_NOOP("TaskLabels", "Validating batch output"),
+    "translation_fallback": QT_TRANSLATE_NOOP("TaskLabels", "Fallback translation"),
+    "apply": QT_TRANSLATE_NOOP("TaskLabels", "Applying results"),
+    "done": QT_TRANSLATE_NOOP("TaskLabels", "Done"),
+}
+
+# ---- Running-stage labels (shown when phase is absent) ----
+_RUNNING_STAGE_LABELS: dict[str, str] = {
+    "batch_translation": QT_TRANSLATE_NOOP("TaskLabels", "Batch translation"),
+    "glossary_extraction": QT_TRANSLATE_NOOP("TaskLabels", "Glossary extraction"),
+    "glossary_translation": QT_TRANSLATE_NOOP("TaskLabels", "Glossary translation"),
+    "glossary_review": QT_TRANSLATE_NOOP("TaskLabels", "Glossary review"),
+    "glossary_export": QT_TRANSLATE_NOOP("TaskLabels", "Glossary export"),
+    "translation_text": QT_TRANSLATE_NOOP("TaskLabels", "Text translation"),
+    "translation_manga": QT_TRANSLATE_NOOP("TaskLabels", "Manga translation"),
+    "chunk_retranslation": QT_TRANSLATE_NOOP("TaskLabels", "Chunk retranslation"),
+    "ocr": QT_TRANSLATE_NOOP("TaskLabels", "OCR"),
+    "image_reembedding": QT_TRANSLATE_NOOP("TaskLabels", "Image reembedding"),
+}
+
+# ---- Scope labels ----
+_SCOPE_NO_DOCUMENT = QT_TRANSLATE_NOOP("TaskLabels", "No document scope")
+_SCOPE_ALL_DOCUMENTS = QT_TRANSLATE_NOOP("TaskLabels", "All documents")
+_SCOPE_ONE_DOCUMENT = QT_TRANSLATE_NOOP("TaskLabels", "1 document")
+_SCOPE_N_DOCUMENTS = QT_TRANSLATE_NOOP("TaskLabels", "%1 documents")
+
+
+def _translate_task(text: str) -> str:
+    return QCoreApplication.translate("TaskLabels", text)
+
+
+def translate_task_status(status: str) -> str:
+    """Translate a task status string for display."""
+    label = _TASK_STATUS_LABELS.get(status)
+    return _translate_task(label) if label is not None else status
+
+
+def translate_task_type(task_type: str) -> str:
+    """Translate a task type key for display."""
+    label = _TASK_TYPE_LABELS.get(task_type)
+    return _translate_task(label) if label is not None else task_type
+
+
+def translate_task_phase(phase: str) -> str:
+    """Translate a task phase key for display."""
+    label = _TASK_PHASE_LABELS.get(phase)
+    return _translate_task(label) if label is not None else _humanize_token(phase)
+
+
+def translate_running_stage(task_type: str) -> str:
+    """Translate a running-stage label (used when phase is absent)."""
+    label = _RUNNING_STAGE_LABELS.get(task_type)
+    return _translate_task(label) if label is not None else ""
+
+
+def translate_scope_label(document_count: int | None) -> str:
+    """Translate a scope label based on document count.
+
+    None means no document scope, 0 means all documents.
+    """
+    if document_count is None:
+        return _translate_task(_SCOPE_NO_DOCUMENT)
+    if document_count == 0:
+        return _translate_task(_SCOPE_ALL_DOCUMENTS)
+    if document_count == 1:
+        return _translate_task(_SCOPE_ONE_DOCUMENT)
+    return qarg(_translate_task(_SCOPE_N_DOCUMENTS), document_count)
+
+
+def _humanize_token(value: str) -> str:
+    return " ".join(part for part in value.replace("_", " ").strip().split()).title()
+
+
 def translate_progress_message(message: str) -> str:
     """Translate a progress message emitted by a worker thread.
 

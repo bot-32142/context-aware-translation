@@ -6,26 +6,12 @@ import json
 
 from context_aware_translation.storage.task_store import TaskRecord
 
+from ..i18n import translate_scope_label, translate_task_type
 from .task_view_models import TaskRowVM
-
-_TASK_TYPE_TITLES: dict[str, str] = {
-    "batch_translation": "Batch Translation",
-    "glossary_extraction": "Glossary Extraction",
-    "glossary_export": "Glossary Export",
-    "glossary_review": "Glossary Review",
-    "glossary_translation": "Glossary Translation",
-    "chunk_retranslation": "Chunk Retranslation",
-    "translation_text": "Text Translation",
-    "translation_manga": "Manga Translation",
-    "ocr": "OCR",
-    "image_reembedding": "Image Reembedding",
-}
 
 
 def _make_title(record: TaskRecord) -> str:
-    title = _TASK_TYPE_TITLES.get(record.task_type)
-    if title is None:
-        raise RuntimeError(f"Unknown task type: {record.task_type!r}")
+    title = translate_task_type(record.task_type)
     return f"{title} #{record.task_id[:8]}"
 
 
@@ -34,20 +20,17 @@ _NO_DOCUMENT_TASK_TYPES: frozenset[str] = frozenset({"glossary_export", "glossar
 
 def _make_scope_label(record: TaskRecord) -> str:
     if record.task_type in _NO_DOCUMENT_TASK_TYPES:
-        return "No document scope"
+        return translate_scope_label(None)
     document_ids_json = record.document_ids_json
     if not document_ids_json:
-        return "All documents"
+        return translate_scope_label(0)
     try:
         ids = json.loads(document_ids_json)
     except (json.JSONDecodeError, TypeError):
-        return "All documents"
+        return translate_scope_label(0)
     if not isinstance(ids, list) or len(ids) == 0:
-        return "All documents"
-    count = len(ids)
-    if count == 1:
-        return "1 document"
-    return f"{count} documents"
+        return translate_scope_label(0)
+    return translate_scope_label(len(ids))
 
 
 def _normalize_progress(value: object) -> int:

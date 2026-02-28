@@ -876,8 +876,26 @@ class TranslationView(QWidget):
         """React to engine task-changed events for this book."""
         if book_id != self.book_id or getattr(self, "_is_cleaned_up", False):
             return
+        if self._should_defer_task_refresh():
+            self._tasks_dirty = True
+            return
         self._handle_chunk_retrans_task_update()
         self._update_start_button_state()
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        if getattr(self, "_tasks_dirty", False):
+            self._tasks_dirty = False
+            self._handle_chunk_retrans_task_update()
+            self._update_start_button_state()
+
+    def _should_defer_task_refresh(self) -> bool:
+        """Return True when task-driven refresh should wait until widget is visible."""
+        with suppress(RuntimeError):
+            if self.isVisible():
+                return False
+            return self.parentWidget() is not None
+        return False
 
     def _handle_chunk_retrans_task_update(self) -> None:
         """Check and react to chunk_retranslation task state changes."""

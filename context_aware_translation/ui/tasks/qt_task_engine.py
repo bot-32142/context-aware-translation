@@ -34,6 +34,18 @@ class TaskEngine(QObject):
         self._store = store
         self._autorun_timer: QTimer | None = None
         self._was_running: bool = False
+
+        # Coalesce rapid-fire task-changed signals into at most one UI
+        # refresh per 250 ms window.  Worker threads emit
+        # ``enqueue_task_changed`` on every DB persist; without
+        # coalescing, 8 connected widgets each re-query the DB on every
+        # emission, starving the event loop.
+        self._pending_book_ids: set[str] = set()
+        self._coalesce_timer = QTimer(self)
+        self._coalesce_timer.setSingleShot(True)
+        self._coalesce_timer.setInterval(250)
+        self._coalesce_timer.timeout.connect(self._flush_task_changed)
+
         self.enqueue_task_changed.connect(self._emit_task_changed, Qt.ConnectionType.QueuedConnection)
 
     @property
@@ -305,7 +317,16 @@ class TaskEngine(QObject):
 
     @Slot(str)
     def _emit_task_changed(self, book_id: str) -> None:
-        self.tasks_changed.emit(book_id)
+        self._pending_book_ids.add(book_id)
+        if not self._coalesce_timer.isActive():
+            self._coalesce_timer.start()
+
+    @Slot()
+    def _flush_task_changed(self) -> None:
+        book_ids = list(self._pending_book_ids)
+        self._pending_book_ids.clear()
+        for book_id in book_ids:
+            self.tasks_changed.emit(book_id)
 
     # ------------------------------------------------------------------
     # Shutdown
@@ -313,6 +334,10 @@ class TaskEngine(QObject):
 
     def close(self) -> None:
         self.stop_autorun()
+        # Flush any coalesced task-changed notifications before tearing down.
+        if self._coalesce_timer.isActive():
+            self._coalesce_timer.stop()
+            self._flush_task_changed()
         # Request interruption for all active workers
         for _task_id, worker in self._core.active_worker_items():
             if hasattr(worker, "requestInterruption"):

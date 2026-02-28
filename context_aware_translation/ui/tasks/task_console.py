@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from context_aware_translation.workflow.tasks.models import TaskAction
 
+from ..i18n import translate_task_phase, translate_task_status
 from .task_view_model_mapper import map_tasks_to_row_vms
 from .task_view_models import TaskRowVM
 
@@ -38,7 +39,9 @@ def _format_eta(seconds_left: float) -> str:
 
 def _row_text(vm: TaskRowVM, start_times: dict[str, float]) -> str:
     """Format a single-line display string for a TaskRowVM."""
-    text = f"#{vm.task_id[:8]} | {vm.status} | {vm.phase} | {vm.completed_items}/{vm.total_items}"
+    status = translate_task_status(vm.status)
+    phase = translate_task_phase(vm.phase) if vm.phase else ""
+    text = f"#{vm.task_id[:8]} | {status} | {phase} | {vm.completed_items}/{vm.total_items}"
     if vm.status == "running" and vm.task_id in start_times:
         elapsed = time.monotonic() - start_times[vm.task_id]
         if elapsed > 0 and vm.completed_items > 0 and vm.total_items > 0:
@@ -240,7 +243,29 @@ class TaskConsole(QWidget):
     # ------------------------------------------------------------------
 
     def _on_tasks_changed(self, book_id: str) -> None:
-        if book_id == self._book_id:
+        if book_id != self._book_id:
+            return
+        if self._should_defer_hidden_refresh():
+            self._dirty = True
+            return
+        self.refresh()
+
+    def _should_defer_hidden_refresh(self) -> bool:
+        """Return True when refresh should be deferred until the widget is shown.
+
+        Embedded consoles in inactive tabs can defer expensive refresh work.
+        Standalone/unparented consoles (common in tests) refresh immediately.
+        """
+        with suppress(RuntimeError):
+            if self.isVisible():
+                return False
+            return self.parentWidget() is not None
+        return False
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        if getattr(self, "_dirty", False):
+            self._dirty = False
             self.refresh()
 
     def _on_row_changed(self, _row: int) -> None:
