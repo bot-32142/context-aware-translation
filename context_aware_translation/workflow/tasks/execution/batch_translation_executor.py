@@ -23,8 +23,9 @@ from context_aware_translation.storage.llm_batch_store import (
     LLMBatchStore,
 )
 from context_aware_translation.storage.task_store import TaskRecord, TaskStore
-from context_aware_translation.workflow.service import WorkflowService
+from context_aware_translation.workflow.runtime import WorkflowContext
 from context_aware_translation.workflow.tasks.execution.batch_translation_ops import (
+    StageItemState,
     apply_results,
     compute_phase_progress,
     decode_task_payload,
@@ -114,10 +115,39 @@ def _is_transient_batch_error(exc: Exception) -> bool:
 
 def prepare_payload_for_rerun(payload: dict[str, Any]) -> dict[str, Any]:
     """Reset a batch-task payload so unapplied items are retried."""
-    def _normalize_stage(existing: dict[str, Any]) -> dict[str, Any]:
-        base = new_stage_state(messages=existing.get("messages") if existing else None)
-        base.update(existing)
-        return base
+
+    def _normalize_stage(existing: dict[str, Any]) -> StageItemState:
+        normalized = new_stage_state(messages=existing.get("messages") if existing else None)
+
+        messages = existing.get("messages")
+        if messages is None or isinstance(messages, list):
+            normalized["messages"] = messages
+
+        request_hash = existing.get("request_hash")
+        if request_hash is None or isinstance(request_hash, str):
+            normalized["request_hash"] = request_hash
+
+        inlined_request = existing.get("inlined_request")
+        if inlined_request is None or isinstance(inlined_request, dict):
+            normalized["inlined_request"] = inlined_request
+
+        state = existing.get("state")
+        if isinstance(state, str) and state:
+            normalized["state"] = state
+
+        error = existing.get("error")
+        if error is None or isinstance(error, str):
+            normalized["error"] = error
+
+        fallback_attempted = existing.get("fallback_attempted")
+        if isinstance(fallback_attempted, bool):
+            normalized["fallback_attempted"] = fallback_attempted
+
+        output_blocks = existing.get("output_blocks")
+        if output_blocks is None or isinstance(output_blocks, list):
+            normalized["output_blocks"] = output_blocks
+
+        return normalized
 
     def _is_stage_final(existing: dict[str, Any]) -> bool:
         state = str(existing.get("state") or "")
@@ -131,7 +161,8 @@ def prepare_payload_for_rerun(payload: dict[str, Any]) -> dict[str, Any]:
                 continue
             if bool(item.get("applied")):
                 continue
-            existing_translation = item.get("translation") if isinstance(item.get("translation"), dict) else {}
+            translation_raw = item.get("translation")
+            existing_translation: dict[str, Any] = translation_raw if isinstance(translation_raw, dict) else {}
             translation_final = _is_stage_final(existing_translation)
             if translation_final:
                 item["translation"] = _normalize_stage(existing_translation)
@@ -140,7 +171,8 @@ def prepare_payload_for_rerun(payload: dict[str, Any]) -> dict[str, Any]:
                     messages=existing_translation.get("messages") if existing_translation else None
                 )
 
-            existing_polish = item.get("polish") if isinstance(item.get("polish"), dict) else {}
+            polish_raw = item.get("polish")
+            existing_polish: dict[str, Any] = polish_raw if isinstance(polish_raw, dict) else {}
             polish_final = _is_stage_final(existing_polish)
             if translation_final and polish_final:
                 item["polish"] = _normalize_stage(existing_polish)
@@ -157,7 +189,7 @@ class BatchTranslationExecutor:
     def __init__(
         self,
         *,
-        workflow: WorkflowService,
+        workflow: WorkflowContext,
         task_store: TaskStore,
         llm_batch_store: LLMBatchStore,
         poll_interval_sec: int = DEFAULT_TASK_POLL_INTERVAL_SEC,
@@ -174,7 +206,7 @@ class BatchTranslationExecutor:
     @classmethod
     def from_workflow(
         cls,
-        workflow: WorkflowService,
+        workflow: WorkflowContext,
         *,
         task_store: TaskStore | None = None,
         notify_task_changed: Callable[[str], None] | None = None,
@@ -422,6 +454,7 @@ class BatchTranslationExecutor:
         task = self.task_store.get(task_id)
         if task is None:
             raise ValueError(f"Task not found: {task_id}")
+        payload: dict[str, Any] | None = None
         if task.status == STATUS_COMPLETED:
             return task
         if task.status in _RERUNNABLE_TERMINAL_STATUSES:
@@ -438,7 +471,6 @@ class BatchTranslationExecutor:
         if task.cancel_requested:
             return await self.request_cancel(task_id)
 
-        payload: dict[str, Any] | None = None
         try:
             task = self._persist(task_id, status=STATUS_RUNNING)
             payload = self._decode_payload(task)
@@ -515,30 +547,30 @@ class BatchTranslationExecutor:
                 if payload is not None:
                     self._persist(task_id, payload_json=json.dumps(payload, ensure_ascii=False))
                 return await self.request_cancel(task_id)
-            updates: dict[str, object] = {"status": STATUS_PAUSED}
+            pause_updates: dict[str, object] = {"status": STATUS_PAUSED}
             if payload is not None:
-                updates["payload_json"] = json.dumps(payload, ensure_ascii=False)
-            return self._persist(task_id, **updates)
+                pause_updates["payload_json"] = json.dumps(payload, ensure_ascii=False)
+            return self._persist(task_id, **pause_updates)
         except OperationCancelledError:
             refreshed = self.task_store.get(task_id)
             if refreshed is not None and refreshed.cancel_requested:
                 if payload is not None:
                     self._persist(task_id, payload_json=json.dumps(payload, ensure_ascii=False))
                 return await self.request_cancel(task_id)
-            updates: dict[str, object] = {"status": STATUS_PAUSED}
+            cancel_pause_updates: dict[str, object] = {"status": STATUS_PAUSED}
             if payload is not None:
-                updates["payload_json"] = json.dumps(payload, ensure_ascii=False)
-            return self._persist(task_id, **updates)
+                cancel_pause_updates["payload_json"] = json.dumps(payload, ensure_ascii=False)
+            return self._persist(task_id, **cancel_pause_updates)
         except Exception as exc:
             if _is_transient_batch_error(exc):
                 logger.warning("Batch translation task paused on transient error: %s (%s)", task_id, exc)
-                updates: dict[str, object] = {
+                transient_updates: dict[str, object] = {
                     "status": STATUS_PAUSED,
                     "last_error": f"{type(exc).__name__}: {exc}",
                 }
                 if payload is not None:
-                    updates["payload_json"] = json.dumps(payload, ensure_ascii=False)
-                return self._persist(task_id, **updates)
+                    transient_updates["payload_json"] = json.dumps(payload, ensure_ascii=False)
+                return self._persist(task_id, **transient_updates)
             logger.exception("Batch translation task failed: %s", task_id)
             return self._persist(
                 task_id,

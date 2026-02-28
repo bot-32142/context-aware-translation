@@ -34,7 +34,7 @@ from context_aware_translation.workflow.tasks.models import (
     TaskAction,
 )
 
-from ..i18n import qarg
+from ..i18n import qarg, translate_task_block_reason
 from ..utils import create_tip_label, translate_document_type
 from ..widgets.task_status_card import TaskStatusStrip
 from ..workers.operation_tracker import DocumentOperationTracker
@@ -421,7 +421,7 @@ class TranslationView(QWidget):
             decision = self._task_engine.preflight(task_type, self.book_id, params, TaskAction.RUN)
             if not decision.allowed:
                 start_allowed = False
-                deny_reason = deny_reason or decision.reason
+                deny_reason = deny_reason or translate_task_block_reason(decision.reason, decision.code)
 
         # If selection has no typed docs, fall back to allowing start (validate at submit time)
         if not saw_bucket:
@@ -452,9 +452,19 @@ class TranslationView(QWidget):
         manga_ids = [d["document_id"] for d in documents if d.get("document_type") == "manga"]
         return text_ids, manga_ids
 
-    def _is_chunk_retranslation_running(self) -> bool:
-        """Return True if any pending chunk_retranslation task is active (non-terminal)."""
+    def _has_active_chunk_retranslations(self) -> bool:
+        """Return True if any pending chunk_retranslation task is still active."""
         for task_id in self._pending_retranslations:
+            record = self._task_engine.get_task(task_id)
+            if record is not None and record.status not in TERMINAL_TASK_STATUSES:
+                return True
+        return False
+
+    def _has_pending_retranslation_for_chunk(self, chunk_id: int) -> bool:
+        """Return True if *chunk_id* already has an active pending retranslation task."""
+        for task_id, (pending_chunk_id, _doc_id) in self._pending_retranslations.items():
+            if pending_chunk_id != chunk_id:
+                continue
             record = self._task_engine.get_task(task_id)
             if record is not None and record.status not in TERMINAL_TASK_STATUSES:
                 return True
@@ -479,13 +489,12 @@ class TranslationView(QWidget):
         """Enable/disable chunk retranslate based on task state and selection."""
         if not hasattr(self, "retranslate_chunk_btn"):
             return
-        if self._is_chunk_retranslation_running():
-            return
 
         current_chunk = getattr(self, "_current_chunk", None)
         has_selected_chunk = current_chunk is not None
         blocked_by_batch_tasks = False
         blocked_by_active_operation = False
+        blocked_by_same_chunk = False
         if has_selected_chunk:
             current_doc_id = getattr(current_chunk, "document_id", None)
             if current_doc_id is not None:
@@ -494,14 +503,20 @@ class TranslationView(QWidget):
                     self.book_id,
                     [current_doc_id],
                 )
+            current_chunk_id = getattr(current_chunk, "chunk_id", None)
+            if current_chunk_id is not None:
+                blocked_by_same_chunk = self._has_pending_retranslation_for_chunk(int(current_chunk_id))
         self.retranslate_chunk_btn.setEnabled(
-            has_selected_chunk and not blocked_by_batch_tasks and not blocked_by_active_operation
+            has_selected_chunk
+            and not blocked_by_batch_tasks
+            and not blocked_by_active_operation
+            and not blocked_by_same_chunk
         )
         if blocked_by_batch_tasks:
             self.retranslate_chunk_btn.setToolTip(
                 self.tr("Retranslate is unavailable while a batch task covers this document.")
             )
-        elif blocked_by_active_operation:
+        elif blocked_by_active_operation or blocked_by_same_chunk:
             self.retranslate_chunk_btn.setToolTip(
                 self.tr("Retranslate is unavailable while the selected document has an active operation.")
             )
@@ -509,6 +524,10 @@ class TranslationView(QWidget):
             self.retranslate_chunk_btn.setToolTip(
                 self.tr("Retranslate the selected chunk using the LLM (incurs API cost).")
             )
+        if self._has_active_chunk_retranslations():
+            self.retranslate_chunk_btn.setText(self.tr("Retranslating..."))
+        else:
+            self.retranslate_chunk_btn.setText(self.tr("Retranslate"))
 
     def _is_retranslation(self) -> bool:
         """Check if the current document selection would be a retranslation."""
@@ -681,7 +700,11 @@ class TranslationView(QWidget):
                 TaskAction.RUN,
             )
             if not decision.allowed:
-                QMessageBox.warning(self, self.tr("Not Supported"), decision.reason)
+                QMessageBox.warning(
+                    self,
+                    self.tr("Not Supported"),
+                    translate_task_block_reason(decision.reason, decision.code),
+                )
                 return None
             if not config_dict.get("translator_batch_config"):
                 QMessageBox.warning(
@@ -773,7 +796,7 @@ class TranslationView(QWidget):
             params = {"document_ids": bucket_ids, "force": force, "skip_context": skip_context}
             decision = self._task_engine.preflight(task_type, self.book_id, params, TaskAction.RUN)
             if not decision.allowed:
-                preflight_errors.append(f"{task_type}: {decision.reason}")
+                preflight_errors.append(f"{task_type}: {translate_task_block_reason(decision.reason, decision.code)}")
 
         if preflight_errors:
             QMessageBox.warning(
@@ -823,7 +846,7 @@ class TranslationView(QWidget):
                         self.tr("Start Failed"),
                         qarg(
                             self.tr("Failed to start translation task:\n%1"),
-                            record.last_error or self.tr("Unknown error"),
+                            translate_task_block_reason(record.last_error) or self.tr("Unknown error"),
                         ),
                     )
                 else:
@@ -832,7 +855,7 @@ class TranslationView(QWidget):
                         self.tr("Partial Start"),
                         qarg(
                             self.tr("First task started but second task failed:\n%1"),
-                            record.last_error or self.tr("Unknown error"),
+                            translate_task_block_reason(record.last_error) or self.tr("Unknown error"),
                         ),
                     )
                 return
@@ -1167,12 +1190,11 @@ class TranslationView(QWidget):
             )
             return
 
-        if self._is_chunk_retranslation_running():
-            return
-
         chunk = self._current_chunk
         if chunk.document_id is None:
             QMessageBox.warning(self, self.tr("Error"), self.tr("Chunk has no associated document."))
+            return
+        if self._has_pending_retranslation_for_chunk(int(chunk.chunk_id)):
             return
 
         reply = QMessageBox.question(
@@ -1199,6 +1221,7 @@ class TranslationView(QWidget):
             skip_context=self.skip_context_cb.isChecked(),
         )
         self._pending_retranslations[record.task_id] = (chunk.chunk_id, chunk.document_id)
+        self._update_retranslate_chunk_button_state()
         if record.status == "failed":
             self._on_retranslate_error(record.last_error or "Task failed to start")
             self._pending_retranslations.pop(record.task_id, None)
@@ -1238,7 +1261,6 @@ class TranslationView(QWidget):
 
     def _on_retranslate_finished(self) -> None:
         """Clean up after retranslation task(s) finish."""
-        self.retranslate_chunk_btn.setText(self.tr("Retranslate"))
         self._update_retranslate_chunk_button_state()
 
     def _build_chunk_record(self, chunk: TranslationChunkRecord, translation_text: str) -> TranslationChunkRecord:

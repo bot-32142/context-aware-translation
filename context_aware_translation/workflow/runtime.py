@@ -9,8 +9,8 @@ from context_aware_translation.storage.document_repository import DocumentReposi
 
 
 @dataclass
-class WorkflowRuntime:
-    """Owned runtime resources for a workflow context."""
+class WorkflowContext:
+    """Data-only workflow context passed to workflow ops."""
 
     config: Config
     llm_client: LLMClient
@@ -26,3 +26,7 @@ class WorkflowRuntime:
         if self.owns_context_tree:
             self.context_tree.close()
         self.db.close()
+
+
+# Backward-compatible alias for existing imports.
+WorkflowRuntime = WorkflowContext

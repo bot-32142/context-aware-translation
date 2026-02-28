@@ -10,6 +10,8 @@ from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.core.progress import ProgressUpdate
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.task_store import TaskStore
+from context_aware_translation.workflow.runtime import WorkflowContext
+from context_aware_translation.workflow.services import bootstrap_ops, export_ops
 from context_aware_translation.workflow.session import WorkflowSession
 
 from .base_worker import BaseWorker
@@ -75,20 +77,18 @@ class ImageReembeddingTaskWorker(BaseWorker):
         finally:
             self._notify()
 
-    async def _do_reembedding(self, svc: object) -> None:
-        from context_aware_translation.workflow.service import WorkflowService
-
-        assert isinstance(svc, WorkflowService)
-        docs = svc._load_documents(self._document_ids)
+    async def _do_reembedding(self, context: WorkflowContext) -> None:
+        docs = bootstrap_ops.load_documents(context, self._document_ids)
         for doc in docs:
-            await svc.materialize_document_translation_state(
+            await export_ops.materialize_document_translation_state(
+                context,
                 doc,
                 allow_original_fallback=True,
                 cancel_check=self._is_cancelled,
                 progress_callback=self._on_progress,
             )
             await doc.reembed(
-                svc.config.image_reembedding_config,
+                context.config.image_reembedding_config,
                 force=self._force,
                 source_ids=self._source_ids,
                 cancel_check=self._is_cancelled,

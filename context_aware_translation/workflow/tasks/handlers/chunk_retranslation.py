@@ -60,11 +60,17 @@ class ChunkRetranslationHandler:
     def claims(self, record: TaskRecord, payload: Any) -> frozenset[ResourceClaim]:
         book_id = record.book_id
         doc_id: int | None = (payload or {}).get("document_id")
+        chunk_id: int | None = (payload or {}).get("chunk_id")
         claims: set[ResourceClaim] = set()
         if doc_id is not None:
-            claims.add(ResourceClaim("doc", book_id, str(doc_id)))
+            # Allow parallel chunk retranslation within the same document while still
+            # conflicting with document-wide WRITE_EXCLUSIVE operations.
+            claims.add(ResourceClaim("doc", book_id, str(doc_id), ClaimMode.WRITE_COOPERATIVE))
         else:
             claims.add(ResourceClaim("doc", book_id, "*"))
+        if chunk_id is not None:
+            # Prevent duplicate concurrent retranslation for the exact same chunk.
+            claims.add(ResourceClaim("chunk", book_id, str(chunk_id)))
         claims.add(ResourceClaim("glossary_state", book_id, "*", ClaimMode.READ_SHARED))
         claims.add(ResourceClaim("context_tree", book_id, "*", ClaimMode.WRITE_COOPERATIVE))
         return frozenset(claims)

@@ -9,6 +9,7 @@ from collections.abc import Callable
 from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.task_store import TaskStore
+from context_aware_translation.workflow.services import translation_ops
 from context_aware_translation.workflow.session import WorkflowSession
 
 from .base_worker import BaseWorker
@@ -63,9 +64,10 @@ class ChunkRetranslationTaskWorker(BaseWorker):
                 session_ctx = WorkflowSession.from_snapshot(self._config_snapshot_json, self._book_id)
             else:
                 session_ctx = WorkflowSession.from_book(self._book_manager, self._book_id)
-            with session_ctx as session:
+            with session_ctx as context:
                 new_translation = asyncio.run(
-                    session.retranslate_chunk(
+                    translation_ops.retranslate_chunk(
+                        context,
                         chunk_id=self._chunk_id,
                         document_id=self._document_id,
                         skip_context=self._skip_context,

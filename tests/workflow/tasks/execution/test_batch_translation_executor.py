@@ -221,9 +221,7 @@ async def test_request_cancel_recovers_known_batch_responses_before_cancel(tmp_p
         created = _create_task(
             executor,
             book_id="book-1",
-            payload_json=(
-                '{"translation":{"jobs":[{"batch_name":"batches/active","request_hashes":["h1","h2"]}]}}'
-            ),
+            payload_json=('{"translation":{"jobs":[{"batch_name":"batches/active","request_hashes":["h1","h2"]}]}}'),
         )
         executor.gateway.poll_once = AsyncMock(return_value=BatchPollResult(status=POLL_STATUS_COMPLETED))
         executor.gateway.cancel_batch = AsyncMock()

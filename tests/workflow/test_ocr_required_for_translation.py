@@ -12,7 +12,8 @@ from context_aware_translation.documents.manga import MangaDocument
 from context_aware_translation.documents.pdf import PDFDocument
 from context_aware_translation.documents.scanned_book import ScannedBookDocument
 from context_aware_translation.documents.text import TextDocument
-from context_aware_translation.workflow.service import WorkflowService
+from context_aware_translation.workflow.runtime import WorkflowContext
+from context_aware_translation.workflow.services import bootstrap_ops
 
 # =========================================================================
 # Flag value tests
@@ -41,7 +42,7 @@ def test_image_documents_require_ocr_for_translation(doc_cls: type) -> None:
 # =========================================================================
 
 
-def _make_service() -> WorkflowService:
+def _make_context() -> WorkflowContext:
     config = MagicMock()
     config.ocr_config = None
     config.translator_config = SimpleNamespace(chunk_size=500)
@@ -49,7 +50,7 @@ def _make_service() -> WorkflowService:
     manager = MagicMock()
     manager.add_text = MagicMock()
 
-    return WorkflowService(
+    return WorkflowContext(
         config=config,
         llm_client=MagicMock(),
         context_tree=MagicMock(),
@@ -62,7 +63,7 @@ def _make_service() -> WorkflowService:
 @pytest.mark.asyncio
 async def test_epub_with_pending_ocr_proceeds_through_process_document():
     """EPUB with incomplete OCR should NOT raise ValueError."""
-    service = _make_service()
+    context = _make_context()
 
     document = MagicMock()
     document.document_id = 1
@@ -73,8 +74,8 @@ async def test_epub_with_pending_ocr_proceeds_through_process_document():
     document.get_text.return_value = "Hello world"
     document.mark_text_added = MagicMock()
 
-    with patch.object(service, "_load_documents", return_value=[document]):
-        await service._process_document()
+    with patch("context_aware_translation.workflow.services.bootstrap_ops.load_documents", return_value=[document]):
+        await bootstrap_ops.process_document(context)
 
     document.get_text.assert_called_once()
     document.mark_text_added.assert_called_once()
@@ -83,7 +84,7 @@ async def test_epub_with_pending_ocr_proceeds_through_process_document():
 @pytest.mark.asyncio
 async def test_non_epub_with_pending_ocr_raises_error():
     """Non-EPUB document with incomplete OCR should raise ValueError."""
-    service = _make_service()
+    context = _make_context()
 
     document = MagicMock()
     document.document_id = 1
@@ -92,16 +93,16 @@ async def test_non_epub_with_pending_ocr_raises_error():
     document.is_ocr_completed.return_value = False
 
     with (
-        patch.object(service, "_load_documents", return_value=[document]),
+        patch("context_aware_translation.workflow.services.bootstrap_ops.load_documents", return_value=[document]),
         pytest.raises(ValueError, match="has not completed OCR"),
     ):
-        await service._process_document()
+        await bootstrap_ops.process_document(context)
 
 
 @pytest.mark.asyncio
 async def test_epub_with_completed_ocr_also_works():
     """EPUB with completed OCR should proceed normally."""
-    service = _make_service()
+    context = _make_context()
 
     document = MagicMock()
     document.document_id = 1
@@ -112,7 +113,7 @@ async def test_epub_with_completed_ocr_also_works():
     document.get_text.return_value = "Hello world"
     document.mark_text_added = MagicMock()
 
-    with patch.object(service, "_load_documents", return_value=[document]):
-        await service._process_document()
+    with patch("context_aware_translation.workflow.services.bootstrap_ops.load_documents", return_value=[document]):
+        await bootstrap_ops.process_document(context)
 
     document.get_text.assert_called_once()

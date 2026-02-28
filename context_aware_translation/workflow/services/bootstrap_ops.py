@@ -4,10 +4,11 @@ import threading
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from context_aware_translation.documents.base import is_ocr_required_for_type
+from context_aware_translation.core.cancellation import raise_if_cancelled
+from context_aware_translation.documents.base import Document, is_ocr_required_for_type
 
 if TYPE_CHECKING:
-    from context_aware_translation.workflow.service import WorkflowService
+    from context_aware_translation.workflow.runtime import WorkflowContext
 
 
 BOOTSTRAP_REGISTRY_LOCK = threading.Lock()
@@ -36,29 +37,41 @@ def is_missing_source_language_error(exc: BaseException) -> bool:
     return ("source language not found" in message) or ("no text chunks found" in message)
 
 
+def check_cancel(cancel_check: Callable[[], bool] | None) -> None:
+    """Raise cancellation if requested."""
+    raise_if_cancelled(cancel_check)
+
+
+def load_documents(workflow: WorkflowContext, document_ids: list[int] | None = None) -> list[Document]:
+    """Load documents by IDs, or all documents if None."""
+    if document_ids is None:
+        return Document.load_all(workflow.document_repo, workflow.config.ocr_config)
+    return Document.load_by_ids(workflow.document_repo, document_ids, workflow.config.ocr_config)
+
+
 async def ensure_source_language(
-    workflow: WorkflowService,
+    workflow: WorkflowContext,
     *,
     cancel_check: Callable[[], bool] | None = None,
 ) -> None:
     """Ensure source language is available for LLM-dependent glossary/translation steps."""
-    workflow._check_cancel(cancel_check)
+    check_cancel(cancel_check)
     await workflow.manager.detect_language(cancel_check=cancel_check)
 
 
 async def process_document(
-    workflow: WorkflowService,
+    workflow: WorkflowContext,
     document_ids: list[int] | None = None,
     *,
     cancel_check: Callable[[], bool] | None = None,
 ) -> None:
     """Process documents, adding their text to the context manager with document_id."""
-    documents = workflow._load_documents(document_ids)
+    documents = load_documents(workflow, document_ids)
     if not documents:
         raise ValueError("No documents found in database")
 
     for document in documents:
-        workflow._check_cancel(cancel_check)
+        check_cancel(cancel_check)
         if not document.is_ocr_completed() and document.ocr_required_for_translation:
             raise ValueError(
                 f"Document {document.document_id} has not completed OCR. "
@@ -80,38 +93,38 @@ async def process_document(
 
 
 async def prepare_llm_prerequisites(
-    workflow: WorkflowService,
+    workflow: WorkflowContext,
     document_ids: list[int] | None,
     *,
     cancel_check: Callable[[], bool] | None = None,
 ) -> None:
     """Prepare document text/chunks and source language for LLM-driven steps."""
-    lock = workflow._get_bootstrap_lock(workflow.book_id)
+    lock = get_bootstrap_lock(workflow.book_id)
     with lock:
-        workflow._check_cancel(cancel_check)
-        await workflow._process_document(document_ids, cancel_check=cancel_check)
-        workflow._check_cancel(cancel_check)
-        await workflow._ensure_source_language(cancel_check=cancel_check)
+        check_cancel(cancel_check)
+        await process_document(workflow, document_ids, cancel_check=cancel_check)
+        check_cancel(cancel_check)
+        await ensure_source_language(workflow, cancel_check=cancel_check)
 
 
 async def ensure_glossary_source_language(
-    workflow: WorkflowService,
+    workflow: WorkflowContext,
     *,
     cancel_check: Callable[[], bool] | None = None,
 ) -> None:
     """Ensure source language for glossary-only operations without document preflight."""
-    workflow._check_cancel(cancel_check)
+    check_cancel(cancel_check)
     source_language = workflow.db.get_source_language()
     if source_language:
         return
 
     # Hidden best-effort prep: add text from docs that are already ready.
     # OCR-blocked document types are skipped rather than failing.
-    documents = sorted(workflow._load_documents(None), key=lambda doc: int(doc.document_id))
+    documents = sorted(load_documents(workflow, None), key=lambda doc: int(doc.document_id))
     translator_config = workflow.config.translator_config
     assert translator_config is not None
     for document in documents:
-        workflow._check_cancel(cancel_check)
+        check_cancel(cancel_check)
         if document.is_text_added():
             continue
         if document.ocr_required_for_translation and not document.is_ocr_completed():
@@ -127,17 +140,17 @@ async def ensure_glossary_source_language(
 
     # First try standard chunk-based detection (if any chunks now exist).
     try:
-        await workflow._ensure_source_language(cancel_check=cancel_check)
+        await ensure_source_language(workflow, cancel_check=cancel_check)
         return
     except ValueError as exc:
-        if not workflow._is_missing_source_language_error(exc):
+        if not is_missing_source_language_error(exc):
             raise
 
     # Fallback to glossary table text (imported terms, etc.).
     terms = workflow.db.list_terms(limit=80)
     sample_parts: list[str] = []
     for term in terms:
-        workflow._check_cancel(cancel_check)
+        check_cancel(cancel_check)
         key = (term.key or "").strip()
         if key:
             sample_parts.append(key)
@@ -158,7 +171,7 @@ async def ensure_glossary_source_language(
 
 
 def resolve_preflight_document_ids(
-    workflow: WorkflowService,
+    workflow: WorkflowContext,
     document_ids: list[int] | None,
 ) -> list[int] | None:
     """Resolve document IDs to preflight before translation."""

@@ -4,14 +4,15 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from context_aware_translation.core.progress import ProgressCallback, ProgressUpdate, WorkflowStep
+from context_aware_translation.workflow.services import bootstrap_ops
 
 if TYPE_CHECKING:
     from context_aware_translation.documents.base import Document
-    from context_aware_translation.workflow.service import WorkflowService
+    from context_aware_translation.workflow.runtime import WorkflowContext
 
 
 async def run_ocr(
-    workflow: WorkflowService,
+    workflow: WorkflowContext,
     *,
     document_loader: Callable[..., list[Document]],
     progress_callback: ProgressCallback | None = None,
@@ -20,7 +21,7 @@ async def run_ocr(
 ) -> int:
     """Run OCR on documents that need it and return processed source count."""
     total_processed = 0
-    workflow._check_cancel(cancel_check)
+    bootstrap_ops.check_cancel(cancel_check)
     documents = document_loader(workflow.document_repo, workflow.config.ocr_config)
 
     if not documents:
@@ -37,7 +38,7 @@ async def run_ocr(
 
     total_sources = len(all_sources)
 
-    workflow._check_cancel(cancel_check)
+    bootstrap_ops.check_cancel(cancel_check)
     if progress_callback and total_sources > 0:
         progress_callback(
             ProgressUpdate(
@@ -50,7 +51,7 @@ async def run_ocr(
 
     current = 0
     for document in documents:
-        workflow._check_cancel(cancel_check)
+        bootstrap_ops.check_cancel(cancel_check)
         if workflow.config.ocr_config is not None:
             if cancel_check is None:
                 processed = await document.process_ocr(workflow.llm_client, source_ids)

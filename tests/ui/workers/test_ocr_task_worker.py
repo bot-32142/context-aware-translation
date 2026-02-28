@@ -63,7 +63,7 @@ def _make_pending_sources(*source_ids: int) -> list[dict]:
 
 
 def test_run_ocr_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    """run action calls session.run_ocr() and updates task status to completed."""
+    """run action calls ocr ops and updates task status to completed."""
     from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
 
     task_store = MagicMock()
@@ -88,12 +88,18 @@ def test_run_ocr_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         lambda *_args, **_kwargs: mock_repo,
     )
 
-    mock_session = MagicMock()
-    mock_session.run_ocr = MagicMock(return_value=_async_noop())
+    mock_context = MagicMock()
+
+    async def _run_ocr(_context, **_kwargs):
+        return None
 
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _WorkflowSessionContext(mock_session),
+        lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        _run_ocr,
     )
 
     success, cancelled, errors = _capture_signals(worker)
@@ -135,17 +141,19 @@ def test_run_ocr_with_source_ids_none_resolves_all_pending(monkeypatch: pytest.M
     )
 
     captured_source_ids: list = []
-    mock_session = MagicMock()
+    mock_context = MagicMock()
 
-    async def _capture_run_ocr(**kwargs):
+    async def _capture_run_ocr(_context, **kwargs):
         ids = kwargs.get("source_ids", [])
         captured_source_ids.extend(ids or [])
 
-    mock_session.run_ocr = _capture_run_ocr
-
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _WorkflowSessionContext(mock_session),
+        lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        _capture_run_ocr,
     )
 
     worker.run()
@@ -183,17 +191,19 @@ def test_run_ocr_filters_cross_document_source_ids(monkeypatch: pytest.MonkeyPat
     )
 
     captured_source_ids: list = []
-    mock_session = MagicMock()
+    mock_context = MagicMock()
 
-    async def _capture_run_ocr(**kwargs):
+    async def _capture_run_ocr(_context, **kwargs):
         ids = kwargs.get("source_ids", [])
         captured_source_ids.extend(ids or [])
 
-    mock_session.run_ocr = _capture_run_ocr
-
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _WorkflowSessionContext(mock_session),
+        lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        _capture_run_ocr,
     )
 
     worker.run()
@@ -230,12 +240,18 @@ def test_run_ocr_cancellation_marks_cancelled(monkeypatch: pytest.MonkeyPatch, t
         lambda *_args, **_kwargs: mock_repo,
     )
 
-    mock_session = MagicMock()
-    mock_session.run_ocr = MagicMock(return_value=_async_raise(OperationCancelledError("cancelled")))
+    mock_context = MagicMock()
+
+    async def _run_ocr(_context, **_kwargs):
+        raise OperationCancelledError("cancelled")
 
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _WorkflowSessionContext(mock_session),
+        lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        _run_ocr,
     )
 
     success, cancelled, errors = _capture_signals(worker)
@@ -273,12 +289,18 @@ def test_run_ocr_failure_marks_failed(monkeypatch: pytest.MonkeyPatch, tmp_path:
         lambda *_args, **_kwargs: mock_repo,
     )
 
-    mock_session = MagicMock()
-    mock_session.run_ocr = MagicMock(return_value=_async_raise(RuntimeError("ocr failed")))
+    mock_context = MagicMock()
+
+    async def _run_ocr(_context, **_kwargs):
+        raise RuntimeError("ocr failed")
 
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _WorkflowSessionContext(mock_session),
+        lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        _run_ocr,
     )
 
     success, cancelled, errors = _capture_signals(worker)
@@ -364,18 +386,20 @@ def test_progress_callback_updates_task_store(monkeypatch: pytest.MonkeyPatch, t
         lambda *_args, **_kwargs: mock_repo,
     )
 
-    mock_session = MagicMock()
+    mock_context = MagicMock()
 
-    async def _emit_progress_then_done(**kwargs):
+    async def _emit_progress_then_done(_context, **kwargs):
         cb = kwargs.get("progress_callback")
         if cb:
             cb(ProgressUpdate(step="ocr", current=1, total=5))
 
-    mock_session.run_ocr = _emit_progress_then_done
-
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _WorkflowSessionContext(mock_session),
+        lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        _emit_progress_then_done,
     )
 
     worker.run()
@@ -416,13 +440,19 @@ def test_run_uses_config_snapshot_when_provided(monkeypatch: pytest.MonkeyPatch,
         lambda *_args, **_kwargs: mock_repo,
     )
 
-    mock_session = MagicMock()
-    mock_session.run_ocr = MagicMock(return_value=_async_noop())
+    mock_context = MagicMock()
     from_snapshot_calls: list = []
+
+    async def _run_ocr(_context, **_kwargs):
+        return None
 
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_snapshot",
-        lambda snap, book_id: (from_snapshot_calls.append((snap, book_id)) or _WorkflowSessionContext(mock_session)),
+        lambda snap, book_id: (from_snapshot_calls.append((snap, book_id)) or _WorkflowSessionContext(mock_context)),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        _run_ocr,
     )
 
     worker.run()

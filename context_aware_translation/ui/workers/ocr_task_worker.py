@@ -8,10 +8,12 @@ from collections.abc import Callable
 
 from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.core.progress import ProgressUpdate
+from context_aware_translation.documents.base import Document
 from context_aware_translation.storage.book_db import SQLiteBookDB
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.document_repository import DocumentRepository
 from context_aware_translation.storage.task_store import TaskStore
+from context_aware_translation.workflow.services import ocr_ops
 from context_aware_translation.workflow.session import WorkflowSession
 
 from .base_worker import BaseWorker
@@ -90,9 +92,11 @@ class OCRTaskWorker(BaseWorker):
                 session_ctx = WorkflowSession.from_snapshot(self._config_snapshot_json, self._book_id)
             else:
                 session_ctx = WorkflowSession.from_book(self._book_manager, self._book_id)
-            with session_ctx as session:
+            with session_ctx as context:
                 asyncio.run(
-                    session.run_ocr(
+                    ocr_ops.run_ocr(
+                        context,
+                        document_loader=Document.load_all,
                         progress_callback=self._on_progress,
                         source_ids=resolved_ids,
                         cancel_check=self._is_cancelled,

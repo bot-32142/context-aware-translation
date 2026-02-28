@@ -6,12 +6,13 @@ from typing import TYPE_CHECKING
 
 from context_aware_translation.core.progress import ProgressCallback, ProgressUpdate, WorkflowStep
 from context_aware_translation.documents.base import Document
+from context_aware_translation.workflow.services import bootstrap_ops
 
 if TYPE_CHECKING:
-    from context_aware_translation.workflow.service import WorkflowService
+    from context_aware_translation.workflow.runtime import WorkflowContext
 
 
-def get_lines_with_original_fallback(workflow: WorkflowService, document: Document) -> list[str]:
+def get_lines_with_original_fallback(workflow: WorkflowContext, document: Document) -> list[str]:
     """Return export lines with per-chunk fallback for untranslated chunks."""
     chunks = sorted(workflow.db.list_chunks(document_id=document.document_id), key=lambda chunk: chunk.chunk_id)
     if not chunks:
@@ -29,7 +30,7 @@ def get_lines_with_original_fallback(workflow: WorkflowService, document: Docume
 
 
 def resolve_export_lines(
-    workflow: WorkflowService,
+    workflow: WorkflowContext,
     document: Document,
     *,
     allow_original_fallback: bool,
@@ -40,11 +41,11 @@ def resolve_export_lines(
     except ValueError:
         if not allow_original_fallback:
             raise
-        return workflow._get_lines_with_original_fallback(document)
+        return get_lines_with_original_fallback(workflow, document)
 
 
 async def materialize_document_translation_state(
-    workflow: WorkflowService,
+    workflow: WorkflowContext,
     document: Document,
     *,
     allow_original_fallback: bool = False,
@@ -52,7 +53,8 @@ async def materialize_document_translation_state(
     progress_callback: ProgressCallback | None = None,
 ) -> None:
     """Apply translated lines to a document so it is ready for export or reembedding."""
-    all_lines = workflow._resolve_export_lines(
+    all_lines = resolve_export_lines(
+        workflow,
         document,
         allow_original_fallback=allow_original_fallback,
     )
@@ -67,11 +69,11 @@ async def materialize_document_translation_state(
         cancel_check=cancel_check,
         progress_callback=progress_callback,
     )
-    workflow._check_cancel(cancel_check)
+    bootstrap_ops.check_cancel(cancel_check)
 
 
 async def apply_export_text(
-    workflow: WorkflowService,
+    workflow: WorkflowContext,
     document: Document,
     *,
     allow_original_fallback: bool,
@@ -79,7 +81,8 @@ async def apply_export_text(
     progress_callback: ProgressCallback | None,
 ) -> None:
     """Apply export text lines to a document, with fallback semantics."""
-    await workflow.materialize_document_translation_state(
+    await materialize_document_translation_state(
+        workflow,
         document,
         allow_original_fallback=allow_original_fallback,
         cancel_check=cancel_check,
@@ -88,7 +91,7 @@ async def apply_export_text(
 
 
 async def export(
-    workflow: WorkflowService,
+    workflow: WorkflowContext,
     *,
     file_path: Path,
     export_format: str | None = None,
@@ -98,8 +101,8 @@ async def export(
     cancel_check: Callable[[], bool] | None = None,
 ) -> None:
     """Export translated content to file."""
-    workflow._check_cancel(cancel_check)
-    documents = workflow._load_documents(document_ids)
+    bootstrap_ops.check_cancel(cancel_check)
+    documents = bootstrap_ops.load_documents(workflow, document_ids)
     if not documents:
         raise ValueError("No documents to export")
 
@@ -117,7 +120,7 @@ async def export(
 
     total_docs = len(documents)
     for idx, doc in enumerate(documents):
-        workflow._check_cancel(cancel_check)
+        bootstrap_ops.check_cancel(cancel_check)
         if progress_callback:
             progress_callback(
                 ProgressUpdate(
@@ -127,20 +130,21 @@ async def export(
                     message=f"Exporting document {idx + 1}/{total_docs}",
                 )
             )
-        await workflow._apply_export_text(
+        await apply_export_text(
+            workflow,
             doc,
             allow_original_fallback=allow_original_fallback,
             cancel_check=cancel_check,
             progress_callback=progress_callback,
         )
 
-    workflow._check_cancel(cancel_check)
+    bootstrap_ops.check_cancel(cancel_check)
     doc_class = type(documents[0])
     doc_class.export_merged(documents, export_format, file_path)
 
 
 async def export_preserve_structure(
-    workflow: WorkflowService,
+    workflow: WorkflowContext,
     *,
     output_folder: Path,
     document_ids: list[int] | None = None,
@@ -149,8 +153,8 @@ async def export_preserve_structure(
     progress_callback: ProgressCallback | None = None,
 ) -> None:
     """Export while preserving original document structure."""
-    workflow._check_cancel(cancel_check)
-    documents = workflow._load_documents(document_ids)
+    bootstrap_ops.check_cancel(cancel_check)
+    documents = bootstrap_ops.load_documents(workflow, document_ids)
     if not documents:
         raise ValueError("No documents to export")
 
@@ -159,8 +163,9 @@ async def export_preserve_structure(
             raise NotImplementedError(f"{type(document).__name__} documents do not support structure-preserving export")
 
     for document in documents:
-        workflow._check_cancel(cancel_check)
-        await workflow._apply_export_text(
+        bootstrap_ops.check_cancel(cancel_check)
+        await apply_export_text(
+            workflow,
             document,
             allow_original_fallback=allow_original_fallback,
             cancel_check=cancel_check,

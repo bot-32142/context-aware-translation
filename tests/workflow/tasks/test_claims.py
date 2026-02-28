@@ -194,27 +194,54 @@ def test_all_doc_claim_conflicts_with_active_all_doc_claim():
 
 
 def test_chunk_retranslation_conflicts_with_all_doc_claim():
-    """chunk_retranslation (specific doc W_E) conflicts with an all-doc W_E holder."""
+    """chunk_retranslation doc WRITE_COOPERATIVE still conflicts with all-doc WRITE_EXCLUSIVE."""
     arbiter = ClaimArbiter()
-    # chunk_retranslation wants doc/5 W_E; all-doc holder holds doc/* W_E
-    wanted = frozenset({ResourceClaim("doc", "book-1", "5")})
+    wanted = frozenset({ResourceClaim("doc", "book-1", "5", ClaimMode.WRITE_COOPERATIVE)})
     active = frozenset({ResourceClaim("doc", "book-1", "*")})
     assert arbiter.conflicts(wanted, active) is True
 
 
-def test_two_chunk_retranslations_same_doc_conflict():
-    """Two chunk_retranslation tasks on the same document conflict."""
+def test_two_chunk_retranslations_same_doc_different_chunks_no_conflict():
+    """Two chunk_retranslations on same doc but different chunk IDs can run in parallel."""
     arbiter = ClaimArbiter()
-    wanted = frozenset({ResourceClaim("doc", "book-1", "3")})
-    active = frozenset({ResourceClaim("doc", "book-1", "3")})
+    wanted = frozenset(
+        {
+            ResourceClaim("doc", "book-1", "3", ClaimMode.WRITE_COOPERATIVE),
+            ResourceClaim("chunk", "book-1", "31"),
+        }
+    )
+    active = frozenset(
+        {
+            ResourceClaim("doc", "book-1", "3", ClaimMode.WRITE_COOPERATIVE),
+            ResourceClaim("chunk", "book-1", "32"),
+        }
+    )
+    assert arbiter.conflicts(wanted, active) is False
+
+
+def test_two_chunk_retranslations_same_chunk_conflict():
+    """Duplicate chunk_retranslation for the same chunk ID must conflict."""
+    arbiter = ClaimArbiter()
+    wanted = frozenset(
+        {
+            ResourceClaim("doc", "book-1", "3", ClaimMode.WRITE_COOPERATIVE),
+            ResourceClaim("chunk", "book-1", "31"),
+        }
+    )
+    active = frozenset(
+        {
+            ResourceClaim("doc", "book-1", "3", ClaimMode.WRITE_COOPERATIVE),
+            ResourceClaim("chunk", "book-1", "31"),
+        }
+    )
     assert arbiter.conflicts(wanted, active) is True
 
 
 def test_two_chunk_retranslations_different_docs_no_conflict():
     """Two chunk_retranslation tasks on different documents do not conflict."""
     arbiter = ClaimArbiter()
-    wanted = frozenset({ResourceClaim("doc", "book-1", "3")})
-    active = frozenset({ResourceClaim("doc", "book-1", "7")})
+    wanted = frozenset({ResourceClaim("doc", "book-1", "3", ClaimMode.WRITE_COOPERATIVE)})
+    active = frozenset({ResourceClaim("doc", "book-1", "7", ClaimMode.WRITE_COOPERATIVE)})
     assert arbiter.conflicts(wanted, active) is False
 
 

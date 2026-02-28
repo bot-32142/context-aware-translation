@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 
 from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, TaskAction
 
-from ..i18n import translate_running_stage, translate_task_phase, translate_task_status
+from ..i18n import translate_running_stage, translate_task_block_reason, translate_task_phase, translate_task_status
 from ..tasks.task_view_model_mapper import map_tasks_to_row_vms
 from ..tasks.task_view_models import TaskRowVM
 
@@ -130,11 +130,11 @@ class _TaskRow(QWidget):
     def apply_preflight(self, run_d, cancel_d, delete_d) -> None:
         """Apply preflight decisions to buttons (enabled state + tooltip)."""
         self._run_btn.setEnabled(run_d.allowed)
-        self._run_btn.setToolTip(run_d.reason)
+        self._run_btn.setToolTip(translate_task_block_reason(run_d.reason, run_d.code))
         self._cancel_btn.setEnabled(cancel_d.allowed)
-        self._cancel_btn.setToolTip(cancel_d.reason)
+        self._cancel_btn.setToolTip(translate_task_block_reason(cancel_d.reason, cancel_d.code))
         self._delete_btn.setEnabled(delete_d.allowed)
-        self._delete_btn.setToolTip(delete_d.reason)
+        self._delete_btn.setToolTip(translate_task_block_reason(delete_d.reason, delete_d.code))
 
     def retranslate(self) -> None:
         self._run_btn.setText(self.tr("Run"))

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -27,10 +28,12 @@ class TokenTracker:
     """
 
     _instance: TokenTracker | None = None
+    _instance_lock = threading.RLock()
 
     def __init__(self, registry: RegistryDB) -> None:
         self._registry = registry
         self._warned_profiles: set[str] = set()
+        self._warned_profiles_lock = threading.Lock()
 
     def _resolve_endpoint_profile(self, profile_ref: str) -> EndpointProfile | None:
         """Resolve an endpoint profile by ID."""
@@ -39,17 +42,20 @@ class TokenTracker:
     @classmethod
     def initialize(cls, registry: RegistryDB) -> None:
         """Initialize the global tracker. Call once at app startup."""
-        cls._instance = cls(registry)
+        with cls._instance_lock:
+            cls._instance = cls(registry)
 
     @classmethod
     def get(cls) -> TokenTracker | None:
         """Get the global tracker instance, or None if not initialized."""
-        return cls._instance
+        with cls._instance_lock:
+            return cls._instance
 
     @classmethod
     def shutdown(cls) -> None:
         """Clear the global tracker (for app shutdown or testing)."""
-        cls._instance = None
+        with cls._instance_lock:
+            cls._instance = None
 
     def check_limit(self, profile_ref: str | None) -> None:
         """Check if endpoint profile has exceeded any token limit.
@@ -138,8 +144,16 @@ class TokenTracker:
             return
         key = f"{profile_name}:{limit_type}"
         usage_pct = used / limit
-        if usage_pct >= 0.8 and usage_pct < 1.0 and key not in self._warned_profiles:
-            self._warned_profiles.add(key)
+        if usage_pct < 0.8 or usage_pct >= 1.0:
+            return
+
+        should_warn = False
+        with self._warned_profiles_lock:
+            if key not in self._warned_profiles:
+                self._warned_profiles.add(key)
+                should_warn = True
+
+        if should_warn:
             logger.warning(
                 "Token usage warning: endpoint '%s' %s at %.0f%% (%s / %s tokens)",
                 profile_name,
@@ -151,5 +165,6 @@ class TokenTracker:
 
     def clear_warning(self, profile_name: str) -> None:
         """Clear all 80% warning flags for a profile (called after manual reset)."""
-        for limit_type in ("total", "input", "output"):
-            self._warned_profiles.discard(f"{profile_name}:{limit_type}")
+        with self._warned_profiles_lock:
+            for limit_type in ("total", "input", "output"):
+                self._warned_profiles.discard(f"{profile_name}:{limit_type}")

@@ -25,7 +25,7 @@ def _qapp():
     yield app
 
 
-class _TranslatorContext:
+class _WorkflowContext:
     def __init__(self, session, exit_error: Exception | None = None) -> None:
         self._session = session
         self._exit_error = exit_error
@@ -70,13 +70,18 @@ def test_run_emits_success_on_completion(monkeypatch: pytest.MonkeyPatch, tmp_pa
         task_store=task_store,
     )
 
-    class _Session:
-        async def review_terms(self, **kwargs) -> None:
-            pass
+    mock_context = MagicMock()
+
+    async def _review_terms(_context, **_kwargs) -> None:
+        return None
 
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.glossary_review_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _TranslatorContext(_Session()),
+        lambda *_args, **_kwargs: _WorkflowContext(mock_context),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.glossary_review_task_worker.glossary_ops.review_terms",
+        _review_terms,
     )
 
     success, cancelled, errors = _capture_signals(worker)
@@ -100,13 +105,18 @@ def test_run_marks_task_running_then_completed(monkeypatch: pytest.MonkeyPatch, 
         task_store=task_store,
     )
 
-    class _Session:
-        async def review_terms(self, **kwargs) -> None:
-            pass
+    mock_context = MagicMock()
+
+    async def _review_terms(_context, **_kwargs) -> None:
+        return None
 
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.glossary_review_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _TranslatorContext(_Session()),
+        lambda *_args, **_kwargs: _WorkflowContext(mock_context),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.glossary_review_task_worker.glossary_ops.review_terms",
+        _review_terms,
     )
 
     worker.run()
@@ -127,13 +137,18 @@ def test_run_emits_error_on_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: P
         task_store=task_store,
     )
 
-    class _Session:
-        async def review_terms(self, **kwargs) -> None:
-            raise RuntimeError("review failed")
+    mock_context = MagicMock()
+
+    async def _review_terms(_context, **_kwargs) -> None:
+        raise RuntimeError("review failed")
 
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.glossary_review_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _TranslatorContext(_Session()),
+        lambda *_args, **_kwargs: _WorkflowContext(mock_context),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.glossary_review_task_worker.glossary_ops.review_terms",
+        _review_terms,
     )
 
     success, cancelled, errors = _capture_signals(worker)
@@ -158,13 +173,18 @@ def test_run_emits_error_when_session_exit_fails(monkeypatch: pytest.MonkeyPatch
         task_store=task_store,
     )
 
-    class _Session:
-        async def review_terms(self, **kwargs) -> None:
-            pass
+    mock_context = MagicMock()
+
+    async def _review_terms(_context, **_kwargs) -> None:
+        return None
 
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.glossary_review_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _TranslatorContext(_Session(), exit_error=RuntimeError("close failed")),
+        lambda *_args, **_kwargs: _WorkflowContext(mock_context, exit_error=RuntimeError("close failed")),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.glossary_review_task_worker.glossary_ops.review_terms",
+        _review_terms,
     )
 
     success, cancelled, errors = _capture_signals(worker)
@@ -231,14 +251,19 @@ def test_run_forwards_progress_updates(monkeypatch: pytest.MonkeyPatch, tmp_path
         task_store=task_store,
     )
 
-    class _Session:
-        async def review_terms(self, progress_callback=None, **kwargs) -> None:
-            if progress_callback:
-                progress_callback(ProgressUpdate(step=WorkflowStep.EXPORT, current=1, total=5, message="reviewing"))
+    mock_context = MagicMock()
+
+    async def _review_terms(_context, progress_callback=None, **_kwargs) -> None:
+        if progress_callback:
+            progress_callback(ProgressUpdate(step=WorkflowStep.EXPORT, current=1, total=5, message="reviewing"))
 
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.glossary_review_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _TranslatorContext(_Session()),
+        lambda *_args, **_kwargs: _WorkflowContext(mock_context),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.glossary_review_task_worker.glossary_ops.review_terms",
+        _review_terms,
     )
 
     worker.run()
@@ -263,19 +288,24 @@ def test_run_always_uses_live_config_even_when_snapshot_set(monkeypatch: pytest.
         config_snapshot_json='{"snapshot": true}',
     )
 
-    class _Session:
-        async def review_terms(self, **kwargs) -> None:
-            pass
+    mock_context = MagicMock()
 
     from_book_calls: list[bool] = []
 
     def fake_from_book(*_args, **_kwargs):
         from_book_calls.append(True)
-        return _TranslatorContext(_Session())
+        return _WorkflowContext(mock_context)
+
+    async def _review_terms(_context, **_kwargs) -> None:
+        return None
 
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.glossary_review_task_worker.WorkflowSession.from_book",
         fake_from_book,
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.glossary_review_task_worker.glossary_ops.review_terms",
+        _review_terms,
     )
 
     success, cancelled, errors = _capture_signals(worker)
@@ -302,13 +332,18 @@ def test_run_calls_notify_task_changed(monkeypatch: pytest.MonkeyPatch, tmp_path
         notify_task_changed=notify,
     )
 
-    class _Session:
-        async def review_terms(self, **kwargs) -> None:
-            pass
+    mock_context = MagicMock()
+
+    async def _review_terms(_context, **_kwargs) -> None:
+        return None
 
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.glossary_review_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _TranslatorContext(_Session()),
+        lambda *_args, **_kwargs: _WorkflowContext(mock_context),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.glossary_review_task_worker.glossary_ops.review_terms",
+        _review_terms,
     )
 
     worker.run()

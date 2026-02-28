@@ -21,7 +21,7 @@ from context_aware_translation.storage.document_repository import DocumentReposi
 from context_aware_translation.storage.term_repository import TermRepository
 from context_aware_translation.utils.chunking import get_tokenizer
 from context_aware_translation.workflow.image_fetcher import RepoImageFetcher
-from context_aware_translation.workflow.runtime import WorkflowRuntime
+from context_aware_translation.workflow.runtime import WorkflowContext
 
 
 def _build_llm_client(runtime_config: WorkflowRuntimeConfig) -> LLMClient:
@@ -120,7 +120,7 @@ def build_workflow_runtime(
     *,
     book_id: str | None = None,
     context_tree: ContextTree | None = None,
-) -> WorkflowRuntime:
+) -> WorkflowContext:
     """Build all runtime dependencies required for workflow execution."""
     llm_client = _build_llm_client(runtime_config)
     owns_context_tree = context_tree is None
@@ -132,7 +132,7 @@ def build_workflow_runtime(
         runtime_config, llm_client, context_tree, db, document_repo, owns_context_tree=owns_context_tree
     )
 
-    return WorkflowRuntime(
+    return WorkflowContext(
         config=config,
         llm_client=llm_client,
         context_tree=context_tree,

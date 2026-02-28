@@ -26,7 +26,7 @@ from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.document_repository import DocumentRepository
 from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, TaskAction
 
-from ..i18n import qarg, translate_progress_message
+from ..i18n import qarg, translate_progress_message, translate_task_block_reason
 from ..utils import create_tip_label, translate_document_type
 from ..widgets import ImageViewer, ProgressWidget
 from ..widgets.task_status_card import TaskStatusCard
@@ -639,7 +639,11 @@ class ReembeddingView(QWidget):
             TaskAction.RUN,
         )
         if not decision.allowed:
-            QMessageBox.warning(self, self.tr("Cannot Reembed"), decision.reason)
+            QMessageBox.warning(
+                self,
+                self.tr("Cannot Reembed"),
+                translate_task_block_reason(decision.reason, decision.code),
+            )
             return
 
         try:
@@ -682,7 +686,11 @@ class ReembeddingView(QWidget):
             TaskAction.RUN,
         )
         if not decision.allowed:
-            QMessageBox.warning(self, self.tr("Cannot Reembed"), decision.reason)
+            QMessageBox.warning(
+                self,
+                self.tr("Cannot Reembed"),
+                translate_task_block_reason(decision.reason, decision.code),
+            )
             return
 
         try:
@@ -737,7 +745,11 @@ class ReembeddingView(QWidget):
             TaskAction.RUN,
         )
         if not decision.allowed:
-            QMessageBox.warning(self, self.tr("Cannot Reembed"), decision.reason)
+            QMessageBox.warning(
+                self,
+                self.tr("Cannot Reembed"),
+                translate_task_block_reason(decision.reason, decision.code),
+            )
             return
 
         try:
@@ -817,7 +829,7 @@ class ReembeddingView(QWidget):
                     self._go_to_page(restored_index)
 
         elif status == "failed":
-            error_msg = record.last_error or self.tr("Unknown error")
+            error_msg = translate_task_block_reason(record.last_error) or self.tr("Unknown error")
             QMessageBox.critical(self, self.tr("Reembedding Error"), qarg(self.tr("Reembedding failed: %1"), error_msg))
 
         elif status == "cancelled":

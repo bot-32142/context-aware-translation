@@ -5,20 +5,18 @@ from typing import TYPE_CHECKING
 from context_aware_translation.config import CONFIG_SNAPSHOT_VERSION, Config, WorkflowRuntimeConfig
 from context_aware_translation.core.context_tree_registry import ContextTreeRegistry
 from context_aware_translation.workflow.bootstrap import _build_context_tree, _build_llm_client, build_workflow_runtime
-from context_aware_translation.workflow.runtime import WorkflowRuntime
-from context_aware_translation.workflow.service import WorkflowService
+from context_aware_translation.workflow.runtime import WorkflowContext
 
 if TYPE_CHECKING:
     from context_aware_translation.storage.book_manager import BookManager
 
 
 class WorkflowSession:
-    """Lifecycle owner that boots runtime resources and exposes WorkflowService."""
+    """Lifecycle owner for WorkflowContext resources."""
 
     def __init__(self, config: Config):
         self.config = config
-        self._workflow: WorkflowService | None = None
-        self._runtime: WorkflowRuntime | None = None
+        self._runtime: WorkflowContext | None = None
         self._book_id: str | None = None
 
     @classmethod
@@ -52,7 +50,7 @@ class WorkflowSession:
         session._book_id = book_id
         return session
 
-    def _build_runtime(self, runtime_config: WorkflowRuntimeConfig) -> WorkflowRuntime:
+    def _build_runtime(self, runtime_config: WorkflowRuntimeConfig) -> WorkflowContext:
         if self._book_id is not None:
             context_tree = ContextTreeRegistry.acquire(
                 self._book_id,
@@ -61,19 +59,7 @@ class WorkflowSession:
             return build_workflow_runtime(self.config, runtime_config, book_id=self._book_id, context_tree=context_tree)
         return build_workflow_runtime(self.config, runtime_config, book_id=self._book_id)
 
-    @staticmethod
-    def _build_workflow_service(runtime: WorkflowRuntime) -> WorkflowService:
-        return WorkflowService(
-            config=runtime.config,
-            llm_client=runtime.llm_client,
-            context_tree=runtime.context_tree,
-            manager=runtime.manager,
-            db=runtime.db,
-            document_repo=runtime.document_repo,
-            book_id=runtime.book_id,
-        )
-
-    def __enter__(self) -> WorkflowService:
+    def __enter__(self) -> WorkflowContext:
         runtime_config = self.config.get_workflow_runtime_config()
         try:
             self._runtime = self._build_runtime(runtime_config)
@@ -82,8 +68,7 @@ class WorkflowSession:
             if self._book_id is not None:
                 ContextTreeRegistry.release(self._book_id)
             raise
-        self._workflow = self._build_workflow_service(self._runtime)
-        return self._workflow
+        return self._runtime
 
     def __exit__(
         self,
@@ -98,4 +83,3 @@ class WorkflowSession:
             if self._book_id is not None:
                 ContextTreeRegistry.release(self._book_id)
         self._runtime = None
-        self._workflow = None

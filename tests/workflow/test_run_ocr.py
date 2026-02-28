@@ -4,7 +4,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from context_aware_translation.workflow.service import WorkflowService
+from context_aware_translation.documents.base import Document
+from context_aware_translation.workflow.runtime import WorkflowContext
+from context_aware_translation.workflow.services import ocr_ops
 
 
 @pytest.mark.asyncio
@@ -26,7 +28,7 @@ async def test_run_ocr_with_empty_source_ids_processes_none():
     document.document_id = 10
     document.process_ocr = AsyncMock(return_value=0)
 
-    service = WorkflowService(
+    context = WorkflowContext(
         config=config,
         llm_client=llm_client,
         context_tree=context_tree,
@@ -36,8 +38,13 @@ async def test_run_ocr_with_empty_source_ids_processes_none():
     )
 
     progress_callback = MagicMock()
-    with patch("context_aware_translation.workflow.service.Document.load_all", return_value=[document]):
-        processed = await service.run_ocr(progress_callback=progress_callback, source_ids=[])
+    with patch("context_aware_translation.documents.base.Document.load_all", return_value=[document]):
+        processed = await ocr_ops.run_ocr(
+            context,
+            document_loader=Document.load_all,
+            progress_callback=progress_callback,
+            source_ids=[],
+        )
 
     assert processed == 0
     progress_callback.assert_not_called()

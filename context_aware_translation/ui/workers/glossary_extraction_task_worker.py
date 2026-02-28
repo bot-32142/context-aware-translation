@@ -9,6 +9,7 @@ from collections.abc import Callable
 from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.task_store import TaskStore
+from context_aware_translation.workflow.services import glossary_ops
 from context_aware_translation.workflow.session import WorkflowSession
 
 from .base_worker import BaseWorker
@@ -59,9 +60,10 @@ class GlossaryExtractionTaskWorker(BaseWorker):
                 session_ctx = WorkflowSession.from_snapshot(self._config_snapshot_json, self._book_id)
             else:
                 session_ctx = WorkflowSession.from_book(self._book_manager, self._book_id)
-            with session_ctx as session:
+            with session_ctx as context:
                 asyncio.run(
-                    session.build_glossary(
+                    glossary_ops.build_glossary(
+                        context,
                         document_ids=self._document_ids,
                         progress_callback=self._on_progress,
                         cancel_check=self._is_cancelled,

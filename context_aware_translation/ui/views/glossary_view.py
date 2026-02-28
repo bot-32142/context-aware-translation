@@ -38,7 +38,7 @@ from context_aware_translation.workflow.tasks.models import TaskAction
 if TYPE_CHECKING:
     from ..tasks.qt_task_engine import TaskEngine
 
-from ..i18n import qarg, translate_progress_message
+from ..i18n import qarg, translate_progress_message, translate_task_block_reason
 from ..models.term_model import TermTableModel
 from ..utils import create_tip_label, translate_document_type
 from ..widgets import ProgressWidget, TaskStatusCard
@@ -372,7 +372,7 @@ class GlossaryView(QWidget):
                             self.tr("Export Failed"),
                             qarg(
                                 self.tr("Glossary export failed:\n\n%1"),
-                                vm.last_error or self.tr("Unknown error"),
+                                translate_task_block_reason(vm.last_error) or self.tr("Unknown error"),
                             ),
                         )
                     elif vm.status == STATUS_CANCELLED:
@@ -462,7 +462,10 @@ class GlossaryView(QWidget):
         else:
             self.translate_button.setEnabled(False)
             self.translate_button.setToolTip(
-                qarg(self.tr("Translation unavailable: %1"), engine_decision.reason or engine_decision.code or "")
+                qarg(
+                    self.tr("Translation unavailable: %1"),
+                    translate_task_block_reason(engine_decision.reason, engine_decision.code),
+                )
             )
 
     def _update_review_button_state(self) -> None:
@@ -479,7 +482,10 @@ class GlossaryView(QWidget):
         else:
             self.review_button.setEnabled(False)
             self.review_button.setToolTip(
-                qarg(self.tr("Review unavailable: %1"), engine_decision.reason or engine_decision.code or "")
+                qarg(
+                    self.tr("Review unavailable: %1"),
+                    translate_task_block_reason(engine_decision.reason, engine_decision.code),
+                )
             )
 
     def _update_export_button_state(self) -> None:
@@ -511,7 +517,11 @@ class GlossaryView(QWidget):
                 )
         else:
             self.export_button.setEnabled(False)
-            reason = decision_full.reason or decision_full.code or decision_skip.reason or decision_skip.code or ""
+            reason = (
+                translate_task_block_reason(decision_full.reason, decision_full.code)
+                or translate_task_block_reason(decision_skip.reason, decision_skip.code)
+                or ""
+            )
             self.export_button.setToolTip(qarg(self.tr("Export unavailable: %1"), reason))
 
     def _on_search_changed(self, text: str) -> None:
@@ -601,7 +611,7 @@ class GlossaryView(QWidget):
                 self.tr("Export Unavailable"),
                 qarg(
                     self.tr("Cannot start export: %1"),
-                    decision.reason or decision.code or self.tr("unknown reason"),
+                    translate_task_block_reason(decision.reason, decision.code) or self.tr("unknown reason"),
                 ),
             )
             return
@@ -624,7 +634,10 @@ class GlossaryView(QWidget):
             QMessageBox.critical(
                 self,
                 self.tr("Start Failed"),
-                qarg(self.tr("Failed to start glossary export:\n%1"), record.last_error or self.tr("Unknown error")),
+                qarg(
+                    self.tr("Failed to start glossary export:\n%1"),
+                    translate_task_block_reason(record.last_error) or self.tr("Unknown error"),
+                ),
             )
             return
 
@@ -729,7 +742,7 @@ class GlossaryView(QWidget):
     def _format_engine_preflight_denial(self, decision) -> str:
         return qarg(
             self.tr("Task engine blocked: %1"),
-            decision.reason or decision.code,
+            translate_task_block_reason(decision.reason, decision.code),
         )
 
     def _format_submit_error(self, exc: Exception) -> str:
@@ -871,7 +884,8 @@ class GlossaryView(QWidget):
                 self,
                 self.tr("Start Failed"),
                 qarg(
-                    self.tr("Failed to start glossary extraction:\n%1"), record.last_error or self.tr("Unknown error")
+                    self.tr("Failed to start glossary extraction:\n%1"),
+                    translate_task_block_reason(record.last_error) or self.tr("Unknown error"),
                 ),
             )
             return
@@ -892,7 +906,8 @@ class GlossaryView(QWidget):
                 self.tr("Translation Unavailable"),
                 qarg(
                     self.tr("Cannot start translation: %1"),
-                    engine_decision.reason or engine_decision.code or self.tr("unknown reason"),
+                    translate_task_block_reason(engine_decision.reason, engine_decision.code)
+                    or self.tr("unknown reason"),
                 ),
             )
             return
@@ -921,7 +936,8 @@ class GlossaryView(QWidget):
                 self,
                 self.tr("Start Failed"),
                 qarg(
-                    self.tr("Failed to start glossary translation:\n%1"), record.last_error or self.tr("Unknown error")
+                    self.tr("Failed to start glossary translation:\n%1"),
+                    translate_task_block_reason(record.last_error) or self.tr("Unknown error"),
                 ),
             )
             return
@@ -979,7 +995,8 @@ class GlossaryView(QWidget):
                 self.tr("Review Unavailable"),
                 qarg(
                     self.tr("Cannot start review: %1"),
-                    engine_decision.reason or engine_decision.code or self.tr("unknown reason"),
+                    translate_task_block_reason(engine_decision.reason, engine_decision.code)
+                    or self.tr("unknown reason"),
                 ),
             )
             return
@@ -1007,7 +1024,10 @@ class GlossaryView(QWidget):
             QMessageBox.critical(
                 self,
                 self.tr("Start Failed"),
-                qarg(self.tr("Failed to start glossary review:\n%1"), record.last_error or self.tr("Unknown error")),
+                qarg(
+                    self.tr("Failed to start glossary review:\n%1"),
+                    translate_task_block_reason(record.last_error) or self.tr("Unknown error"),
+                ),
             )
             return
 

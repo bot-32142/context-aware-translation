@@ -23,3 +23,19 @@ def test_translate_progress_message_dynamic_patterns(monkeypatch):
 def test_translate_progress_message_unknown_passthrough():
     unknown = "some custom status text"
     assert i18n.translate_progress_message(unknown) == unknown
+
+
+def test_translate_task_block_reason_static_passthrough_without_translator():
+    assert i18n.translate_task_block_reason("Task is already running") == "Task is already running"
+
+
+def test_translate_task_block_reason_pattern_passthrough_without_translator():
+    assert i18n.translate_task_block_reason("Book not found: book-1") == "Book not found: book-1"
+
+
+def test_translate_task_block_reason_code_mapping_without_translator():
+    assert i18n.translate_task_block_reason(None, "blocked_claim_conflict") == "Blocked by active task claims"
+
+
+def test_translate_task_block_reason_unknown_code_humanized():
+    assert i18n.translate_task_block_reason(None, "custom_error_code") == "Custom Error Code"

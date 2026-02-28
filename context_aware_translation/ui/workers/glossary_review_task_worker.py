@@ -9,6 +9,7 @@ from collections.abc import Callable
 from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.task_store import TaskStore
+from context_aware_translation.workflow.services import glossary_ops
 from context_aware_translation.workflow.session import WorkflowSession
 
 from .base_worker import BaseWorker
@@ -56,9 +57,10 @@ class GlossaryReviewTaskWorker(BaseWorker):
             # Always use live config — glossary review validates against live state
             # at run time, so execution must also use live config (no snapshot fallback).
             session_ctx = WorkflowSession.from_book(self._book_manager, self._book_id)
-            with session_ctx as session:
+            with session_ctx as context:
                 asyncio.run(
-                    session.review_terms(
+                    glossary_ops.review_terms(
+                        context,
                         progress_callback=self._on_progress,
                         cancel_check=self._is_cancelled,
                     )

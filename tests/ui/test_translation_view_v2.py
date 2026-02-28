@@ -503,6 +503,84 @@ def test_retranslate_chunk_submits_chunk_retranslation():
     assert "cr-1" in view._pending_retranslations
 
 
+def test_retranslate_chunk_allows_parallel_different_chunk_same_document():
+    """Active retranslation on chunk A must not block submitting chunk B in the same doc."""
+    from PySide6.QtWidgets import QMessageBox
+
+    view = _make_view()
+    view.book_id = "book-id"
+    view._task_engine.get_tasks.return_value = []
+    view.retranslate_chunk_btn = QPushButton()
+    view.skip_context_cb = QCheckBox()
+    view.skip_context_cb.setChecked(False)
+    view._pending_retranslations = {"cr-1": (7, 2)}
+
+    active_record = MagicMock()
+    active_record.status = STATUS_RUNNING
+
+    def _get_task(task_id: str):
+        return active_record if task_id == "cr-1" else None
+
+    view._task_engine.get_task.side_effect = _get_task
+
+    chunk = MagicMock()
+    chunk.chunk_id = 8
+    chunk.document_id = 2
+    view._current_chunk = chunk
+
+    submitted = MagicMock()
+    submitted.task_id = "cr-2"
+    submitted.status = STATUS_RUNNING
+    submitted.last_error = None
+    view._task_engine.submit_and_start.return_value = submitted
+
+    with patch(
+        "context_aware_translation.ui.views.translation_view.QMessageBox.question",
+        return_value=QMessageBox.StandardButton.Yes,
+    ):
+        view._retranslate_current_chunk()
+
+    view._task_engine.submit_and_start.assert_called_once_with(
+        "chunk_retranslation",
+        "book-id",
+        chunk_id=8,
+        document_id=2,
+        skip_context=False,
+    )
+    assert "cr-1" in view._pending_retranslations
+    assert "cr-2" in view._pending_retranslations
+
+
+def test_retranslate_chunk_blocks_duplicate_submit_for_same_chunk():
+    """Submitting another retranslation for the exact same chunk is ignored."""
+    view = _make_view()
+    view.book_id = "book-id"
+    view._task_engine.get_tasks.return_value = []
+    view.retranslate_chunk_btn = QPushButton()
+    view.skip_context_cb = QCheckBox()
+    view.skip_context_cb.setChecked(False)
+    view._pending_retranslations = {"cr-1": (7, 2)}
+
+    active_record = MagicMock()
+    active_record.status = STATUS_RUNNING
+
+    def _get_task(task_id: str):
+        return active_record if task_id == "cr-1" else None
+
+    view._task_engine.get_task.side_effect = _get_task
+
+    chunk = MagicMock()
+    chunk.chunk_id = 7
+    chunk.document_id = 2
+    view._current_chunk = chunk
+
+    with patch("context_aware_translation.ui.views.translation_view.QMessageBox.question") as question_mock:
+        view._retranslate_current_chunk()
+
+    question_mock.assert_not_called()
+    view._task_engine.submit_and_start.assert_not_called()
+
+
 # ------------------------------------------------------------------
 # cleanup uses task_status_strip not task_console
 # ------------------------------------------------------------------

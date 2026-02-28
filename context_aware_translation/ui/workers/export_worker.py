@@ -6,6 +6,7 @@ from pathlib import Path
 
 from context_aware_translation.core.progress import ProgressUpdate, WorkflowStep
 from context_aware_translation.storage.book_manager import BookManager
+from context_aware_translation.workflow.services import export_ops
 from context_aware_translation.workflow.session import WorkflowSession
 
 from .base_worker import BaseWorker
@@ -38,7 +39,7 @@ class ExportWorker(BaseWorker):
     def _execute(self) -> None:
         self._raise_if_cancelled()
         translator = WorkflowSession.from_book(self.book_manager, self.book_id)
-        with translator as session:
+        with translator as context:
             if self.preserve_structure:
                 self._emit_progress(
                     ProgressUpdate(
@@ -49,8 +50,9 @@ class ExportWorker(BaseWorker):
                     )
                 )
                 asyncio.run(
-                    session.export_preserve_structure(
-                        self.output_path,
+                    export_ops.export_preserve_structure(
+                        context,
+                        output_folder=self.output_path,
                         document_ids=self.document_ids,
                         allow_original_fallback=self.allow_original_fallback,
                         cancel_check=self._is_cancelled,
@@ -60,8 +62,9 @@ class ExportWorker(BaseWorker):
                 self.progress.emit(1, 1, "Export complete")
             else:
                 asyncio.run(
-                    session.export(
-                        self.output_path,
+                    export_ops.export(
+                        context,
+                        file_path=self.output_path,
                         export_format=self.export_format,
                         document_ids=self.document_ids,
                         allow_original_fallback=self.allow_original_fallback,

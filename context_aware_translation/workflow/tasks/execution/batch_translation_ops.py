@@ -5,7 +5,7 @@ import hashlib
 import json
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypedDict
 
@@ -28,6 +28,7 @@ from context_aware_translation.llm.translator import (
 )
 from context_aware_translation.storage.llm_batch_store import STATUS_FAILED, STATUS_SUBMITTED
 from context_aware_translation.storage.task_store import TaskRecord
+from context_aware_translation.workflow.services import bootstrap_ops, translation_ops
 from context_aware_translation.workflow.tasks.models import (
     PHASE_APPLY,
     PHASE_DONE,
@@ -45,6 +46,8 @@ from context_aware_translation.workflow.tasks.models import (
 
 logger = logging.getLogger(__name__)
 _PROVIDER_NAME = "gemini_ai_studio"
+
+
 def decode_task_payload(record: TaskRecord) -> dict[str, Any]:
     """Decode a task record's payload_json into a dict, returning {} on failure."""
     if not record.payload_json:
@@ -134,9 +137,7 @@ def is_item_polish_success(item: dict[str, Any]) -> bool:
     return str(item.get("polish", {}).get("state", "")) == "succeeded"
 
 
-def compute_phase_progress(
-    items: list[dict[str, Any]], phase: str
-) -> tuple[int, int, int]:
+def compute_phase_progress(items: list[dict[str, Any]], phase: str) -> tuple[int, int, int]:
     """Return ``(total, completed, failed)`` scoped to the current pipeline *phase*.
 
     Unlike the legacy approach (which always counted ``applied`` items), this
@@ -151,49 +152,46 @@ def compute_phase_progress(
     # --- translation submit ---
     if phase == PHASE_TRANSLATION_SUBMIT:
         completed = sum(
-            1 for item in items
-            if isinstance(item.get("translation"), dict)
-            and item["translation"].get("request_hash")
+            1 for item in items if isinstance(item.get("translation"), dict) and item["translation"].get("request_hash")
         )
         return (all_count, completed, 0)
 
     # --- translation poll ---
     if phase == PHASE_TRANSLATION_POLL:
         completed = sum(
-            1 for item in items
-            if isinstance(item.get("translation"), dict)
-            and item["translation"].get("state", "pending") != "pending"
+            1
+            for item in items
+            if isinstance(item.get("translation"), dict) and item["translation"].get("state", "pending") != "pending"
         )
         failed = sum(
-            1 for item in items
-            if isinstance(item.get("translation"), dict)
-            and item["translation"].get("state") == "failed"
+            1
+            for item in items
+            if isinstance(item.get("translation"), dict) and item["translation"].get("state") == "failed"
         )
         return (all_count, completed, failed)
 
     # --- translation validate ---
     if phase == PHASE_TRANSLATION_VALIDATE:
         completed = sum(
-            1 for item in items
+            1
+            for item in items
             if isinstance(item.get("translation"), dict)
             and item["translation"].get("state") in ("succeeded", "failed", "skipped")
         )
         failed = sum(
-            1 for item in items
-            if isinstance(item.get("translation"), dict)
-            and item["translation"].get("state") == "failed"
+            1
+            for item in items
+            if isinstance(item.get("translation"), dict) and item["translation"].get("state") == "failed"
         )
         return (all_count, completed, failed)
 
     # --- translation fallback (scoped to candidates only) ---
     if phase == PHASE_TRANSLATION_FALLBACK:
         candidates = [
-            item for item in items
+            item
+            for item in items
             if isinstance(item.get("translation"), dict)
-            and (
-                item["translation"].get("fallback_attempted")
-                or item["translation"].get("state") == "failed"
-            )
+            and (item["translation"].get("fallback_attempted") or item["translation"].get("state") == "failed")
         ]
         total = len(candidates)
         completed = sum(1 for c in candidates if c["translation"].get("fallback_attempted"))
@@ -205,9 +203,7 @@ def compute_phase_progress(
         eligible = [item for item in items if is_item_translation_success(item)]
         total = len(eligible)
         completed = sum(
-            1 for item in eligible
-            if isinstance(item.get("polish"), dict)
-            and item["polish"].get("request_hash")
+            1 for item in eligible if isinstance(item.get("polish"), dict) and item["polish"].get("request_hash")
         )
         return (total, completed, 0)
 
@@ -216,14 +212,12 @@ def compute_phase_progress(
         eligible = [item for item in items if is_item_translation_success(item)]
         total = len(eligible)
         completed = sum(
-            1 for item in eligible
-            if isinstance(item.get("polish"), dict)
-            and item["polish"].get("state", "pending") != "pending"
+            1
+            for item in eligible
+            if isinstance(item.get("polish"), dict) and item["polish"].get("state", "pending") != "pending"
         )
         failed = sum(
-            1 for item in eligible
-            if isinstance(item.get("polish"), dict)
-            and item["polish"].get("state") == "failed"
+            1 for item in eligible if isinstance(item.get("polish"), dict) and item["polish"].get("state") == "failed"
         )
         return (total, completed, failed)
 
@@ -232,14 +226,13 @@ def compute_phase_progress(
         eligible = [item for item in items if is_item_translation_success(item)]
         total = len(eligible)
         completed = sum(
-            1 for item in eligible
+            1
+            for item in eligible
             if isinstance(item.get("polish"), dict)
             and item["polish"].get("state") in ("succeeded", "failed", "skipped")
         )
         failed = sum(
-            1 for item in eligible
-            if isinstance(item.get("polish"), dict)
-            and item["polish"].get("state") == "failed"
+            1 for item in eligible if isinstance(item.get("polish"), dict) and item["polish"].get("state") == "failed"
         )
         return (total, completed, failed)
 
@@ -247,12 +240,10 @@ def compute_phase_progress(
     if phase == PHASE_POLISH_FALLBACK:
         eligible = [item for item in items if is_item_translation_success(item)]
         candidates = [
-            item for item in eligible
+            item
+            for item in eligible
             if isinstance(item.get("polish"), dict)
-            and (
-                item["polish"].get("fallback_attempted")
-                or item["polish"].get("state") == "failed"
-            )
+            and (item["polish"].get("fallback_attempted") or item["polish"].get("state") == "failed")
         ]
         total = len(candidates)
         completed = sum(1 for c in candidates if c["polish"].get("fallback_attempted"))
@@ -285,6 +276,50 @@ def _stage_request_kwargs(payload: dict[str, Any]) -> dict[str, Any]:
     return resolved
 
 
+def _resolve_preflight_document_ids(workflow: Any, document_ids: list[int] | None) -> list[int] | None:
+    resolver = getattr(workflow, "resolve_preflight_document_ids", None)
+    if callable(resolver):
+        resolved = resolver(document_ids)
+        if resolved is None:
+            return None
+        if isinstance(resolved, list):
+            return [int(doc_id) for doc_id in resolved]
+        raise TypeError(f"resolve_preflight_document_ids returned unexpected type: {type(resolved)!r}")
+    resolved = bootstrap_ops.resolve_preflight_document_ids(workflow, document_ids)
+    if resolved is None:
+        return None
+    return [int(doc_id) for doc_id in resolved]
+
+
+async def _prepare_llm_prerequisites(
+    workflow: Any,
+    document_ids: list[int] | None,
+    *,
+    cancel_check: Callable[[], bool] | None,
+) -> None:
+    prepare = getattr(workflow, "prepare_llm_prerequisites", None)
+    if callable(prepare):
+        await prepare(document_ids, cancel_check=cancel_check)
+        return
+    await bootstrap_ops.prepare_llm_prerequisites(workflow, document_ids, cancel_check=cancel_check)
+
+
+def _check_cancel(workflow: Any, cancel_check: Callable[[], bool] | None) -> None:
+    checker = getattr(workflow, "check_cancel", None)
+    if callable(checker):
+        checker(cancel_check)
+        return
+    bootstrap_ops.check_cancel(cancel_check)
+
+
+def _update_chunk_records(workflow: Any, chunk_records: list[Any]) -> None:
+    updater = getattr(workflow, "update_chunk_records", None)
+    if callable(updater):
+        updater(chunk_records)
+        return
+    translation_ops.update_chunk_records(workflow, chunk_records)
+
+
 async def ensure_payload_prepared(
     service: BatchTranslationExecutor,
     task: TaskRecord,
@@ -300,13 +335,13 @@ async def ensure_payload_prepared(
     service.raise_if_local_pause(task.task_id, cancel_check)
 
     document_ids = service.document_ids_for_task(task)
-    preflight_document_ids = service.workflow.resolve_preflight_document_ids(document_ids)
-    await service.workflow.prepare_llm_prerequisites(preflight_document_ids, cancel_check=cancel_check)
+    preflight_document_ids = _resolve_preflight_document_ids(service.workflow, document_ids)
+    await _prepare_llm_prerequisites(service.workflow, preflight_document_ids, cancel_check=cancel_check)
     service.raise_if_local_pause(task.task_id, cancel_check)
 
     skip_context = service._get_skip_context(task)
     if not skip_context:
-        service.workflow.check_cancel(cancel_check)
+        _check_cancel(service.workflow, cancel_check)
         service.workflow.manager.build_context_tree(cancel_check=cancel_check)
 
     translator_config = service.translator_config()
@@ -745,7 +780,7 @@ async def _run_items_with_concurrency(
     *,
     items: list[dict[str, Any]],
     concurrency: int,
-    worker: Callable[[dict[str, Any]], Awaitable[None]],
+    worker: Callable[[dict[str, Any]], Coroutine[Any, Any, None]],
 ) -> None:
     if not items:
         return
@@ -939,7 +974,7 @@ def apply_results(
         if not update_chunks:
             continue
 
-        service.workflow.update_chunk_records(update_chunks)
+        _update_chunk_records(service.workflow, update_chunks)
         item["applied"] = True
         completed += 1
         if progress_callback:

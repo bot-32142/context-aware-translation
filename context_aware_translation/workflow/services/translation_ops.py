@@ -4,17 +4,18 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from context_aware_translation.core.progress import ProgressCallback
+from context_aware_translation.workflow.services import bootstrap_ops
 
 if TYPE_CHECKING:
-    from context_aware_translation.workflow.service import WorkflowService
+    from context_aware_translation.workflow.runtime import WorkflowContext
 
 
-def update_chunk_records(workflow: WorkflowService, chunk_records: list) -> None:
+def update_chunk_records(workflow: WorkflowContext, chunk_records: list) -> None:
     """Persist translated chunk records via the context manager."""
     workflow.manager._state_update([], chunk_records)
 
 
-def build_doc_type_by_id(workflow: WorkflowService, document_ids: list[int] | None) -> dict[int, str]:
+def build_doc_type_by_id(workflow: WorkflowContext, document_ids: list[int] | None) -> dict[int, str]:
     """Build document_id -> document_type mapping for selected translation targets."""
     all_docs = workflow.document_repo.list_documents()
     if document_ids is None:
@@ -24,7 +25,7 @@ def build_doc_type_by_id(workflow: WorkflowService, document_ids: list[int] | No
 
 
 async def translate(
-    workflow: WorkflowService,
+    workflow: WorkflowContext,
     *,
     document_ids: list[int] | None = None,
     progress_callback: ProgressCallback | None = None,
@@ -36,15 +37,15 @@ async def translate(
     translator_config = workflow.config.translator_config
     assert translator_config is not None
 
-    preflight_document_ids = workflow._resolve_preflight_document_ids(document_ids)
-    await workflow._prepare_llm_prerequisites(preflight_document_ids, cancel_check=cancel_check)
+    preflight_document_ids = bootstrap_ops.resolve_preflight_document_ids(workflow, document_ids)
+    await bootstrap_ops.prepare_llm_prerequisites(workflow, preflight_document_ids, cancel_check=cancel_check)
 
     if not skip_context:
-        workflow._check_cancel(cancel_check)
+        bootstrap_ops.check_cancel(cancel_check)
         workflow.manager.build_context_tree(cancel_check=cancel_check)
 
-    workflow._check_cancel(cancel_check)
-    doc_type_by_id = workflow._build_doc_type_by_id(document_ids)
+    bootstrap_ops.check_cancel(cancel_check)
+    doc_type_by_id = build_doc_type_by_id(workflow, document_ids)
 
     await workflow.manager.translate_chunks(
         doc_type_by_id=doc_type_by_id,
@@ -58,7 +59,7 @@ async def translate(
 
 
 async def retranslate_chunk(
-    workflow: WorkflowService,
+    workflow: WorkflowContext,
     *,
     chunk_id: int,
     document_id: int,
@@ -69,14 +70,14 @@ async def retranslate_chunk(
     translator_config = workflow.config.translator_config
     assert translator_config is not None
 
-    preflight_document_ids = workflow._resolve_preflight_document_ids([document_id])
-    await workflow._prepare_llm_prerequisites(preflight_document_ids, cancel_check=cancel_check)
+    preflight_document_ids = bootstrap_ops.resolve_preflight_document_ids(workflow, [document_id])
+    await bootstrap_ops.prepare_llm_prerequisites(workflow, preflight_document_ids, cancel_check=cancel_check)
 
     if not skip_context:
-        workflow._check_cancel(cancel_check)
+        bootstrap_ops.check_cancel(cancel_check)
         workflow.manager.build_context_tree(cancel_check=cancel_check)
 
-    workflow._check_cancel(cancel_check)
+    bootstrap_ops.check_cancel(cancel_check)
 
     chunk = workflow.db.get_chunk_by_id(chunk_id)
     if chunk is None:
@@ -93,7 +94,7 @@ async def retranslate_chunk(
         skip_context=skip_context,
     )
 
-    workflow._check_cancel(cancel_check)
+    bootstrap_ops.check_cancel(cancel_check)
 
     translated_texts = await workflow.manager.chunk_translator.translate(
         [chunk.text], batch_terms, source_language, cancel_check=cancel_check

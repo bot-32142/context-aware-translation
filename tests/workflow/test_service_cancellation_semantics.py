@@ -6,7 +6,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from context_aware_translation.config import TranslatorBatchConfig
-from context_aware_translation.workflow.service import WorkflowService
+from context_aware_translation.workflow.runtime import WorkflowContext
+from context_aware_translation.workflow.services import (
+    bootstrap_ops,
+    export_ops,
+    glossary_ops,
+    ocr_ops,
+    translation_ops,
+)
 
 
 @pytest.mark.asyncio
@@ -26,7 +33,7 @@ async def test_translate_late_cancel_after_completion_reports_success():
     document_repo = MagicMock()
     document_repo.list_documents.return_value = [{"document_id": 1, "document_type": "text"}]
 
-    service = WorkflowService(
+    service = WorkflowContext(
         config=config,
         llm_client=MagicMock(),
         context_tree=MagicMock(),
@@ -34,12 +41,12 @@ async def test_translate_late_cancel_after_completion_reports_success():
         db=MagicMock(),
         document_repo=document_repo,
     )
-    service._process_document = AsyncMock()
 
     def cancel_check() -> bool:
         return state["completed"]
 
-    await service.translate(cancel_check=cancel_check)
+    with patch.object(bootstrap_ops, "process_document", new=AsyncMock()):
+        await translation_ops.translate(service, cancel_check=cancel_check)
     manager.detect_language.assert_awaited_once()
     manager.translate_chunks.assert_awaited_once()
 
@@ -61,7 +68,7 @@ async def test_translate_uses_regular_chunk_path_even_when_batch_config_present(
     document_repo = MagicMock()
     document_repo.list_documents.return_value = [{"document_id": 1, "document_type": "text"}]
 
-    service = WorkflowService(
+    service = WorkflowContext(
         config=config,
         llm_client=MagicMock(),
         context_tree=MagicMock(),
@@ -69,9 +76,9 @@ async def test_translate_uses_regular_chunk_path_even_when_batch_config_present(
         db=MagicMock(),
         document_repo=document_repo,
     )
-    service._process_document = AsyncMock()
 
-    await service.translate()
+    with patch.object(bootstrap_ops, "process_document", new=AsyncMock()):
+        await translation_ops.translate(service)
 
     manager.translate_chunks.assert_awaited_once()
 
@@ -95,7 +102,7 @@ async def test_run_ocr_late_cancel_after_processing_reports_success():
     document_repo = MagicMock()
     document_repo.get_document_sources_needing_ocr.return_value = [{"source_id": 10}]
 
-    service = WorkflowService(
+    service = WorkflowContext(
         config=config,
         llm_client=MagicMock(),
         context_tree=MagicMock(),
@@ -107,8 +114,11 @@ async def test_run_ocr_late_cancel_after_processing_reports_success():
     def cancel_check() -> bool:
         return state["completed"]
 
-    with patch("context_aware_translation.workflow.service.Document.load_all", return_value=[document]):
-        processed = await service.run_ocr(cancel_check=cancel_check)
+    processed = await ocr_ops.run_ocr(
+        service,
+        document_loader=lambda *_args, **_kwargs: [document],
+        cancel_check=cancel_check,
+    )
 
     assert processed == 1
 
@@ -130,7 +140,7 @@ async def test_translate_glossary_late_cancel_after_completion_reports_success()
     db = MagicMock()
     db.get_source_language.return_value = "ja"
 
-    service = WorkflowService(
+    service = WorkflowContext(
         config=config,
         llm_client=MagicMock(),
         context_tree=MagicMock(),
@@ -142,7 +152,7 @@ async def test_translate_glossary_late_cancel_after_completion_reports_success()
     def cancel_check() -> bool:
         return state["completed"]
 
-    await service.translate_glossary(cancel_check=cancel_check)
+    await glossary_ops.translate_glossary(service, cancel_check=cancel_check)
     db.get_source_language.assert_not_called()
     manager.translate_terms.assert_awaited_once()
 
@@ -163,7 +173,7 @@ async def test_review_terms_late_cancel_after_completion_reports_success():
     db = MagicMock()
     db.get_source_language.return_value = "ja"
 
-    service = WorkflowService(
+    service = WorkflowContext(
         config=config,
         llm_client=MagicMock(),
         context_tree=MagicMock(),
@@ -175,7 +185,7 @@ async def test_review_terms_late_cancel_after_completion_reports_success():
     def cancel_check() -> bool:
         return state["completed"]
 
-    await service.review_terms(cancel_check=cancel_check)
+    await glossary_ops.review_terms(service, cancel_check=cancel_check)
     db.get_source_language.assert_not_called()
     manager.review_terms.assert_awaited_once()
 
@@ -201,7 +211,7 @@ async def test_translate_glossary_detects_source_language_from_terms_when_missin
         SimpleNamespace(key="二つ目", descriptions={}),
     ]
 
-    service = WorkflowService(
+    service = WorkflowContext(
         config=config,
         llm_client=MagicMock(),
         context_tree=MagicMock(),
@@ -209,9 +219,8 @@ async def test_translate_glossary_detects_source_language_from_terms_when_missin
         db=db,
         document_repo=MagicMock(),
     )
-    service._load_documents = MagicMock(return_value=[])
-
-    await service.translate_glossary(cancel_check=None)
+    with patch("context_aware_translation.workflow.services.bootstrap_ops.load_documents", return_value=[]):
+        await glossary_ops.translate_glossary(service, cancel_check=None)
 
     detector.detect.assert_awaited_once()
     db.set_source_language.assert_called_once_with("ja")
@@ -252,7 +261,7 @@ async def test_translate_glossary_uses_ready_non_ocr_documents_for_language_dete
     ready_text_doc.get_text.return_value = "これはテストです"
     ready_text_doc.mark_text_added = MagicMock()
 
-    service = WorkflowService(
+    service = WorkflowContext(
         config=config,
         llm_client=MagicMock(),
         context_tree=MagicMock(),
@@ -260,9 +269,11 @@ async def test_translate_glossary_uses_ready_non_ocr_documents_for_language_dete
         db=db,
         document_repo=MagicMock(),
     )
-    service._load_documents = MagicMock(return_value=[ready_text_doc, pending_ocr_doc])
-
-    await service.translate_glossary(cancel_check=None)
+    with patch(
+        "context_aware_translation.workflow.services.bootstrap_ops.load_documents",
+        return_value=[ready_text_doc, pending_ocr_doc],
+    ):
+        await glossary_ops.translate_glossary(service, cancel_check=None)
 
     manager.add_text.assert_called_once_with(
         text="これはテストです",
@@ -289,7 +300,7 @@ async def test_ensure_glossary_source_language_propagates_non_missing_detect_lan
     db = MagicMock()
     db.get_source_language.return_value = None
 
-    service = WorkflowService(
+    service = WorkflowContext(
         config=config,
         llm_client=MagicMock(),
         context_tree=MagicMock(),
@@ -297,10 +308,11 @@ async def test_ensure_glossary_source_language_propagates_non_missing_detect_lan
         db=db,
         document_repo=MagicMock(),
     )
-    service._load_documents = MagicMock(return_value=[])
-
-    with pytest.raises(ValueError, match="LLM unavailable"):
-        await service._ensure_glossary_source_language(cancel_check=None)
+    with (
+        patch("context_aware_translation.workflow.services.bootstrap_ops.load_documents", return_value=[]),
+        pytest.raises(ValueError, match="LLM unavailable"),
+    ):
+        await bootstrap_ops.ensure_glossary_source_language(service, cancel_check=None)
 
 
 @pytest.mark.asyncio
@@ -318,7 +330,7 @@ async def test_translate_skip_context_bypasses_context_tree_and_forwards_flag():
         {"document_id": 2, "document_type": "manga"},
     ]
 
-    service = WorkflowService(
+    service = WorkflowContext(
         config=config,
         llm_client=MagicMock(),
         context_tree=MagicMock(),
@@ -326,9 +338,9 @@ async def test_translate_skip_context_bypasses_context_tree_and_forwards_flag():
         db=MagicMock(),
         document_repo=document_repo,
     )
-    service._process_document = AsyncMock()
 
-    await service.translate(document_ids=[2], skip_context=True, force=True)
+    with patch.object(bootstrap_ops, "process_document", new=AsyncMock()):
+        await translation_ops.translate(service, document_ids=[2], skip_context=True, force=True)
 
     manager.detect_language.assert_awaited_once()
     manager.build_context_tree.assert_not_called()
@@ -351,7 +363,7 @@ async def test_translate_without_skip_context_builds_context_tree():
     document_repo = MagicMock()
     document_repo.list_documents.return_value = [{"document_id": 7, "document_type": "text"}]
 
-    service = WorkflowService(
+    service = WorkflowContext(
         config=config,
         llm_client=MagicMock(),
         context_tree=MagicMock(),
@@ -359,9 +371,9 @@ async def test_translate_without_skip_context_builds_context_tree():
         db=MagicMock(),
         document_repo=document_repo,
     )
-    service._process_document = AsyncMock()
 
-    await service.translate(skip_context=False)
+    with patch.object(bootstrap_ops, "process_document", new=AsyncMock()):
+        await translation_ops.translate(service, skip_context=False)
 
     manager.detect_language.assert_awaited_once()
     manager.build_context_tree.assert_called_once_with(cancel_check=None)
@@ -385,7 +397,7 @@ async def test_translate_does_not_preflight_earlier_stack_for_text_selection():
         {"document_id": 3, "document_type": "text"},
     ]
 
-    service = WorkflowService(
+    service = WorkflowContext(
         config=config,
         llm_client=MagicMock(),
         context_tree=MagicMock(),
@@ -393,12 +405,11 @@ async def test_translate_does_not_preflight_earlier_stack_for_text_selection():
         db=MagicMock(),
         document_repo=document_repo,
     )
-    service._process_document = AsyncMock()
-
-    await service.translate(document_ids=[2], skip_context=True)
+    with patch.object(bootstrap_ops, "process_document", new=AsyncMock()) as process_document:
+        await translation_ops.translate(service, document_ids=[2], skip_context=True)
 
     manager.detect_language.assert_awaited_once()
-    service._process_document.assert_awaited_once_with([2], cancel_check=None)
+    process_document.assert_awaited_once_with(service, [2], cancel_check=None)
     manager.translate_chunks.assert_awaited_once()
     assert manager.translate_chunks.await_args.kwargs["doc_type_by_id"] == {2: "text"}
 
@@ -419,7 +430,7 @@ async def test_translate_preflights_stack_for_ocr_required_selection():
         {"document_id": 3, "document_type": "text"},
     ]
 
-    service = WorkflowService(
+    service = WorkflowContext(
         config=config,
         llm_client=MagicMock(),
         context_tree=MagicMock(),
@@ -427,12 +438,11 @@ async def test_translate_preflights_stack_for_ocr_required_selection():
         db=MagicMock(),
         document_repo=document_repo,
     )
-    service._process_document = AsyncMock()
-
-    await service.translate(document_ids=[2], skip_context=True)
+    with patch.object(bootstrap_ops, "process_document", new=AsyncMock()) as process_document:
+        await translation_ops.translate(service, document_ids=[2], skip_context=True)
 
     manager.detect_language.assert_awaited_once()
-    service._process_document.assert_awaited_once_with([1, 2], cancel_check=None)
+    process_document.assert_awaited_once_with(service, [1, 2], cancel_check=None)
     manager.translate_chunks.assert_awaited_once()
     assert manager.translate_chunks.await_args.kwargs["doc_type_by_id"] == {2: "manga"}
 
@@ -473,7 +483,7 @@ async def test_export_strict_mode_raises_for_untranslated_chunks(tmp_path):
     manager.get_translated_lines.side_effect = ValueError("Cannot export: chunks [2] are not translated yet")
 
     fake_doc = _FakeExportDocument()
-    service = WorkflowService(
+    service = WorkflowContext(
         config=config,
         llm_client=MagicMock(),
         context_tree=MagicMock(),
@@ -481,10 +491,16 @@ async def test_export_strict_mode_raises_for_untranslated_chunks(tmp_path):
         db=MagicMock(),
         document_repo=MagicMock(),
     )
-    service._load_documents = MagicMock(return_value=[fake_doc])
-
-    with pytest.raises(ValueError, match="not translated"):
-        await service.export(tmp_path / "out.txt", export_format="txt", allow_original_fallback=False)
+    with (
+        patch("context_aware_translation.workflow.services.bootstrap_ops.load_documents", return_value=[fake_doc]),
+        pytest.raises(ValueError, match="not translated"),
+    ):
+        await export_ops.export(
+            service,
+            file_path=tmp_path / "out.txt",
+            export_format="txt",
+            allow_original_fallback=False,
+        )
 
     assert fake_doc.received_lines is None
 
@@ -505,7 +521,7 @@ async def test_export_fallback_mode_merges_translated_and_original_chunks(tmp_pa
 
     fake_doc = _FakeExportDocument()
     _FakeExportDocument.export_calls = []
-    service = WorkflowService(
+    service = WorkflowContext(
         config=config,
         llm_client=MagicMock(),
         context_tree=MagicMock(),
@@ -513,11 +529,15 @@ async def test_export_fallback_mode_merges_translated_and_original_chunks(tmp_pa
         db=db,
         document_repo=MagicMock(),
     )
-    service._load_documents = MagicMock(return_value=[fake_doc])
+    with patch("context_aware_translation.workflow.services.bootstrap_ops.load_documents", return_value=[fake_doc]):
+        await export_ops.export(
+            service,
+            file_path=tmp_path / "out.txt",
+            export_format="txt",
+            allow_original_fallback=True,
+        )
 
-    await service.export(tmp_path / "out.txt", export_format="txt", allow_original_fallback=True)
-
-    assert fake_doc.received_lines == ["hola", "world"]
+    assert fake_doc.received_lines == ["hola", "world", ""]
     assert _FakeExportDocument.export_calls
 
 
@@ -537,7 +557,7 @@ async def test_export_fallback_mode_for_manga_keeps_untranslated_pages_unreembed
 
     fake_doc = _FakeMangaExportDocument()
     _FakeMangaExportDocument.export_calls = []
-    service = WorkflowService(
+    service = WorkflowContext(
         config=config,
         llm_client=MagicMock(),
         context_tree=MagicMock(),
@@ -545,9 +565,13 @@ async def test_export_fallback_mode_for_manga_keeps_untranslated_pages_unreembed
         db=db,
         document_repo=MagicMock(),
     )
-    service._load_documents = MagicMock(return_value=[fake_doc])
-
-    await service.export(tmp_path / "out.cbz", export_format="txt", allow_original_fallback=True)
+    with patch("context_aware_translation.workflow.services.bootstrap_ops.load_documents", return_value=[fake_doc]):
+        await export_ops.export(
+            service,
+            file_path=tmp_path / "out.cbz",
+            export_format="txt",
+            allow_original_fallback=True,
+        )
 
     # Untranslated manga page should stay empty so reembedding is skipped.
     assert fake_doc.received_lines == ["EN PAGE 1", ""]

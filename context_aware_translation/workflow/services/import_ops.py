@@ -5,13 +5,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from context_aware_translation.documents.base import Document
+from context_aware_translation.workflow.services import bootstrap_ops
 
 if TYPE_CHECKING:
-    from context_aware_translation.workflow.service import WorkflowService
+    from context_aware_translation.workflow.runtime import WorkflowContext
 
 
 def resolve_imported_document_id(
-    workflow: WorkflowService,
+    workflow: WorkflowContext,
     existing_document_ids: set[int],
     imported_count: int,
 ) -> int | None:
@@ -29,7 +30,7 @@ def resolve_imported_document_id(
 
 
 def resolve_import_class(
-    workflow: WorkflowService,
+    _workflow: WorkflowContext,
     classes: list[type[Document]],
     path: Path,
     *,
@@ -39,7 +40,7 @@ def resolve_import_class(
     """Resolve target document class for import request."""
     if document_type:
         for cls in classes:
-            workflow._check_cancel(cancel_check)
+            bootstrap_ops.check_cancel(cancel_check)
             if cls.document_type != document_type:
                 continue
             if cls.can_import(path):
@@ -49,7 +50,7 @@ def resolve_import_class(
 
     matches = []
     for cls in classes:
-        workflow._check_cancel(cancel_check)
+        bootstrap_ops.check_cancel(cancel_check)
         if cls.can_import(path):
             matches.append(cls)
     if len(matches) > 1:
@@ -61,7 +62,7 @@ def resolve_import_class(
 
 
 def import_with_class(
-    workflow: WorkflowService,
+    workflow: WorkflowContext,
     document_class: type[Document],
     path: Path,
     *,
@@ -69,9 +70,9 @@ def import_with_class(
 ) -> dict[str, int | None]:
     """Import a path with a resolved document class and return standardized result."""
     existing_document_ids = {int(doc["document_id"]) for doc in workflow.document_repo.list_documents()}
-    workflow._check_cancel(cancel_check)
+    bootstrap_ops.check_cancel(cancel_check)
     result = document_class.do_import(workflow.document_repo, path, cancel_check=cancel_check)
-    document_id = workflow._resolve_imported_document_id(existing_document_ids, int(result["imported"]))
+    document_id = resolve_imported_document_id(workflow, existing_document_ids, int(result["imported"]))
     return {
         "imported": int(result["imported"]),
         "skipped": int(result["skipped"]),
@@ -80,7 +81,7 @@ def import_with_class(
 
 
 def import_path(
-    workflow: WorkflowService,
+    workflow: WorkflowContext,
     *,
     path: Path,
     document_type: str | None = None,
@@ -89,19 +90,20 @@ def import_path(
     """Import a file/folder path into the current book."""
     from context_aware_translation.documents.base import get_document_classes
 
-    workflow._check_cancel(cancel_check)
+    bootstrap_ops.check_cancel(cancel_check)
     if not path.exists():
         raise ValueError(f"Path does not exist: {path}")
 
-    workflow._check_cancel(cancel_check)
+    bootstrap_ops.check_cancel(cancel_check)
     if path.is_dir() and not any(path.iterdir()):
         raise ValueError(f"Cannot import empty folder: {path}")
 
     classes = get_document_classes()
-    target_class = workflow._resolve_import_class(
+    target_class = resolve_import_class(
+        workflow,
         classes,
         path,
         document_type=document_type,
         cancel_check=cancel_check,
     )
-    return workflow._import_with_class(target_class, path, cancel_check=cancel_check)
+    return import_with_class(workflow, target_class, path, cancel_check=cancel_check)

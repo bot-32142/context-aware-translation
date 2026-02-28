@@ -12,7 +12,7 @@ from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.task_store import TaskStore
 
 if TYPE_CHECKING:
-    from context_aware_translation.workflow.service import WorkflowService
+    from context_aware_translation.workflow.runtime import WorkflowContext
 
 
 class FollowupEnqueue(Protocol):
@@ -23,6 +23,6 @@ class FollowupEnqueue(Protocol):
 class WorkerDeps:
     book_manager: BookManager
     task_store: TaskStore
-    create_workflow_session: Callable[[str], AbstractContextManager[WorkflowService]]
+    create_workflow_session: Callable[[str], AbstractContextManager[WorkflowContext]]
     notify_task_changed: Callable[[str], None]
     enqueue_followup: FollowupEnqueue | None = None

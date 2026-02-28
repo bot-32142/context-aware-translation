@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 
-from PySide6.QtCore import QEvent, Qt, QTimer, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -20,7 +20,7 @@ from context_aware_translation.workflow.tasks.models import (
     TaskAction,
 )
 
-from ..i18n import translate_task_phase, translate_task_status
+from ..i18n import translate_task_block_reason, translate_task_phase, translate_task_status
 from ..tasks.task_view_model_mapper import map_tasks_to_row_vms
 from ..tasks.task_view_models import TaskRowVM
 
@@ -51,7 +51,8 @@ def _chip_style(status: str) -> str:
 
 def _progress_text(vm: TaskRowVM) -> str:
     if vm.total_items > 0:
-        return f"{vm.completed_items}/{vm.total_items} items"
+        template = QCoreApplication.translate("TaskStatusCard", "{0}/{1} items")
+        return template.format(vm.completed_items, vm.total_items)
     return ""
 
 
@@ -240,11 +241,11 @@ class TaskStatusCard(QWidget):
     def _update_buttons(self, vm: TaskRowVM) -> None:
         cancel_d = self._engine.preflight_task(vm.task_id, TaskAction.CANCEL)
         self._cancel_btn.setVisible(cancel_d.allowed)
-        self._cancel_btn.setToolTip(cancel_d.reason)
+        self._cancel_btn.setToolTip(translate_task_block_reason(cancel_d.reason, cancel_d.code))
 
         run_d = self._engine.preflight_task(vm.task_id, TaskAction.RUN)
         self._run_btn.setVisible(run_d.allowed)
-        self._run_btn.setToolTip(run_d.reason)
+        self._run_btn.setToolTip(translate_task_block_reason(run_d.reason, run_d.code))
         # Label: "Retry" if task is terminal, else "Run"
         if vm.status in TERMINAL_TASK_STATUSES:
             self._run_btn.setText(self.tr("Retry"))
@@ -369,7 +370,7 @@ class _MiniCard(QFrame):
 
         cancel_d = self._engine.preflight_task(vm.task_id, TaskAction.CANCEL)
         self._cancel_btn.setVisible(cancel_d.allowed)
-        self._cancel_btn.setToolTip(cancel_d.reason)
+        self._cancel_btn.setToolTip(translate_task_block_reason(cancel_d.reason, cancel_d.code))
 
     def _on_cancel_clicked(self) -> None:
         try:

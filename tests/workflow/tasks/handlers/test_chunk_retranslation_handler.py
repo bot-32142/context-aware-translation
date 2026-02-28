@@ -109,7 +109,8 @@ def test_claims_specific_doc():
     record = _make_record()
     payload = {"chunk_id": 1, "document_id": 4}
     claims = handler.claims(record, payload)
-    assert ResourceClaim("doc", "book-1", "4") in claims
+    assert ResourceClaim("doc", "book-1", "4", ClaimMode.WRITE_COOPERATIVE) in claims
+    assert ResourceClaim("chunk", "book-1", "1") in claims
     assert ResourceClaim("glossary_state", "book-1", "*", ClaimMode.READ_SHARED) in claims
     assert ResourceClaim("context_tree", "book-1", "*", ClaimMode.WRITE_COOPERATIVE) in claims
     assert ResourceClaim("doc", "book-1", "*") not in claims

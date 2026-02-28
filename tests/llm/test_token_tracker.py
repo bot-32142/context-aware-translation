@@ -2,6 +2,8 @@
 
 import logging
 import tempfile
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -272,3 +274,111 @@ class TestRecordUsage:
             )
             # All 3 warnings should fire again
             assert caplog.text.count("Token usage warning") == 3
+
+
+class TestThreadSafety:
+    def test_initialize_is_serialized_across_threads(self, registry, monkeypatch):
+        original_init = TokenTracker.__init__
+        active = 0
+        max_active = 0
+        active_lock = threading.Lock()
+
+        def instrumented_init(self, reg):
+            nonlocal active, max_active
+            with active_lock:
+                active += 1
+                max_active = max(max_active, active)
+            try:
+                time.sleep(0.01)
+                original_init(self, reg)
+            finally:
+                with active_lock:
+                    active -= 1
+
+        monkeypatch.setattr(TokenTracker, "__init__", instrumented_init)
+
+        barrier = threading.Barrier(8)
+        errors: list[Exception] = []
+
+        def worker() -> None:
+            try:
+                barrier.wait()
+                TokenTracker.initialize(registry)
+            except Exception as e:  # pragma: no cover - exercised only on failure
+                errors.append(e)
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors
+        assert max_active == 1
+        assert TokenTracker.get() is not None
+
+    def test_warning_set_access_is_serialized_across_threads(self, registry, monkeypatch):
+        _insert_profile(registry, "threadsafe_warn", token_limit=1000)
+        TokenTracker.initialize(registry)
+        tracker = TokenTracker.get()
+        assert tracker is not None
+
+        class InstrumentedSet(set):
+            def __init__(self):
+                super().__init__()
+                self._active = 0
+                self.max_active = 0
+                self._active_lock = threading.Lock()
+
+            def _enter(self) -> None:
+                with self._active_lock:
+                    self._active += 1
+                    self.max_active = max(self.max_active, self._active)
+
+            def _exit(self) -> None:
+                with self._active_lock:
+                    self._active -= 1
+
+            def __contains__(self, key):
+                self._enter()
+                try:
+                    time.sleep(0.002)
+                    return super().__contains__(key)
+                finally:
+                    self._exit()
+
+            def add(self, key):
+                self._enter()
+                try:
+                    time.sleep(0.002)
+                    return super().add(key)
+                finally:
+                    self._exit()
+
+        instrumented = InstrumentedSet()
+        tracker._warned_profiles = instrumented
+
+        def _ignore_warning(*_args, **_kwargs) -> None:
+            return None
+
+        monkeypatch.setattr("context_aware_translation.llm.token_tracker.logger.warning", _ignore_warning)
+
+        barrier = threading.Barrier(12)
+        errors: list[Exception] = []
+
+        def worker() -> None:
+            try:
+                barrier.wait()
+                tracker._check_warning("threadsafe_warn", "total", 800, 1000)
+            except Exception as e:  # pragma: no cover - exercised only on failure
+                errors.append(e)
+
+        threads = [threading.Thread(target=worker) for _ in range(12)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors
+        assert instrumented.max_active == 1
+        assert "threadsafe_warn:total" in tracker._warned_profiles

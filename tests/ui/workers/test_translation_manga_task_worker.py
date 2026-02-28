@@ -33,14 +33,18 @@ def _make_worker(
 def test_worker_run_sets_running_status():
     worker = _make_worker(action="run")
 
+    fake_context = MagicMock()
     fake_session = MagicMock()
-    fake_session.__enter__ = MagicMock(return_value=fake_session)
+    fake_session.__enter__ = MagicMock(return_value=fake_context)
     fake_session.__exit__ = MagicMock(return_value=False)
-    fake_session.translate = MagicMock(return_value=_async_none())
 
-    with patch(
-        "context_aware_translation.ui.workers.translation_manga_task_worker.WorkflowSession"
-    ) as mock_session_cls:
+    with (
+        patch("context_aware_translation.ui.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.ui.workers.translation_manga_task_worker.translation_ops.translate",
+            new=_async_none,
+        ),
+    ):
         mock_session_cls.from_book.return_value = fake_session
         worker._run_translation()
 
@@ -50,14 +54,18 @@ def test_worker_run_sets_running_status():
 def test_worker_run_sets_completed_status():
     worker = _make_worker(action="run")
 
+    fake_context = MagicMock()
     fake_session = MagicMock()
-    fake_session.__enter__ = MagicMock(return_value=fake_session)
+    fake_session.__enter__ = MagicMock(return_value=fake_context)
     fake_session.__exit__ = MagicMock(return_value=False)
-    fake_session.translate = MagicMock(return_value=_async_none())
 
-    with patch(
-        "context_aware_translation.ui.workers.translation_manga_task_worker.WorkflowSession"
-    ) as mock_session_cls:
+    with (
+        patch("context_aware_translation.ui.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.ui.workers.translation_manga_task_worker.translation_ops.translate",
+            new=_async_none,
+        ),
+    ):
         mock_session_cls.from_book.return_value = fake_session
         worker._run_translation()
 
@@ -70,14 +78,18 @@ def test_worker_run_uses_snapshot_when_provided():
     snapshot = json.dumps({"snapshot_version": 1, "config": {}})
     worker = _make_worker(action="run", config_snapshot_json=snapshot)
 
+    fake_context = MagicMock()
     fake_session = MagicMock()
-    fake_session.__enter__ = MagicMock(return_value=fake_session)
+    fake_session.__enter__ = MagicMock(return_value=fake_context)
     fake_session.__exit__ = MagicMock(return_value=False)
-    fake_session.translate = MagicMock(return_value=_async_none())
 
-    with patch(
-        "context_aware_translation.ui.workers.translation_manga_task_worker.WorkflowSession"
-    ) as mock_session_cls:
+    with (
+        patch("context_aware_translation.ui.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.ui.workers.translation_manga_task_worker.translation_ops.translate",
+            new=_async_none,
+        ),
+    ):
         mock_session_cls.from_snapshot.return_value = fake_session
         worker._run_translation()
 
@@ -88,14 +100,18 @@ def test_worker_run_uses_snapshot_when_provided():
 def test_worker_run_uses_from_book_when_no_snapshot():
     worker = _make_worker(action="run", config_snapshot_json=None)
 
+    fake_context = MagicMock()
     fake_session = MagicMock()
-    fake_session.__enter__ = MagicMock(return_value=fake_session)
+    fake_session.__enter__ = MagicMock(return_value=fake_context)
     fake_session.__exit__ = MagicMock(return_value=False)
-    fake_session.translate = MagicMock(return_value=_async_none())
 
-    with patch(
-        "context_aware_translation.ui.workers.translation_manga_task_worker.WorkflowSession"
-    ) as mock_session_cls:
+    with (
+        patch("context_aware_translation.ui.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.ui.workers.translation_manga_task_worker.translation_ops.translate",
+            new=_async_none,
+        ),
+    ):
         mock_session_cls.from_book.return_value = fake_session
         worker._run_translation()
 
@@ -106,34 +122,44 @@ def test_worker_run_uses_from_book_when_no_snapshot():
 def test_worker_run_passes_document_ids():
     worker = _make_worker(action="run", document_ids=[1, 2, 3])
 
-    fake_service = MagicMock()
-    fake_service.translate = MagicMock(return_value=_async_none())
-
+    fake_context = MagicMock()
     fake_session = MagicMock()
-    fake_session.__enter__ = MagicMock(return_value=fake_service)
+    fake_session.__enter__ = MagicMock(return_value=fake_context)
     fake_session.__exit__ = MagicMock(return_value=False)
+    calls: list[tuple[tuple, dict]] = []
 
-    with patch(
-        "context_aware_translation.ui.workers.translation_manga_task_worker.WorkflowSession"
-    ) as mock_session_cls:
+    async def _translate(*args, **kwargs):
+        calls.append((args, kwargs))
+
+    with (
+        patch("context_aware_translation.ui.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.ui.workers.translation_manga_task_worker.translation_ops.translate",
+            new=_translate,
+        ),
+    ):
         mock_session_cls.from_book.return_value = fake_session
         worker._run_translation()
 
-    call_kwargs = fake_service.translate.call_args
-    assert call_kwargs.kwargs.get("document_ids") == [1, 2, 3] or call_kwargs.args[0] == [1, 2, 3]
+    assert len(calls) == 1
+    assert calls[0][1].get("document_ids") == [1, 2, 3]
 
 
 def test_worker_run_sets_failed_status_on_exception():
     worker = _make_worker(action="run")
 
+    fake_context = MagicMock()
     fake_session = MagicMock()
-    fake_session.__enter__ = MagicMock(return_value=fake_session)
+    fake_session.__enter__ = MagicMock(return_value=fake_context)
     fake_session.__exit__ = MagicMock(return_value=False)
-    fake_session.translate = MagicMock(return_value=_async_raise(RuntimeError("test error")))
 
-    with patch(
-        "context_aware_translation.ui.workers.translation_manga_task_worker.WorkflowSession"
-    ) as mock_session_cls:
+    with (
+        patch("context_aware_translation.ui.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.ui.workers.translation_manga_task_worker.translation_ops.translate",
+            new=_raise_runtime_error,
+        ),
+    ):
         mock_session_cls.from_book.return_value = fake_session
         import contextlib
 
@@ -148,14 +174,18 @@ def test_worker_run_sets_cancelled_status_on_cancel():
 
     worker = _make_worker(action="run")
 
+    fake_context = MagicMock()
     fake_session = MagicMock()
-    fake_session.__enter__ = MagicMock(return_value=fake_session)
+    fake_session.__enter__ = MagicMock(return_value=fake_context)
     fake_session.__exit__ = MagicMock(return_value=False)
-    fake_session.translate = MagicMock(return_value=_async_raise(OperationCancelledError("cancelled")))
 
-    with patch(
-        "context_aware_translation.ui.workers.translation_manga_task_worker.WorkflowSession"
-    ) as mock_session_cls:
+    with (
+        patch("context_aware_translation.ui.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.ui.workers.translation_manga_task_worker.translation_ops.translate",
+            new=_raise_cancelled,
+        ),
+    ):
         mock_session_cls.from_book.return_value = fake_session
         import contextlib
 
@@ -237,19 +267,15 @@ def test_unknown_action_raises():
 # ---------------------------------------------------------------------------
 
 
-def _async_none():
-    """Return a coroutine that returns None."""
-
-    async def _inner(*_args, **_kwargs):
-        return None
-
-    return _inner()
+async def _async_none(*_args, **_kwargs):
+    return None
 
 
-def _async_raise(exc: Exception):
-    """Return a coroutine that raises exc."""
+async def _raise_runtime_error(*_args, **_kwargs):
+    raise RuntimeError("test error")
 
-    async def _inner(*_args, **_kwargs):
-        raise exc
 
-    return _inner()
+async def _raise_cancelled(*_args, **_kwargs):
+    from context_aware_translation.core.cancellation import OperationCancelledError
+
+    raise OperationCancelledError("cancelled")

@@ -12,6 +12,7 @@ from context_aware_translation.storage.book_db import SQLiteBookDB
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.document_repository import DocumentRepository
 from context_aware_translation.storage.task_store import TaskStore
+from context_aware_translation.workflow.services import translation_ops
 from context_aware_translation.workflow.session import WorkflowSession
 from context_aware_translation.workflow.tasks.models import STATUS_COMPLETED_WITH_ERRORS
 
@@ -94,9 +95,10 @@ class TranslationMangaTaskWorker(BaseWorker):
                 session_ctx = WorkflowSession.from_snapshot(self._config_snapshot_json, self._book_id)
             else:
                 session_ctx = WorkflowSession.from_book(self._book_manager, self._book_id)
-            with session_ctx as session:
+            with session_ctx as context:
                 asyncio.run(
-                    session.translate(
+                    translation_ops.translate(
+                        context,
                         document_ids=self._document_ids,
                         progress_callback=self._on_progress,
                         force=self._force,

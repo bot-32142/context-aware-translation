@@ -27,7 +27,7 @@ from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.document_repository import DocumentRepository
 from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, TaskAction
 
-from ..i18n import qarg, translate_progress_message
+from ..i18n import qarg, translate_progress_message, translate_task_block_reason
 from ..utils import create_tip_label, translate_document_type
 from ..widgets import ImageViewer, OCRElementList, ProgressWidget
 from ..widgets.task_status_card import TaskStatusCard
@@ -686,7 +686,11 @@ class OCRReviewView(QWidget):
             if not decision.allowed:
                 self._clear_ocr_run_context()
                 self._restore_rerun_backup()
-                QMessageBox.warning(self, self.tr("Cannot Run OCR"), decision.reason)
+                QMessageBox.warning(
+                    self,
+                    self.tr("Cannot Run OCR"),
+                    translate_task_block_reason(decision.reason, decision.code),
+                )
                 return
 
             record = self._task_engine.submit_and_start(
@@ -732,7 +736,11 @@ class OCRReviewView(QWidget):
             TaskAction.RUN,
         )
         if not decision.allowed:
-            QMessageBox.warning(self, self.tr("Cannot Run OCR"), decision.reason)
+            QMessageBox.warning(
+                self,
+                self.tr("Cannot Run OCR"),
+                translate_task_block_reason(decision.reason, decision.code),
+            )
             return
 
         self._capture_ocr_run_context()
@@ -875,7 +883,7 @@ class OCRReviewView(QWidget):
 
         elif status == "failed":
             self._restore_rerun_backup()
-            error_msg = record.last_error or self.tr("Unknown error")
+            error_msg = translate_task_block_reason(record.last_error) or self.tr("Unknown error")
             QMessageBox.critical(self, self.tr("OCR Error"), qarg(self.tr("OCR failed: %1"), error_msg))
 
         elif status == "cancelled":
