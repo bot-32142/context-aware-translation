@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import os
 import unicodedata
 from collections.abc import Iterable
 from functools import lru_cache
@@ -9,68 +7,12 @@ from functools import lru_cache
 from opencc import OpenCC
 
 
-def _ensure_jp2s_config() -> None:
-    """Generate jp2s OpenCC config if it doesn't exist.
-
-    The opencc-python-reimplemented package ships JPVariants.txt (Traditional->JP)
-    but no jp2s config. We generate:
-    - JPVariantsRev.txt: reversed mapping (JP->Traditional)
-    - jp2s.json: config chaining JP->Traditional->Simplified
-    """
-    opencc_file = __import__("opencc").__file__
-    assert opencc_file is not None, "opencc package __file__ is None"
-    pkg_dir = os.path.dirname(os.path.abspath(opencc_file))
-    config_dir = os.path.join(pkg_dir, "config")
-    dict_dir = os.path.join(pkg_dir, "dictionary")
-
-    jp2s_path = os.path.join(config_dir, "jp2s.json")
-    if os.path.exists(jp2s_path):
-        return
-
-    # Generate reversed JP dictionary
-    jp_rev_path = os.path.join(dict_dir, "JPVariantsRev.txt")
-    if not os.path.exists(jp_rev_path):
-        jp_path = os.path.join(dict_dir, "JPVariants.txt")
-        with open(jp_path, encoding="utf-8") as f:
-            lines = f.readlines()
-        reversed_lines = []
-        for line in lines:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split("\t")
-            if len(parts) == 2:
-                reversed_lines.append(f"{parts[1]}\t{parts[0]}")
-        with open(jp_rev_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(sorted(reversed_lines)) + "\n")
-
-    # Generate jp2s config (JP shinjitai -> Traditional -> Simplified)
-    config = {
-        "name": "Japanese Shinjitai + Traditional to Simplified Chinese",
-        "segmentation": {
-            "type": "mmseg",
-            "dict": {"type": "txt", "file": "TSPhrases.txt"},
-        },
-        "conversion_chain": [
-            {"dict": {"type": "txt", "file": "JPVariantsRev.txt"}},
-            {
-                "dict": {
-                    "type": "group",
-                    "dicts": [
-                        {"type": "txt", "file": "TSPhrases.txt"},
-                        {"type": "txt", "file": "TSCharacters.txt"},
-                    ],
-                }
-            },
-        ],
-    }
-    with open(jp2s_path, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2)
-
-
 @lru_cache(maxsize=1)
 def _get_converter() -> OpenCC:
-    _ensure_jp2s_config()
+    """Return OpenCC converter for JP/CJK normalization.
+
+    Uses built-in ``jp2s`` config from opencc package data.
+    """
     return OpenCC("jp2s")
 
 
