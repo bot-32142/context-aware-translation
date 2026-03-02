@@ -70,8 +70,6 @@ hiddenimports = [
 # Exclude unnecessary modules to reduce size
 excludes = [
     'tkinter',
-    'test',
-    'unittest',
 ]
 
 a = Analysis(

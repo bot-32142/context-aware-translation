@@ -1,12 +1,10 @@
 """Entry point for the PySide6 desktop application."""
 
 import sys
+import traceback
 from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
-
-from context_aware_translation.ui import i18n
-from context_aware_translation.ui.main_window import MainWindow
 
 
 def load_stylesheet() -> str:
@@ -23,6 +21,26 @@ def main() -> None:
     app.setApplicationName("Context-Aware Translation")
     app.setOrganizationName("CAT")
     app.setOrganizationDomain("context-aware-translation")
+
+    try:
+        from context_aware_translation.ui import i18n
+        from context_aware_translation.ui.main_window import MainWindow
+    except Exception:
+        # Surface startup failures when running as a packaged GUI app
+        # where stderr is typically not visible to end users.
+        detail = traceback.format_exc()
+        try:
+            from PySide6.QtWidgets import QMessageBox
+
+            QMessageBox.critical(
+                None,
+                "Startup Error",
+                "Context-Aware Translation failed to start.\n\n"
+                "Please send this traceback to support:\n\n"
+                f"{detail}",
+            )
+        finally:
+            raise
 
     # Load stylesheet
     stylesheet = load_stylesheet()
