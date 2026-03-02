@@ -37,17 +37,29 @@ if qt_styles_dir.exists():
             binaries.append((str(plugin), 'PySide6/Qt/plugins/styles'))
 
 # Explicit native-lib collection for packages that commonly miss implicit hook coverage.
-for module_name in ('pikepdf', 'faiss'):
+for module_name in ('pikepdf', 'faiss', 'pypdfium2_raw'):
     try:
         binaries += collect_dynamic_libs(module_name)
     except Exception as exc:  # noqa: BLE001
         print(f"[cat-ui.spec] warning: failed to collect dynamic libs for {module_name}: {exc}")
+
+# pypdfium2_raw also ships version metadata that some builds/runtime checks read.
+try:
+    datas += collect_data_files('pypdfium2_raw')
+except Exception as exc:  # noqa: BLE001
+    print(f"[cat-ui.spec] warning: failed to collect data files for pypdfium2_raw: {exc}")
 
 # Ensure bundled pandoc executable/data (from pypandoc-binary distribution) are included.
 try:
     datas += collect_data_files('pypandoc')
 except Exception as exc:  # noqa: BLE001
     print(f"[cat-ui.spec] warning: failed to collect data files for pypandoc: {exc}")
+
+# OpenCC requires config/dictionary assets at runtime (e.g. config/jp2s.json).
+try:
+    datas += collect_data_files('opencc')
+except Exception as exc:  # noqa: BLE001
+    print(f"[cat-ui.spec] warning: failed to collect data files for opencc: {exc}")
 
 # Hidden imports for PySide6 and other dependencies
 hiddenimports = [
