@@ -5,7 +5,7 @@ import logging
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QComboBox
 
-from ..constants import LANGUAGES
+from context_aware_translation.ui.constants import LANGUAGES
 
 logger = logging.getLogger(__name__)
 

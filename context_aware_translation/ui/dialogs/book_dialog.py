@@ -18,9 +18,8 @@ from PySide6.QtWidgets import (
 
 from context_aware_translation.storage.book import Book
 from context_aware_translation.storage.book_manager import BookManager
-
-from ..i18n import qarg
-from ..widgets import ConfigEditorWidget
+from context_aware_translation.ui.i18n import qarg
+from context_aware_translation.ui.widgets import ConfigEditorWidget
 
 # Dialog size constants
 DIALOG_WIDTH_NORMAL = 650

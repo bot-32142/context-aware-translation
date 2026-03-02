@@ -10,8 +10,7 @@ from context_aware_translation.documents.base import get_document_classes
 from context_aware_translation.storage.book_db import SQLiteBookDB
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.document_repository import DocumentRepository
-
-from .base_worker import BaseWorker
+from context_aware_translation.ui.workers.base_worker import BaseWorker
 
 
 class ImportWorker(BaseWorker):

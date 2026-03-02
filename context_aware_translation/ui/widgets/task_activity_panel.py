@@ -17,11 +17,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from context_aware_translation.ui.i18n import (
+    translate_running_stage,
+    translate_task_block_reason,
+    translate_task_phase,
+    translate_task_status,
+)
+from context_aware_translation.ui.tasks.task_view_model_mapper import map_tasks_to_row_vms
+from context_aware_translation.ui.tasks.task_view_models import TaskRowVM
 from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, TaskAction
-
-from ..i18n import translate_running_stage, translate_task_block_reason, translate_task_phase, translate_task_status
-from ..tasks.task_view_model_mapper import map_tasks_to_row_vms
-from ..tasks.task_view_models import TaskRowVM
 
 _AUTO_REFRESH_INTERVAL_MS = 3000
 

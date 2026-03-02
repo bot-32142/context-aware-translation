@@ -28,17 +28,16 @@ from context_aware_translation.documents.base import is_ocr_required_for_type
 from context_aware_translation.storage.book_db import SQLiteBookDB, TranslationChunkRecord
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.document_repository import DocumentRepository
+from context_aware_translation.ui.i18n import qarg, translate_task_block_reason
+from context_aware_translation.ui.utils import create_tip_label, translate_document_type
+from context_aware_translation.ui.views.manga_review_widget import MangaReviewWidget
+from context_aware_translation.ui.widgets.task_status_card import TaskStatusStrip
+from context_aware_translation.ui.workers.operation_tracker import DocumentOperationTracker
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 from context_aware_translation.workflow.tasks.models import (
     TERMINAL_TASK_STATUSES,
     TaskAction,
 )
-
-from ..i18n import qarg, translate_task_block_reason
-from ..utils import create_tip_label, translate_document_type
-from ..widgets.task_status_card import TaskStatusStrip
-from ..workers.operation_tracker import DocumentOperationTracker
-from .manga_review_widget import MangaReviewWidget
 
 _TRANSLATION_TASK_TYPES = ["translation_text", "translation_manga", "batch_translation", "chunk_retranslation"]
 

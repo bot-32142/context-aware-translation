@@ -17,9 +17,8 @@ from PySide6.QtWidgets import (
 from context_aware_translation.documents.manga_alignment import align_sources_to_chunks, count_nonempty_ocr_sources
 from context_aware_translation.storage.book_db import SQLiteBookDB, TranslationChunkRecord
 from context_aware_translation.storage.document_repository import DocumentRepository
-
-from ..i18n import qarg
-from ..widgets import ImageViewer
+from context_aware_translation.ui.i18n import qarg
+from context_aware_translation.ui.widgets import ImageViewer
 
 PREVIEW_TRUNCATION_LENGTH = 50
 

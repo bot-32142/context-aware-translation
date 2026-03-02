@@ -5,7 +5,7 @@ import time
 from PySide6.QtCore import QEvent, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QPushButton, QVBoxLayout, QWidget
 
-from ..i18n import qarg
+from context_aware_translation.ui.i18n import qarg
 
 
 class ProgressWidget(QWidget):

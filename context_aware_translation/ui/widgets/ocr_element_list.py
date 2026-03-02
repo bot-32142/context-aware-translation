@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .ocr_element_card import OCRElementCard
+from context_aware_translation.ui.widgets.ocr_element_card import OCRElementCard
 
 # Page-type placeholder messages
 _PLACEHOLDER_MESSAGES = {

@@ -19,7 +19,19 @@ from PySide6.QtWidgets import (
 from context_aware_translation.llm.token_tracker import TokenTracker
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.task_store import TaskStore
+from context_aware_translation.ui import i18n
+from context_aware_translation.ui.constants import (
+    APP_VERSION,
+    DEFAULT_WINDOW_HEIGHT,
+    DEFAULT_WINDOW_WIDTH,
+    MIN_WINDOW_HEIGHT,
+    MIN_WINDOW_WIDTH,
+    SIDEBAR_WIDTH,
+)
+from context_aware_translation.ui.i18n import qarg
+from context_aware_translation.ui.sleep_inhibitor import SleepInhibitor
 from context_aware_translation.ui.tasks.qt_task_engine import TaskEngine
+from context_aware_translation.ui.views import BookWorkspace, LibraryView, ProfileView
 from context_aware_translation.workflow.session import WorkflowSession
 from context_aware_translation.workflow.tasks.handlers.batch_translation import BatchTranslationHandler
 from context_aware_translation.workflow.tasks.handlers.chunk_retranslation import ChunkRetranslationHandler
@@ -32,19 +44,6 @@ from context_aware_translation.workflow.tasks.handlers.ocr import OCRHandler
 from context_aware_translation.workflow.tasks.handlers.translation_manga import TranslationMangaHandler
 from context_aware_translation.workflow.tasks.handlers.translation_text import TranslationTextHandler
 from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
-
-from . import i18n
-from .constants import (
-    APP_VERSION,
-    DEFAULT_WINDOW_HEIGHT,
-    DEFAULT_WINDOW_WIDTH,
-    MIN_WINDOW_HEIGHT,
-    MIN_WINDOW_WIDTH,
-    SIDEBAR_WIDTH,
-)
-from .i18n import qarg
-from .sleep_inhibitor import SleepInhibitor
-from .views import BookWorkspace, LibraryView, ProfileView
 
 logger = logging.getLogger(__name__)
 

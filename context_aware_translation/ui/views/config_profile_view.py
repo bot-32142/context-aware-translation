@@ -14,10 +14,9 @@ from PySide6.QtWidgets import (
 
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.config_profile import ConfigProfile
-
-from ..dialogs.config_profile_dialog import ConfigProfileDialog
-from ..i18n import qarg
-from ..models.profile_model import ConfigProfileModel
+from context_aware_translation.ui.dialogs.config_profile_dialog import ConfigProfileDialog
+from context_aware_translation.ui.i18n import qarg
+from context_aware_translation.ui.models.profile_model import ConfigProfileModel
 
 
 class ConfigProfileView(QWidget):

@@ -24,12 +24,11 @@ from PySide6.QtWidgets import (
 from context_aware_translation.storage.book_db import SQLiteBookDB
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.document_repository import DocumentRepository
+from context_aware_translation.ui.i18n import qarg, translate_progress_message, translate_task_block_reason
+from context_aware_translation.ui.utils import create_tip_label, translate_document_type
+from context_aware_translation.ui.widgets import ImageViewer, ProgressWidget
+from context_aware_translation.ui.widgets.task_status_card import TaskStatusCard
 from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, TaskAction
-
-from ..i18n import qarg, translate_progress_message, translate_task_block_reason
-from ..utils import create_tip_label, translate_document_type
-from ..widgets import ImageViewer, ProgressWidget
-from ..widgets.task_status_card import TaskStatusCard
 
 logger = logging.getLogger(__name__)
 

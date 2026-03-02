@@ -16,10 +16,9 @@ from PySide6.QtWidgets import (
 
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.endpoint_profile import EndpointProfile
-
-from ..dialogs.endpoint_profile_dialog import EndpointProfileDialog
-from ..i18n import qarg
-from ..models.endpoint_profile_model import EndpointProfileModel
+from context_aware_translation.ui.dialogs.endpoint_profile_dialog import EndpointProfileDialog
+from context_aware_translation.ui.i18n import qarg
+from context_aware_translation.ui.models.endpoint_profile_model import EndpointProfileModel
 
 
 class EndpointProfileView(QWidget):

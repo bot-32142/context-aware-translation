@@ -23,12 +23,11 @@ from context_aware_translation.documents.base import get_document_classes
 from context_aware_translation.storage.book_db import SQLiteBookDB
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.document_repository import DocumentRepository
+from context_aware_translation.ui.i18n import qarg
+from context_aware_translation.ui.utils import create_tip_label, translate_document_type
 from context_aware_translation.ui.widgets import ProgressWidget
 from context_aware_translation.ui.workers.import_worker import ImportWorker
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
-
-from ..i18n import qarg
-from ..utils import create_tip_label, translate_document_type
 
 
 class ImportView(QWidget):

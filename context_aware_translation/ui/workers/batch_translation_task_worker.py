@@ -11,12 +11,11 @@ from typing import Any
 
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.task_store import TaskStore
+from context_aware_translation.ui.workers.base_worker import BaseWorker
+from context_aware_translation.ui.workers.batch_task_overlap_guard import has_any_batch_task_overlap
+from context_aware_translation.ui.workers.operation_tracker import DocumentOperationTracker
 from context_aware_translation.workflow.session import WorkflowSession
 from context_aware_translation.workflow.tasks.execution.batch_translation_executor import BatchTranslationExecutor
-
-from .base_worker import BaseWorker
-from .batch_task_overlap_guard import has_any_batch_task_overlap
-from .operation_tracker import DocumentOperationTracker
 
 logger = logging.getLogger(__name__)
 

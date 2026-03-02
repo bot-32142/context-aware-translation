@@ -14,10 +14,9 @@ from PySide6.QtWidgets import (
 
 from context_aware_translation.llm.image_generator import ImageBackend
 from context_aware_translation.storage.book_manager import BookManager
-
-from ..utils import create_tip_label
-from .collapsible_section import CollapsibleSection
-from .language_dropdown import LanguageDropdown
+from context_aware_translation.ui.utils import create_tip_label
+from context_aware_translation.ui.widgets.collapsible_section import CollapsibleSection
+from context_aware_translation.ui.widgets.language_dropdown import LanguageDropdown
 
 
 class ConfigEditorWidget(QWidget):

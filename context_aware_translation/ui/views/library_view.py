@@ -13,11 +13,10 @@ from PySide6.QtWidgets import (
 )
 
 from context_aware_translation.storage.book_manager import BookManager
-
-from ..dialogs.book_dialog import BookDialog
-from ..i18n import qarg
-from ..models.book_model import BookTableModel
-from ..utils import create_tip_label
+from context_aware_translation.ui.dialogs.book_dialog import BookDialog
+from context_aware_translation.ui.i18n import qarg
+from context_aware_translation.ui.models.book_model import BookTableModel
+from context_aware_translation.ui.utils import create_tip_label
 
 
 class LibraryView(QWidget):

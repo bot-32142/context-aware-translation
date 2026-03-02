@@ -1,17 +1,17 @@
 """Views for the application."""
 
-from .book_workspace import BookWorkspace
-from .config_profile_view import ConfigProfileView
-from .endpoint_profile_view import EndpointProfileView
-from .export_view import ExportView
-from .glossary_view import GlossaryView
-from .import_view import ImportView
-from .library_view import LibraryView
-from .manga_review_widget import MangaReviewWidget
-from .ocr_review_view import OCRReviewView
-from .profile_view import ProfileView
-from .reembedding_view import ReembeddingView
-from .translation_view import TranslationView
+from context_aware_translation.ui.views.book_workspace import BookWorkspace
+from context_aware_translation.ui.views.config_profile_view import ConfigProfileView
+from context_aware_translation.ui.views.endpoint_profile_view import EndpointProfileView
+from context_aware_translation.ui.views.export_view import ExportView
+from context_aware_translation.ui.views.glossary_view import GlossaryView
+from context_aware_translation.ui.views.import_view import ImportView
+from context_aware_translation.ui.views.library_view import LibraryView
+from context_aware_translation.ui.views.manga_review_widget import MangaReviewWidget
+from context_aware_translation.ui.views.ocr_review_view import OCRReviewView
+from context_aware_translation.ui.views.profile_view import ProfileView
+from context_aware_translation.ui.views.reembedding_view import ReembeddingView
+from context_aware_translation.ui.views.translation_view import TranslationView
 
 __all__ = [
     "BookWorkspace",

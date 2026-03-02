@@ -4,10 +4,9 @@ from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 
 from context_aware_translation.storage.book_manager import BookManager
-
-from ..utils import create_tip_label
-from .config_profile_view import ConfigProfileView
-from .endpoint_profile_view import EndpointProfileView
+from context_aware_translation.ui.utils import create_tip_label
+from context_aware_translation.ui.views.config_profile_view import ConfigProfileView
+from context_aware_translation.ui.views.endpoint_profile_view import EndpointProfileView
 
 
 class ProfileView(QWidget):

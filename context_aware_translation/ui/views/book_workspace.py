@@ -21,15 +21,14 @@ if TYPE_CHECKING:
     from context_aware_translation.ui.tasks.qt_task_engine import TaskEngine
 
 from context_aware_translation.storage.book_manager import BookManager
-
-from ..i18n import qarg
-from ..utils import create_tip_label
-from .export_view import ExportView
-from .glossary_view import GlossaryView
-from .import_view import ImportView
-from .ocr_review_view import OCRReviewView
-from .reembedding_view import ReembeddingView
-from .translation_view import TranslationView
+from context_aware_translation.ui.i18n import qarg
+from context_aware_translation.ui.utils import create_tip_label
+from context_aware_translation.ui.views.export_view import ExportView
+from context_aware_translation.ui.views.glossary_view import GlossaryView
+from context_aware_translation.ui.views.import_view import ImportView
+from context_aware_translation.ui.views.ocr_review_view import OCRReviewView
+from context_aware_translation.ui.views.reembedding_view import ReembeddingView
+from context_aware_translation.ui.views.translation_view import TranslationView
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +120,7 @@ class BookWorkspace(QWidget):
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
 
         # Activity panel (right-side collapsible, hidden by default)
-        from ..widgets.task_activity_panel import TaskActivityPanel
+        from context_aware_translation.ui.widgets.task_activity_panel import TaskActivityPanel
 
         self._activity_panel = TaskActivityPanel(self._task_engine, self.book_id)
         self._activity_panel.close_requested.connect(self._on_activity_panel_close)

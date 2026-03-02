@@ -36,12 +36,12 @@ from context_aware_translation.workflow.tasks.glossary_preflight import compute_
 from context_aware_translation.workflow.tasks.models import TaskAction
 
 if TYPE_CHECKING:
-    from ..tasks.qt_task_engine import TaskEngine
+    from context_aware_translation.ui.tasks.qt_task_engine import TaskEngine
 
-from ..i18n import qarg, translate_progress_message, translate_task_block_reason
-from ..models.term_model import TermTableModel
-from ..utils import create_tip_label, translate_document_type
-from ..widgets import ProgressWidget, TaskStatusCard
+from context_aware_translation.ui.i18n import qarg, translate_progress_message, translate_task_block_reason
+from context_aware_translation.ui.models.term_model import TermTableModel
+from context_aware_translation.ui.utils import create_tip_label, translate_document_type
+from context_aware_translation.ui.widgets import ProgressWidget, TaskStatusCard
 
 _GLOSSARY_MUTATING_TASK_TYPES: tuple[str, ...] = (
     "glossary_extraction",
@@ -282,9 +282,8 @@ class GlossaryView(QWidget):
 
     def _seed_completed_task_ids(self) -> None:
         """Treat already-terminal rows as historical so startup doesn't replay dialogs."""
+        from context_aware_translation.ui.tasks.task_view_model_mapper import map_tasks_to_row_vms
         from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES
-
-        from ..tasks.task_view_model_mapper import map_tasks_to_row_vms
 
         all_records = self._collect_task_records(_GLOSSARY_MUTATING_TASK_TYPES)
         self._last_glossary_task_signature = self._task_signature(all_records)
@@ -301,6 +300,7 @@ class GlossaryView(QWidget):
             self._tasks_dirty = True
             return
 
+        from context_aware_translation.ui.tasks.task_view_model_mapper import map_tasks_to_row_vms
         from context_aware_translation.workflow.tasks.models import (
             STATUS_CANCELLED,
             STATUS_COMPLETED,
@@ -308,8 +308,6 @@ class GlossaryView(QWidget):
             STATUS_FAILED,
             TERMINAL_TASK_STATUSES,
         )
-
-        from ..tasks.task_view_model_mapper import map_tasks_to_row_vms
 
         all_records = self._collect_task_records(_GLOSSARY_MUTATING_TASK_TYPES)
         signature = self._task_signature(all_records)

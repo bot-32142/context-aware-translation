@@ -5,8 +5,8 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
-from . import i18n
-from .main_window import MainWindow
+from context_aware_translation.ui import i18n
+from context_aware_translation.ui.main_window import MainWindow
 
 
 def load_stylesheet() -> str:

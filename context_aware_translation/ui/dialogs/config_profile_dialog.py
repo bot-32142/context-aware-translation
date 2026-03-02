@@ -17,9 +17,8 @@ from PySide6.QtWidgets import (
 
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.config_profile import ConfigProfile
-
-from ..i18n import qarg
-from ..widgets import CollapsibleSection, ConfigEditorWidget
+from context_aware_translation.ui.i18n import qarg
+from context_aware_translation.ui.widgets import CollapsibleSection, ConfigEditorWidget
 
 
 class ConfigProfileDialog(QDialog):

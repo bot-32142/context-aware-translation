@@ -5,9 +5,8 @@ from __future__ import annotations
 import json
 
 from context_aware_translation.storage.task_store import TaskRecord
-
-from ..i18n import translate_scope_label, translate_task_type
-from .task_view_models import TaskRowVM
+from context_aware_translation.ui.i18n import translate_scope_label, translate_task_type
+from context_aware_translation.ui.tasks.task_view_models import TaskRowVM
 
 
 def _make_title(record: TaskRecord) -> str:
