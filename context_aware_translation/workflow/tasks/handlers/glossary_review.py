@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import context_aware_translation.config as config_module
+import context_aware_translation.storage.book_db as book_db
+import context_aware_translation.storage.term_repository as term_repository
+from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 from context_aware_translation.workflow.tasks.claims import (
     ClaimArbiter,
     ClaimMode,
@@ -10,6 +14,7 @@ from context_aware_translation.workflow.tasks.claims import (
     ResourceClaim,
 )
 from context_aware_translation.workflow.tasks.execution.batch_translation_ops import decode_task_payload
+from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy, CancelOutcome
 from context_aware_translation.workflow.tasks.models import (
     STATUS_CANCEL_REQUESTED,
     STATUS_CANCELLED,
@@ -27,7 +32,6 @@ from context_aware_translation.workflow.tasks.models import (
 
 if TYPE_CHECKING:
     from context_aware_translation.storage.task_store import TaskRecord
-    from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy, CancelOutcome
     from context_aware_translation.workflow.tasks.models import ActionSnapshot
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
@@ -96,15 +100,11 @@ class GlossaryReviewHandler:
         return Decision(allowed=True)
 
     def validate_submit(self, book_id: str, params: dict, deps: WorkerDeps) -> Decision:
-        from context_aware_translation.config import Config
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.term_repository import TermRepository
-
         # Check review_config is set
         book = deps.book_manager.get_book(book_id)
         if book is None:
             return Decision(allowed=False, reason=f"Book not found: {book_id}")
-        config = Config.from_book(book, deps.book_manager.library_root, deps.book_manager.registry)
+        config = config_module.Config.from_book(book, deps.book_manager.library_root, deps.book_manager.registry)
         if config.review_config is None:
             return Decision(
                 allowed=False,
@@ -114,9 +114,9 @@ class GlossaryReviewHandler:
 
         # Check there are pending review terms
         db_path = deps.book_manager.get_book_db_path(book_id)
-        db = SQLiteBookDB(db_path)
+        db = book_db.SQLiteBookDB(db_path)
         try:
-            term_repo = TermRepository(db)
+            term_repo = term_repository.TermRepository(db)
             pending = term_repo.get_terms_pending_review()
             if not pending:
                 return Decision(
@@ -130,17 +130,13 @@ class GlossaryReviewHandler:
         return Decision(allowed=True)
 
     def validate_run(self, record: TaskRecord, payload: Any, deps: WorkerDeps) -> Decision:
-        from context_aware_translation.config import Config
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.term_repository import TermRepository
-
         book_id = record.book_id
 
         # Check review_config is set
         book = deps.book_manager.get_book(book_id)
         if book is None:
             return Decision(allowed=False, reason=f"Book not found: {book_id}")
-        config = Config.from_book(book, deps.book_manager.library_root, deps.book_manager.registry)
+        config = config_module.Config.from_book(book, deps.book_manager.library_root, deps.book_manager.registry)
         if config.review_config is None:
             return Decision(
                 allowed=False,
@@ -150,9 +146,9 @@ class GlossaryReviewHandler:
 
         # Check there are pending review terms
         db_path = deps.book_manager.get_book_db_path(book_id)
-        db = SQLiteBookDB(db_path)
+        db = book_db.SQLiteBookDB(db_path)
         try:
-            term_repo = TermRepository(db)
+            term_repo = term_repository.TermRepository(db)
             pending = term_repo.get_terms_pending_review()
             if not pending:
                 return Decision(
@@ -166,8 +162,6 @@ class GlossaryReviewHandler:
         return Decision(allowed=True)
 
     def build_worker(self, action: TaskAction, record: TaskRecord, payload: Any, deps: WorkerDeps) -> object:
-        from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
-
         if action == TaskAction.RUN:
             return GlossaryReviewTaskWorker(
                 deps.book_manager,
@@ -192,13 +186,9 @@ class GlossaryReviewHandler:
         raise ValueError(f"Unsupported action for GlossaryReviewHandler: {action!r}")
 
     def cancel_dispatch_policy(self, record: TaskRecord, payload: Any) -> CancelDispatchPolicy:
-        from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy
-
         return CancelDispatchPolicy.LOCAL_TERMINALIZE
 
     def classify_cancel_outcome(self, record: TaskRecord, payload: Any, provider_result: Any) -> CancelOutcome:
-        from context_aware_translation.workflow.tasks.handlers.base import CancelOutcome
-
         return CancelOutcome.CONFIRMED_CANCELLED
 
     def pre_delete(self, record: TaskRecord, payload: Any, deps: WorkerDeps) -> list[str]:

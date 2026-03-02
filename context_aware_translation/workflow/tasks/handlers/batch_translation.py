@@ -5,6 +5,10 @@ import logging
 from contextlib import AbstractContextManager
 from typing import TYPE_CHECKING, Any
 
+import context_aware_translation.storage.book_db as book_db
+import context_aware_translation.storage.document_repository as document_repository
+from context_aware_translation.ui.workers.batch_translation_task_worker import BatchTranslationTaskWorker
+from context_aware_translation.workflow.session import WorkflowSession
 from context_aware_translation.workflow.tasks.claims import (
     AllDocuments,
     ClaimArbiter,
@@ -13,7 +17,9 @@ from context_aware_translation.workflow.tasks.claims import (
     ResourceClaim,
     SomeDocuments,
 )
+from context_aware_translation.workflow.tasks.execution.batch_translation_executor import BatchTranslationExecutor
 from context_aware_translation.workflow.tasks.execution.batch_translation_ops import decode_task_payload
+from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy, CancelOutcome
 from context_aware_translation.workflow.tasks.models import (
     STATUS_CANCEL_REQUESTED,
     STATUS_CANCELLED,
@@ -31,7 +37,6 @@ from context_aware_translation.workflow.tasks.models import (
 
 if TYPE_CHECKING:
     from context_aware_translation.storage.task_store import TaskRecord
-    from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy, CancelOutcome
     from context_aware_translation.workflow.tasks.models import ActionSnapshot
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
@@ -78,16 +83,12 @@ class BatchTranslationHandler:
         return Decision(allowed=True)
 
     def cancel_dispatch_policy(self, record: TaskRecord, payload: Any) -> CancelDispatchPolicy:
-        from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy
-
         remote_state = (payload or {}).get("remote_submission_state", "none")
         if remote_state == "submitted":
             return CancelDispatchPolicy.REQUIRE_REMOTE_CONFIRMATION
         return CancelDispatchPolicy.LOCAL_TERMINALIZE
 
     def classify_cancel_outcome(self, record: TaskRecord, payload: Any, provider_result: Any) -> CancelOutcome:
-        from context_aware_translation.workflow.tasks.handlers.base import CancelOutcome
-
         return CancelOutcome.CONFIRMED_CANCELLED
 
     def can(self, action: TaskAction, record: TaskRecord, payload: Any, snapshot: ActionSnapshot) -> Decision:
@@ -125,13 +126,10 @@ class BatchTranslationHandler:
         return Decision(allowed=True)
 
     def validate_submit(self, book_id: str, params: dict, deps: WorkerDeps) -> Decision:
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
-
         db_path = deps.book_manager.get_book_db_path(book_id)
-        db = SQLiteBookDB(db_path)
+        db = book_db.SQLiteBookDB(db_path)
         try:
-            doc_repo = DocumentRepository(db)
+            doc_repo = document_repository.DocumentRepository(db)
             documents = doc_repo.list_documents()
             doc_ids = params.get("document_ids")
             if doc_ids is not None:
@@ -144,17 +142,11 @@ class BatchTranslationHandler:
         return Decision(allowed=True)
 
     def pre_delete(self, record: TaskRecord, payload: Any, deps: WorkerDeps) -> list[str]:
-        from context_aware_translation.workflow.session import WorkflowSession as _WorkflowSession
-
         warnings: list[str] = []
         snapshot_exc: Exception | None = None
 
         def _cleanup_with_session_ctx(session_ctx: AbstractContextManager[Any]) -> None:
             with session_ctx as session:
-                from context_aware_translation.workflow.tasks.execution.batch_translation_executor import (
-                    BatchTranslationExecutor,
-                )
-
                 executor = BatchTranslationExecutor.from_workflow(session, task_store=deps.task_store)
                 try:
                     result = executor.cleanup_remote_artifacts(record.task_id)
@@ -166,7 +158,7 @@ class BatchTranslationHandler:
 
         if record.config_snapshot_json:
             try:
-                snapshot_ctx = _WorkflowSession.from_snapshot(record.config_snapshot_json, record.book_id)
+                snapshot_ctx = WorkflowSession.from_snapshot(record.config_snapshot_json, record.book_id)
                 _cleanup_with_session_ctx(snapshot_ctx)
                 return warnings
             except Exception as exc:  # noqa: BLE001
@@ -194,8 +186,6 @@ class BatchTranslationHandler:
         return warnings
 
     def build_worker(self, action: TaskAction, record: TaskRecord, payload: Any, deps: WorkerDeps) -> object:
-        from context_aware_translation.ui.workers.batch_translation_task_worker import BatchTranslationTaskWorker
-
         doc_ids: list[int] | None = None
         if record.document_ids_json:
             try:

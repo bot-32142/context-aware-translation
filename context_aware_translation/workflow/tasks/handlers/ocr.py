@@ -3,12 +3,17 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
+import context_aware_translation.storage.book_db as book_db
+import context_aware_translation.storage.document_repository as document_repository
+from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
 from context_aware_translation.workflow.tasks.claims import (
     ClaimMode,
     DocumentScope,
+    NoDocuments,
     ResourceClaim,
     SomeDocuments,
 )
+from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy, CancelOutcome
 from context_aware_translation.workflow.tasks.models import (
     STATUS_CANCEL_REQUESTED,
     STATUS_CANCELLED,
@@ -25,7 +30,6 @@ from context_aware_translation.workflow.tasks.models import (
 
 if TYPE_CHECKING:
     from context_aware_translation.storage.task_store import TaskRecord
-    from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy, CancelOutcome
     from context_aware_translation.workflow.tasks.models import ActionSnapshot
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
@@ -68,8 +72,6 @@ class OCRHandler:
             doc_id = self._get_document_id(record)
         except ValueError:
             # Fallback: empty scope so we don't crash claim resolution
-            from context_aware_translation.workflow.tasks.claims import NoDocuments
-
             return NoDocuments(record.book_id)
         return SomeDocuments(record.book_id, frozenset({doc_id}))
 
@@ -121,9 +123,6 @@ class OCRHandler:
         return Decision(allowed=False, reason="OCR requires explicit user initiation")
 
     def validate_submit(self, book_id: str, params: dict, deps: WorkerDeps) -> Decision:
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
-
         # Must specify exactly one document_id
         raw_ids = params.get("document_ids")
         if not isinstance(raw_ids, list) or len(raw_ids) != 1:
@@ -136,12 +135,12 @@ class OCRHandler:
         # Open the book DB
         db_path = deps.book_manager.get_book_db_path(book_id)
         try:
-            db = SQLiteBookDB(db_path)
+            db = book_db.SQLiteBookDB(db_path)
         except Exception:
             return Decision(allowed=False, reason="Cannot open book database.")
 
         try:
-            doc_repo = DocumentRepository(db)
+            doc_repo = document_repository.DocumentRepository(db)
 
             # Get the document
             doc = doc_repo.get_document_by_id(doc_id)
@@ -201,9 +200,6 @@ class OCRHandler:
         return Decision(allowed=True)
 
     def validate_run(self, record: TaskRecord, payload: Any, deps: WorkerDeps) -> Decision:
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
-
         # Get document_id from record
         try:
             doc_id = self._get_document_id(record)
@@ -223,12 +219,12 @@ class OCRHandler:
         # Open book DB
         db_path = deps.book_manager.get_book_db_path(book_id)
         try:
-            db = SQLiteBookDB(db_path)
+            db = book_db.SQLiteBookDB(db_path)
         except Exception:
             return Decision(allowed=False, reason="Cannot open book database.")
 
         try:
-            doc_repo = DocumentRepository(db)
+            doc_repo = document_repository.DocumentRepository(db)
 
             # Check document still exists and is OCR-capable
             doc = doc_repo.get_document_by_id(doc_id)
@@ -273,8 +269,6 @@ class OCRHandler:
         return Decision(allowed=True)
 
     def build_worker(self, action: TaskAction, record: TaskRecord, payload: Any, deps: WorkerDeps) -> object:
-        from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
-
         try:
             doc_id = self._get_document_id(record)
         except ValueError:
@@ -310,13 +304,9 @@ class OCRHandler:
         raise ValueError(f"Unsupported action for OCRHandler: {action!r}")
 
     def cancel_dispatch_policy(self, record: TaskRecord, payload: Any) -> CancelDispatchPolicy:
-        from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy
-
         return CancelDispatchPolicy.LOCAL_TERMINALIZE
 
     def classify_cancel_outcome(self, record: TaskRecord, payload: Any, provider_result: Any) -> CancelOutcome:
-        from context_aware_translation.workflow.tasks.handlers.base import CancelOutcome
-
         return CancelOutcome.CONFIRMED_CANCELLED
 
     def pre_delete(self, record: TaskRecord, payload: Any, deps: WorkerDeps) -> list[str]:

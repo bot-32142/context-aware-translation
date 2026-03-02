@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
+import context_aware_translation.storage.book_db as book_db
+import context_aware_translation.storage.document_repository as document_repository
+from context_aware_translation.ui.workers.glossary_extraction_task_worker import GlossaryExtractionTaskWorker
 from context_aware_translation.workflow.tasks.claims import (
     AllDocuments,
     ClaimArbiter,
@@ -16,6 +19,7 @@ from context_aware_translation.workflow.tasks.glossary_preflight import (
     compute_glossary_preflight,
     resolve_effective_pending_ids,
 )
+from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy, CancelOutcome
 from context_aware_translation.workflow.tasks.models import (
     STATUS_CANCEL_REQUESTED,
     STATUS_CANCELLED,
@@ -32,10 +36,7 @@ from context_aware_translation.workflow.tasks.models import (
 )
 
 if TYPE_CHECKING:
-    from context_aware_translation.storage.book_db import SQLiteBookDB
-    from context_aware_translation.storage.document_repository import DocumentRepository
     from context_aware_translation.storage.task_store import TaskRecord
-    from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy, CancelOutcome
     from context_aware_translation.workflow.tasks.models import ActionSnapshot
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
@@ -45,12 +46,9 @@ _NON_DELETABLE_STATUSES = frozenset({STATUS_RUNNING, STATUS_CANCEL_REQUESTED, ST
 _AUTORUN_STATUSES = frozenset({STATUS_QUEUED, STATUS_PAUSED})
 
 
-def _open_doc_repo(deps: WorkerDeps, book_id: str) -> tuple[SQLiteBookDB, DocumentRepository]:
-    from context_aware_translation.storage.book_db import SQLiteBookDB
-    from context_aware_translation.storage.document_repository import DocumentRepository
-
-    db = SQLiteBookDB(deps.book_manager.get_book_db_path(book_id))
-    doc_repo = DocumentRepository(db)
+def _open_doc_repo(deps: WorkerDeps, book_id: str) -> tuple[book_db.SQLiteBookDB, document_repository.DocumentRepository]:
+    db = book_db.SQLiteBookDB(deps.book_manager.get_book_db_path(book_id))
+    doc_repo = document_repository.DocumentRepository(db)
     return db, doc_repo
 
 
@@ -206,8 +204,6 @@ class GlossaryExtractionHandler:
         return Decision(allowed=True)
 
     def build_worker(self, action: TaskAction, record: TaskRecord, payload: Any, deps: WorkerDeps) -> object:
-        from context_aware_translation.ui.workers.glossary_extraction_task_worker import GlossaryExtractionTaskWorker
-
         doc_ids: list[int] | None = None
         if record.document_ids_json:
             try:
@@ -242,13 +238,9 @@ class GlossaryExtractionHandler:
         raise ValueError(f"Unsupported action for GlossaryExtractionHandler: {action!r}")
 
     def cancel_dispatch_policy(self, record: TaskRecord, payload: Any) -> CancelDispatchPolicy:
-        from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy
-
         return CancelDispatchPolicy.LOCAL_TERMINALIZE
 
     def classify_cancel_outcome(self, record: TaskRecord, payload: Any, provider_result: Any) -> CancelOutcome:
-        from context_aware_translation.workflow.tasks.handlers.base import CancelOutcome
-
         return CancelOutcome.CONFIRMED_CANCELLED
 
     def pre_delete(self, record: TaskRecord, payload: Any, deps: WorkerDeps) -> list[str]:

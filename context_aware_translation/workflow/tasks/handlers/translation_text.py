@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
+import context_aware_translation.storage.book_db as book_db
+import context_aware_translation.storage.document_repository as document_repository
+from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
 from context_aware_translation.workflow.tasks.claims import (
     AllDocuments,
     ClaimArbiter,
@@ -12,6 +15,7 @@ from context_aware_translation.workflow.tasks.claims import (
     SomeDocuments,
 )
 from context_aware_translation.workflow.tasks.execution.batch_translation_ops import decode_task_payload
+from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy, CancelOutcome
 from context_aware_translation.workflow.tasks.models import (
     STATUS_CANCEL_REQUESTED,
     STATUS_CANCELLED,
@@ -29,7 +33,6 @@ from context_aware_translation.workflow.tasks.models import (
 
 if TYPE_CHECKING:
     from context_aware_translation.storage.task_store import TaskRecord
-    from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy, CancelOutcome
     from context_aware_translation.workflow.tasks.models import ActionSnapshot
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
@@ -112,16 +115,13 @@ class TranslationTextHandler:
         return Decision(allowed=True)
 
     def validate_submit(self, book_id: str, params: dict, deps: WorkerDeps) -> Decision:
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
-
         db_path = deps.book_manager.get_book_db_path(book_id)
         try:
-            db = SQLiteBookDB(db_path)
+            db = book_db.SQLiteBookDB(db_path)
         except Exception:
             return Decision(allowed=False, reason="Cannot open book database.")
         try:
-            doc_repo = DocumentRepository(db)
+            doc_repo = document_repository.DocumentRepository(db)
             documents = doc_repo.list_documents()
             if not documents:
                 return Decision(allowed=False, reason="Book has no documents to translate.")
@@ -158,8 +158,6 @@ class TranslationTextHandler:
         return Decision(allowed=True)
 
     def build_worker(self, action: TaskAction, record: TaskRecord, payload: Any, deps: WorkerDeps) -> object:
-        from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
-
         doc_ids: list[int] | None = None
         if record.document_ids_json:
             try:
@@ -200,13 +198,9 @@ class TranslationTextHandler:
         raise ValueError(f"Unsupported action for TranslationTextHandler: {action!r}")
 
     def cancel_dispatch_policy(self, record: TaskRecord, payload: Any) -> CancelDispatchPolicy:
-        from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy
-
         return CancelDispatchPolicy.LOCAL_TERMINALIZE
 
     def classify_cancel_outcome(self, record: TaskRecord, payload: Any, provider_result: Any) -> CancelOutcome:
-        from context_aware_translation.workflow.tasks.handlers.base import CancelOutcome
-
         return CancelOutcome.CONFIRMED_CANCELLED
 
     def pre_delete(self, record: TaskRecord, payload: Any, deps: WorkerDeps) -> list[str]:

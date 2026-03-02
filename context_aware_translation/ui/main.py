@@ -1,10 +1,13 @@
 """Entry point for the PySide6 desktop application."""
 
+import os
 import sys
 import traceback
 from pathlib import Path
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import QApplication, QStyleFactory
 
 
 def load_stylesheet() -> str:
@@ -17,10 +20,22 @@ def load_stylesheet() -> str:
 
 def main() -> None:
     """Launch the application."""
+    # Keep packaged and local runs consistent on high-DPI displays.
+    os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
+    os.environ.setdefault("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
+    QGuiApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+
     app = QApplication(sys.argv)
     app.setApplicationName("Context-Aware Translation")
     app.setOrganizationName("CAT")
     app.setOrganizationDomain("context-aware-translation")
+    if sys.platform == "darwin":
+        # Prefer native macOS style when available (can be missing in mis-packaged builds).
+        available_styles = QStyleFactory.keys()
+        available = {name.lower(): name for name in available_styles}
+        mac_style = available.get("macos") or available.get("macintosh")
+        if mac_style:
+            app.setStyle(mac_style)
 
     try:
         from context_aware_translation.ui import i18n

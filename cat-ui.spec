@@ -4,6 +4,8 @@
 import sys
 import tomllib
 from pathlib import Path
+import PySide6
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
 
 # Get the project root
 project_root = Path(SPECPATH)
@@ -25,6 +27,27 @@ datas = [
     (str(project_root / 'context_aware_translation' / 'resources' / 'tokenizers' / 'deepseek-v3'),
      'context_aware_translation/resources/tokenizers/deepseek-v3'),
 ]
+
+# Bundle Qt style plugins explicitly so packaged app can use native styles.
+binaries = []
+qt_styles_dir = Path(PySide6.__file__).resolve().parent / 'Qt' / 'plugins' / 'styles'
+if qt_styles_dir.exists():
+    for plugin in qt_styles_dir.iterdir():
+        if plugin.is_file():
+            binaries.append((str(plugin), 'PySide6/Qt/plugins/styles'))
+
+# Explicit native-lib collection for packages that commonly miss implicit hook coverage.
+for module_name in ('pikepdf', 'faiss'):
+    try:
+        binaries += collect_dynamic_libs(module_name)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[cat-ui.spec] warning: failed to collect dynamic libs for {module_name}: {exc}")
+
+# Ensure bundled pandoc executable/data (from pypandoc-binary distribution) are included.
+try:
+    datas += collect_data_files('pypandoc')
+except Exception as exc:  # noqa: BLE001
+    print(f"[cat-ui.spec] warning: failed to collect data files for pypandoc: {exc}")
 
 # Hidden imports for PySide6 and other dependencies
 hiddenimports = [
@@ -67,6 +90,11 @@ hiddenimports = [
     'context_aware_translation.config',
 ]
 
+# Transformers loads model families via importlib at runtime.
+# Bundle all model-family modules to avoid runtime ModuleNotFoundError
+# (e.g., ernie4_5, qwen, glm, etc.) in packaged builds.
+hiddenimports += collect_submodules('transformers.models')
+
 # Exclude unnecessary modules to reduce size
 excludes = [
     'tkinter',
@@ -75,7 +103,7 @@ excludes = [
 a = Analysis(
     [str(project_root / 'context_aware_translation' / 'ui' / 'main.py')],
     pathex=[str(project_root)],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],

@@ -33,7 +33,7 @@ class TaskEngine(QObject):
         self._core = EngineCore(store=store, deps=deps)
         self._store = store
         self._autorun_timer: QTimer | None = None
-        self._was_running: bool = False
+        self._was_running: bool = self._core.has_running_work()
 
         # Coalesce rapid-fire task-changed signals into at most one UI
         # refresh per 250 ms window.  Worker threads emit
@@ -130,6 +130,7 @@ class TaskEngine(QObject):
             except Exception:
                 logger.exception("submit_and_start: could not mark task %s failed", record.task_id)
             self.enqueue_task_changed.emit(book_id)
+            self._emit_running_work_changed_if_needed()
             # Re-fetch the record so the caller sees the failed status.
             updated = self._core.get_task(record.task_id)
             return updated if updated is not None else record
@@ -156,6 +157,7 @@ class TaskEngine(QObject):
             except Exception:
                 logger.exception("run_task: could not mark task %s failed", task_id)
             self.enqueue_task_changed.emit(record.book_id)
+            self._emit_running_work_changed_if_needed()
             updated = self._core.get_task(task_id)
             return updated if updated is not None else record
         self._emit_running_work_changed_if_needed()
@@ -181,6 +183,7 @@ class TaskEngine(QObject):
             except Exception:
                 logger.exception("rerun: could not mark task %s failed", task_id)
             self.enqueue_task_changed.emit(record.book_id)
+            self._emit_running_work_changed_if_needed()
             updated = self._core.get_task(task_id)
             return updated if updated is not None else record
         self._emit_running_work_changed_if_needed()
@@ -237,6 +240,7 @@ class TaskEngine(QObject):
             self._autorun_timer = QTimer(self)
             self._autorun_timer.timeout.connect(self.tick)
         self._autorun_timer.start(interval_ms)
+        self._emit_running_work_changed_if_needed()
 
     def stop_autorun(self) -> None:
         if self._autorun_timer is not None:
@@ -300,6 +304,7 @@ class TaskEngine(QObject):
             worker.start()  # type: ignore[attr-defined]
         except Exception:
             self._core.release_task_resources(task_id)
+            self._emit_running_work_changed_if_needed()
             raise
 
         self._emit_running_work_changed_if_needed()
@@ -361,6 +366,7 @@ class TaskEngine(QObject):
                 worker.wait(remaining_ms)  # type: ignore[attr-defined]
         # Release claims for any workers that finished
         self._core.cleanup_finished_workers()
+        self._emit_running_work_changed_if_needed()
         # Only close the store if no workers are still running
         if not self._core.has_running_work():
             self._core.close()
