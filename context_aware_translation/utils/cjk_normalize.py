@@ -1,10 +1,38 @@
 from __future__ import annotations
 
+import sys
 import unicodedata
 from collections.abc import Iterable
 from functools import lru_cache
+from pathlib import Path
 
 from opencc import OpenCC
+from opencc import opencc as opencc_module
+
+
+def _configure_opencc_paths_for_frozen_build() -> None:
+    """Point OpenCC to bundled config/dictionary dirs in frozen builds.
+
+    opencc-python resolves files using ``os.path.dirname(__file__)`` + ``CONFIG_DIR`` /
+    ``DICT_DIR``. In some PyInstaller layouts those resources live under ``_internal``.
+    Override dir constants with absolute paths when detected.
+    """
+    if not getattr(sys, "frozen", False):
+        return
+
+    base_dir = getattr(sys, "_MEIPASS", None)
+    if not isinstance(base_dir, str) or not base_dir:
+        return
+
+    base = Path(base_dir)
+    candidates = (base, base / "_internal")
+    for candidate in candidates:
+        config_dir = candidate / "opencc" / "config"
+        dict_dir = candidate / "opencc" / "dictionary"
+        if config_dir.exists() and dict_dir.exists():
+            opencc_module.CONFIG_DIR = str(config_dir)
+            opencc_module.DICT_DIR = str(dict_dir)
+            return
 
 
 @lru_cache(maxsize=1)
@@ -13,6 +41,7 @@ def _get_converter() -> OpenCC:
 
     Uses built-in ``jp2s`` config from opencc package data.
     """
+    _configure_opencc_paths_for_frozen_build()
     return OpenCC("jp2s")
 
 
