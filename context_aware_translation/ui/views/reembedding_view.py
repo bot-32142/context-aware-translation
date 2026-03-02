@@ -639,7 +639,7 @@ class ReembeddingView(QWidget):
         decision = self._task_engine.preflight(
             "image_reembedding",
             self.book_id,
-            {"document_ids": [self.document_id], "source_ids": use_source_ids},
+            {"document_ids": [self.document_id], "source_ids": use_source_ids, "force": True},
             TaskAction.RUN,
         )
         if not decision.allowed:
@@ -656,6 +656,7 @@ class ReembeddingView(QWidget):
                 self.book_id,
                 document_ids=[self.document_id],
                 source_ids=use_source_ids,
+                force=True,
             )
             self._active_task_id = record.task_id
 

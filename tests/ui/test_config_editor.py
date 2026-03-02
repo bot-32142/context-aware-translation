@@ -73,23 +73,22 @@ class TestGetConfig:
 
         assert config["translation_target_language"] == "日语"
 
-    def test_get_config_saves_image_reembedding_when_checkbox_on(self, widget):
-        """get_config should save image_reembedding_config when checkbox is checked."""
+    def test_get_config_saves_image_reembedding_when_endpoint_selected(self, widget):
+        """get_config should save image_reembedding_config when endpoint is selected."""
         from context_aware_translation.llm.image_generator import ImageBackend
 
-        widget.enable_reembedding_check.setChecked(True)
+        widget.reembedding_endpoint.setCurrentIndex(1)
         # Set backend to OpenAI (index 1)
         widget.reembedding_backend_combo.setCurrentIndex(1)
 
         config = widget.get_config()
 
         assert "image_reembedding_config" in config
+        assert config["image_reembedding_config"]["endpoint_profile"] == "gpt4-profile"
         assert config["image_reembedding_config"]["backend"] == ImageBackend.OPENAI.value
 
-    def test_get_config_saves_image_reembedding_when_endpoint_selected(self, widget):
-        """get_config should save image_reembedding_config when endpoint is selected (pre-config)."""
-        # Checkbox OFF but endpoint selected (pre-configuration)
-        widget.enable_reembedding_check.setChecked(False)
+    def test_get_config_saves_image_reembedding_endpoint_backend_pair(self, widget):
+        """get_config should persist endpoint/backend pair for image reembedding config."""
         # Select an endpoint (index 1 = first actual profile after "(None)")
         widget.reembedding_endpoint.setCurrentIndex(1)
         # Set backend to Qwen (index 2)
@@ -97,13 +96,12 @@ class TestGetConfig:
 
         config = widget.get_config()
 
-        # Config should be saved even though checkbox is off
         assert "image_reembedding_config" in config
         assert config["image_reembedding_config"]["endpoint_profile"] == "gpt4-profile"
+        assert config["image_reembedding_config"]["backend"] == "qwen"
 
-    def test_get_config_no_image_reembedding_when_both_off(self, widget):
-        """get_config should NOT save image_reembedding_config when both checkbox off and no endpoint."""
-        widget.enable_reembedding_check.setChecked(False)
+    def test_get_config_no_image_reembedding_when_no_endpoint(self, widget):
+        """get_config should NOT save image_reembedding_config when endpoint is not selected."""
         widget.reembedding_endpoint.setCurrentIndex(0)  # "(None)"
 
         config = widget.get_config()
@@ -111,16 +109,15 @@ class TestGetConfig:
         # Config should NOT include image_reembedding_config
         assert "image_reembedding_config" not in config
 
-    def test_get_config_saves_ocr_config_with_reembedding_flag(self, widget):
-        """get_config should include enable_image_reembedding in ocr_config when OCR endpoint is set."""
+    def test_get_config_saves_ocr_config_without_reembedding_flag(self, widget):
+        """get_config should not include legacy enable_image_reembedding in ocr_config."""
         # Set OCR endpoint
         widget.ocr_endpoint.setCurrentIndex(1)  # First actual profile
-        widget.enable_reembedding_check.setChecked(True)
 
         config = widget.get_config()
 
         assert "ocr_config" in config
-        assert config["ocr_config"]["enable_image_reembedding"] is True
+        assert "enable_image_reembedding" not in config["ocr_config"]
 
     def test_get_config_saves_translator_batch_fields(self, widget):
         """get_config should include translator batch settings."""
@@ -228,15 +225,14 @@ class TestValidate:
 
         assert result == "Target language is required."
 
-    def test_validate_requires_endpoint_when_reembedding_enabled(self, widget):
-        """validate should return error if reembedding enabled but no endpoint."""
+    def test_validate_allows_missing_reembedding_endpoint(self, widget):
+        """validate should pass even when reembedding endpoint is not selected."""
         widget.language_dropdown.set_value("英语")
-        widget.enable_reembedding_check.setChecked(True)
         widget.reembedding_endpoint.setCurrentIndex(0)  # "(None)"
 
         result = widget.validate()
 
-        assert result == "Image reembedding is enabled but no endpoint profile is selected."
+        assert result is None
 
     def test_validate_requires_batch_api_key_when_provider_enabled(self, widget):
         widget.language_dropdown.set_value("英语")
@@ -258,21 +254,10 @@ class TestValidate:
 
         assert result == "Translator batch model is required when provider is enabled."
 
-    def test_validate_passes_when_reembedding_enabled_with_endpoint(self, widget):
-        """validate should pass if reembedding enabled and endpoint selected."""
+    def test_validate_passes_with_reembedding_endpoint_selected(self, widget):
+        """validate should pass when reembedding endpoint is selected."""
         widget.language_dropdown.set_value("英语")
-        widget.enable_reembedding_check.setChecked(True)
         widget.reembedding_endpoint.setCurrentIndex(1)  # First profile
-
-        result = widget.validate()
-
-        assert result is None
-
-    def test_validate_passes_when_reembedding_disabled_no_endpoint(self, widget):
-        """validate should pass if reembedding disabled, regardless of endpoint."""
-        widget.language_dropdown.set_value("英语")
-        widget.enable_reembedding_check.setChecked(False)
-        widget.reembedding_endpoint.setCurrentIndex(0)  # "(None)"
 
         result = widget.validate()
 
@@ -288,7 +273,6 @@ class TestConfigRoundTrip:
 
         # Set initial values
         widget.language_dropdown.set_value("英语")
-        widget.enable_reembedding_check.setChecked(True)
         widget.reembedding_endpoint.setCurrentIndex(2)  # "Claude"
         widget.reembedding_backend_combo.setCurrentIndex(2)  # "Qwen"
 
@@ -324,7 +308,6 @@ class TestFieldTooltips:
             ("Summarizer Endpoint", widget.summarizer_endpoint),
             ("Glossary Endpoint", widget.glossary_endpoint),
             ("Translator Endpoint", widget.translator_endpoint),
-            ("Enable Polish", widget.enable_polish_check),
             ("Chunks per Call", widget.chunks_per_call_spin),
             ("Chunk Size", widget.chunk_size_spin),
             ("Translator Batch Provider", widget.translator_batch_provider),
@@ -336,7 +319,6 @@ class TestFieldTooltips:
             ("OCR Endpoint", widget.ocr_endpoint),
             ("OCR DPI", widget.ocr_dpi_spin),
             ("Strip Artifacts", widget.strip_artifacts_check),
-            ("Enable Image Re-embedding", widget.enable_reembedding_check),
             ("Reembedding Backend", widget.reembedding_backend_combo),
             ("Reembedding Endpoint", widget.reembedding_endpoint),
             ("Manga Endpoint", widget.manga_endpoint),

@@ -131,6 +131,40 @@ def test_run_action_updates_task_store_running_then_completed(monkeypatch: pytes
     task_store.update.assert_any_call("task-1", status="completed")
 
 
+def test_run_action_does_not_auto_enqueue_reembedding(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """Translation completion should not auto-trigger image reembedding tasks."""
+    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
+
+    task_store = MagicMock()
+    enqueue_followup = MagicMock()
+    worker = TranslationTextTaskWorker(
+        _book_manager_with_db(tmp_path),
+        "book-id",
+        action="run",
+        task_id="task-1",
+        task_store=task_store,
+        enqueue_followup=enqueue_followup,
+    )
+
+    mock_context = MagicMock()
+
+    async def _translate(_context, **_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.translation_text_task_worker.WorkflowSession.from_book",
+        lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.translation_text_task_worker.translation_ops.translate",
+        _translate,
+    )
+
+    worker.run()
+
+    enqueue_followup.assert_not_called()
+
+
 def test_run_action_on_cancel_sets_cancelled_status(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Cancellation during run sets cancelled status."""
     from context_aware_translation.core.cancellation import OperationCancelledError

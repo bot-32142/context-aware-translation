@@ -12,6 +12,8 @@ from .task_view_models import TaskRowVM
 
 def _make_title(record: TaskRecord) -> str:
     title = translate_task_type(record.task_type)
+    if title == record.task_type:
+        raise RuntimeError(f"Unknown task type: {record.task_type}")
     return f"{title} #{record.task_id[:8]}"
 
 
@@ -33,11 +35,21 @@ def _make_scope_label(record: TaskRecord) -> str:
     return translate_scope_label(len(ids))
 
 
-def _normalize_progress(value: object) -> int:
+def _normalize_progress(value: int | float | str | None) -> int:
     """Coerce progress fields to non-negative ints safe for UI rendering."""
-    try:
+    if value is None:
+        return 0
+    normalized: int
+    if isinstance(value, int):
+        normalized = value
+    elif isinstance(value, float):
         normalized = int(value)
-    except (TypeError, ValueError):
+    elif isinstance(value, str):
+        try:
+            normalized = int(value)
+        except ValueError:
+            return 0
+    else:
         return 0
     return max(0, normalized)
 

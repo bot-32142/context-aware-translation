@@ -206,12 +206,14 @@ class BatchTranslationHandler:
                 doc_ids = None
 
         if action == TaskAction.RUN:
+            enable_polish: bool = bool((payload or {}).get("enable_polish", True))
             return BatchTranslationTaskWorker(
                 deps.book_manager,
                 record.book_id,
                 action="run",
                 task_id=record.task_id,
                 document_ids=doc_ids,
+                enable_polish=enable_polish,
                 task_store=deps.task_store,
                 notify_task_changed=deps.notify_task_changed,
                 config_snapshot_json=record.config_snapshot_json,

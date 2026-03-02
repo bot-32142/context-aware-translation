@@ -54,6 +54,8 @@ def _make_view():
     view.book_id = "test-book"
     view.book_manager = _make_book_manager()
     view.term_db = MagicMock()
+    view.document_repo = MagicMock()
+    view.document_repo.get_document_by_id.return_value = {"document_type": "text"}
     view._document_type_cache = {}
     return view
 
@@ -185,6 +187,7 @@ def test_start_translation_forwards_skip_context_to_engine():
         document_ids=[1],
         force=False,
         skip_context=True,
+        enable_polish=True,
     )
 
 
@@ -202,7 +205,12 @@ def test_submit_batch_task_does_not_require_translated_glossary_terms():
 
     view._resolve_trigger_conditions.assert_called_once_with(for_batch_submit=True)
     view._task_engine.submit.assert_called_once_with(
-        "batch_translation", "book-id", document_ids=[1], force=False, skip_context=False
+        "batch_translation",
+        "book-id",
+        document_ids=[1],
+        force=False,
+        skip_context=False,
+        enable_polish=True,
     )
     view.term_db.list_terms.assert_not_called()
 
@@ -229,7 +237,12 @@ def test_submit_batch_task_calls_engine_submit_with_correct_args():
     view._submit_batch_task()
 
     view._task_engine.submit.assert_called_once_with(
-        "batch_translation", "book-1", document_ids=[2, 3], force=True, skip_context=True
+        "batch_translation",
+        "book-1",
+        document_ids=[2, 3],
+        force=True,
+        skip_context=True,
+        enable_polish=True,
     )
 
 
@@ -249,7 +262,29 @@ def test_update_retranslate_chunk_button_state_disables_retranslate_when_batch_t
     view._task_engine.preflight.assert_called_once_with(
         "chunk_retranslation",
         "test-book",
-        {"chunk_id": 7, "document_id": 2, "skip_context": False},
+        {"chunk_id": 7, "document_id": 2, "skip_context": False, "enable_polish": True},
+        "run",
+    )
+
+
+def test_update_retranslate_chunk_button_state_uses_translation_manga_preflight_for_manga_chunk():
+    view = _make_view()
+    view.retranslate_chunk_btn = QPushButton()
+    view._current_chunk = MagicMock(chunk_id=7, document_id=2)
+    view.document_repo.get_document_by_id.return_value = {"document_type": "manga"}
+    denied = MagicMock()
+    denied.allowed = False
+    denied.reason = "Blocked by active task claims"
+    denied.code = "blocked_claim_conflict"
+    view._task_engine.preflight.return_value = denied
+
+    view._update_retranslate_chunk_button_state()
+
+    assert not view.retranslate_chunk_btn.isEnabled()
+    view._task_engine.preflight.assert_called_once_with(
+        "translation_manga",
+        "test-book",
+        {"document_ids": [2], "force": True, "skip_context": False, "enable_polish": True},
         "run",
     )
 
@@ -603,6 +638,7 @@ def test_retranslate_current_chunk_uses_strict_submit_and_tracks_task():
         chunk_id=5,
         document_id=3,
         skip_context=False,
+        enable_polish=True,
     )
     assert "chunk-task-new" in view._pending_retranslations
     assert view._pending_retranslations["chunk-task-new"] == (5, 3)
@@ -693,6 +729,7 @@ def test_start_translation_submits_manga_task_for_manga_documents():
         document_ids=[2],
         force=False,
         skip_context=False,
+        enable_polish=True,
     )
 
 

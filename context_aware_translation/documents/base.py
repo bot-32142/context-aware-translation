@@ -130,6 +130,7 @@ class Document(ABC):
         llm_client: LLMClient,
         source_ids: list[int] | None = None,
         cancel_check: Callable[[], bool] | None = None,
+        on_item_processed: Callable[[], None] | None = None,
     ) -> int:
         """OCR sources where is_ocr_completed=0 and source_type='image'. No-op for text.
 
@@ -137,6 +138,8 @@ class Document(ABC):
             llm_client: LLM client for OCR
             source_ids: Optional list of source IDs to process. If None, process all.
             cancel_check: Optional cooperative cancellation callback.
+            on_item_processed: Optional callback invoked once per successfully
+                persisted OCR source.
 
         Returns:
             Number of sources processed.

@@ -113,13 +113,17 @@ def test_export_worker_late_interrupt_still_emits_success(monkeypatch: pytest.Mo
     )
 
     class _Session:
-        async def export(self, *_args, **_kwargs) -> None:  # noqa: ANN003
-            worker.requestInterruption()
+        pass
 
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.export_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _TranslatorContext(_Session()),
     )
+
+    async def _fake_export(*_args, **_kwargs):  # noqa: ANN003
+        worker.requestInterruption()
+
+    monkeypatch.setattr("context_aware_translation.ui.workers.export_worker.export_ops.export", _fake_export)
 
     success, cancelled, errors = _capture_signals(worker)
     worker.run()

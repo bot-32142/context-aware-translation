@@ -72,6 +72,28 @@ def test_worker_run_sets_completed_status():
     worker._task_store.update.assert_any_call(worker._task_id, status="completed")
 
 
+def test_worker_run_does_not_auto_enqueue_reembedding():
+    worker = _make_worker(action="run")
+    worker._enqueue_followup = MagicMock()
+
+    fake_context = MagicMock()
+    fake_session = MagicMock()
+    fake_session.__enter__ = MagicMock(return_value=fake_context)
+    fake_session.__exit__ = MagicMock(return_value=False)
+
+    with (
+        patch("context_aware_translation.ui.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.ui.workers.translation_manga_task_worker.translation_ops.translate",
+            new=_async_none,
+        ),
+    ):
+        mock_session_cls.from_book.return_value = fake_session
+        worker._run_translation()
+
+    worker._enqueue_followup.assert_not_called()
+
+
 def test_worker_run_uses_snapshot_when_provided():
     import json
 

@@ -1342,8 +1342,8 @@ class SQLiteBookDB:
 
         if row is None or not row["reembedded_images_json"]:
             return {}
-
         images_json = json.loads(row["reembedded_images_json"])
+
         result: dict[int, tuple[bytes, str]] = {}
 
         for idx_str, value in images_json.items():

@@ -123,11 +123,6 @@ class ImageReembeddingHandler:
                 allowed=False,
                 reason="image_reembedding_config is required for image reembedding. Please configure it in your book settings.",
             )
-        if config.ocr_config is None or not config.ocr_config.enable_image_reembedding:
-            return Decision(
-                allowed=False,
-                reason="Image reembedding is disabled. Enable OCR image reembedding in your book config.",
-            )
 
         db_path = deps.book_manager.get_book_db_path(book_id)
         try:
@@ -215,11 +210,6 @@ class ImageReembeddingHandler:
             return Decision(
                 allowed=False,
                 reason="image_reembedding_config is required for image reembedding.",
-            )
-        if config.ocr_config is None or not config.ocr_config.enable_image_reembedding:
-            return Decision(
-                allowed=False,
-                reason="Image reembedding is disabled in current config.",
             )
 
         db_path = deps.book_manager.get_book_db_path(record.book_id)

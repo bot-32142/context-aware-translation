@@ -9,6 +9,7 @@ from PIL import Image
 
 from context_aware_translation.config import Config
 from context_aware_translation.core.cancellation import OperationCancelledError
+from context_aware_translation.workflow.ops import export_ops, import_ops
 from context_aware_translation.workflow.session import WorkflowSession
 
 # Minimal valid 1x1 white PNG (passes epubcheck validation)
@@ -24,6 +25,29 @@ def _png_bytes(color: tuple[int, int, int], size: tuple[int, int] = (4, 4)) -> b
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
+
+
+def _import_path(
+    workflow,
+    path: Path,
+    *,
+    document_type: str | None = None,
+    cancel_check=None,  # noqa: ANN001
+):
+    return import_ops.import_path(
+        workflow,
+        path=path,
+        document_type=document_type,
+        cancel_check=cancel_check,
+    )
+
+
+async def _export(workflow, file_path: Path, export_format: str | None = None, **kwargs) -> None:  # noqa: ANN003
+    await export_ops.export(workflow, file_path=file_path, export_format=export_format, **kwargs)
+
+
+async def _export_preserve_structure(workflow, output_folder: Path, **kwargs) -> None:  # noqa: ANN003
+    await export_ops.export_preserve_structure(workflow, output_folder=output_folder, **kwargs)
 
 
 @pytest.fixture
@@ -62,7 +86,7 @@ class TestImportPath:
 
         try:
             with WorkflowSession(import_test_config) as translator:
-                result = translator.import_path(file_path)
+                result = _import_path(translator, file_path)
 
                 assert result["imported"] == 1
                 assert result["skipped"] == 0
@@ -88,7 +112,7 @@ class TestImportPath:
 
         try:
             with WorkflowSession(import_test_config) as translator:
-                result = translator.import_path(file_path)
+                result = _import_path(translator, file_path)
 
                 assert result["imported"] == 1
 
@@ -112,7 +136,7 @@ class TestImportPath:
             (folder / "file3.txt").write_text("content3")
 
             with WorkflowSession(import_test_config) as translator:
-                result = translator.import_path(folder)
+                result = _import_path(translator, folder)
 
                 assert result["imported"] == 3
                 assert result["skipped"] == 0
@@ -133,7 +157,7 @@ class TestImportPath:
             (folder / "middle.txt").write_text("m")
 
             with WorkflowSession(import_test_config) as translator:
-                translator.import_path(folder)
+                _import_path(translator, folder)
 
                 db = translator.document_repo
                 doc = db.get_document_row()
@@ -149,11 +173,11 @@ class TestImportPath:
 
         try:
             with WorkflowSession(import_test_config) as translator:
-                result1 = translator.import_path(file_path)
+                result1 = _import_path(translator, file_path)
                 assert result1["imported"] == 1
                 assert result1["skipped"] == 0
 
-                result2 = translator.import_path(file_path)
+                result2 = _import_path(translator, file_path)
                 assert result2["imported"] == 0
                 assert result2["skipped"] == 1
 
@@ -172,7 +196,7 @@ class TestImportPath:
             (folder / "valid.txt").write_text("text")
 
             with WorkflowSession(import_test_config) as translator:
-                result = translator.import_path(folder)
+                result = _import_path(translator, folder)
 
                 assert result["imported"] == 1
                 db = translator.document_repo
@@ -190,7 +214,7 @@ class TestImportPath:
             (subdir / "nested.txt").write_text("nested")
 
             with WorkflowSession(import_test_config) as translator:
-                result = translator.import_path(folder)
+                result = _import_path(translator, folder)
 
                 assert result["imported"] == 1
                 db = translator.document_repo
@@ -214,7 +238,7 @@ class TestImportPath:
 
             with WorkflowSession(import_test_config) as translator:
                 with pytest.raises(OperationCancelledError):
-                    translator.import_path(folder, cancel_check=cancel_check)
+                    _import_path(translator, folder, cancel_check=cancel_check)
 
                 # Cancellation should rollback transaction fully.
                 assert translator.document_repo.get_document_row() is None
@@ -251,7 +275,7 @@ class TestImportPath:
         fake_file.write_text("x", encoding="utf-8")
 
         with WorkflowSession(import_test_config) as translator:
-            result = translator.import_path(fake_file, document_type="fake", cancel_check=cancel_check)
+            result = _import_path(translator, fake_file, document_type="fake", cancel_check=cancel_check)
 
         assert result["imported"] == 1
         assert result["skipped"] == 0
@@ -263,11 +287,11 @@ class TestImportPath:
             WorkflowSession(import_test_config) as translator,
             pytest.raises(ValueError, match="Cannot import empty folder"),
         ):
-            translator.import_path(Path(tmpdir))
+            _import_path(translator, Path(tmpdir))
 
     def test_import_nonexistent_path_raises(self, import_test_config: Config):
         with WorkflowSession(import_test_config) as translator, pytest.raises(ValueError, match="does not exist"):
-            translator.import_path(Path("/nonexistent/path"))
+            _import_path(translator, Path("/nonexistent/path"))
 
     def test_import_does_not_create_chunks_for_text_files(self, import_test_config: Config):
         """Test that import_path does NOT create chunks for text files (new behavior)."""
@@ -278,7 +302,7 @@ class TestImportPath:
 
         try:
             with WorkflowSession(import_test_config) as translator:
-                translator.import_path(file_path)
+                _import_path(translator, file_path)
 
                 chunks = translator.manager.term_repo.list_chunks()
                 assert len(chunks) == 0  # Should NOT create chunks during import
@@ -293,7 +317,7 @@ class TestImportPath:
 
         try:
             with WorkflowSession(import_test_config) as translator:
-                translator.import_path(file_path)
+                _import_path(translator, file_path)
 
                 chunks = translator.manager.term_repo.list_chunks()
                 assert len(chunks) == 0
@@ -307,7 +331,7 @@ class TestImportPath:
             (folder / "file2.txt").write_text("line3\nline4\nline5")
 
             with WorkflowSession(import_test_config) as translator:
-                translator.import_path(folder)
+                _import_path(translator, folder)
 
                 db = translator.document_repo
                 doc = db.get_document_row()
@@ -324,7 +348,7 @@ class TestImportPath:
             (folder / "page2.png").write_bytes(_png_bytes((40, 50, 60)))
 
             with WorkflowSession(import_test_config) as translator:
-                translator.import_path(folder, document_type="scanned_book")
+                _import_path(translator, folder, document_type="scanned_book")
 
                 db = translator.document_repo
                 doc = db.get_document_row()
@@ -385,7 +409,7 @@ class TestImportEpub:
     def test_import_epub_file(self, import_test_config: Config):
         with WorkflowSession(import_test_config) as session:
             epub_path = self._make_epub_file(import_test_config.working_dir)
-            result = session.import_path(epub_path, document_type="epub")
+            result = _import_path(session, epub_path, document_type="epub")
 
             assert result["imported"] == 1
             assert result["skipped"] == 0
@@ -397,7 +421,7 @@ class TestImportEpub:
     def test_import_epub_has_chapter_sources(self, import_test_config: Config):
         with WorkflowSession(import_test_config) as session:
             epub_path = self._make_epub_file(import_test_config.working_dir)
-            session.import_path(epub_path, document_type="epub")
+            _import_path(session, epub_path, document_type="epub")
 
             docs = session.document_repo.list_documents()
             sources = session.document_repo.get_document_sources(docs[0]["document_id"])
@@ -410,7 +434,7 @@ class TestImportEpub:
     def test_import_epub_has_image_sources(self, import_test_config: Config):
         with WorkflowSession(import_test_config) as session:
             epub_path = self._make_epub_file(import_test_config.working_dir)
-            session.import_path(epub_path, document_type="epub")
+            _import_path(session, epub_path, document_type="epub")
 
             docs = session.document_repo.list_documents()
             sources = session.document_repo.get_document_sources(docs[0]["document_id"])
@@ -421,7 +445,7 @@ class TestImportEpub:
     def test_import_epub_metadata_not_in_pipeline(self, import_test_config: Config):
         with WorkflowSession(import_test_config) as session:
             epub_path = self._make_epub_file(import_test_config.working_dir)
-            session.import_path(epub_path, document_type="epub")
+            _import_path(session, epub_path, document_type="epub")
 
             docs = session.document_repo.list_documents()
             sources = session.document_repo.get_document_sources(docs[0]["document_id"])
@@ -443,7 +467,7 @@ class TestExportPreserveStructure:
             (input_folder / "test.txt").write_text("Hello World")
 
             with WorkflowSession(import_test_config) as translator:
-                translator.import_path(input_folder)
+                _import_path(translator, input_folder)
 
                 db = translator.document_repo
                 doc = db.get_document_row()
@@ -465,7 +489,7 @@ class TestExportPreserveStructure:
 
                 translator.manager.term_repo.apply_batch(BatchUpdate(keyed_context=[], chunk_records=chunks))
 
-                await translator.export_preserve_structure(output_folder)
+                await _export_preserve_structure(translator, output_folder)
 
                 # Output is in document_id subfolder
                 output_file = output_folder / str(doc_id) / "test.txt"
@@ -483,11 +507,11 @@ class TestExportPreserveStructure:
             (input_folder / "image.png").write_bytes(binary_content)
 
             with WorkflowSession(import_test_config) as translator:
-                translator.import_path(input_folder, document_type="scanned_book")
+                _import_path(translator, input_folder, document_type="scanned_book")
 
                 # Scanned books don't support structure-preserving export
                 with pytest.raises(NotImplementedError, match="do not support structure-preserving export"):
-                    await translator.export_preserve_structure(output_folder)
+                    await _export_preserve_structure(translator, output_folder)
 
     async def test_export_creates_output_folder(self, import_test_config: Config):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -496,7 +520,7 @@ class TestExportPreserveStructure:
             input_file.write_text("Hello")
 
             with WorkflowSession(import_test_config) as translator:
-                translator.import_path(input_file)
+                _import_path(translator, input_file)
 
                 db = translator.document_repo
                 doc = db.get_document_row()
@@ -518,7 +542,7 @@ class TestExportPreserveStructure:
 
                 translator.manager.term_repo.apply_batch(BatchUpdate(keyed_context=[], chunk_records=chunks))
 
-                await translator.export_preserve_structure(output_folder)
+                await _export_preserve_structure(translator, output_folder)
 
                 assert output_folder.exists()
 
@@ -533,7 +557,7 @@ class TestExportPreserveStructure:
             (input_folder / "file3.txt").write_text("content3")
 
             with WorkflowSession(import_test_config) as translator:
-                translator.import_path(input_folder)
+                _import_path(translator, input_folder)
 
                 db = translator.document_repo
                 doc = db.get_document_row()
@@ -555,7 +579,7 @@ class TestExportPreserveStructure:
 
                 translator.manager.term_repo.apply_batch(BatchUpdate(keyed_context=[], chunk_records=chunks))
 
-                await translator.export_preserve_structure(output_folder)
+                await _export_preserve_structure(translator, output_folder)
 
                 # Output is in document_id subfolder
                 doc_subfolder = output_folder / str(doc_id)
@@ -571,4 +595,4 @@ class TestExportPreserveStructure:
                 WorkflowSession(import_test_config) as translator,
                 pytest.raises(ValueError, match="No documents to export"),
             ):
-                await translator.export_preserve_structure(output_folder)
+                await _export_preserve_structure(translator, output_folder)

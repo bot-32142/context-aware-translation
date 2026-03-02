@@ -9,6 +9,7 @@ import pytest
 
 from context_aware_translation.config import Config
 from context_aware_translation.storage.term_repository import BatchUpdate
+from context_aware_translation.workflow.ops import export_ops, import_ops
 from context_aware_translation.workflow.session import WorkflowSession
 
 _VALID_PNG = (
@@ -16,6 +17,29 @@ _VALID_PNG = (
     b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\xff\xff"
     b"?\x00\x05\xfe\x02\xfe\r\xefF\xb8\x00\x00\x00\x00IEND\xaeB`\x82"
 )
+
+
+def _import_path(
+    workflow,
+    path: Path,
+    *,
+    document_type: str | None = None,
+    cancel_check=None,  # noqa: ANN001
+):
+    return import_ops.import_path(
+        workflow,
+        path=path,
+        document_type=document_type,
+        cancel_check=cancel_check,
+    )
+
+
+async def _export(workflow, file_path: Path, export_format: str | None = None, **kwargs) -> None:  # noqa: ANN003
+    await export_ops.export(workflow, file_path=file_path, export_format=export_format, **kwargs)
+
+
+async def _export_preserve_structure(workflow, output_folder: Path, **kwargs) -> None:  # noqa: ANN003
+    await export_ops.export_preserve_structure(workflow, output_folder=output_folder, **kwargs)
 
 
 @pytest.fixture
@@ -60,12 +84,12 @@ class TestMultiDocumentImport:
 
             with WorkflowSession(multi_doc_config) as translator:
                 # Import first document
-                result1 = translator.import_path(file1)
+                result1 = _import_path(translator, file1)
                 assert result1["imported"] == 1
                 assert result1["skipped"] == 0
 
                 # Import second document
-                result2 = translator.import_path(file2)
+                result2 = _import_path(translator, file2)
                 assert result2["imported"] == 1
                 assert result2["skipped"] == 0
 
@@ -90,7 +114,7 @@ class TestMultiDocumentImport:
 
         try:
             with WorkflowSession(multi_doc_config) as translator:
-                translator.import_path(file_path)
+                _import_path(translator, file_path)
 
                 # Get document_id
                 repo = translator.document_repo
@@ -128,8 +152,8 @@ class TestMultiDocumentImport:
 
             with WorkflowSession(multi_doc_config) as translator:
                 # Import both documents
-                translator.import_path(file1)
-                translator.import_path(file2)
+                _import_path(translator, file1)
+                _import_path(translator, file2)
 
                 # Get document IDs
                 repo = translator.document_repo
@@ -176,9 +200,9 @@ class TestMultiDocumentImport:
 
             with WorkflowSession(multi_doc_config) as translator:
                 # Import all documents
-                translator.import_path(folder / "doc1.txt")
-                translator.import_path(folder / "doc2.txt")
-                translator.import_path(folder / "doc3.txt")
+                _import_path(translator, folder / "doc1.txt")
+                _import_path(translator, folder / "doc2.txt")
+                _import_path(translator, folder / "doc3.txt")
 
                 # List documents
                 repo = translator.document_repo
@@ -206,8 +230,8 @@ class TestMultiDocumentExport:
 
             with WorkflowSession(multi_doc_config) as translator:
                 # Import both documents
-                translator.import_path(file1)
-                translator.import_path(file2)
+                _import_path(translator, file1)
+                _import_path(translator, file2)
 
                 # Get documents and add text
                 repo = translator.document_repo
@@ -236,7 +260,7 @@ class TestMultiDocumentExport:
                 translator.manager.term_repo.apply_batch(BatchUpdate(keyed_context=[], chunk_records=chunks))
 
                 # Export merged
-                await translator.export(output_file)
+                await _export(translator, output_file)
 
                 # Verify output contains content from both documents
                 output_content = output_file.read_text()
@@ -257,12 +281,12 @@ class TestMultiDocumentExport:
 
             with WorkflowSession(multi_doc_config) as translator:
                 # Import both types
-                translator.import_path(text_file)
-                translator.import_path(image_file)
+                _import_path(translator, text_file)
+                _import_path(translator, image_file)
 
                 # Attempt to export should raise
                 with pytest.raises(ValueError, match="Cannot export mixed document types"):
-                    await translator.export(output_file)
+                    await _export(translator, output_file)
 
     async def test_export_preserve_structure_multiple_docs(self, multi_doc_config: Config):
         """Export with preserve_structure creates document_id subfolders."""
@@ -277,8 +301,8 @@ class TestMultiDocumentExport:
 
             with WorkflowSession(multi_doc_config) as translator:
                 # Import both documents
-                translator.import_path(file1)
-                translator.import_path(file2)
+                _import_path(translator, file1)
+                _import_path(translator, file2)
 
                 # Get documents and add text
                 repo = translator.document_repo
@@ -306,7 +330,7 @@ class TestMultiDocumentExport:
                 translator.manager.term_repo.apply_batch(BatchUpdate(keyed_context=[], chunk_records=chunks))
 
                 # Export with preserve structure
-                await translator.export_preserve_structure(output_folder)
+                await _export_preserve_structure(translator, output_folder)
 
                 # Verify document_id subfolders are created
                 assert output_folder.exists()
@@ -338,9 +362,9 @@ class TestMultiDocumentExport:
 
             with WorkflowSession(multi_doc_config) as translator:
                 # Import all documents
-                translator.import_path(file1)
-                translator.import_path(file2)
-                translator.import_path(file3)
+                _import_path(translator, file1)
+                _import_path(translator, file2)
+                _import_path(translator, file3)
 
                 # Get all documents
                 repo = translator.document_repo
@@ -371,7 +395,7 @@ class TestMultiDocumentExport:
 
                 # Export only documents 1 and 3
                 doc_ids_to_export = [documents[0]["document_id"], documents[2]["document_id"]]
-                await translator.export(output_file, document_ids=doc_ids_to_export)
+                await _export(translator, output_file, document_ids=doc_ids_to_export)
 
                 # Verify export succeeded (detailed verification would require checking content)
                 assert output_file.exists()
@@ -402,7 +426,7 @@ class TestMultiDocumentValidation:
                 WorkflowSession(multi_doc_config) as translator,
                 pytest.raises(ValueError, match="No documents to export"),
             ):
-                await translator.export(output_file)
+                await _export(translator, output_file)
 
     async def test_export_nonexistent_document_ids(self, multi_doc_config: Config):
         """Export with nonexistent document_ids raises or returns empty."""
@@ -414,8 +438,8 @@ class TestMultiDocumentValidation:
             file1.write_text("Content")
 
             with WorkflowSession(multi_doc_config) as translator:
-                translator.import_path(file1)
+                _import_path(translator, file1)
 
                 # Try to export nonexistent document IDs
                 with pytest.raises(ValueError, match="No documents to export"):
-                    await translator.export(output_file, document_ids=[999, 1000])
+                    await _export(translator, output_file, document_ids=[999, 1000])

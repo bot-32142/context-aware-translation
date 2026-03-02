@@ -16,6 +16,7 @@ except ImportError:
     HAS_PYSIDE6 = False
 
 from context_aware_translation.storage.task_store import TaskRecord
+from context_aware_translation.ui.i18n import translate_task_phase, translate_task_status
 from context_aware_translation.workflow.tasks.models import Decision, TaskAction
 
 pytestmark = pytest.mark.skipif(not HAS_PYSIDE6, reason="PySide6 not available")
@@ -94,9 +95,11 @@ def test_rows_render_from_vm_mapping():
     text0 = console._task_list.item(0).text()
     text1 = console._task_list.item(1).text()
     assert "#aaaa0000" in text0
-    assert "queued" in text0
+    assert translate_task_status("queued") in text0
     assert "#bbbb1111" in text1
-    assert "running" in text1
+    assert translate_task_status("running") in text1
+    assert translate_task_phase("prepare") in text0
+    assert translate_task_phase("apply") in text1
 
 
 # ---------------------------------------------------------------------------

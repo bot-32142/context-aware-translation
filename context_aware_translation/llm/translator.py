@@ -316,24 +316,31 @@ def build_translation_prompt(
     system_prompt = f"""--角色-- 你是专业翻译, 将以下{source_language}文本翻译为{target_language}。
 
 --规则--
-    你的目标受众是拥有大学学位的{target_language}母语人士。
-    {source_language}应当全部翻译。
-    只翻译{source_language}：如果原文中出现其他语言的文本，应保持原样不翻译。
-    保持译文与术语表的一致性。（注意，术语表的描述实质是按照文章顺序总结的前后文。如果前后矛盾，可以以后面的总结为主。）
-    严禁去除重复内容。
-    保留所有原始格式，包括 Markdown、换行符和特殊字符。
-    如果原文中出现EPUB内联标记，请按下列规则处理：
-    1) 对非样式内联标记（如 a/abbr/img 等）：⟪tag:n⟫ 与 ⟪/tag:n⟫ 必须成对保留、顺序不变，不得删除/改写。
-    2) 对样式内联标记（b,big,code,del,dfn,em,i,ins,kbd,mark,q,s,samp,small,strong,sub,sup,u,var）：
-       可按语义整对保留/删除/新增，但不能只留一半。
-    3) ⟪RUBY:n⟫ ... ⟪/RUBY:n⟫：可整对保留、整对删除或整对新增，不能只留一半；n 只需为数字。
-    4) ⟪BR:n⟫：可按语义需要保留或删除。
-    所有标记都是结构控制符，不是可翻译内容；只翻译标记外或标记包裹的自然语言文本。
+你的目标受众是拥有大学学位的{target_language}母语人士。
+{source_language}应当全部翻译。
+只翻译{source_language}：如果原文中出现其他语言的文本，应保持原样不翻译。
+保持译文与术语表的一致性。（注意，术语表的描述实质是按照文章顺序总结的前后文。如果前后矛盾，可以以后面的总结为主。）
+严禁去除重复内容。
+保留所有原始格式，包括 Markdown、换行符和特殊字符。
+如果原文中出现EPUB内联标记，请按下列规则处理：
+1) 对非样式内联标记（如 a/abbr/img 等）：⟪tag:n⟫ 与 ⟪/tag:n⟫ 必须成对保留、顺序不变，不得删除/改写。
+2) 对样式内联标记（b,big,code,del,dfn,em,i,ins,kbd,mark,q,s,samp,small,strong,sub,sup,u,var）：
+    可按语义整对保留/删除/新增，但不能只留一半。
+3) ⟪RUBY:n⟫ ... ⟪/RUBY:n⟫：可整对保留、整对删除或整对新增，不能只留一半；n 只需为数字。
+4) ⟪BR:n⟫：可按语义需要保留或删除。
+所有标记都是结构控制符，不是可翻译内容；只翻译标记外或标记包裹的自然语言文本。
+
+--数组结构约束（仅跨元素）--
+必须保持输入数组结构不变：
+1) 输出数组长度必须与输入数组长度完全相同，索引一一对应。不得增减、合并、重排任何元素。（规则4为唯一例外）
+2) 即使某些元素为空字符串或与其他元素完全相同，也必须在对应索引保留（可为空字符串）。
+3）不得去除重复元素。
+4）仅有在原文一句话被拆分成多个元素的情况下，并且不可能一一对应的情况下，允许压缩内容。若把连续多条内容压成一条：译文放在第一条，其余索引填 ""。
 
 --输出--
-严格输出JSON格式，包含"翻译文本"字段,不得去重！
-原文以列表提供，所有条目同属于一篇文章，内容连续。翻译时必须严格一对一：原文第1条对应翻译第1条，原文第2条对应翻译第2条，以此类推。禁止合并多条原文为一条翻译，也禁止将一条原文拆分为多条翻译。输出列表长度必须与原文列表长度完全相同。
-若把连续多条内容压成一条：译文放在第一条，其余索引填 ""。
+只输出一个JSON对象，且仅包含字段："翻译文本"。
+"翻译文本"必须是字符串数组，数组长度必须与输入完全一致。
+不得输出任何额外说明、前后缀文本或代码块围栏。
 
 示例：
 输入：
@@ -380,7 +387,29 @@ def build_translation_prompt(
     "",
     "她被称为「女主角」。"
   ]
-}}"""
+}}
+
+输入：
+{{
+  "术语列表": [],
+  "原文": [
+    "意",
+    "义",
+    "不",
+    "明"
+  ]
+}}
+
+输出：
+{{
+  "翻译文本": [
+    "意味が分からない",
+    "",
+    "",
+    ""
+  ]
+}}
+"""
 
     # Build JSON payload for user prompt with Chinese keys
     terms_json = []
@@ -403,6 +432,7 @@ def build_translation_prompt(
 def build_polish_prompt(
     translated_blocks: list[str],
     target_language: str,
+    source_language: str,
 ) -> tuple[str, str]:
     """Build standalone system and user prompts for polishing a translation.
 
@@ -421,7 +451,7 @@ def build_polish_prompt(
 
     --任务--
     对输入JSON中的"翻译文本"数组逐元素进行润色改写（每个元素视为一个独立段落/句群），使其更符合{target_language}母语表达习惯与文体一致性。
-    允许在单个元素内部：拆句/合句、调整信息顺序、补足省略主语、替换连接词、改写措辞、调整标点与断句。
+    允许在单个元素内部：拆句/合句、调整信息顺序、补足省略主语、替换连接词、改写措辞、调整标点与断句。如果有未翻译的{source_language}残留，也请一并翻译润色。
 
     --核心原则（通用流畅性）--
     在不改变含义与逻辑关系的前提下，优先采用{target_language}自然语序、常见搭配与段落组织方式；避免照搬源语言句法骨架（避免“翻译腔”）。
@@ -434,10 +464,8 @@ def build_polish_prompt(
 
     --数组结构约束（仅跨元素）--
     必须保持输入数组结构不变：
-    1) 输出数组长度必须与输入数组长度完全相同，索引一一对应。
-    2) 不得删除、合并、重排任何元素。
-    3) 即使某些元素为空字符串或与其他元素完全相同，也必须在对应索引保留（可为空字符串）。
-    4) 禁止“把多条内容压成一条并清空后续索引”的行为，除非输入明确指示允许压缩。
+    1) 输出数组长度必须与输入数组长度完全相同，索引一一对应。不得增减、合并、重排任何元素。
+    2) 即使某些元素为空字符串或与其他元素完全相同，也必须在对应索引保留（可为空字符串）。
 
     --格式与标记（必须严格遵守）--
     必须保留所有原始格式，包括 Markdown、换行符、空格数量（除非为提升可读性在元素内部做极小调整且不影响标记位置）、以及所有特殊字符。
@@ -596,7 +624,7 @@ async def translate_chunk(
 
                 # -- Optional polish (standalone, no original text or terms) ---
                 if translator_config.enable_polish:
-                    polish_sys, polish_usr = build_polish_prompt(translated_text, target_language)
+                    polish_sys, polish_usr = build_polish_prompt(translated_text, target_language, source_language)
                     polish_messages: list[dict[str, str]] = [
                         {"role": "system", "content": polish_sys},
                         {"role": "user", "content": polish_usr},

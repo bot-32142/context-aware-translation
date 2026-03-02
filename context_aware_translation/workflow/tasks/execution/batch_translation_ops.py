@@ -487,7 +487,9 @@ async def run_polish_stage(
             sd["state"] = "failed"
             sd["error"] = "Missing translated blocks for polish."
             continue
-        polish_system, polish_user = build_polish_prompt(translated_blocks, str(payload["target_language"]))
+        polish_system, polish_user = build_polish_prompt(
+            translated_blocks, str(payload["target_language"]), str(payload["source_language"])
+        )
         polish_messages = [
             {"role": "system", "content": polish_system},
             {"role": "user", "content": polish_user},

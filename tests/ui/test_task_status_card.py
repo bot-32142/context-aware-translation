@@ -115,7 +115,7 @@ def test_card_shows_status_chip_text():
     r = _make_record(status="running")
     engine = _make_engine(records=[r])
     card = _make_card(engine=engine)
-    assert card._chip.text() == "running"
+    assert card._chip.text() == "Running"
 
 
 def test_card_prefers_non_terminal_task():
@@ -133,7 +133,7 @@ def test_card_prefers_non_terminal_task():
     # Most recent is completed, but running should be preferred
     engine = _make_engine(records=[r_completed, r_running])
     card = _make_card(engine=engine)
-    assert card._chip.text() == "running"
+    assert card._chip.text() == "Running"
 
 
 def test_card_falls_back_to_most_recent_if_all_terminal():
@@ -151,7 +151,7 @@ def test_card_falls_back_to_most_recent_if_all_terminal():
     engine = _make_engine(records=[r1, r2])
     card = _make_card(engine=engine)
     # Most recent by updated_at (after sorting newest-first) is r1
-    assert card._chip.text() == "completed"
+    assert card._chip.text() == "Completed"
 
 
 def test_card_shows_phase_and_progress():
@@ -159,7 +159,7 @@ def test_card_shows_phase_and_progress():
     engine = _make_engine(records=[r])
     card = _make_card(engine=engine)
     detail = card._detail_label.text()
-    assert "extraction" in detail
+    assert "Extraction" in detail
     assert "45/120" in detail
     assert card._detail_label.isVisible()
 
@@ -353,7 +353,7 @@ def test_card_multiple_task_types_aggregates_all():
     engine.get_tasks.side_effect = _get_tasks
     card = _make_card(engine=engine, task_types=["batch_translation", "translation_text"])
     # running is non-terminal, should be preferred over queued
-    assert card._chip.text() == "running"
+    assert card._chip.text() == "Running"
 
 
 # ---------------------------------------------------------------------------

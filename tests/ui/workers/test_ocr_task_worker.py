@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+import base64
 from pathlib import Path
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -57,6 +60,12 @@ def _book_manager_with_db(tmp_path: Path) -> MagicMock:
 
 def _make_pending_sources(*source_ids: int) -> list[dict]:
     return [{"source_id": sid} for sid in source_ids]
+
+
+def _tiny_png_bytes() -> bytes:
+    return base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4//8/AwAI/AL+XJadOQAAAABJRU5ErkJggg=="
+    )
 
 
 # --- run action ---
@@ -211,6 +220,116 @@ def test_run_ocr_filters_cross_document_source_ids(monkeypatch: pytest.MonkeyPat
     assert 30 not in captured_source_ids
     assert 10 in captured_source_ids
     assert 20 in captured_source_ids
+
+
+def test_run_ocr_loader_targets_selected_document_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """OCR worker should load only the selected document, not all book documents."""
+    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+
+    task_store = MagicMock()
+    worker = OCRTaskWorker(
+        _book_manager_with_db(tmp_path),
+        "book-id",
+        action="run",
+        task_id="task-single-doc",
+        document_id=99,
+        task_store=task_store,
+    )
+
+    monkeypatch.setattr(worker, "_resolve_source_ids_for_document", lambda: [1001])
+
+    fake_loaded_doc = MagicMock()
+    load_by_id_calls: list[tuple[int, object]] = []
+
+    def _load_by_id(_repo, document_id, ocr_config):
+        load_by_id_calls.append((document_id, ocr_config))
+        return fake_loaded_doc
+
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.ocr_task_worker.Document.load_by_id",
+        _load_by_id,
+    )
+
+    mock_context = MagicMock()
+    loaded_docs: list[object] = []
+
+    async def _capture_run_ocr(_context, **kwargs):
+        loader = kwargs["document_loader"]
+        loaded_docs.extend(loader(MagicMock(), MagicMock()))
+        return 0
+
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
+        lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        _capture_run_ocr,
+    )
+
+    worker.run()
+
+    assert load_by_id_calls
+    assert load_by_id_calls[0][0] == 99
+    assert loaded_docs == [fake_loaded_doc]
+
+
+def test_run_ocr_for_manga_uses_manga_ocr_pipeline(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """A manga OCR task must execute MangaDocument.process_ocr -> ocr_manga_image."""
+    from context_aware_translation.config import OCRConfig
+    from context_aware_translation.storage.book_db import SQLiteBookDB
+    from context_aware_translation.storage.document_repository import DocumentRepository
+    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+
+    db = SQLiteBookDB(tmp_path / "book.db")
+    repo = DocumentRepository(db)
+    document_id = repo.insert_document("manga")
+    source_id = repo.insert_document_source(
+        document_id,
+        0,
+        "image",
+        binary_content=_tiny_png_bytes(),
+        mime_type="image/png",
+        is_ocr_completed=False,
+    )
+    db.commit()
+
+    task_store = MagicMock()
+    worker = OCRTaskWorker(
+        _book_manager_with_db(tmp_path),
+        "book-id",
+        action="run",
+        task_id="task-manga-pipeline",
+        document_id=document_id,
+        source_ids=[source_id],
+        task_store=task_store,
+    )
+
+    mock_context = SimpleNamespace(
+        document_repo=repo,
+        config=SimpleNamespace(ocr_config=OCRConfig(concurrency=1, max_retries=0)),
+        llm_client=MagicMock(),
+    )
+
+    mock_manga_ocr = AsyncMock(return_value="hello manga")
+    mock_epub_ocr = AsyncMock(return_value=None)
+    monkeypatch.setattr("context_aware_translation.llm.manga_ocr.ocr_manga_image", mock_manga_ocr)
+    monkeypatch.setattr("context_aware_translation.llm.epub_ocr.ocr_epub_images", mock_epub_ocr)
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
+        lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
+    )
+
+    worker.run()
+
+    assert mock_manga_ocr.await_count == 1
+    assert mock_epub_ocr.await_count == 0
+
+    db.refresh()
+    saved = repo.get_source_ocr_json(source_id) or ""
+    assert '"text"' in saved
+    assert '"embedded_text"' not in saved
+    db.close()
 
 
 def test_run_ocr_cancellation_marks_cancelled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -405,6 +524,54 @@ def test_progress_callback_updates_task_store(monkeypatch: pytest.MonkeyPatch, t
     worker.run()
 
     task_store.update.assert_any_call("task-progress", completed_items=1, total_items=5)
+
+
+def test_run_ocr_reports_incremental_item_progress(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """run action should report item count during OCR, not only at completion."""
+    from context_aware_translation.core.progress import ProgressUpdate
+    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+
+    task_store = MagicMock()
+    worker = OCRTaskWorker(
+        _book_manager_with_db(tmp_path),
+        "book-id",
+        action="run",
+        task_id="task-live-progress",
+        document_id=10,
+        task_store=task_store,
+    )
+
+    monkeypatch.setattr(worker, "_resolve_source_ids_for_document", lambda: [1, 2, 3])
+
+    mock_context = MagicMock()
+
+    async def _run_ocr(_context, **kwargs):
+        cb = kwargs.get("progress_callback")
+        if cb:
+            cb(ProgressUpdate(step="ocr", current=1, total=3))
+            cb(ProgressUpdate(step="ocr", current=2, total=3))
+            cb(ProgressUpdate(step="ocr", current=3, total=3))
+            await asyncio.sleep(0.01)
+        return 3
+
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
+        lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        _run_ocr,
+    )
+
+    worker.run()
+
+    completed_values = [
+        int(call.kwargs["completed_items"])
+        for call in task_store.update.call_args_list
+        if "completed_items" in call.kwargs and int(call.kwargs.get("total_items", -1)) == 3
+    ]
+    assert any(0 < value < 3 for value in completed_values)
+    assert 3 in completed_values
 
 
 # --- config snapshot ---

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from unittest.mock import MagicMock
 
@@ -262,6 +263,22 @@ def test_rerun_emits_running_work_changed_immediately_without_tick(engine, tmp_s
     engine.rerun(record.task_id)
 
     assert emissions == [True]
+
+
+def test_run_task_image_reembedding_forces_payload_on_terminal(engine, tmp_store):
+    handler = _make_handler("image_reembedding", can_run=True)
+    engine.register_handler(handler)
+    record = tmp_store.create(
+        book_id="book-reembed",
+        task_type="image_reembedding",
+        status="failed",
+        payload_json=json.dumps({"source_ids": [7], "force": False}),
+    )
+
+    updated = engine.run_task(record.task_id)
+    payload = json.loads(updated.payload_json or "{}")
+    assert payload.get("force") is True
+    assert payload.get("source_ids") == [7]
 
 
 def test_cancel_emits_running_work_changed_when_cancel_worker_starts(engine, tmp_store):

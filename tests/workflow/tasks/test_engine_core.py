@@ -217,6 +217,49 @@ class TestEnsureRunnableSnapshot:
         assert result.status == STATUS_QUEUED
         engine.close()
 
+    def test_ensure_runnable_image_reembedding_sets_force_true(self, tmp_path):
+        """ensure_runnable() should force reruns for image reembedding tasks."""
+        engine, deps = _make_engine(tmp_path)
+        handler = _make_handler(task_type="image_reembedding")
+        engine.register_handler(handler)
+
+        deps.book_manager.get_config_snapshot_json.return_value = _VALID_SNAPSHOT
+        record = engine._store.create(
+            book_id="book-1",
+            task_type="image_reembedding",
+            status=STATUS_FAILED,
+            payload_json=json.dumps({"source_ids": [13, 14], "force": False}),
+        )
+
+        result = engine.ensure_runnable(record.task_id)
+
+        payload = json.loads(result.payload_json or "{}")
+        assert payload.get("force") is True
+        assert payload.get("source_ids") == [13, 14]
+        engine.close()
+
+    def test_ensure_runnable_image_reembedding_raises_on_malformed_payload(self, tmp_path):
+        """ensure_runnable() should raise when image_reembedding payload is malformed."""
+        engine, deps = _make_engine(tmp_path)
+        handler = _make_handler(task_type="image_reembedding")
+        engine.register_handler(handler)
+
+        deps.book_manager.get_config_snapshot_json.return_value = _VALID_SNAPSHOT
+        record = engine._store.create(
+            book_id="book-1",
+            task_type="image_reembedding",
+            status=STATUS_FAILED,
+            payload_json="{",
+        )
+
+        with pytest.raises(ValueError, match="malformed JSON"):
+            engine.ensure_runnable(record.task_id)
+
+        fetched = engine._store.get(record.task_id)
+        assert fetched is not None
+        assert fetched.status == STATUS_FAILED
+        engine.close()
+
 
 # ---------------------------------------------------------------------------
 # rerun() — re-capture snapshot for terminal tasks
@@ -284,4 +327,47 @@ class TestRerunSnapshot:
         with pytest.raises(ValueError):
             engine.rerun(record.task_id)
 
+        engine.close()
+
+    def test_rerun_image_reembedding_sets_force_true(self, tmp_path):
+        """rerun() should set payload.force=true for image reembedding tasks."""
+        engine, deps = _make_engine(tmp_path)
+        handler = _make_handler(task_type="image_reembedding")
+        engine.register_handler(handler)
+
+        deps.book_manager.get_config_snapshot_json.return_value = _VALID_SNAPSHOT
+        record = engine._store.create(
+            book_id="book-1",
+            task_type="image_reembedding",
+            status=STATUS_CANCELLED,
+            payload_json=json.dumps({"source_ids": [21], "force": False}),
+        )
+
+        result = engine.rerun(record.task_id)
+
+        payload = json.loads(result.payload_json or "{}")
+        assert payload.get("force") is True
+        assert payload.get("source_ids") == [21]
+        engine.close()
+
+    def test_rerun_image_reembedding_raises_on_non_object_payload(self, tmp_path):
+        """rerun() should raise when image_reembedding payload is not a JSON object."""
+        engine, deps = _make_engine(tmp_path)
+        handler = _make_handler(task_type="image_reembedding")
+        engine.register_handler(handler)
+
+        deps.book_manager.get_config_snapshot_json.return_value = _VALID_SNAPSHOT
+        record = engine._store.create(
+            book_id="book-1",
+            task_type="image_reembedding",
+            status=STATUS_CANCELLED,
+            payload_json=json.dumps([1, 2, 3]),
+        )
+
+        with pytest.raises(ValueError, match="must be a JSON object"):
+            engine.rerun(record.task_id)
+
+        fetched = engine._store.get(record.task_id)
+        assert fetched is not None
+        assert fetched.status == STATUS_CANCELLED
         engine.close()

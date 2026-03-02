@@ -93,15 +93,7 @@ class OCRTaskWorker(BaseWorker):
             else:
                 session_ctx = WorkflowSession.from_book(self._book_manager, self._book_id)
             with session_ctx as context:
-                asyncio.run(
-                    ocr_ops.run_ocr(
-                        context,
-                        document_loader=Document.load_all,
-                        progress_callback=self._on_progress,
-                        source_ids=resolved_ids,
-                        cancel_check=self._is_cancelled,
-                    )
-                )
+                asyncio.run(self._do_ocr(context, resolved_ids))
             if self._task_store is not None and self._task_id is not None:
                 self._task_store.update(self._task_id, status="completed")
             self.finished_success.emit({"action": "run", "task_id": self._task_id})
@@ -115,6 +107,29 @@ class OCRTaskWorker(BaseWorker):
             raise  # Let BaseWorker.run() emit error signal
         finally:
             self._notify()
+
+    async def _do_ocr(self, context, resolved_ids: list[int]) -> None:
+        def _single_document_loader(repo, ocr_config):
+            if self._document_id is None:
+                return []
+            doc = Document.load_by_id(repo, self._document_id, ocr_config)
+            if doc is not None:
+                logger.info(
+                    "OCR task %s using document_id=%s document_type=%s class=%s",
+                    self._task_id,
+                    self._document_id,
+                    getattr(doc, "document_type", "unknown"),
+                    type(doc).__name__,
+                )
+            return [doc] if doc is not None else []
+
+        await ocr_ops.run_ocr(
+            context,
+            document_loader=_single_document_loader,
+            progress_callback=self._on_progress,
+            source_ids=resolved_ids,
+            cancel_check=self._is_cancelled,
+        )
 
     def _run_cancel(self) -> None:
         if self._task_store is not None and self._task_id is not None:

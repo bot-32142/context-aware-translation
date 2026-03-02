@@ -189,7 +189,7 @@ class TranslatorConfig(LLMConfig):
 
     # Translation-specific settings
     enable_polish: bool = True
-    num_of_chunks_per_llm_call: int = 5
+    num_of_chunks_per_llm_call: int = 3
     chunk_size: int = 1000  # Max token size per chunk for text processing
 
     def to_dict(self) -> dict[str, Any]:
@@ -219,7 +219,7 @@ class TranslatorConfig(LLMConfig):
             endpoint_profile=data.get("endpoint_profile"),
             kwargs=data.get("kwargs", {}),
             enable_polish=data.get("enable_polish", True),
-            num_of_chunks_per_llm_call=data.get("num_of_chunks_per_llm_call", 5),
+            num_of_chunks_per_llm_call=data.get("num_of_chunks_per_llm_call", 3),
             chunk_size=data.get("chunk_size", 1000),
         )
 
@@ -231,7 +231,7 @@ class TranslatorBatchConfig:
     provider: str
     api_key: str
     model: str
-    batch_size: int = 500
+    batch_size: int = 100
     thinking_mode: str = "auto"
 
     def to_dict(self) -> dict[str, Any]:
@@ -251,7 +251,7 @@ class TranslatorBatchConfig:
             provider=str(data.get("provider") or ""),
             api_key=str(data.get("api_key") or ""),
             model=str(data.get("model") or ""),
-            batch_size=int(data.get("batch_size", 500)),
+            batch_size=int(data.get("batch_size", 100)),
             thinking_mode=str(data.get("thinking_mode", "auto")),
         )
 
@@ -370,7 +370,6 @@ class OCRConfig(LLMConfig):
 
     # Post-processing settings
     strip_llm_artifacts: bool = True  # Remove tokenizer artifacts (<pad>, etc.) from output
-    enable_image_reembedding: bool = False  # Enable re-embedding images in translated markdown
 
     # Image compression settings for OCR
     ocr_dpi: int = 150  # DPI to compress images to before sending to LLM (lower = faster)
@@ -381,7 +380,6 @@ class OCRConfig(LLMConfig):
         base.update(
             {
                 "strip_llm_artifacts": self.strip_llm_artifacts,
-                "enable_image_reembedding": self.enable_image_reembedding,
                 "ocr_dpi": self.ocr_dpi,
             }
         )
@@ -402,7 +400,6 @@ class OCRConfig(LLMConfig):
             endpoint_profile=data.get("endpoint_profile"),
             kwargs=data.get("kwargs", {}),
             strip_llm_artifacts=data.get("strip_llm_artifacts", True),
-            enable_image_reembedding=data.get("enable_image_reembedding", False),
             ocr_dpi=data.get("ocr_dpi", 150),
         )
 
@@ -1077,7 +1074,7 @@ def validate_persisted_config_payload(
             if not str(translator_batch_cfg.get("model") or "").strip():
                 errors.append("translator_batch_config.model is required")
 
-            batch_size_value = translator_batch_cfg.get("batch_size", 500)
+            batch_size_value = translator_batch_cfg.get("batch_size", 100)
             try:
                 batch_size = int(batch_size_value)
             except (TypeError, ValueError):

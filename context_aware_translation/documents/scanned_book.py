@@ -149,6 +149,7 @@ class ScannedBookDocument(Document):
         llm_client: LLMClient,
         source_ids: list[int] | None = None,
         cancel_check: Callable[[], bool] | None = None,
+        on_item_processed: Callable[[], None] | None = None,
     ) -> int:
         raise_if_cancelled(cancel_check)
         if self._ocr_config is None:
@@ -178,6 +179,8 @@ class ScannedBookDocument(Document):
             raise_if_cancelled(cancel_check)
             self.repo.update_source_ocr(sources[index]["source_id"], json.dumps(ocr_pages))
             self.repo.update_source_ocr_completed(sources[index]["source_id"])
+            if on_item_processed is not None:
+                on_item_processed()
             raise_if_cancelled(cancel_check)
 
         # Process all images concurrently in one call with incremental persistence

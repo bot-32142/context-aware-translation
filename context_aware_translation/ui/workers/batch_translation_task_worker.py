@@ -34,6 +34,7 @@ class BatchTranslationTaskWorker(BaseWorker):
         document_ids: list[int] | None = None,
         force: bool = False,
         skip_context: bool = False,
+        enable_polish: bool = True,
         task_store: TaskStore | None = None,
         notify_task_changed: Callable[[str], None] | None = None,
         config_snapshot_json: str | None = None,
@@ -46,6 +47,7 @@ class BatchTranslationTaskWorker(BaseWorker):
         self.document_ids = document_ids
         self.force = force
         self.skip_context = skip_context
+        self.enable_polish = enable_polish
         self.task_store = task_store
         self.notify_task_changed = notify_task_changed
         self.config_snapshot_json = config_snapshot_json
@@ -160,6 +162,10 @@ class BatchTranslationTaskWorker(BaseWorker):
         else:
             session_manager = WorkflowSession.from_book(self.book_manager, self.book_id)
         with session_manager as session:
+            if self.action == "run":
+                translator_config = session.config.translator_config
+                if translator_config is not None:
+                    translator_config.enable_polish = self.enable_polish
             executor = BatchTranslationExecutor.from_workflow(
                 session,
                 task_store=self.task_store,

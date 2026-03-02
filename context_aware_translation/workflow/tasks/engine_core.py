@@ -177,6 +177,28 @@ class EngineCore:
             updated_at=now,
         )
 
+    @staticmethod
+    def _payload_json_for_task_rerun(task_type: str, payload_json: str | None) -> str | None:
+        """Return payload_json override for rerun semantics, preserving existing keys when possible."""
+        if task_type != "image_reembedding":
+            return payload_json
+
+        if not payload_json:
+            raise ValueError(
+                "Cannot rerun image_reembedding task: payload is missing. "
+                "Task payload must be valid JSON object containing task parameters."
+            )
+        try:
+            decoded = json.loads(payload_json)
+        except json.JSONDecodeError as exc:
+            raise ValueError("Cannot rerun image_reembedding task: payload is malformed JSON.") from exc
+        if not isinstance(decoded, dict):
+            raise ValueError("Cannot rerun image_reembedding task: payload must be a JSON object.")
+        payload: dict[str, object] = dict(decoded)
+
+        payload["force"] = True
+        return json.dumps(payload, ensure_ascii=False)
+
     def preflight(
         self,
         task_type: str,
@@ -351,12 +373,15 @@ class EngineCore:
                         f"Cannot rerun task {task_id}: failed to capture config snapshot for book {record.book_id!r}. "
                         "Ensure the book has a valid profile or custom config assigned."
                     )
-                record = self._store.update(
-                    task_id,
-                    status="queued",
-                    cancel_requested=False,
-                    config_snapshot_json=config_snapshot_json,
-                )
+                payload_json = self._payload_json_for_task_rerun(record.task_type, record.payload_json)
+                update_fields: dict[str, object] = {
+                    "status": "queued",
+                    "cancel_requested": False,
+                    "config_snapshot_json": config_snapshot_json,
+                }
+                if payload_json != record.payload_json:
+                    update_fields["payload_json"] = payload_json
+                record = self._store.update(task_id, **update_fields)
         return record
 
     def rerun(self, task_id: str) -> TaskRecord:
@@ -382,12 +407,15 @@ class EngineCore:
                     f"Cannot rerun task {task_id}: failed to capture config snapshot for book {record.book_id!r}. "
                     "Ensure the book has a valid profile or custom config assigned."
                 )
-            return self._store.update(
-                task_id,
-                status="queued",
-                cancel_requested=False,
-                config_snapshot_json=config_snapshot_json,
-            )
+            payload_json = self._payload_json_for_task_rerun(record.task_type, record.payload_json)
+            update_fields: dict[str, object] = {
+                "status": "queued",
+                "cancel_requested": False,
+                "config_snapshot_json": config_snapshot_json,
+            }
+            if payload_json != record.payload_json:
+                update_fields["payload_json"] = payload_json
+            return self._store.update(task_id, **update_fields)
 
     def cancel(self, task_id: str) -> object | None:
         """Request cancellation only if handler policy allows it.

@@ -14,6 +14,10 @@ CAT is a desktop translation tool for long-form text and various document types 
 - Supports OCR with manual review before export.
 - Supports image text embedding.
 
+## Disclaimer
+
+**As an individual, I'm unable to extensively test different languages, models, and formats. You will most likely see bugs. Please report to help.**
+
 ## Core Idea: Context Management
 
 CAT does not translate each chunk as isolated text.
@@ -30,7 +34,7 @@ The result: better long-document consistency without sending the entire book as 
 1. **Import**: Import documents in the intended reading order.
 2. **OCR Review** (if needed): Run OCR first, then correct the OCR text.
 3. **Glossary**: Build/import a glossary, review and translate terms.
-4. **Translate**: Translate the selected documents.
+4. **Translate**: Translate the selected documents. It is recommended to send less for consistent high-quality output. More context will certainly lead to hallucination. Under 3000 tokens is recommended, depending on your model and whether context summaries is enabled or not.
 5. **Export**: Export by document type and format.
 
 ## Supported Types
@@ -67,6 +71,6 @@ Recommended practices:
 These recommendations are already pre-configured in the default endpoint and config profiles (except **Image Text Embedding**, which requires separate setup). You only need to fill in the API keys to get started.
 
 ## Notes
-* OCR cannot handle overly complex layouts.
-* If a single sentence in the source text spans multiple paragraphs, formatting may occasionally break.
+* OCR cannot handle overly complex layouts. **The OCR is not designed to keep the original layout but to render the original content in an opinioned way.**
+* If a single sentence in the source text spans multiple paragraphs, formatting may break, and may result in translation failure.
 * All llm responses are cached and persisted at the earliest possible time so cancellation won't result in data loss if you want to stop and resume from where you left out.

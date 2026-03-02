@@ -1019,6 +1019,7 @@ class EPUBDocument(Document):
         llm_client: LLMClient,
         source_ids: list[int] | None = None,
         cancel_check: Callable[[], bool] | None = None,
+        on_item_processed: Callable[[], None] | None = None,
     ) -> int:
         """Run OCR on image resources and store embedded image text.
 
@@ -1056,6 +1057,8 @@ class EPUBDocument(Document):
             payload = self._build_epub_image_ocr_payload(embedded_text)
             self.repo.update_source_ocr(sources[index]["source_id"], json.dumps(payload, ensure_ascii=False))
             self.repo.update_source_ocr_completed(sources[index]["source_id"])
+            if on_item_processed is not None:
+                on_item_processed()
             raise_if_cancelled(cancel_check)
 
         if cancel_check is None:

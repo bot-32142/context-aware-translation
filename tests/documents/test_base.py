@@ -57,7 +57,13 @@ def test_document_has_all_abstract_methods():
 def test_document_abstract_methods_have_correct_signatures():
     assert hasattr(Document, "process_ocr")
     process_ocr_sig = inspect.signature(Document.process_ocr)
-    assert list(process_ocr_sig.parameters.keys()) == ["self", "llm_client", "source_ids", "cancel_check"]
+    assert list(process_ocr_sig.parameters.keys()) == [
+        "self",
+        "llm_client",
+        "source_ids",
+        "cancel_check",
+        "on_item_processed",
+    ]
 
     assert hasattr(Document, "get_text")
     get_text_sig = inspect.signature(Document.get_text)

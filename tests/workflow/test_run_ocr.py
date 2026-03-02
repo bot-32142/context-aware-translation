@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -48,4 +48,4 @@ async def test_run_ocr_with_empty_source_ids_processes_none():
 
     assert processed == 0
     progress_callback.assert_not_called()
-    document.process_ocr.assert_awaited_once_with(llm_client, [])
+    document.process_ocr.assert_awaited_once_with(llm_client, [], on_item_processed=ANY)

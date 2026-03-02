@@ -50,25 +50,64 @@ async def run_ocr(
         )
 
     current = 0
+
+    def emit_progress() -> None:
+        if progress_callback:
+            progress_callback(
+                ProgressUpdate(
+                    step=WorkflowStep.OCR,
+                    current=current,
+                    total=total_sources,
+                    message=f"OCR page {current}/{total_sources}",
+                )
+            )
+
+    def on_item_processed() -> None:
+        nonlocal current
+        current += 1
+        if total_sources > 0:
+            current = min(current, total_sources)
+            emit_progress()
+
     for document in documents:
         bootstrap_ops.check_cancel(cancel_check)
         if workflow.config.ocr_config is not None:
-            if cancel_check is None:
-                processed = await document.process_ocr(workflow.llm_client, source_ids)
-            else:
-                processed = await document.process_ocr(workflow.llm_client, source_ids, cancel_check=cancel_check)
-            if processed > 0:
-                current += processed
-                total_processed += processed
-
-                if progress_callback:
-                    progress_callback(
-                        ProgressUpdate(
-                            step=WorkflowStep.OCR,
-                            current=current,
-                            total=total_sources,
-                            message=f"OCR page {current}/{total_sources}",
-                        )
+            before = current
+            try:
+                if cancel_check is None:
+                    processed = await document.process_ocr(
+                        workflow.llm_client,
+                        source_ids,
+                        on_item_processed=on_item_processed,
                     )
+                else:
+                    processed = await document.process_ocr(
+                        workflow.llm_client,
+                        source_ids,
+                        cancel_check=cancel_check,
+                        on_item_processed=on_item_processed,
+                    )
+            except TypeError as exc:
+                # Backward-compat for test doubles / legacy document classes that do not
+                # yet accept on_item_processed.
+                if "on_item_processed" not in str(exc):
+                    raise
+                if cancel_check is None:
+                    processed = await document.process_ocr(workflow.llm_client, source_ids)
+                else:
+                    processed = await document.process_ocr(
+                        workflow.llm_client,
+                        source_ids,
+                        cancel_check=cancel_check,
+                    )
+            if processed > 0:
+                total_processed += processed
+                accounted = current - before
+                # Fallback for document types that do not emit item-level callbacks.
+                if accounted < processed:
+                    current += processed - accounted
+                    if total_sources > 0:
+                        current = min(current, total_sources)
+                        emit_progress()
 
     return total_processed

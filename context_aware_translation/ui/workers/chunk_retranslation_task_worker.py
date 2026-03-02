@@ -30,6 +30,7 @@ class ChunkRetranslationTaskWorker(BaseWorker):
         chunk_id: int,
         document_id: int,
         skip_context: bool = False,
+        enable_polish: bool = True,
         task_store: TaskStore | None = None,
         notify_task_changed: Callable[[str], None] | None = None,
         config_snapshot_json: str | None = None,
@@ -42,6 +43,7 @@ class ChunkRetranslationTaskWorker(BaseWorker):
         self._chunk_id = chunk_id
         self._document_id = document_id
         self._skip_context = skip_context
+        self._enable_polish = enable_polish
         self._task_store = task_store
         self._notify_task_changed = notify_task_changed
         self._config_snapshot_json = config_snapshot_json
@@ -65,6 +67,9 @@ class ChunkRetranslationTaskWorker(BaseWorker):
             else:
                 session_ctx = WorkflowSession.from_book(self._book_manager, self._book_id)
             with session_ctx as context:
+                translator_config = context.config.translator_config
+                if translator_config is not None:
+                    translator_config.enable_polish = self._enable_polish
                 new_translation = asyncio.run(
                     translation_ops.retranslate_chunk(
                         context,

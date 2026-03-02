@@ -135,9 +135,10 @@ class TextDocument(Document):
         llm_client: LLMClient,
         source_ids: list[int] | None = None,
         cancel_check: Callable[[], bool] | None = None,
+        on_item_processed: Callable[[], None] | None = None,
     ) -> int:
         """No-op for text documents - they don't need OCR."""
-        _ = (llm_client, source_ids)
+        _ = (llm_client, source_ids, on_item_processed)
         raise_if_cancelled(cancel_check)
         return 0
 

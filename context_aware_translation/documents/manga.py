@@ -221,6 +221,7 @@ class MangaDocument(Document):
         llm_client: LLMClient,
         source_ids: list[int] | None = None,
         cancel_check: Callable[[], bool] | None = None,
+        on_item_processed: Callable[[], None] | None = None,
     ) -> int:
         """OCR using simple manga text extraction (not structured OCR)."""
         raise_if_cancelled(cancel_check)
@@ -253,6 +254,8 @@ class MangaDocument(Document):
                 ocr_result = json.dumps({"text": text})
                 self.repo.update_source_ocr(sources[index]["source_id"], ocr_result)
                 self.repo.update_source_ocr_completed(sources[index]["source_id"])
+                if on_item_processed is not None:
+                    on_item_processed()
                 raise_if_cancelled(cancel_check)
 
         await asyncio.gather(*[process_one(i, img, mime) for i, (img, mime) in enumerate(image_data)])
@@ -316,13 +319,13 @@ class MangaDocument(Document):
             self._page_translations[source["source_id"]] = lines[consumed]
             consumed += 1
 
-        # Load cached reembedded images from DB so export applies them
+        # Load cached reembedded images from DB so export applies them.
         sources = self.repo.get_document_sources(self.document_id)
-        sources_sorted = sorted(sources, key=lambda s: s["sequence_number"])
         existing = self.repo.load_reembedded_images(self.document_id)
-        for idx, source in enumerate(sources_sorted):
-            if idx in existing:
-                self._reembedded_pages[source["source_id"]] = existing[idx][0]
+        for source_idx, source, _ocr_text in get_sources_with_nonempty_ocr_text(sources):
+            cached = existing.get(source_idx)
+            if cached is not None:
+                self._reembedded_pages[source["source_id"]] = cached[0]
 
         return consumed
 
@@ -359,11 +362,17 @@ class MangaDocument(Document):
         # Load existing to skip already-processed items (unless force=True)
         existing = self.repo.load_reembedded_images(self.document_id) if not force else {}
 
+        def _get_cached_reembed(source_id: int) -> tuple[bytes, str] | None:
+            original_idx = source_id_to_idx[source_id]
+            if original_idx in existing:
+                return existing[original_idx]
+            return None
+
         total = sum(
             1
             for source in sources_sorted
             if self._page_translations.get(source["source_id"], "").strip()
-            and source_id_to_idx[source["source_id"]] not in existing
+            and _get_cached_reembed(source["source_id"]) is None
         )
         if total == 0:
             return 0
@@ -380,9 +389,10 @@ class MangaDocument(Document):
                 translated = self._page_translations.get(source_id, "")
                 if not translated.strip():
                     return
-                if original_idx in existing:
+                cached = _get_cached_reembed(source_id)
+                if cached is not None:
                     # Already cached — populate in-memory but don't count as newly generated
-                    self._reembedded_pages[source_id] = existing[original_idx][0]
+                    self._reembedded_pages[source_id] = cached[0]
                     return
                 image_bytes = source["binary_content"]
                 mime_type = source.get("mime_type", "image/png")
@@ -411,7 +421,9 @@ class MangaDocument(Document):
             if isinstance(result, OperationCancelledError):
                 raise result
             if isinstance(result, Exception):
-                raise RuntimeError(f"Failed to reembed manga page (source {source['source_id']}): {result}")
+                raise RuntimeError(
+                    f"Failed to reembed manga page (source {source['source_id']}): {type(result).__name__}: {result}"
+                ) from result
 
         return completed
 

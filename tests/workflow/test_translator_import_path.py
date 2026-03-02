@@ -12,6 +12,7 @@ from PIL import Image
 from context_aware_translation.config import Config
 from context_aware_translation.storage.book_db import SQLiteBookDB
 from context_aware_translation.storage.document_repository import DocumentRepository
+from context_aware_translation.workflow.ops import import_ops
 from context_aware_translation.workflow.session import WorkflowSession
 
 
@@ -29,6 +30,21 @@ def _jpeg_bytes(color: tuple[int, int, int], size: tuple[int, int] = (4, 4)) -> 
     return buf.getvalue()
 
 
+def _import_path(
+    workflow,
+    path: Path,
+    *,
+    document_type: str | None = None,
+    cancel_check=None,  # noqa: ANN001
+):
+    return import_ops.import_path(
+        workflow,
+        path=path,
+        document_type=document_type,
+        cancel_check=cancel_check,
+    )
+
+
 class TestImportPath:
     """Test WorkflowSession.import_path() method with new document class pattern."""
 
@@ -40,7 +56,7 @@ class TestImportPath:
 
         # Import without specifying document_type
         with WorkflowSession(temp_config) as translator:
-            result = translator.import_path(text_file)
+            result = _import_path(translator, text_file)
 
         # Verify return format
         assert result["imported"] == 1
@@ -64,7 +80,7 @@ class TestImportPath:
 
         # Import without specifying document_type
         with WorkflowSession(temp_config) as translator:
-            result = translator.import_path(pdf_file)
+            result = _import_path(translator, pdf_file)
 
         # Verify return format
         assert result["imported"] == 1
@@ -88,7 +104,7 @@ class TestImportPath:
 
         # Import as scanned_book (image folders are ambiguous with manga)
         with WorkflowSession(temp_config) as translator:
-            result = translator.import_path(folder, document_type="scanned_book")
+            result = _import_path(translator, folder, document_type="scanned_book")
 
         # Verify return format
         assert result["imported"] == 2
@@ -110,7 +126,7 @@ class TestImportPath:
 
         # Import with explicit document_type
         with WorkflowSession(temp_config) as translator:
-            result = translator.import_path(text_file, document_type="text")
+            result = _import_path(translator, text_file, document_type="text")
 
         # Verify return format
         assert result["imported"] == 1
@@ -132,8 +148,8 @@ class TestImportPath:
         file_b.write_text("Beta", encoding="utf-8")
 
         with WorkflowSession(temp_config) as translator:
-            result_a = translator.import_path(file_a)
-            result_b = translator.import_path(file_b)
+            result_a = _import_path(translator, file_a)
+            result_b = _import_path(translator, file_b)
             assert result_a["imported"] == 1
             assert result_b["imported"] == 1
             assert result_a["document_id"] is not None
@@ -161,7 +177,7 @@ class TestImportPath:
 
         # This should work fine (no multiple matches in current implementation)
         with WorkflowSession(temp_config) as translator:
-            result = translator.import_path(text_file)
+            result = _import_path(translator, text_file)
 
         assert result["imported"] == 1
         assert result["skipped"] == 0
@@ -178,7 +194,7 @@ class TestImportPath:
             WorkflowSession(temp_config) as translator,
             pytest.raises(ValueError, match="Cannot import path: no supported document type matches"),
         ):
-            translator.import_path(unsupported_file)
+            _import_path(translator, unsupported_file)
 
     def test_returns_correct_format(self, tmp_path: Path, temp_config: Config):
         """Test that return value has correct format."""
@@ -188,7 +204,7 @@ class TestImportPath:
 
         # Import and verify return format
         with WorkflowSession(temp_config) as translator:
-            result = translator.import_path(text_file)
+            result = _import_path(translator, text_file)
 
         # Verify keys and types
         assert isinstance(result, dict)
@@ -209,7 +225,7 @@ class TestImportPath:
             WorkflowSession(temp_config) as translator,
             pytest.raises(ValueError, match="Unknown document type: unknown"),
         ):
-            translator.import_path(text_file, document_type="unknown")
+            _import_path(translator, text_file, document_type="unknown")
 
     def test_direct_import_wrong_type_raises_error(self, tmp_path: Path, temp_config: Config):
         """Test that specifying wrong document_type raises error."""
@@ -222,4 +238,4 @@ class TestImportPath:
             WorkflowSession(temp_config) as translator,
             pytest.raises(ValueError, match="Path cannot be imported as pdf"),
         ):
-            translator.import_path(text_file, document_type="pdf")
+            _import_path(translator, text_file, document_type="pdf")

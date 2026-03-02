@@ -155,14 +155,9 @@ class ConfigEditorWidget(QWidget):
         self.translator_endpoint = self._create_endpoint_dropdown()
         self._translator_layout.addRow(self.tr("Endpoint Profile:"), self.translator_endpoint)
 
-        self.enable_polish_check = QCheckBox()
-        self.enable_polish_check.setChecked(True)
-        self.enable_polish_check.setToolTip(self.tr("Enable post-translation polishing pass"))
-        self._translator_layout.addRow(self.tr("Enable Polish:"), self.enable_polish_check)
-
         self.chunks_per_call_spin = QSpinBox()
         self.chunks_per_call_spin.setRange(1, 20)
-        self.chunks_per_call_spin.setValue(5)
+        self.chunks_per_call_spin.setValue(3)
         self.chunks_per_call_spin.setToolTip(self.tr("Number of chunks to translate per LLM call"))
         self._translator_layout.addRow(self.tr("Chunks per Call:"), self.chunks_per_call_spin)
 
@@ -199,7 +194,7 @@ class ConfigEditorWidget(QWidget):
 
         self.translator_batch_size_spin = QSpinBox()
         self.translator_batch_size_spin.setRange(1, 5000)
-        self.translator_batch_size_spin.setValue(500)
+        self.translator_batch_size_spin.setValue(100)
         self._translator_batch_layout.addRow(self.tr("Batch Size:"), self.translator_batch_size_spin)
 
         self.translator_batch_thinking_mode = QComboBox()
@@ -248,11 +243,6 @@ class ConfigEditorWidget(QWidget):
         self.strip_artifacts_check.setChecked(True)
         self.strip_artifacts_check.setToolTip(self.tr("Remove LLM artifacts from OCR output"))
         self._ocr_layout.addRow(self.tr("Strip Artifacts:"), self.strip_artifacts_check)
-
-        self.enable_reembedding_check = QCheckBox()
-        self.enable_reembedding_check.setChecked(False)
-        self.enable_reembedding_check.setToolTip(self.tr("Re-embed images in translated output"))
-        self._ocr_layout.addRow(self.tr("Enable Image Re-embedding:"), self.enable_reembedding_check)
 
         self._ocr_section.set_content(ocr_widget)
         layout.addWidget(self._ocr_section)
@@ -357,7 +347,6 @@ class ConfigEditorWidget(QWidget):
 
         # Translator form labels
         _set_label(self._translator_layout, self.translator_endpoint, self.tr("Endpoint Profile:"))
-        _set_label(self._translator_layout, self.enable_polish_check, self.tr("Enable Polish:"))
         _set_label(self._translator_layout, self.chunks_per_call_spin, self.tr("Chunks per Call:"))
         _set_label(self._translator_layout, self.chunk_size_spin, self.tr("Chunk Size:"))
 
@@ -382,7 +371,6 @@ class ConfigEditorWidget(QWidget):
         _set_label(self._ocr_layout, self.ocr_endpoint, self.tr("Endpoint Profile:"))
         _set_label(self._ocr_layout, self.ocr_dpi_spin, self.tr("OCR DPI:"))
         _set_label(self._ocr_layout, self.strip_artifacts_check, self.tr("Strip Artifacts:"))
-        _set_label(self._ocr_layout, self.enable_reembedding_check, self.tr("Enable Image Re-embedding:"))
 
         # Reembedding form labels
         _set_label(self._reembedding_layout, self.reembedding_backend_combo, self.tr("Backend:"))
@@ -487,11 +475,6 @@ class ConfigEditorWidget(QWidget):
         )
         self._set_field_tooltip(
             self._translator_layout,
-            self.enable_polish_check,
-            self.tr("Run an additional polishing pass after translation."),
-        )
-        self._set_field_tooltip(
-            self._translator_layout,
             self.chunks_per_call_spin,
             self.tr("Number of text chunks sent per translation request."),
         )
@@ -547,11 +530,6 @@ class ConfigEditorWidget(QWidget):
             self._ocr_layout,
             self.strip_artifacts_check,
             self.tr("Remove common LLM artifact patterns from OCR text."),
-        )
-        self._set_field_tooltip(
-            self._ocr_layout,
-            self.enable_reembedding_check,
-            self.tr("Enable writing translated text back into images."),
         )
 
         self._set_field_tooltip(
@@ -632,7 +610,8 @@ class ConfigEditorWidget(QWidget):
         if translator_endpoint:
             config["translator_config"] = {
                 "endpoint_profile": translator_endpoint,
-                "enable_polish": self.enable_polish_check.isChecked(),
+                # UI-level translation controls own polish behavior now.
+                "enable_polish": True,
                 "num_of_chunks_per_llm_call": self.chunks_per_call_spin.value(),
                 "chunk_size": self.chunk_size_spin.value(),
             }
@@ -661,12 +640,11 @@ class ConfigEditorWidget(QWidget):
                 "endpoint_profile": ocr_endpoint,
                 "ocr_dpi": self.ocr_dpi_spin.value(),
                 "strip_llm_artifacts": self.strip_artifacts_check.isChecked(),
-                "enable_image_reembedding": self.enable_reembedding_check.isChecked(),
             }
 
-        # Image reembedding config - save when enabled OR endpoint selected (preserves pre-config)
+        # Image reembedding config - save when endpoint is selected
         reembedding_endpoint = self._get_endpoint_name(self.reembedding_endpoint)
-        if self.enable_reembedding_check.isChecked() or reembedding_endpoint:
+        if reembedding_endpoint:
             config["image_reembedding_config"] = {
                 "endpoint_profile": reembedding_endpoint,
                 "backend": self.reembedding_backend_combo.currentData(),
@@ -716,8 +694,7 @@ class ConfigEditorWidget(QWidget):
         translator = config.get("translator_config", {})
         if translator:
             self._set_endpoint_dropdown(self.translator_endpoint, translator.get("endpoint_profile"))
-            self.enable_polish_check.setChecked(translator.get("enable_polish", True))
-            self.chunks_per_call_spin.setValue(translator.get("num_of_chunks_per_llm_call", 5))
+            self.chunks_per_call_spin.setValue(translator.get("num_of_chunks_per_llm_call", 3))
             self.chunk_size_spin.setValue(translator.get("chunk_size", 1000))
 
         translator_batch = config.get("translator_batch_config", {})
@@ -732,7 +709,7 @@ class ConfigEditorWidget(QWidget):
 
             self.translator_batch_api_key.setText(str(translator_batch.get("api_key") or ""))
             self.translator_batch_model.setText(str(translator_batch.get("model") or ""))
-            self.translator_batch_size_spin.setValue(int(translator_batch.get("batch_size", 500)))
+            self.translator_batch_size_spin.setValue(int(translator_batch.get("batch_size", 100)))
 
             thinking_value = str(translator_batch.get("thinking_mode") or "auto")
             for i in range(self.translator_batch_thinking_mode.count()):
@@ -751,7 +728,6 @@ class ConfigEditorWidget(QWidget):
             self._set_endpoint_dropdown(self.ocr_endpoint, ocr.get("endpoint_profile"))
             self.ocr_dpi_spin.setValue(ocr.get("ocr_dpi", 150))
             self.strip_artifacts_check.setChecked(ocr.get("strip_llm_artifacts", True))
-            self.enable_reembedding_check.setChecked(ocr.get("enable_image_reembedding", False))
 
         # Image reembedding config
         reembedding = config.get("image_reembedding_config", {})
@@ -786,9 +762,5 @@ class ConfigEditorWidget(QWidget):
                 return self.tr("Translator batch API key is required when provider is enabled.")
             if not self.translator_batch_model.text().strip():
                 return self.tr("Translator batch model is required when provider is enabled.")
-
-        # Validate image reembedding requires endpoint when enabled
-        if self.enable_reembedding_check.isChecked() and not self._get_endpoint_name(self.reembedding_endpoint):
-            return self.tr("Image reembedding is enabled but no endpoint profile is selected.")
 
         return None

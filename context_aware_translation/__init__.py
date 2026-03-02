@@ -6,6 +6,7 @@ import logging
 import logging.handlers
 import os
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -17,6 +18,26 @@ _logging_configured = False
 # Default log file location
 DEFAULT_LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB
 DEFAULT_LOG_BACKUP_COUNT = 50
+
+
+class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
+    """Rotating file handler that tolerates disappearing parent directories.
+
+    Book directories can be removed while background threads still emit logs.
+    In that case, silently drop file writes instead of surfacing noisy
+    logging tracebacks to users.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        parent = Path(self.baseFilename).parent
+        if not parent.exists():
+            return
+        try:
+            super().emit(record)
+        except (FileNotFoundError, OSError, ValueError):
+            # Runtime race: path removed, stream already closed, or rollover reopen failed.
+            # Keep console logging alive and avoid cascading logging exceptions.
+            return
 
 
 def configure_logging(config: "Config") -> None:
@@ -74,7 +95,7 @@ def configure_logging(config: "Config") -> None:
     # Create file handler with rotation
     try:
         log_file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.handlers.RotatingFileHandler(
+        file_handler = SafeRotatingFileHandler(
             filename=str(log_file_path),
             maxBytes=DEFAULT_LOG_MAX_BYTES,
             backupCount=DEFAULT_LOG_BACKUP_COUNT,

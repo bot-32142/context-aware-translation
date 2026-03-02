@@ -52,6 +52,8 @@ def _make_view():
     view.book_id = "test-book"
     view.book_manager = _make_book_manager()
     view.term_db = MagicMock()
+    view.document_repo = MagicMock()
+    view.document_repo.get_document_by_id.return_value = {"document_type": "text"}
     return view
 
 
@@ -110,6 +112,7 @@ def test_start_translation_text_only_submits_translation_text():
         document_ids=[1, 2],
         force=False,
         skip_context=False,
+        enable_polish=True,
     )
 
 
@@ -144,6 +147,7 @@ def test_start_translation_manga_only_submits_translation_manga():
         document_ids=[3],
         force=False,
         skip_context=False,
+        enable_polish=True,
     )
 
 
@@ -456,7 +460,12 @@ def test_submit_batch_task_submits_batch_translation():
     view._submit_batch_task()
 
     view._task_engine.submit.assert_called_once_with(
-        "batch_translation", "book-1", document_ids=[1], force=False, skip_context=False
+        "batch_translation",
+        "book-1",
+        document_ids=[1],
+        force=False,
+        skip_context=False,
+        enable_polish=True,
     )
 
 
@@ -499,8 +508,53 @@ def test_retranslate_chunk_submits_chunk_retranslation():
         chunk_id=7,
         document_id=2,
         skip_context=False,
+        enable_polish=True,
     )
     assert "cr-1" in view._pending_retranslations
+
+
+def test_retranslate_chunk_for_manga_submits_translation_manga():
+    """Manga chunk retranslate routes through translation_manga with force=True."""
+    from PySide6.QtWidgets import QMessageBox
+
+    view = _make_view()
+    view.book_id = "book-id"
+    view._task_engine.get_tasks.return_value = []
+    view.document_repo.get_document_by_id.return_value = {"document_type": "manga"}
+
+    chunk = MagicMock()
+    chunk.chunk_id = 7
+    chunk.document_id = 2
+    view._current_chunk = chunk
+    view.skip_context_cb = QCheckBox()
+    view.skip_context_cb.setChecked(False)
+    view.retranslate_chunk_btn = QPushButton()
+
+    preflight_ok = MagicMock()
+    preflight_ok.allowed = True
+    view._task_engine.preflight.return_value = preflight_ok
+
+    submitted = MagicMock()
+    submitted.task_id = "tm-rt-1"
+    submitted.status = STATUS_RUNNING
+    submitted.last_error = None
+    view._task_engine.submit_and_start.return_value = submitted
+
+    with patch(
+        "context_aware_translation.ui.views.translation_view.QMessageBox.question",
+        return_value=QMessageBox.StandardButton.Yes,
+    ):
+        view._retranslate_current_chunk()
+
+    view._task_engine.submit_and_start.assert_called_once_with(
+        "translation_manga",
+        "book-id",
+        document_ids=[2],
+        force=True,
+        skip_context=False,
+        enable_polish=True,
+    )
+    assert "tm-rt-1" in view._pending_retranslations
 
 
 def test_retranslate_chunk_allows_parallel_different_chunk_same_document():
@@ -546,6 +600,7 @@ def test_retranslate_chunk_allows_parallel_different_chunk_same_document():
         chunk_id=8,
         document_id=2,
         skip_context=False,
+        enable_polish=True,
     )
     assert "cr-1" in view._pending_retranslations
     assert "cr-2" in view._pending_retranslations
