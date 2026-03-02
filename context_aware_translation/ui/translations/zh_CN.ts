@@ -2141,70 +2141,70 @@ Output: %1</source>
     <name>GlossaryView</name>
     <message>
         <location filename="../views/glossary_view.py" line="127"/>
-        <location filename="../views/glossary_view.py" line="1374"/>
+        <location filename="../views/glossary_view.py" line="1344"/>
         <source>Search terms...</source>
         <translation>搜索术语...</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="133"/>
-        <location filename="../views/glossary_view.py" line="1376"/>
+        <location filename="../views/glossary_view.py" line="1346"/>
         <source>All</source>
         <translation>全部</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="134"/>
-        <location filename="../views/glossary_view.py" line="1377"/>
+        <location filename="../views/glossary_view.py" line="1347"/>
         <source>Unreviewed</source>
         <translation>未审核</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="135"/>
-        <location filename="../views/glossary_view.py" line="1378"/>
+        <location filename="../views/glossary_view.py" line="1348"/>
         <source>Ignored</source>
         <translation>已忽略</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="136"/>
-        <location filename="../views/glossary_view.py" line="1379"/>
+        <location filename="../views/glossary_view.py" line="1349"/>
         <source>Translated</source>
         <translation>已翻译</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="137"/>
-        <location filename="../views/glossary_view.py" line="1380"/>
+        <location filename="../views/glossary_view.py" line="1350"/>
         <source>Untranslated</source>
         <translation>未翻译</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="142"/>
-        <location filename="../views/glossary_view.py" line="1381"/>
+        <location filename="../views/glossary_view.py" line="1351"/>
         <source>Build until:</source>
         <translation>构建至：</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="145"/>
-        <location filename="../views/glossary_view.py" line="961"/>
+        <location filename="../views/glossary_view.py" line="931"/>
         <source>All Documents</source>
         <translation>所有文档</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="151"/>
-        <location filename="../views/glossary_view.py" line="851"/>
-        <location filename="../views/glossary_view.py" line="1382"/>
+        <location filename="../views/glossary_view.py" line="821"/>
+        <location filename="../views/glossary_view.py" line="1352"/>
         <source>Build Glossary</source>
         <translation>构建术语表</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="165"/>
-        <location filename="../views/glossary_view.py" line="915"/>
-        <location filename="../views/glossary_view.py" line="1383"/>
+        <location filename="../views/glossary_view.py" line="885"/>
+        <location filename="../views/glossary_view.py" line="1353"/>
         <source>Translate Untranslated</source>
         <translation>翻译未翻译项</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="170"/>
-        <location filename="../views/glossary_view.py" line="1004"/>
-        <location filename="../views/glossary_view.py" line="1384"/>
+        <location filename="../views/glossary_view.py" line="974"/>
+        <location filename="../views/glossary_view.py" line="1354"/>
         <source>Review Terms</source>
         <translation>审校术语</translation>
     </message>
@@ -2214,49 +2214,49 @@ Output: %1</source>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="175"/>
-        <location filename="../views/glossary_view.py" line="1385"/>
+        <location filename="../views/glossary_view.py" line="1355"/>
         <source>Filter Rare</source>
         <translation>过滤低频</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="180"/>
-        <location filename="../views/glossary_view.py" line="1387"/>
+        <location filename="../views/glossary_view.py" line="1357"/>
         <source>Bulk Actions</source>
         <translation>批量操作</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="181"/>
-        <location filename="../views/glossary_view.py" line="1388"/>
+        <location filename="../views/glossary_view.py" line="1358"/>
         <source>Mark Reviewed</source>
         <translation>标记为已审核</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="183"/>
-        <location filename="../views/glossary_view.py" line="1389"/>
+        <location filename="../views/glossary_view.py" line="1359"/>
         <source>Unmark Reviewed</source>
         <translation>取消审核标记</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="185"/>
-        <location filename="../views/glossary_view.py" line="1390"/>
+        <location filename="../views/glossary_view.py" line="1360"/>
         <source>Mark Ignored</source>
         <translation>标记为已忽略</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="186"/>
-        <location filename="../views/glossary_view.py" line="1391"/>
+        <location filename="../views/glossary_view.py" line="1361"/>
         <source>Unmark Ignored</source>
         <translation>取消忽略标记</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="187"/>
-        <location filename="../views/glossary_view.py" line="1392"/>
+        <location filename="../views/glossary_view.py" line="1362"/>
         <source>Delete Selected</source>
         <translation>删除所选</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="190"/>
-        <location filename="../views/glossary_view.py" line="1386"/>
+        <location filename="../views/glossary_view.py" line="1356"/>
         <source>Refresh</source>
         <translation>刷新</translation>
     </message>
@@ -2266,7 +2266,7 @@ Output: %1</source>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="445"/>
-        <location filename="../views/glossary_view.py" line="1365"/>
+        <location filename="../views/glossary_view.py" line="1335"/>
         <source>Automatically ignore terms that occurred only once or were recognized by the LLM in only one chunk.</source>
         <translation>自动忽略仅出现一次或仅在一个分块中被 LLM 识别的术语。</translation>
     </message>
@@ -2275,7 +2275,7 @@ Output: %1</source>
         <translation type="vanished">显示 %1 个术语 | 总计：%2 | 已审核：%3 | 已翻译：%4</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="727"/>
+        <location filename="../views/glossary_view.py" line="697"/>
         <source>Document %1 (%2)</source>
         <translation>文档 %1（%2）</translation>
     </message>
@@ -2284,7 +2284,7 @@ Output: %1</source>
         <translation type="vanished">直到文档 %1（含）的所有文档</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="845"/>
+        <location filename="../views/glossary_view.py" line="815"/>
         <source>all pending documents</source>
         <translation>所有待处理文档</translation>
     </message>
@@ -2293,7 +2293,7 @@ Output: %1</source>
         <translation type="vanished">这将从 %1 提取并翻译术语。是否继续？</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="832"/>
+        <location filename="../views/glossary_view.py" line="802"/>
         <source>OCR Not Complete</source>
         <translation>OCR未完成</translation>
     </message>
@@ -2310,7 +2310,7 @@ Building glossary without OCR may result in missing text.</source>
 不经过OCR直接构建术语表可能导致文本缺失。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="916"/>
+        <location filename="../views/glossary_view.py" line="886"/>
         <source>This will translate all untranslated terms.
 Ignored terms will be skipped.
 
@@ -2341,7 +2341,7 @@ Continue?</source>
         <translation type="vanished">未翻译的术语已成功翻译。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1005"/>
+        <location filename="../views/glossary_view.py" line="975"/>
         <source>This will review all unreviewed terms using LLM. Continue?</source>
         <translation>这将使用LLM审校所有未审核的术语。是否继续？</translation>
     </message>
@@ -2358,7 +2358,7 @@ Continue?</source>
         <translation type="vanished">术语已成功审校。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1045"/>
+        <location filename="../views/glossary_view.py" line="1015"/>
         <source>Operation Failed</source>
         <translation>操作失败</translation>
     </message>
@@ -2389,13 +2389,13 @@ Continue?</source>
 继续？</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1300"/>
+        <location filename="../views/glossary_view.py" line="1270"/>
         <source>Copy Description</source>
         <translation>复制描述</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="783"/>
-        <location filename="../views/glossary_view.py" line="1359"/>
+        <location filename="../views/glossary_view.py" line="753"/>
+        <location filename="../views/glossary_view.py" line="1329"/>
         <source>Build glossary terms from pending documents up to the selected document.</source>
         <translation>从待处理文档中构建术语，范围截至当前所选文档（含）。</translation>
     </message>
@@ -2464,13 +2464,13 @@ Continue?</source>
         <translation type="vanished">已用令牌：</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1361"/>
+        <location filename="../views/glossary_view.py" line="1331"/>
         <source>Translate all currently untranslated glossary terms.</source>
         <translation>翻译当前所有未翻译的术语。</translation>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="479"/>
-        <location filename="../views/glossary_view.py" line="1362"/>
+        <location filename="../views/glossary_view.py" line="1332"/>
         <source>Run an LLM review pass on unreviewed glossary terms.</source>
         <translation>对未审校术语运行一次LLM审校。</translation>
     </message>
@@ -2479,18 +2479,18 @@ Continue?</source>
         <translation type="vanished">自动忽略 %1 &gt; 40 的术语，以减少范围过宽、信号较弱的术语噪声。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1368"/>
+        <location filename="../views/glossary_view.py" line="1338"/>
         <source>Reload glossary table data and refresh statistics.</source>
         <translation>重新加载术语表数据并刷新统计信息。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="507"/>
-        <location filename="../views/glossary_view.py" line="1369"/>
+        <location filename="../views/glossary_view.py" line="500"/>
+        <location filename="../views/glossary_view.py" line="1339"/>
         <source>Export glossary terms to a JSON file.</source>
         <translation>将术语导出为 JSON 文件。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1370"/>
+        <location filename="../views/glossary_view.py" line="1340"/>
         <source>Import glossary terms from a JSON file and replace current glossary.</source>
         <translation>从 JSON 文件导入术语并替换当前术语表。</translation>
     </message>
@@ -2503,8 +2503,8 @@ Continue?</source>
         <translation type="vanished">第3步：在导入/OCR后构建术语表。审校或忽略噪声术语，再翻译剩余术语。干净的术语表可提升翻译一致性。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="717"/>
-        <location filename="../views/glossary_view.py" line="1046"/>
+        <location filename="../views/glossary_view.py" line="687"/>
+        <location filename="../views/glossary_view.py" line="1016"/>
         <source>An error occurred:
 
 %1</source>
@@ -2513,27 +2513,27 @@ Continue?</source>
 %1</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="736"/>
+        <location filename="../views/glossary_view.py" line="706"/>
         <source>Blocked: earlier OCR-required document(s) pending OCR: %1</source>
         <translation>已阻止：更早的需 OCR 文档仍有待 OCR：%1</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="818"/>
+        <location filename="../views/glossary_view.py" line="788"/>
         <source>No Pending Documents</source>
         <translation>无待处理文档</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="819"/>
+        <location filename="../views/glossary_view.py" line="789"/>
         <source>No documents are pending glossary build.</source>
         <translation>没有待构建术语表的文档。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="847"/>
+        <location filename="../views/glossary_view.py" line="817"/>
         <source>all pending documents up to and including document %1</source>
         <translation>截至并包含文档 %1 的所有待处理文档</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="835"/>
+        <location filename="../views/glossary_view.py" line="805"/>
         <source>Cannot build glossary yet because earlier OCR-required document(s) are still pending OCR: %1.
 
 Please complete OCR in import order before building later documents.</source>
@@ -2562,10 +2562,10 @@ Please complete OCR in import order before building later documents.</source>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="373"/>
-        <location filename="../views/glossary_view.py" line="637"/>
-        <location filename="../views/glossary_view.py" line="886"/>
-        <location filename="../views/glossary_view.py" line="938"/>
-        <location filename="../views/glossary_view.py" line="1027"/>
+        <location filename="../views/glossary_view.py" line="607"/>
+        <location filename="../views/glossary_view.py" line="856"/>
+        <location filename="../views/glossary_view.py" line="908"/>
+        <location filename="../views/glossary_view.py" line="997"/>
         <source>Unknown error</source>
         <translation>未知错误</translation>
     </message>
@@ -2615,67 +2615,76 @@ Please complete OCR in import order before building later documents.</source>
         <translation>审校不可用：%1</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="510"/>
         <source>Export glossary terms to a JSON file (skip context mode available; full context blocked).</source>
-        <translation>将术语表术语导出为 JSON 文件（可用跳过上下文模式；完整上下文被阻止）。</translation>
+        <translation type="vanished">将术语表术语导出为 JSON 文件（可用跳过上下文模式；完整上下文被阻止）。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="514"/>
         <source>Export glossary terms to a JSON file (full context available; skip context blocked).</source>
-        <translation>将术语表术语导出为 JSON 文件（可用完整上下文；跳过上下文被阻止）。</translation>
+        <translation type="vanished">将术语表术语导出为 JSON 文件（可用完整上下文；跳过上下文被阻止）。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="523"/>
+        <location filename="../views/glossary_view.py" line="504"/>
         <source>Export unavailable: %1</source>
         <translation>导出不可用：%1</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="609"/>
+        <location filename="../views/glossary_view.py" line="549"/>
+        <source>By default, this export will summarize glossary descriptions before writing the file.
+For large glossaries, this may take some time.
+
+Continue?</source>
+        <translation>默认情况下，导出前会先总结术语表描述。
+对于大型术语表，这可能需要一些时间。
+
+是否继续？</translation>
+    </message>
+    <message>
+        <location filename="../views/glossary_view.py" line="580"/>
         <source>Export Unavailable</source>
         <translation>导出不可用</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="611"/>
+        <location filename="../views/glossary_view.py" line="582"/>
         <source>Cannot start export: %1</source>
         <translation>无法启动导出：%1</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="612"/>
-        <location filename="../views/glossary_view.py" line="908"/>
-        <location filename="../views/glossary_view.py" line="997"/>
+        <location filename="../views/glossary_view.py" line="583"/>
+        <location filename="../views/glossary_view.py" line="878"/>
+        <location filename="../views/glossary_view.py" line="967"/>
         <source>unknown reason</source>
         <translation>未知原因</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="627"/>
-        <location filename="../views/glossary_view.py" line="876"/>
-        <location filename="../views/glossary_view.py" line="928"/>
-        <location filename="../views/glossary_view.py" line="1017"/>
+        <location filename="../views/glossary_view.py" line="597"/>
+        <location filename="../views/glossary_view.py" line="846"/>
+        <location filename="../views/glossary_view.py" line="898"/>
+        <location filename="../views/glossary_view.py" line="987"/>
         <source>Submit Failed</source>
         <translation>提交失败</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="634"/>
-        <location filename="../views/glossary_view.py" line="883"/>
-        <location filename="../views/glossary_view.py" line="935"/>
-        <location filename="../views/glossary_view.py" line="1024"/>
+        <location filename="../views/glossary_view.py" line="604"/>
+        <location filename="../views/glossary_view.py" line="853"/>
+        <location filename="../views/glossary_view.py" line="905"/>
+        <location filename="../views/glossary_view.py" line="994"/>
         <source>Start Failed</source>
         <translation>启动失败</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="636"/>
+        <location filename="../views/glossary_view.py" line="606"/>
         <source>Failed to start glossary export:
 %1</source>
         <translation>启动术语表导出失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="683"/>
+        <location filename="../views/glossary_view.py" line="653"/>
         <source>Import Unavailable</source>
         <translation>导入不可用</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="685"/>
+        <location filename="../views/glossary_view.py" line="655"/>
         <source>Cannot import glossary while glossary tasks are running.
 
 Please cancel or wait for running tasks to complete.</source>
@@ -2684,17 +2693,17 @@ Please cancel or wait for running tasks to complete.</source>
 请取消或等待运行中的任务完成。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="742"/>
+        <location filename="../views/glossary_view.py" line="712"/>
         <source>Task engine blocked: %1</source>
         <translation>任务引擎被阻止：%1</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="747"/>
+        <location filename="../views/glossary_view.py" line="717"/>
         <source>Submit error: %1</source>
         <translation>提交错误：%1</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="854"/>
+        <location filename="../views/glossary_view.py" line="824"/>
         <source>This will extract terms and build occurrence mapping from %1.
 It will not translate glossary terms; use &quot;Translate Untranslated&quot; afterwards.
 
@@ -2705,155 +2714,155 @@ Continue?</source>
 继续？</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="885"/>
+        <location filename="../views/glossary_view.py" line="855"/>
         <source>Failed to start glossary extraction:
 %1</source>
         <translation>启动术语提取失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="904"/>
+        <location filename="../views/glossary_view.py" line="874"/>
         <source>Translation Unavailable</source>
         <translation>翻译不可用</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="906"/>
+        <location filename="../views/glossary_view.py" line="876"/>
         <source>Cannot start translation: %1</source>
         <translation>无法启动翻译：%1</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="937"/>
+        <location filename="../views/glossary_view.py" line="907"/>
         <source>Failed to start glossary translation:
 %1</source>
         <translation>启动术语表翻译失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="993"/>
+        <location filename="../views/glossary_view.py" line="963"/>
         <source>Review Unavailable</source>
         <translation>审校不可用</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="995"/>
+        <location filename="../views/glossary_view.py" line="965"/>
         <source>Cannot start review: %1</source>
         <translation>无法启动审校：%1</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1026"/>
+        <location filename="../views/glossary_view.py" line="996"/>
         <source>Failed to start glossary review:
 %1</source>
         <translation>启动术语表审校失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1051"/>
+        <location filename="../views/glossary_view.py" line="1021"/>
         <source>Cancelling...</source>
         <translation>正在取消...</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1058"/>
+        <location filename="../views/glossary_view.py" line="1028"/>
         <source>Cancelled</source>
         <translation>已取消</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1058"/>
+        <location filename="../views/glossary_view.py" line="1028"/>
         <source>Operation cancelled.</source>
         <translation>操作已取消。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1098"/>
-        <location filename="../views/glossary_view.py" line="1117"/>
-        <location filename="../views/glossary_view.py" line="1136"/>
-        <location filename="../views/glossary_view.py" line="1155"/>
+        <location filename="../views/glossary_view.py" line="1068"/>
+        <location filename="../views/glossary_view.py" line="1087"/>
+        <location filename="../views/glossary_view.py" line="1106"/>
+        <location filename="../views/glossary_view.py" line="1125"/>
         <source>Action Unavailable</source>
         <translation>操作不可用</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1102"/>
-        <location filename="../views/glossary_view.py" line="1121"/>
-        <location filename="../views/glossary_view.py" line="1140"/>
-        <location filename="../views/glossary_view.py" line="1159"/>
-        <location filename="../views/glossary_view.py" line="1250"/>
+        <location filename="../views/glossary_view.py" line="1072"/>
+        <location filename="../views/glossary_view.py" line="1091"/>
+        <location filename="../views/glossary_view.py" line="1110"/>
+        <location filename="../views/glossary_view.py" line="1129"/>
+        <location filename="../views/glossary_view.py" line="1220"/>
         <source>No Selection</source>
         <translation>未选择</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1102"/>
+        <location filename="../views/glossary_view.py" line="1072"/>
         <source>Please select terms to mark as reviewed.</source>
         <translation>请选择要标记为已审核的术语。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1111"/>
-        <location filename="../views/glossary_view.py" line="1130"/>
-        <location filename="../views/glossary_view.py" line="1149"/>
-        <location filename="../views/glossary_view.py" line="1168"/>
-        <location filename="../views/glossary_view.py" line="1221"/>
-        <location filename="../views/glossary_view.py" line="1269"/>
+        <location filename="../views/glossary_view.py" line="1081"/>
+        <location filename="../views/glossary_view.py" line="1100"/>
+        <location filename="../views/glossary_view.py" line="1119"/>
+        <location filename="../views/glossary_view.py" line="1138"/>
+        <location filename="../views/glossary_view.py" line="1191"/>
+        <location filename="../views/glossary_view.py" line="1239"/>
         <source>Success</source>
         <translation>成功</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1112"/>
+        <location filename="../views/glossary_view.py" line="1082"/>
         <source>Marked %1 term(s) as reviewed.</source>
         <translation>已将 %1 个术语标记为已审核。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1121"/>
+        <location filename="../views/glossary_view.py" line="1091"/>
         <source>Please select terms to unmark as reviewed.</source>
         <translation>请选择要取消审核标记的术语。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1131"/>
+        <location filename="../views/glossary_view.py" line="1101"/>
         <source>Unmarked %1 term(s) as reviewed.</source>
         <translation>已取消 %1 个术语的审核标记。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1140"/>
+        <location filename="../views/glossary_view.py" line="1110"/>
         <source>Please select terms to mark as ignored.</source>
         <translation>请选择要标记为已忽略的术语。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1150"/>
+        <location filename="../views/glossary_view.py" line="1120"/>
         <source>Marked %1 term(s) as ignored.</source>
         <translation>已将 %1 个术语标记为已忽略。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1159"/>
+        <location filename="../views/glossary_view.py" line="1129"/>
         <source>Please select terms to unmark as ignored.</source>
         <translation>请选择要取消忽略标记的术语。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1169"/>
+        <location filename="../views/glossary_view.py" line="1139"/>
         <source>Unmarked %1 term(s) as ignored.</source>
         <translation>已取消 %1 个术语的忽略标记。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1174"/>
+        <location filename="../views/glossary_view.py" line="1144"/>
         <source>Occurrences</source>
         <translation>出现次数</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1178"/>
+        <location filename="../views/glossary_view.py" line="1148"/>
         <source>Votes</source>
         <translation>投票</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1185"/>
+        <location filename="../views/glossary_view.py" line="1155"/>
         <source>Filter Unavailable</source>
         <translation>筛选不可用</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1186"/>
+        <location filename="../views/glossary_view.py" line="1156"/>
         <source>Cannot filter rare terms while other glossary tasks are active.</source>
         <translation>其他术语表任务正在运行，无法筛选低频术语。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1246"/>
+        <location filename="../views/glossary_view.py" line="1216"/>
         <source>Delete Unavailable</source>
         <translation>删除不可用</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1401"/>
+        <location filename="../views/glossary_view.py" line="1371"/>
         <source>Glossary is optional: build it after OCR if you want auto-extracted terms, or import your own glossary.
 Review/ignore/translate glossary terms before main translation for best consistency.
 During translation, relevant terms are selected per chunk via normalized substring matching and sent alongside the source text. Each term includes its name, translation, and a summarized description to guide the translator for consistent output.</source>
@@ -2902,12 +2911,12 @@ Continue?</source>
         <translation type="vanished">已忽略 %1 个噪声术语（%2 &gt; %3）。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1191"/>
+        <location filename="../views/glossary_view.py" line="1161"/>
         <source>Filter Rare Terms</source>
         <translation>过滤低频术语</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1193"/>
+        <location filename="../views/glossary_view.py" line="1163"/>
         <source>This will mark terms as ignored when:
 
 - The term occurred only once across all chunks, OR
@@ -2928,37 +2937,37 @@ Continue?</source>
 继续？</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1210"/>
+        <location filename="../views/glossary_view.py" line="1180"/>
         <source>No Rare Terms Found</source>
         <translation>未找到低频术语</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1211"/>
+        <location filename="../views/glossary_view.py" line="1181"/>
         <source>No terms matched the rare-term criteria.</source>
         <translation>没有术语符合低频条件。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1222"/>
+        <location filename="../views/glossary_view.py" line="1192"/>
         <source>Ignored %1 rare term(s).</source>
         <translation>已忽略 %1 个低频术语。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1250"/>
+        <location filename="../views/glossary_view.py" line="1220"/>
         <source>Please select terms to delete.</source>
         <translation>请选择要删除的术语。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1255"/>
+        <location filename="../views/glossary_view.py" line="1225"/>
         <source>Confirm Delete</source>
         <translation>确认删除</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1256"/>
+        <location filename="../views/glossary_view.py" line="1226"/>
         <source>Are you sure you want to delete %1 term(s)?</source>
         <translation>确定要删除 %1 个术语吗？</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1270"/>
+        <location filename="../views/glossary_view.py" line="1240"/>
         <source>Deleted %1 term(s).</source>
         <translation>已删除 %1 个术语。</translation>
     </message>
@@ -2984,15 +2993,15 @@ Continue?</source>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="195"/>
-        <location filename="../views/glossary_view.py" line="566"/>
-        <location filename="../views/glossary_view.py" line="589"/>
-        <location filename="../views/glossary_view.py" line="1393"/>
+        <location filename="../views/glossary_view.py" line="546"/>
+        <location filename="../views/glossary_view.py" line="561"/>
+        <location filename="../views/glossary_view.py" line="1363"/>
         <source>Export Glossary</source>
         <translation>导出术语表</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="591"/>
-        <location filename="../views/glossary_view.py" line="649"/>
+        <location filename="../views/glossary_view.py" line="563"/>
+        <location filename="../views/glossary_view.py" line="619"/>
         <source>JSON Files (*.json)</source>
         <translation>JSON文件 (*.json)</translation>
     </message>
@@ -3015,9 +3024,9 @@ Continue?</source>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="200"/>
-        <location filename="../views/glossary_view.py" line="647"/>
-        <location filename="../views/glossary_view.py" line="655"/>
-        <location filename="../views/glossary_view.py" line="1394"/>
+        <location filename="../views/glossary_view.py" line="617"/>
+        <location filename="../views/glossary_view.py" line="625"/>
+        <location filename="../views/glossary_view.py" line="1364"/>
         <source>Import Glossary</source>
         <translation>导入术语表</translation>
     </message>
@@ -3032,14 +3041,13 @@ Continue?</source>
         <translation>显示 %1 个术语 | 总计：%2 | 未忽略：%3 | 未忽略且已审核：%4 | 已审核：%5 | 已翻译：%6</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="569"/>
         <source>By default, this export will summarize glossary descriptions before writing the file.
 For large glossaries, this may take some time.
 
 Enable &quot;Skip context&quot; below to use only the first description per term.
 
 Continue?</source>
-        <translation>默认情况下，此导出将在写入文件前对术语表描述进行摘要。
+        <translation type="vanished">默认情况下，此导出将在写入文件前对术语表描述进行摘要。
 对于大型术语表，这可能需要一些时间。
 
 启用下方的&quot;跳过上下文&quot;可仅使用每个术语的首条描述。
@@ -3047,12 +3055,11 @@ Continue?</source>
 继续？</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="578"/>
         <source>Skip context (use first description only)</source>
-        <translation>跳过上下文（仅使用首条描述）</translation>
+        <translation type="vanished">跳过上下文（仅使用首条描述）</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="658"/>
+        <location filename="../views/glossary_view.py" line="628"/>
         <source>This will REPLACE all existing glossary terms with the imported data.
 
 This action cannot be undone. Continue?</source>
@@ -3061,22 +3068,22 @@ This action cannot be undone. Continue?</source>
 此操作无法撤销。是否继续？</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="665"/>
+        <location filename="../views/glossary_view.py" line="635"/>
         <source>Include translations</source>
         <translation>包含翻译</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="710"/>
+        <location filename="../views/glossary_view.py" line="680"/>
         <source>Import Complete</source>
         <translation>导入完成</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="711"/>
+        <location filename="../views/glossary_view.py" line="681"/>
         <source>Imported %1 term(s).</source>
         <translation>已导入 %1 个术语。</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="716"/>
+        <location filename="../views/glossary_view.py" line="686"/>
         <source>Import Failed</source>
         <translation>导入失败</translation>
     </message>
@@ -5540,44 +5547,42 @@ Do you want to continue?</source>
     </message>
     <message>
         <location filename="../views/translation_view.py" line="127"/>
-        <location filename="../views/translation_view.py" line="209"/>
-        <location filename="../views/translation_view.py" line="1575"/>
-        <location filename="../views/translation_view.py" line="1587"/>
+        <location filename="../views/translation_view.py" line="204"/>
+        <location filename="../views/translation_view.py" line="1549"/>
+        <location filename="../views/translation_view.py" line="1560"/>
         <source>Document:</source>
         <translation>文档：</translation>
     </message>
     <message>
         <location filename="../views/translation_view.py" line="130"/>
-        <location filename="../views/translation_view.py" line="212"/>
-        <location filename="../views/translation_view.py" line="651"/>
-        <location filename="../views/translation_view.py" line="1082"/>
+        <location filename="../views/translation_view.py" line="207"/>
+        <location filename="../views/translation_view.py" line="639"/>
+        <location filename="../views/translation_view.py" line="1063"/>
         <source>All Documents</source>
         <translation>所有文档</translation>
     </message>
     <message>
         <location filename="../views/translation_view.py" line="143"/>
-        <location filename="../views/translation_view.py" line="376"/>
-        <location filename="../views/translation_view.py" line="388"/>
-        <location filename="../views/translation_view.py" line="403"/>
-        <location filename="../views/translation_view.py" line="448"/>
+        <location filename="../views/translation_view.py" line="369"/>
+        <location filename="../views/translation_view.py" line="381"/>
+        <location filename="../views/translation_view.py" line="396"/>
+        <location filename="../views/translation_view.py" line="439"/>
         <source>Start Translation</source>
         <translation>开始翻译</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="148"/>
-        <location filename="../views/translation_view.py" line="1577"/>
         <source>Skip context (use first description only)</source>
-        <translation>跳过上下文（仅使用首条描述）</translation>
+        <translation type="vanished">跳过上下文（仅使用首条描述）</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="158"/>
-        <location filename="../views/translation_view.py" line="1580"/>
+        <location filename="../views/translation_view.py" line="153"/>
+        <location filename="../views/translation_view.py" line="1553"/>
         <source>Async Batch Tasks</source>
         <translation>异步批量任务</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="163"/>
-        <location filename="../views/translation_view.py" line="1581"/>
+        <location filename="../views/translation_view.py" line="158"/>
+        <location filename="../views/translation_view.py" line="1554"/>
         <source>Submit Batch Task</source>
         <translation>提交批量任务</translation>
     </message>
@@ -5598,121 +5603,121 @@ Do you want to continue?</source>
         <translation type="vanished">删除选中的任务</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="188"/>
-        <location filename="../views/translation_view.py" line="1576"/>
+        <location filename="../views/translation_view.py" line="183"/>
+        <location filename="../views/translation_view.py" line="1550"/>
         <source>Review Translations</source>
         <translation>审阅翻译</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="203"/>
-        <location filename="../views/translation_view.py" line="1586"/>
+        <location filename="../views/translation_view.py" line="198"/>
+        <location filename="../views/translation_view.py" line="1559"/>
         <source>Back to Progress</source>
         <translation>返回进度</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="248"/>
-        <location filename="../views/translation_view.py" line="1590"/>
+        <location filename="../views/translation_view.py" line="243"/>
+        <location filename="../views/translation_view.py" line="1563"/>
         <source>Chunks:</source>
         <translation>文本块：</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="263"/>
-        <location filename="../views/translation_view.py" line="1591"/>
+        <location filename="../views/translation_view.py" line="258"/>
+        <location filename="../views/translation_view.py" line="1564"/>
         <source>Original:</source>
         <translation>原文：</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="273"/>
-        <location filename="../views/translation_view.py" line="1592"/>
+        <location filename="../views/translation_view.py" line="268"/>
+        <location filename="../views/translation_view.py" line="1565"/>
         <source>Translation:</source>
         <translation>翻译：</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="280"/>
-        <location filename="../views/translation_view.py" line="1593"/>
+        <location filename="../views/translation_view.py" line="275"/>
+        <location filename="../views/translation_view.py" line="1566"/>
         <source>Find...</source>
         <translation>查找...</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="282"/>
-        <location filename="../views/translation_view.py" line="1594"/>
+        <location filename="../views/translation_view.py" line="277"/>
+        <location filename="../views/translation_view.py" line="1567"/>
         <source>Replace with...</source>
         <translation>替换为...</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="283"/>
-        <location filename="../views/translation_view.py" line="1595"/>
+        <location filename="../views/translation_view.py" line="278"/>
+        <location filename="../views/translation_view.py" line="1568"/>
         <source>Find Next</source>
         <translation>查找下一个</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="284"/>
-        <location filename="../views/translation_view.py" line="1596"/>
+        <location filename="../views/translation_view.py" line="279"/>
+        <location filename="../views/translation_view.py" line="1569"/>
         <source>Replace</source>
         <translation>替换</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="285"/>
-        <location filename="../views/translation_view.py" line="1597"/>
+        <location filename="../views/translation_view.py" line="280"/>
+        <location filename="../views/translation_view.py" line="1570"/>
         <source>Replace All</source>
         <translation>全部替换</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="306"/>
-        <location filename="../views/translation_view.py" line="1598"/>
+        <location filename="../views/translation_view.py" line="301"/>
+        <location filename="../views/translation_view.py" line="1571"/>
         <source>Save Changes</source>
         <translation>保存更改</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="318"/>
-        <location filename="../views/translation_view.py" line="1600"/>
+        <location filename="../views/translation_view.py" line="313"/>
+        <location filename="../views/translation_view.py" line="1573"/>
         <source>Previous</source>
         <translation>上一个</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="320"/>
-        <location filename="../views/translation_view.py" line="1601"/>
+        <location filename="../views/translation_view.py" line="315"/>
+        <location filename="../views/translation_view.py" line="1574"/>
         <source>Next</source>
         <translation>下一个</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="352"/>
+        <location filename="../views/translation_view.py" line="347"/>
         <source>Document %1 (%2) [OCR pending]</source>
         <translation>文档 %1（%2）[OCR待处理]</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="391"/>
-        <location filename="../views/translation_view.py" line="395"/>
+        <location filename="../views/translation_view.py" line="384"/>
+        <location filename="../views/translation_view.py" line="388"/>
         <source>Selected document(s) already have task history; delete overlapping task(s) to unblock.</source>
         <translation>所选文档已有任务记录；请删除重叠的任务以解除阻止。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="407"/>
+        <location filename="../views/translation_view.py" line="400"/>
         <source>OCR is pending for document(s): %1. Complete OCR first.</source>
         <translation>以下文档OCR待处理：%1。请先完成OCR。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="536"/>
+        <location filename="../views/translation_view.py" line="524"/>
         <source>Retranslate is unavailable due to active task constraints.</source>
         <translation>由于活动任务约束，无法重新翻译。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="562"/>
+        <location filename="../views/translation_view.py" line="550"/>
         <source>Chunk ID is missing.</source>
         <translation>缺少分块ID。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="566"/>
+        <location filename="../views/translation_view.py" line="554"/>
         <source>Retranslate is unavailable while the selected chunk has an active retranslation.</source>
         <translation>所选分块正在重新翻译，当前无法重新翻译。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1198"/>
+        <location filename="../views/translation_view.py" line="1179"/>
         <source>Save Unavailable</source>
         <translation>保存不可用</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1199"/>
+        <location filename="../views/translation_view.py" line="1180"/>
         <source>Cannot save while tasks are actively modifying this document.</source>
         <translation>任务正在修改此文档，无法保存。</translation>
     </message>
@@ -5725,78 +5730,78 @@ Do you want to continue?</source>
         <translation type="vanished">批量任务覆盖了此文档，重新翻译不可用。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="779"/>
+        <location filename="../views/translation_view.py" line="767"/>
         <source>Retranslate is unavailable while async batch tasks are active for this book.</source>
         <translation>本书有异步批量任务正在运行，无法重新翻译。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="838"/>
+        <location filename="../views/translation_view.py" line="825"/>
         <source>No Documents</source>
         <translation>无文档</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="838"/>
+        <location filename="../views/translation_view.py" line="825"/>
         <source>No translatable documents found.</source>
         <translation>未找到可翻译的文档。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="857"/>
+        <location filename="../views/translation_view.py" line="843"/>
         <source>Cannot Start</source>
         <translation>无法启动</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="890"/>
-        <location filename="../views/translation_view.py" line="1063"/>
+        <location filename="../views/translation_view.py" line="873"/>
+        <location filename="../views/translation_view.py" line="1044"/>
         <source>Submit Failed</source>
         <translation>提交失败</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="891"/>
+        <location filename="../views/translation_view.py" line="874"/>
         <source>Failed to submit translation task:
 %1</source>
         <translation>提交翻译任务失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="897"/>
-        <location filename="../views/translation_view.py" line="919"/>
+        <location filename="../views/translation_view.py" line="880"/>
+        <location filename="../views/translation_view.py" line="901"/>
         <source>Partial Start</source>
         <translation>部分启动</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="898"/>
+        <location filename="../views/translation_view.py" line="881"/>
         <source>First task started but second submit failed:
 %1</source>
         <translation>第一个任务已启动，但第二个提交失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="910"/>
+        <location filename="../views/translation_view.py" line="892"/>
         <source>Start Failed</source>
         <translation>启动失败</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="912"/>
+        <location filename="../views/translation_view.py" line="894"/>
         <source>Failed to start translation task:
 %1</source>
         <translation>启动翻译任务失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="913"/>
-        <location filename="../views/translation_view.py" line="922"/>
+        <location filename="../views/translation_view.py" line="895"/>
+        <location filename="../views/translation_view.py" line="904"/>
         <source>Unknown error</source>
         <translation>未知错误</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="921"/>
+        <location filename="../views/translation_view.py" line="903"/>
         <source>First task started but second task failed:
 %1</source>
         <translation>第一个任务已启动，但第二个任务失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1064"/>
+        <location filename="../views/translation_view.py" line="1045"/>
         <source>Failed to submit batch task:
 %1</source>
         <translation>提交批量任务失败：
@@ -5807,7 +5812,7 @@ Do you want to continue?</source>
         <translation type="vanished">所选文档有正在进行的操作，重新翻译暂不可用。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="778"/>
+        <location filename="../views/translation_view.py" line="766"/>
         <source>Batch Task Running</source>
         <translation>批量任务运行中</translation>
     </message>
@@ -5816,12 +5821,12 @@ Do you want to continue?</source>
         <translation type="vanished">批量任务操作正在运行，请等待完成。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="732"/>
+        <location filename="../views/translation_view.py" line="720"/>
         <source>OCR Not Complete</source>
         <translation>OCR未完成</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="726"/>
+        <location filename="../views/translation_view.py" line="714"/>
         <source>Cannot translate yet. Documents with pending OCR in the selected stack: %1.
 
 Please complete OCR from the OCR Review tab first.</source>
@@ -5842,7 +5847,7 @@ Please complete OCR from the OCR Review tab first.</source>
         <translation type="vanished">正在暂停...</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="721"/>
+        <location filename="../views/translation_view.py" line="709"/>
         <source>Cannot submit batch task yet. Documents with pending OCR in the selected stack: %1.
 
 Please complete OCR from the OCR Review tab first.</source>
@@ -5857,7 +5862,7 @@ Please complete OCR from the OCR Review tab first.</source>
         </translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="752"/>
+        <location filename="../views/translation_view.py" line="740"/>
         <source>Not Supported</source>
         <translation>不支持</translation>
     </message>
@@ -5866,17 +5871,17 @@ Please complete OCR from the OCR Review tab first.</source>
         <translation type="vanished">漫画文档不支持异步批量任务。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="760"/>
+        <location filename="../views/translation_view.py" line="748"/>
         <source>translator_batch_config is required to submit async batch tasks.</source>
         <translation>提交异步批量任务需要配置 translator_batch_config。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="810"/>
+        <location filename="../views/translation_view.py" line="798"/>
         <source>Documents Reserved</source>
         <translation>文档已被占用</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="812"/>
+        <location filename="../views/translation_view.py" line="800"/>
         <source>Selected document(s) have active operations or existing batch task history. Delete overlapping task(s) to unblock.</source>
         <translation>所选文档有正在进行的操作或现有的批量任务记录。请删除重叠的任务以解除阻止。</translation>
     </message>
@@ -5959,23 +5964,23 @@ Please complete OCR from the OCR Review tab first.</source>
         <translation type="vanished">批量任务操作已暂停。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1252"/>
+        <location filename="../views/translation_view.py" line="1233"/>
         <source>Error</source>
         <translation>错误</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="560"/>
-        <location filename="../views/translation_view.py" line="1252"/>
+        <location filename="../views/translation_view.py" line="548"/>
+        <location filename="../views/translation_view.py" line="1233"/>
         <source>Chunk has no associated document.</source>
         <translation>该分块没有关联的文档。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1280"/>
+        <location filename="../views/translation_view.py" line="1261"/>
         <source>Retranslate Chunk</source>
         <translation>重新翻译分块</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1275"/>
+        <location filename="../views/translation_view.py" line="1256"/>
         <source>This will retranslate chunk #%1 using the LLM.
 LLM API costs will be incurred.
 
@@ -5986,24 +5991,24 @@ Continue?</source>
 是否继续？</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="153"/>
-        <location filename="../views/translation_view.py" line="1579"/>
+        <location filename="../views/translation_view.py" line="148"/>
+        <location filename="../views/translation_view.py" line="1552"/>
         <source>Enable polish pass</source>
         <translation>启用润色阶段</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="575"/>
-        <location filename="../views/translation_view.py" line="1288"/>
+        <location filename="../views/translation_view.py" line="563"/>
+        <location filename="../views/translation_view.py" line="1269"/>
         <source>Retranslating...</source>
         <translation>正在重新翻译...</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1263"/>
+        <location filename="../views/translation_view.py" line="1244"/>
         <source>Retranslate Unavailable</source>
         <translation>重新翻译不可用</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1271"/>
+        <location filename="../views/translation_view.py" line="1252"/>
         <source>This will retranslate all chunks in manga document #%1 using the manga translator.
 LLM API costs will be incurred.
 
@@ -6014,34 +6019,33 @@ Continue?</source>
 是否继续？</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1345"/>
+        <location filename="../views/translation_view.py" line="1324"/>
         <source>Retranslation Error</source>
         <translation>重新翻译错误</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1346"/>
+        <location filename="../views/translation_view.py" line="1325"/>
         <source>Failed to retranslate chunk:
 %1</source>
         <translation>重新翻译分块失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1552"/>
+        <location filename="../views/translation_view.py" line="1531"/>
         <source>Start translation for selected documents. If already translated, this will retranslate.</source>
         <translation>开始翻译所选文档；若已翻译，将执行重新翻译。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1556"/>
         <source>Use only the earliest glossary description for each term instead of chunk-positioned context summaries.</source>
-        <translation>仅使用每个术语最早的描述，而非基于分块位置的上下文摘要。</translation>
+        <translation type="vanished">仅使用每个术语最早的描述，而非基于分块位置的上下文摘要。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1560"/>
+        <location filename="../views/translation_view.py" line="1534"/>
         <source>Run an additional polish pass after translation.</source>
         <translation>在翻译后额外执行一次润色阶段。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1562"/>
+        <location filename="../views/translation_view.py" line="1536"/>
         <source>Create and run an async batch translation task.</source>
         <translation>创建并运行异步批量翻译任务。</translation>
     </message>
@@ -6058,8 +6062,8 @@ Continue?</source>
         <translation type="vanished">请求取消所选的异步任务和服务端批量作业。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="572"/>
-        <location filename="../views/translation_view.py" line="1567"/>
+        <location filename="../views/translation_view.py" line="560"/>
+        <location filename="../views/translation_view.py" line="1541"/>
         <source>Retranslate the selected chunk using the LLM (incurs API cost).</source>
         <translation>使用 LLM 重新翻译所选分块（会产生 API 费用）。</translation>
     </message>
@@ -6072,7 +6076,7 @@ Continue?</source>
         <translation type="vanished">从本地历史中删除选中的异步任务。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1609"/>
+        <location filename="../views/translation_view.py" line="1582"/>
         <source>Translate selected documents directly (glossary extraction is optional, but glossary terms are always used).
 For OCR-required document types, complete OCR first. Keep original line count when editing text chunks.</source>
         <translation>直接翻译选中的文档（术语表提取为可选，但术语表术语始终会被使用）。
@@ -6215,27 +6219,27 @@ This action cannot be undone. Continue?</source>
         <translation type="vanished">导入失败</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1563"/>
+        <location filename="../views/translation_view.py" line="1537"/>
         <source>Open review mode to inspect and edit translated chunks.</source>
         <translation>打开审阅模式以检查并编辑已翻译分块。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1564"/>
+        <location filename="../views/translation_view.py" line="1538"/>
         <source>Return to progress mode and translation controls.</source>
         <translation>返回进度模式和翻译控制界面。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1565"/>
+        <location filename="../views/translation_view.py" line="1539"/>
         <source>Save edits for the currently selected chunk translation.</source>
         <translation>保存当前所选分块翻译的编辑。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1569"/>
+        <location filename="../views/translation_view.py" line="1543"/>
         <source>Go to the previous chunk in the review list.</source>
         <translation>跳转到审阅列表中的上一个分块。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1570"/>
+        <location filename="../views/translation_view.py" line="1544"/>
         <source>Go to the next chunk in the review list.</source>
         <translation>跳转到审阅列表中的下一个分块。</translation>
     </message>
@@ -6260,26 +6264,26 @@ This action cannot be undone. Continue?</source>
         <translation type="vanished">保存</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="354"/>
+        <location filename="../views/translation_view.py" line="349"/>
         <source>Document %1 (%2) [Translated]</source>
         <translation>文档 %1（%2）[已翻译]</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="356"/>
+        <location filename="../views/translation_view.py" line="351"/>
         <source>Document %1 (%2) [%3/%4 translated]</source>
         <translation>文档 %1（%2）[%3/%4 已翻译]</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="358"/>
-        <location filename="../views/translation_view.py" line="1073"/>
+        <location filename="../views/translation_view.py" line="353"/>
+        <location filename="../views/translation_view.py" line="1054"/>
         <source>Document %1 (%2)</source>
         <translation>文档 %1（%2）</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="310"/>
-        <location filename="../views/translation_view.py" line="445"/>
-        <location filename="../views/translation_view.py" line="577"/>
-        <location filename="../views/translation_view.py" line="1599"/>
+        <location filename="../views/translation_view.py" line="305"/>
+        <location filename="../views/translation_view.py" line="436"/>
+        <location filename="../views/translation_view.py" line="565"/>
+        <location filename="../views/translation_view.py" line="1572"/>
         <source>Retranslate</source>
         <translation>重新翻译</translation>
     </message>
@@ -6288,28 +6292,28 @@ This action cannot be undone. Continue?</source>
         <translation type="vanished">同步翻译任务</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="697"/>
+        <location filename="../views/translation_view.py" line="685"/>
         <source>Chunks: %1 translated / %2 total (%3%)</source>
         <translation>文本块：%1 已翻译 / 共 %2 个（%3%）</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="759"/>
-        <location filename="../views/translation_view.py" line="766"/>
+        <location filename="../views/translation_view.py" line="747"/>
+        <location filename="../views/translation_view.py" line="754"/>
         <source>Configuration Required</source>
         <translation>需要配置</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="768"/>
+        <location filename="../views/translation_view.py" line="756"/>
         <source>manga_translator_config is required to translate manga documents. Please configure it in your book settings.</source>
         <translation>翻译漫画文档需要 manga_translator_config。请在书籍设置中进行配置。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="785"/>
+        <location filename="../views/translation_view.py" line="773"/>
         <source>Retranslate Document</source>
         <translation>重新翻译文档</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="787"/>
+        <location filename="../views/translation_view.py" line="775"/>
         <source>This will retranslate all chunks in the selected document(s). Existing translations will be overwritten and LLM API costs will be incurred.
 
 Are you sure you want to continue?</source>
@@ -6322,29 +6326,29 @@ Are you sure you want to continue?</source>
         <translation type="vanished">正在取消翻译...</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="937"/>
+        <location filename="../views/translation_view.py" line="919"/>
         <source>Translation completed successfully!</source>
         <translation>翻译成功完成！</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="946"/>
+        <location filename="../views/translation_view.py" line="928"/>
         <source>Translation failed: %1</source>
         <translation>翻译失败：%1</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="952"/>
+        <location filename="../views/translation_view.py" line="934"/>
         <source>Translation Error</source>
         <translation>翻译错误</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="953"/>
+        <location filename="../views/translation_view.py" line="935"/>
         <source>Failed to translate chunks:
 %1</source>
         <translation>翻译文本块失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="958"/>
+        <location filename="../views/translation_view.py" line="940"/>
         <source>Translation cancelled.</source>
         <translation>翻译已取消。</translation>
     </message>
@@ -6357,12 +6361,12 @@ Are you sure you want to continue?</source>
         <translation type="vanished">批量任务因临时错误已暂停。请重新运行所选任务。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1210"/>
+        <location filename="../views/translation_view.py" line="1191"/>
         <source>Line Count Mismatch</source>
         <translation>行数不匹配</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1213"/>
+        <location filename="../views/translation_view.py" line="1194"/>
         <source>Cannot save: translation has %1 lines but original has %2 lines.
 
 The number of lines must remain the same.</source>
@@ -6371,12 +6375,12 @@ The number of lines must remain the same.</source>
 行数必须保持一致。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1243"/>
+        <location filename="../views/translation_view.py" line="1224"/>
         <source>Saved</source>
         <translation>已保存</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1243"/>
+        <location filename="../views/translation_view.py" line="1224"/>
         <source>Translation saved successfully!</source>
         <translation>翻译保存成功！</translation>
     </message>

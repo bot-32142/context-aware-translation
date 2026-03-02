@@ -124,7 +124,6 @@ class DocumentTypeHandler(Protocol):
         document_ids: list[int],
         manager: TranslationContextManager,
         force: bool = False,
-        skip_context: bool = False,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> None:

@@ -339,10 +339,8 @@ async def ensure_payload_prepared(
     await _prepare_llm_prerequisites(service.workflow, preflight_document_ids, cancel_check=cancel_check)
     service.raise_if_local_pause(task.task_id, cancel_check)
 
-    skip_context = service._get_skip_context(task)
-    if not skip_context:
-        _check_cancel(service.workflow, cancel_check)
-        service.workflow.manager.build_context_tree(cancel_check=cancel_check)
+    _check_cancel(service.workflow, cancel_check)
+    service.workflow.manager.build_context_tree(cancel_check=cancel_check)
 
     translator_config = service.translator_config()
     batch_config = service.batch_config()
@@ -354,16 +352,15 @@ async def ensure_payload_prepared(
     if not source_language:
         raise ValueError("Source language not found in database.")
 
-    max_tokens_per_batch = int(getattr(translator_config, "max_tokens_per_llm_call", 5000) or 5000)
+    max_tokens_per_batch = int(getattr(translator_config, "max_tokens_per_llm_call", 4000) or 4000)
     if max_tokens_per_batch <= 0:
-        max_tokens_per_batch = 5000
+        max_tokens_per_batch = 4000
 
     inputs = service.workflow.manager.collect_chunk_translation_inputs(
         batch_size=0,
         max_tokens_per_batch=max_tokens_per_batch,
         document_ids=document_ids,
         force=service._get_force(task),
-        skip_context=skip_context,
         cancel_check=cancel_check,
         source_language=source_language,
     )
@@ -383,7 +380,6 @@ async def ensure_payload_prepared(
         batch_texts, batch_terms = service.workflow.manager.build_batch_request_payload(
             batch,
             inputs.all_terms,
-            skip_context=skip_context,
         )
         prepared = prepare_chunk_translation(
             batch_texts,

@@ -588,11 +588,6 @@ class BatchTranslationExecutor:
         payload = self._decode_payload(task)
         return bool(payload.get("force", False))
 
-    def _get_skip_context(self, task: TaskRecord) -> bool:
-        """Extract the 'skip_context' flag from task payload_json."""
-        payload = self._decode_payload(task)
-        return bool(payload.get("skip_context", False))
-
     def _decode_payload(self, task: TaskRecord) -> dict[str, Any]:
         return decode_task_payload(task)
 

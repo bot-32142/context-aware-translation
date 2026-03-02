@@ -431,6 +431,41 @@ class ContextTree:
             nodes = self._tile_context_nodes_locked(term, query_index)
             return [node.content for node in nodes]
 
+    def get_longest_context_summary(self, term: str, query_index: int) -> str:
+        """Return the longest non-empty summary content available before query_index."""
+        with self.lock:
+            while not self._initialization_complete:
+                self._init_condition.wait()
+
+            term_nodes = self.store.get(term)
+            if not term_nodes:
+                return ""
+
+            best_content = ""
+            best_len = -1
+            best_span = -1
+            best_layer = -1
+            for nodes in term_nodes.values():
+                for node in nodes:
+                    if node.end > query_index:
+                        continue
+                    content = node.content.strip()
+                    if not content:
+                        continue
+                    content_len = len(content)
+                    span = node.length
+                    # Deterministic tie-breakers: prefer longer span, then higher layer.
+                    if (
+                        content_len > best_len
+                        or (content_len == best_len and span > best_span)
+                        or (content_len == best_len and span == best_span and node.layer > best_layer)
+                    ):
+                        best_content = content
+                        best_len = content_len
+                        best_span = span
+                        best_layer = node.layer
+            return best_content
+
     def summarize_term_fully(
         self,
         term: str,

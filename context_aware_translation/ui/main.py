@@ -35,9 +35,7 @@ def main() -> None:
             QMessageBox.critical(
                 None,
                 "Startup Error",
-                "Context-Aware Translation failed to start.\n\n"
-                "Please send this traceback to support:\n\n"
-                f"{detail}",
+                f"Context-Aware Translation failed to start.\n\nPlease send this traceback to support:\n\n{detail}",
             )
         finally:
             raise

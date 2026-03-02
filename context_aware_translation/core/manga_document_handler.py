@@ -80,7 +80,6 @@ class MangaDocumentHandler:
         document_ids: list[int],
         manager: TranslationContextManager,
         force: bool = False,
-        skip_context: bool = False,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> None:
@@ -176,7 +175,7 @@ class MangaDocumentHandler:
                                 (
                                     t.key,
                                     t.translated_name or "",
-                                    manager.get_term_description_for_query(t, max_chunk_id, skip_context=skip_context),
+                                    manager.get_term_description_for_query(t, max_chunk_id),
                                 )
                                 for t in all_terms
                                 if any(t.key in text for text in batch_texts)

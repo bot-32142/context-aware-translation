@@ -156,7 +156,7 @@ class ConfigEditorWidget(QWidget):
 
         self.max_tokens_per_call_spin = QSpinBox()
         self.max_tokens_per_call_spin.setRange(100, 100000)
-        self.max_tokens_per_call_spin.setValue(5000)
+        self.max_tokens_per_call_spin.setValue(4000)
         self.max_tokens_per_call_spin.setToolTip(self.tr("Maximum estimated request tokens per translation call"))
         self._translator_layout.addRow(self.tr("Max Tokens per Call:"), self.max_tokens_per_call_spin)
 
@@ -693,7 +693,7 @@ class ConfigEditorWidget(QWidget):
         translator = config.get("translator_config", {})
         if translator:
             self._set_endpoint_dropdown(self.translator_endpoint, translator.get("endpoint_profile"))
-            self.max_tokens_per_call_spin.setValue(translator.get("max_tokens_per_llm_call", 5000))
+            self.max_tokens_per_call_spin.setValue(translator.get("max_tokens_per_llm_call", 4000))
             self.chunk_size_spin.setValue(translator.get("chunk_size", 1000))
 
         translator_batch = config.get("translator_batch_config", {})

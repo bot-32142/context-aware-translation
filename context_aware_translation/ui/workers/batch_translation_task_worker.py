@@ -32,7 +32,6 @@ class BatchTranslationTaskWorker(BaseWorker):
         task_id: str | None = None,
         document_ids: list[int] | None = None,
         force: bool = False,
-        skip_context: bool = False,
         enable_polish: bool = True,
         task_store: TaskStore | None = None,
         notify_task_changed: Callable[[str], None] | None = None,
@@ -45,7 +44,6 @@ class BatchTranslationTaskWorker(BaseWorker):
         self.task_id = task_id
         self.document_ids = document_ids
         self.force = force
-        self.skip_context = skip_context
         self.enable_polish = enable_polish
         self.task_store = task_store
         self.notify_task_changed = notify_task_changed

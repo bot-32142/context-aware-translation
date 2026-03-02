@@ -210,7 +210,6 @@ class TranslationMangaHandler:
                 doc_ids = None
 
         force: bool = bool((payload or {}).get("force", False))
-        skip_context: bool = bool((payload or {}).get("skip_context", False))
         enable_polish: bool = bool((payload or {}).get("enable_polish", True))
 
         if action == TaskAction.RUN:
@@ -221,7 +220,6 @@ class TranslationMangaHandler:
                 task_id=record.task_id,
                 document_ids=doc_ids,
                 force=force,
-                skip_context=skip_context,
                 enable_polish=enable_polish,
                 task_store=deps.task_store,
                 notify_task_changed=deps.notify_task_changed,

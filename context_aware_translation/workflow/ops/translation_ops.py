@@ -30,7 +30,6 @@ async def translate(
     document_ids: list[int] | None = None,
     progress_callback: ProgressCallback | None = None,
     force: bool = False,
-    skip_context: bool = False,
     cancel_check: Callable[[], bool] | None = None,
 ) -> None:
     """Translate documents using the glossary context."""
@@ -40,15 +39,14 @@ async def translate(
     preflight_document_ids = bootstrap_ops.resolve_preflight_document_ids(workflow, document_ids)
     await bootstrap_ops.prepare_llm_prerequisites(workflow, preflight_document_ids, cancel_check=cancel_check)
 
-    if not skip_context:
-        bootstrap_ops.check_cancel(cancel_check)
-        workflow.manager.build_context_tree(cancel_check=cancel_check)
+    bootstrap_ops.check_cancel(cancel_check)
+    workflow.manager.build_context_tree(cancel_check=cancel_check)
 
     bootstrap_ops.check_cancel(cancel_check)
     doc_type_by_id = build_doc_type_by_id(workflow, document_ids)
-    max_tokens_per_call = int(getattr(translator_config, "max_tokens_per_llm_call", 5000) or 5000)
+    max_tokens_per_call = int(getattr(translator_config, "max_tokens_per_llm_call", 4000) or 4000)
     if max_tokens_per_call <= 0:
-        max_tokens_per_call = 5000
+        max_tokens_per_call = 4000
 
     await workflow.manager.translate_chunks(
         doc_type_by_id=doc_type_by_id,
@@ -56,7 +54,6 @@ async def translate(
         batch_size=0,
         max_tokens_per_batch=max_tokens_per_call,
         force=force,
-        skip_context=skip_context,
         cancel_check=cancel_check,
         progress_callback=progress_callback,
     )
@@ -67,7 +64,6 @@ async def retranslate_chunk(
     *,
     chunk_id: int,
     document_id: int,
-    skip_context: bool = False,
     cancel_check: Callable[[], bool] | None = None,
 ) -> str:
     """Retranslate a single chunk by ID using the LLM."""
@@ -77,9 +73,8 @@ async def retranslate_chunk(
     preflight_document_ids = bootstrap_ops.resolve_preflight_document_ids(workflow, [document_id])
     await bootstrap_ops.prepare_llm_prerequisites(workflow, preflight_document_ids, cancel_check=cancel_check)
 
-    if not skip_context:
-        bootstrap_ops.check_cancel(cancel_check)
-        workflow.manager.build_context_tree(cancel_check=cancel_check)
+    bootstrap_ops.check_cancel(cancel_check)
+    workflow.manager.build_context_tree(cancel_check=cancel_check)
 
     bootstrap_ops.check_cancel(cancel_check)
 
@@ -95,7 +90,6 @@ async def retranslate_chunk(
     _, batch_terms = workflow.manager.build_batch_request_payload(
         [chunk],
         all_terms,
-        skip_context=skip_context,
     )
 
     bootstrap_ops.check_cancel(cancel_check)

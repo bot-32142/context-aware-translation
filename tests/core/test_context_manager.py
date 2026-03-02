@@ -266,6 +266,26 @@ def test_context_manager_build_fully_summarized_descriptions_reports_progress(mo
     assert updates[-1].message.startswith("Summarizing glossary term ")
 
 
+def test_get_term_description_for_query_prefers_longest_summary(mock_context_manager):
+    term = Term(
+        key="term_longest",
+        descriptions={"0": "desc0"},
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+    )
+    mock_context_manager.term_repo.keyed_contexts["term_longest"] = term
+
+    mock_context_manager.context_tree.get_context = lambda *_a, **_k: [  # type: ignore[method-assign]
+        "short",
+        "this is the longest summary",
+        "mid",
+    ]
+
+    description = mock_context_manager.get_term_description_for_query(term, 10, skip_context=False)
+    assert description == "this is the longest summary"
+
+
 def test_context_manager_build_fully_summarized_descriptions_raises_for_non_chunk_keys(mock_context_manager):
     term = Term(
         key="term_non_chunk",

@@ -487,39 +487,20 @@ class GlossaryView(QWidget):
             )
 
     def _update_export_button_state(self) -> None:
-        """Enable/disable export button based on mode-aware engine preflight."""
-        decision_skip = self._task_engine.preflight(
+        """Enable/disable export button based on engine preflight."""
+        decision = self._task_engine.preflight(
             "glossary_export",
             self.book_id,
-            {"skip_context": True},
-            TaskAction.RUN,
-        )
-        decision_full = self._task_engine.preflight(
-            "glossary_export",
-            self.book_id,
-            {"skip_context": False},
+            {},
             TaskAction.RUN,
         )
 
-        if decision_skip.allowed or decision_full.allowed:
+        if decision.allowed:
             self.export_button.setEnabled(True)
-            if decision_skip.allowed and decision_full.allowed:
-                self.export_button.setToolTip(self.tr("Export glossary terms to a JSON file."))
-            elif decision_skip.allowed:
-                self.export_button.setToolTip(
-                    self.tr("Export glossary terms to a JSON file (skip context mode available; full context blocked).")
-                )
-            else:
-                self.export_button.setToolTip(
-                    self.tr("Export glossary terms to a JSON file (full context available; skip context blocked).")
-                )
+            self.export_button.setToolTip(self.tr("Export glossary terms to a JSON file."))
         else:
             self.export_button.setEnabled(False)
-            reason = (
-                translate_task_block_reason(decision_full.reason, decision_full.code)
-                or translate_task_block_reason(decision_skip.reason, decision_skip.code)
-                or ""
-            )
+            reason = translate_task_block_reason(decision.reason, decision.code) or ""
             self.export_button.setToolTip(qarg(self.tr("Export unavailable: %1"), reason))
 
     def _on_search_changed(self, text: str) -> None:
@@ -560,28 +541,19 @@ class GlossaryView(QWidget):
         """Refresh stats/action state after direct in-table edits."""
         self._update_stats()
 
-    def _confirm_export_glossary(self) -> bool | None:
-        """Return skip_context selection, or None if user cancelled."""
+    def _confirm_export_glossary(self) -> bool:
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle(self.tr("Export Glossary"))
         msg_box.setText(
             self.tr(
                 "By default, this export will summarize glossary descriptions before writing the file.\n"
                 "For large glossaries, this may take some time.\n\n"
-                'Enable "Skip context" below to use only the first description per term.\n\n'
                 "Continue?"
             )
         )
         msg_box.setIcon(QMessageBox.Icon.Warning)
         msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-
-        skip_context_cb = QCheckBox(self.tr("Skip context (use first description only)"))
-        skip_context_cb.setChecked(False)
-        msg_box.setCheckBox(skip_context_cb)
-
-        if msg_box.exec() != QMessageBox.StandardButton.Yes:
-            return None
-        return skip_context_cb.isChecked()
+        return msg_box.exec() == QMessageBox.StandardButton.Yes
 
     def _on_export_glossary(self) -> None:
         file_path, _ = QFileDialog.getSaveFileName(
@@ -593,14 +565,13 @@ class GlossaryView(QWidget):
         if not file_path:
             return
 
-        skip_context = self._confirm_export_glossary()
-        if skip_context is None:
+        if not self._confirm_export_glossary():
             return
 
         decision = self._task_engine.preflight(
             "glossary_export",
             self.book_id,
-            {"output_path": str(file_path), "skip_context": skip_context},
+            {"output_path": str(file_path)},
             TaskAction.RUN,
         )
         if not decision.allowed:
@@ -619,7 +590,6 @@ class GlossaryView(QWidget):
                 "glossary_export",
                 self.book_id,
                 output_path=str(file_path),
-                skip_context=skip_context,
             )
         except Exception as exc:
             QMessageBox.critical(

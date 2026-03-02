@@ -48,16 +48,10 @@ class GlossaryExportHandler:
 
     def claims(self, record: TaskRecord, payload: Any) -> frozenset[ResourceClaim]:
         book_id = record.book_id
-        payload_dict = self.decode_payload(record)
-        skip_context = payload_dict.get("skip_context", False)
-
         claims = [
             ResourceClaim("glossary_state", book_id, "*", ClaimMode.READ_SHARED),
+            ResourceClaim("context_tree", book_id, "*", ClaimMode.WRITE_COOPERATIVE),
         ]
-
-        if not skip_context:
-            claims.append(ResourceClaim("context_tree", book_id, "*", ClaimMode.WRITE_COOPERATIVE))
-
         return frozenset(claims)
 
     def can(self, action: TaskAction, record: TaskRecord, payload: Any, snapshot: ActionSnapshot) -> Decision:
@@ -158,7 +152,6 @@ class GlossaryExportHandler:
         output_path = payload_dict.get("output_path")
         if output_path is None:
             raise ValueError("output_path is required in payload")
-        skip_context = payload_dict.get("skip_context", False)
 
         if action == TaskAction.RUN:
             return GlossaryExportTaskWorker(
@@ -169,7 +162,6 @@ class GlossaryExportHandler:
                 task_store=deps.task_store,
                 notify_task_changed=deps.notify_task_changed,
                 output_path=output_path,
-                skip_context=skip_context,
             )
 
         if action == TaskAction.CANCEL:
@@ -181,7 +173,6 @@ class GlossaryExportHandler:
                 task_store=deps.task_store,
                 notify_task_changed=deps.notify_task_changed,
                 output_path=output_path,
-                skip_context=skip_context,
             )
 
         raise ValueError(f"Unsupported action for GlossaryExportHandler: {action!r}")

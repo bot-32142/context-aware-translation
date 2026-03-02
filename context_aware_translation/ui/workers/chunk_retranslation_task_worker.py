@@ -28,7 +28,6 @@ class ChunkRetranslationTaskWorker(BaseWorker):
         task_id: str | None = None,
         chunk_id: int,
         document_id: int,
-        skip_context: bool = False,
         enable_polish: bool = True,
         task_store: TaskStore | None = None,
         notify_task_changed: Callable[[str], None] | None = None,
@@ -41,7 +40,6 @@ class ChunkRetranslationTaskWorker(BaseWorker):
         self._task_id = task_id
         self._chunk_id = chunk_id
         self._document_id = document_id
-        self._skip_context = skip_context
         self._enable_polish = enable_polish
         self._task_store = task_store
         self._notify_task_changed = notify_task_changed
@@ -74,7 +72,6 @@ class ChunkRetranslationTaskWorker(BaseWorker):
                         context,
                         chunk_id=self._chunk_id,
                         document_id=self._document_id,
-                        skip_context=self._skip_context,
                         cancel_check=self._is_cancelled,
                     )
                 )

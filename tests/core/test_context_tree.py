@@ -77,6 +77,23 @@ def test_add_chunks_sequential_indices(tmp_path: Path):
     assert context == ["description0 | description1 | description2 | description3", "description4"]
 
 
+def test_get_longest_context_summary_returns_longest_prior_summary(tmp_path: Path):
+    sqlite_path = tmp_path / "test_get_longest_context_summary_returns_longest_prior_summary.db"
+    tree = ContextTree(
+        summarize_func=simple_summarize,
+        estimate_token_size_func=simple_estimate_tokens,
+        sqlite_path=sqlite_path,
+        max_token_size=3,
+    )
+
+    tree.add_chunks({"term1": {0: "a", 1: "bb", 2: "cccccccc", 3: "d"}})
+    longest = tree.get_longest_context_summary("term1", 4)
+    assert longest
+    assert len(longest) >= len("cccccccc")
+
+    tree.close()
+
+
 def test_add_chunks_non_sequential_indices(tmp_path: Path):
     """Test adding chunks with non-sequential chunk indices (0, 2, 4, 5, 8).
     With gap merging enabled, indices 0, 2, 4, 5 can be merged into a summary covering [0-6).

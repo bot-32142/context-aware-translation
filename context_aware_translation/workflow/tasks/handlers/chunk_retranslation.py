@@ -153,7 +153,6 @@ class ChunkRetranslationHandler:
         p = payload or {}
         chunk_id: int = int(p["chunk_id"])
         document_id: int = int(p["document_id"])
-        skip_context: bool = bool(p.get("skip_context", False))
         enable_polish: bool = bool(p.get("enable_polish", True))
 
         if action == TaskAction.RUN:
@@ -164,7 +163,6 @@ class ChunkRetranslationHandler:
                 task_id=record.task_id,
                 chunk_id=chunk_id,
                 document_id=document_id,
-                skip_context=skip_context,
                 enable_polish=enable_polish,
                 task_store=deps.task_store,
                 notify_task_changed=deps.notify_task_changed,

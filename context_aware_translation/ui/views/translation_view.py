@@ -144,11 +144,6 @@ class TranslationView(QWidget):
         self.start_btn.clicked.connect(self._start_translation)
         layout.addWidget(self.start_btn)
 
-        # Optional prompt mode for large books: use only first glossary description.
-        self.skip_context_cb = QCheckBox(self.tr("Skip context (use first description only)"))
-        self.skip_context_cb.setChecked(True)
-        layout.addWidget(self.skip_context_cb)
-
         # Optional post-processing mode: run a polish pass after translation.
         self.enable_polish_cb = QCheckBox(self.tr("Enable polish pass"))
         self.enable_polish_cb.setChecked(True)
@@ -364,8 +359,6 @@ class TranslationView(QWidget):
         if self._is_cleaned_up:
             return
 
-        if hasattr(self, "skip_context_cb"):
-            self.skip_context_cb.setEnabled(True)
         if hasattr(self, "enable_polish_cb"):
             self.enable_polish_cb.setEnabled(True)
         has_documents = self.doc_combo.count() > 1
@@ -413,7 +406,6 @@ class TranslationView(QWidget):
         # Use the same all-or-none preflight contract as click-time submit.
         text_doc_ids, manga_doc_ids = self._split_doc_ids_by_type(selected_doc_ids)
         is_retranslation = self._is_retranslation()
-        skip_context = self.skip_context_cb.isChecked()
         enable_polish = self._is_enable_polish_enabled()
 
         start_allowed = True
@@ -429,7 +421,6 @@ class TranslationView(QWidget):
             params = {
                 "document_ids": bucket_ids,
                 "force": is_retranslation,
-                "skip_context": skip_context,
                 "enable_polish": enable_polish,
             }
             decision = self._task_engine.preflight(task_type, self.book_id, params, TaskAction.RUN)
@@ -501,7 +492,6 @@ class TranslationView(QWidget):
 
     def _preflight_chunk_retranslation(self, *, chunk_id: int, document_id: int) -> tuple[bool, str]:
         """Return (allowed, reason) for retranslation under current engine policy."""
-        skip_context = bool(self.skip_context_cb.isChecked()) if hasattr(self, "skip_context_cb") else False
         enable_polish = self._is_enable_polish_enabled()
         is_manga = self._is_manga_document(int(document_id))
         if is_manga:
@@ -511,7 +501,6 @@ class TranslationView(QWidget):
                 {
                     "document_ids": [int(document_id)],
                     "force": True,
-                    "skip_context": skip_context,
                     "enable_polish": enable_polish,
                 },
                 TaskAction.RUN,
@@ -523,7 +512,6 @@ class TranslationView(QWidget):
                 {
                     "chunk_id": chunk_id,
                     "document_id": document_id,
-                    "skip_context": skip_context,
                     "enable_polish": enable_polish,
                 },
                 TaskAction.RUN,
@@ -820,7 +808,6 @@ class TranslationView(QWidget):
             return
         document_ids, force = resolved
 
-        skip_context = self.skip_context_cb.isChecked()
         enable_polish = self._is_enable_polish_enabled()
 
         # Split into buckets
@@ -844,7 +831,6 @@ class TranslationView(QWidget):
             params = {
                 "document_ids": bucket_ids,
                 "force": force,
-                "skip_context": skip_context,
                 "enable_polish": enable_polish,
             }
             decision = self._task_engine.preflight(task_type, self.book_id, params, TaskAction.RUN)
@@ -861,7 +847,6 @@ class TranslationView(QWidget):
 
         self.start_btn.setEnabled(False)
         self.doc_combo.setEnabled(False)
-        self.skip_context_cb.setEnabled(False)
         if hasattr(self, "enable_polish_cb"):
             self.enable_polish_cb.setEnabled(False)
         self.status_label.hide()
@@ -872,7 +857,6 @@ class TranslationView(QWidget):
             params = {
                 "document_ids": bucket_ids,
                 "force": force,
-                "skip_context": skip_context,
                 "enable_polish": enable_polish,
             }
             try:
@@ -881,7 +865,6 @@ class TranslationView(QWidget):
                 if not submitted_records:
                     # First task failed: restore UI
                     self.doc_combo.setEnabled(True)
-                    self.skip_context_cb.setEnabled(True)
                     if hasattr(self, "enable_polish_cb"):
                         self.enable_polish_cb.setEnabled(True)
                     self._update_start_button_state()
@@ -901,7 +884,6 @@ class TranslationView(QWidget):
             if record.status == "failed":
                 if not submitted_records:
                     self.doc_combo.setEnabled(True)
-                    self.skip_context_cb.setEnabled(True)
                     if hasattr(self, "enable_polish_cb"):
                         self.enable_polish_cb.setEnabled(True)
                     self._update_start_button_state()
@@ -1054,7 +1036,6 @@ class TranslationView(QWidget):
                 self.book_id,
                 document_ids=document_ids,
                 force=force,
-                skip_context=self.skip_context_cb.isChecked(),
                 enable_polish=self._is_enable_polish_enabled(),
             )
         except Exception as exc:  # noqa: BLE001
@@ -1294,7 +1275,6 @@ class TranslationView(QWidget):
                 self.book_id,
                 document_ids=[int(chunk.document_id)],
                 force=True,
-                skip_context=self.skip_context_cb.isChecked(),
                 enable_polish=self._is_enable_polish_enabled(),
             )
         else:
@@ -1304,7 +1284,6 @@ class TranslationView(QWidget):
                 self.book_id,
                 chunk_id=chunk.chunk_id,
                 document_id=chunk.document_id,
-                skip_context=self.skip_context_cb.isChecked(),
                 enable_polish=self._is_enable_polish_enabled(),
             )
         self._pending_retranslations[record.task_id] = (chunk.chunk_id, chunk.document_id)
@@ -1551,11 +1530,6 @@ class TranslationView(QWidget):
         self.start_btn.setToolTip(
             self.tr("Start translation for selected documents. If already translated, this will retranslate.")
         )
-        self.skip_context_cb.setToolTip(
-            self.tr(
-                "Use only the earliest glossary description for each term instead of chunk-positioned context summaries."
-            )
-        )
         if hasattr(self, "enable_polish_cb"):
             self.enable_polish_cb.setToolTip(self.tr("Run an additional polish pass after translation."))
         if hasattr(self, "submit_batch_btn"):
@@ -1574,7 +1548,6 @@ class TranslationView(QWidget):
         # Progress page
         self.doc_selector_label.setText(self.tr("Document:"))
         self.review_btn.setText(self.tr("Review Translations"))
-        self.skip_context_cb.setText(self.tr("Skip context (use first description only)"))
         if hasattr(self, "enable_polish_cb"):
             self.enable_polish_cb.setText(self.tr("Enable polish pass"))
         self.batch_section_label.setText(self.tr("Async Batch Tasks"))

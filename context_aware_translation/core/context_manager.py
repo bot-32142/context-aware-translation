@@ -216,7 +216,6 @@ class ContextManager:
         self,
         term: Term,
         *,
-        skip_context: bool,
         cancel_check: Callable[[], bool] | None,
     ) -> str:
         if not term.descriptions:
@@ -225,8 +224,6 @@ class ContextManager:
         description_values = self._ordered_description_values(term.descriptions)
         if not description_values:
             return ""
-        if skip_context:
-            return description_values[0]
         if term.ignored:
             return " ".join(description_values).strip()
 
@@ -237,29 +234,24 @@ class ContextManager:
 
         raise ValueError(
             f"Failed to summarize glossary term '{term.key}' for export. "
-            "All non-ignored terms must have a context-tree summary when skip_context=False."
+            "All non-ignored terms must have a context-tree summary."
         )
 
     @staticmethod
-    def _export_term_progress_message(*, skip_context: bool, current: int, total: int) -> str:
-        if skip_context:
-            return f"Collecting glossary term {current}/{total}"
+    def _export_term_progress_message(*, current: int, total: int) -> str:
         return f"Summarizing glossary term {current}/{total}"
 
     def build_fully_summarized_descriptions(
         self,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
-        skip_context: bool = False,
     ) -> dict[str, str]:
         """Build one export description for every glossary term.
 
-        When ``skip_context`` is False, descriptions are fully summarized via
-        context-tree nodes (persisted for future reuse). When True, export uses
-        only each term's earliest description without context summarization.
+        Descriptions are fully summarized via context-tree nodes (persisted for
+        future reuse).
         """
-        if not skip_context:
-            self.build_context_tree(cancel_check=cancel_check)
+        self.build_context_tree(cancel_check=cancel_check)
         terms = self.term_repo.list_keyed_context()
         progress_total = max(1, len(terms))
         if progress_callback:
@@ -277,7 +269,6 @@ class ContextManager:
             raise_if_cancelled(cancel_check)
             summaries[term.key] = self._build_export_description_for_term(
                 term,
-                skip_context=skip_context,
                 cancel_check=cancel_check,
             )
 
@@ -288,7 +279,6 @@ class ContextManager:
                         current=idx,
                         total=progress_total,
                         message=self._export_term_progress_message(
-                            skip_context=skip_context,
                             current=idx,
                             total=progress_total,
                         ),
@@ -296,11 +286,16 @@ class ContextManager:
                 )
         return summaries
 
-    def get_term_description_for_query(self, term: Term, query_index: int, *, skip_context: bool = False) -> str:
+    def get_term_description_for_query(self, term: Term, query_index: int) -> str:
         """Return the term description text used for chunk translation prompts."""
-        if skip_context:
-            return self._first_description_value(term.descriptions)
-        return "\n".join(self.context_tree.get_context(term.key, query_index))
+        longest = self.context_tree.get_longest_context_summary(term.key, query_index)
+        if longest.strip():
+            return longest
+        summaries = [s for s in self.context_tree.get_context(term.key, query_index) if s and s.strip()]
+        if not summaries:
+            return ""
+        # Prefer a single strongest context summary instead of concatenating all prior nodes.
+        return max(summaries, key=lambda s: len(s.strip()))
 
     async def extract_keyed_context(
         self,
@@ -1269,7 +1264,6 @@ class TranslationContextManager(ContextManager):
         all_terms: list[Term],
         *,
         max_tokens_per_batch: int,
-        skip_context: bool = False,
         max_chunks_per_batch: int | None = None,
     ) -> list[list[TranslationChunkRecord]]:
         """Greedily split consecutive chunks by request token budget."""
@@ -1291,7 +1285,6 @@ class TranslationContextManager(ContextManager):
             batch_texts, batch_terms = self.build_batch_request_payload(
                 candidate,
                 all_terms,
-                skip_context=skip_context,
             )
             return self._estimate_translation_request_tokens(batch_texts, batch_terms)
 
@@ -1382,7 +1375,6 @@ class TranslationContextManager(ContextManager):
         all_terms: list[Term],
         batch: list[TranslationChunkRecord],
         max_chunk_id: int,
-        skip_context: bool = False,
     ) -> list[tuple[str, str, str]]:
         batch_chunk_ids = {str(chunk.chunk_id) for chunk in batch}
         batch_normalized_texts = [chunk.normalized_text for chunk in batch]
@@ -1390,7 +1382,7 @@ class TranslationContextManager(ContextManager):
             (
                 term.key,
                 term.translated_name or "",
-                self.get_term_description_for_query(term, max_chunk_id, skip_context=skip_context),
+                self.get_term_description_for_query(term, max_chunk_id),
             )
             for term in all_terms
             if self._term_in_batch(term, batch_chunk_ids, batch_normalized_texts)
@@ -1401,10 +1393,9 @@ class TranslationContextManager(ContextManager):
         self,
         *,
         batch_size: int,
-        max_tokens_per_batch: int = 5000,
+        max_tokens_per_batch: int = 4000,
         document_ids: list[int] | None,
         force: bool,
-        skip_context: bool = False,
         cancel_check: Callable[[], bool] | None,
         source_language: str | None = None,
     ) -> ChunkTranslationInputs | None:
@@ -1427,7 +1418,6 @@ class TranslationContextManager(ContextManager):
             untranslated_chunks,
             all_terms,
             max_tokens_per_batch=max_tokens_per_batch,
-            skip_context=skip_context,
             max_chunks_per_batch=max_chunks_per_batch,
         )
         return ChunkTranslationInputs(
@@ -1440,23 +1430,20 @@ class TranslationContextManager(ContextManager):
         self,
         batch: list[TranslationChunkRecord],
         all_terms: list[Term],
-        *,
-        skip_context: bool = False,
     ) -> tuple[list[str], list[tuple[str, str, str]]]:
         """Build request chunk-text and glossary payload for one translation batch."""
         batch_texts = [chunk.text for chunk in batch]
         max_chunk_id = max(chunk.chunk_id for chunk in batch)
-        batch_terms = self._build_batch_terms(all_terms, batch, max_chunk_id, skip_context=skip_context)
+        batch_terms = self._build_batch_terms(all_terms, batch, max_chunk_id)
         return batch_texts, batch_terms
 
     async def translate_chunks(
         self,
         concurrency: int,
         batch_size: int = 5,
-        max_tokens_per_batch: int = 5000,
+        max_tokens_per_batch: int = 4000,
         document_ids: list[int] | None = None,
         force: bool = False,
-        skip_context: bool = False,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> None:
@@ -1475,7 +1462,6 @@ class TranslationContextManager(ContextManager):
             max_tokens_per_batch=max_tokens_per_batch,
             document_ids=document_ids,
             force=force,
-            skip_context=skip_context,
             cancel_check=cancel_check,
         )
         if inputs is None:
@@ -1499,7 +1485,6 @@ class TranslationContextManager(ContextManager):
                     batch_texts, batch_terms = self.build_batch_request_payload(
                         batch,
                         all_terms,
-                        skip_context=skip_context,
                     )
 
                     translated_texts = await self.chunk_translator.translate(
@@ -1601,10 +1586,9 @@ class TranslationContextManagerAdapter:
         self,
         concurrency: int,
         batch_size: int = 5,
-        max_tokens_per_batch: int = 5000,
+        max_tokens_per_batch: int = 4000,
         doc_type_by_id: dict[int, str] | None = None,
         force: bool = False,
-        skip_context: bool = False,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> None:
@@ -1624,7 +1608,6 @@ class TranslationContextManagerAdapter:
                         [doc_id],
                         self._manager,
                         force=force,
-                        skip_context=skip_context,
                         progress_callback=progress_callback,
                     )
                 else:
@@ -1632,7 +1615,6 @@ class TranslationContextManagerAdapter:
                         [doc_id],
                         self._manager,
                         force=force,
-                        skip_context=skip_context,
                         cancel_check=cancel_check,
                         progress_callback=progress_callback,
                     )
@@ -1644,7 +1626,6 @@ class TranslationContextManagerAdapter:
                         max_tokens_per_batch=max_tokens_per_batch,
                         document_ids=[doc_id],
                         force=force,
-                        skip_context=skip_context,
                         progress_callback=progress_callback,
                     )
                 else:
@@ -1654,7 +1635,6 @@ class TranslationContextManagerAdapter:
                         max_tokens_per_batch=max_tokens_per_batch,
                         document_ids=[doc_id],
                         force=force,
-                        skip_context=skip_context,
                         cancel_check=cancel_check,
                         progress_callback=progress_callback,
                     )
