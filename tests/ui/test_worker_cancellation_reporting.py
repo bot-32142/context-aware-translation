@@ -100,6 +100,74 @@ def test_import_worker_late_interrupt_still_emits_success(monkeypatch: pytest.Mo
     fake_db.close.assert_called_once()
 
 
+def test_import_worker_multiple_files_imports_as_staged_folder(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    from context_aware_translation.ui.workers.import_worker import ImportWorker
+
+    file_a = tmp_path / "a.txt"
+    file_b = tmp_path / "nested" / "b.txt"
+    file_b.parent.mkdir()
+    file_a.write_text("alpha", encoding="utf-8")
+    file_b.write_text("beta", encoding="utf-8")
+
+    book_manager = MagicMock()
+    book_manager.get_book_db_path.return_value = tmp_path / "book.db"
+    worker = ImportWorker(book_manager, "book-id", [file_a, file_b], "text")
+
+    class _FolderDoc:
+        document_type = "text"
+
+        @staticmethod
+        def can_import(path: Path) -> bool:
+            return path.is_dir()
+
+        @staticmethod
+        def do_import(_repo, path: Path, cancel_check=None):  # noqa: ANN001
+            _ = cancel_check
+            assert path.is_dir()
+            staged_names = sorted(entry.name for entry in path.rglob("*") if entry.is_file())
+            assert staged_names == ["a.txt", "b.txt"]
+            return {"imported": 2, "skipped": 0}
+
+    fake_db = MagicMock()
+    fake_repo = MagicMock()
+    fake_repo.list_documents.side_effect = [[], [{"document_id": 7}]]
+
+    monkeypatch.setattr("context_aware_translation.ui.workers.import_worker.SQLiteBookDB", lambda *_a, **_k: fake_db)
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.import_worker.DocumentRepository",
+        lambda *_a, **_k: fake_repo,
+    )
+    monkeypatch.setattr("context_aware_translation.ui.workers.import_worker.get_document_classes", lambda: [_FolderDoc])
+
+    success, cancelled, errors = _capture_signals(worker)
+    worker.run()
+
+    assert cancelled == []
+    assert errors == []
+    assert success == [{"imported": 2, "skipped": 0, "document_id": 7}]
+
+
+def test_stage_selected_files_as_folder_falls_back_to_copy(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    from context_aware_translation.ui.workers import import_worker
+
+    source = tmp_path / "sample.txt"
+    source.write_text("hello", encoding="utf-8")
+
+    def _fail_link(*_args, **_kwargs):  # noqa: ANN002, ANN003
+        raise OSError("hardlink unavailable")
+
+    def _fail_symlink(*_args, **_kwargs):  # noqa: ANN002, ANN003
+        raise OSError("symlink unavailable")
+
+    monkeypatch.setattr(import_worker.os, "link", _fail_link)
+    monkeypatch.setattr(import_worker.os, "symlink", _fail_symlink)
+
+    with import_worker.stage_selected_files_as_folder([source]) as staged_root:
+        staged_files = [entry for entry in staged_root.rglob("*") if entry.is_file()]
+        assert len(staged_files) == 1
+        assert staged_files[0].read_text(encoding="utf-8") == "hello"
+
+
 def test_export_worker_late_interrupt_still_emits_success(monkeypatch: pytest.MonkeyPatch):
     from context_aware_translation.ui.workers.export_worker import ExportWorker
 

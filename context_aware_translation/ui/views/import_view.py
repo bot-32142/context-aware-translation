@@ -19,14 +19,17 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from context_aware_translation.documents.base import get_document_classes
 from context_aware_translation.storage.book_db import SQLiteBookDB
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.document_repository import DocumentRepository
 from context_aware_translation.ui.i18n import qarg
 from context_aware_translation.ui.utils import create_tip_label, translate_document_type
 from context_aware_translation.ui.widgets import ProgressWidget
-from context_aware_translation.ui.workers.import_worker import ImportWorker
+from context_aware_translation.ui.workers.import_worker import (
+    ImportWorker,
+    get_compatible_document_classes_for_paths,
+    normalize_import_paths,
+)
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 
 
@@ -46,6 +49,7 @@ class ImportView(QWidget):
         self.book_id = book_id
         self._task_engine = task_engine
         self.selected_path: Path | None = None
+        self.selected_paths: list[Path] = []
         self.worker: ImportWorker | None = None
         self._config_valid = False
 
@@ -131,7 +135,7 @@ class ImportView(QWidget):
         self.select_file_btn.setEnabled(enabled)
         self.select_folder_btn.setEnabled(enabled)
 
-        has_selected_path = self.selected_path is not None
+        has_selected_path = self.selected_path is not None or len(self.selected_paths) > 0
         has_valid_type = self._has_valid_selected_type()
         can_import = enabled and has_selected_path and has_valid_type
         self.import_btn.setEnabled(can_import)
@@ -263,15 +267,15 @@ class ImportView(QWidget):
         layout.addWidget(self.docs_group, 1)  # Give stretch to docs section
 
     def _select_file(self) -> None:
-        """Open file dialog to select a file."""
-        file_path, _ = QFileDialog.getOpenFileName(
+        """Open file dialog to select one or more files."""
+        file_paths, _ = QFileDialog.getOpenFileNames(
             self,
-            self.tr("Select Document File"),
+            self.tr("Select Document File(s)"),
             str(Path.home()),
             self.tr("All Files (*.*)"),
         )
-        if file_path:
-            self._handle_path_selection(Path(file_path))
+        if file_paths:
+            self._handle_paths_selection([Path(path) for path in file_paths])
 
     def _select_folder(self) -> None:
         """Open folder dialog to select a folder."""
@@ -286,43 +290,70 @@ class ImportView(QWidget):
     def _handle_path_selection(self, path: Path) -> None:
         """Handle path selection and auto-detect document type."""
         self.selected_path = path
+        self.selected_paths = []
         self.path_label.setText(qarg(self.tr("Selected: %1"), path))
         self.result_label.hide()
 
-        # Auto-detect document type
-        doc_classes = get_document_classes()
-        matches = [cls for cls in doc_classes if cls.can_import(path)]
+        warned = False
+        try:
+            matches = get_compatible_document_classes_for_paths([path])
+        except ValueError as e:
+            matches = []
+            warned = True
+            QMessageBox.warning(self, self.tr("Import Error"), str(e))
 
+        self._populate_document_type_matches(matches, show_no_match_warning=not warned)
+
+    def _handle_paths_selection(self, paths: list[Path]) -> None:
+        """Handle file selection and detect compatible document types."""
+        normalized_paths = normalize_import_paths(paths)
+        if len(normalized_paths) == 1:
+            self._handle_path_selection(normalized_paths[0])
+            return
+
+        self.selected_path = None
+        self.selected_paths = normalized_paths
+        names = ", ".join(path.name for path in normalized_paths)
+        self.path_label.setText(qarg(self.tr("Selected: %1"), names))
+        self.result_label.hide()
+
+        warned = False
+        try:
+            matches = get_compatible_document_classes_for_paths(normalized_paths)
+        except ValueError as e:
+            matches = []
+            warned = True
+            QMessageBox.warning(self, self.tr("Import Error"), str(e))
+
+        self._populate_document_type_matches(matches, show_no_match_warning=not warned)
+
+    def _populate_document_type_matches(self, matches: list[type], *, show_no_match_warning: bool = True) -> None:
+        """Update type combo from detected importable document classes."""
         self.type_combo.clear()
-        self.type_combo.setEnabled(True)
 
-        if len(matches) == 0:
+        if not matches:
             self.type_combo.addItem(self.tr("(No compatible type detected)"))
-            self.type_combo.setEnabled(False)
-            self.import_btn.setEnabled(False)
-            QMessageBox.warning(
-                self,
-                self.tr("Import Error"),
-                self.tr("Cannot import this path: no supported document type matches."),
-            )
-        elif len(matches) == 1:
-            # Single match - auto-select
-            doc_type = matches[0].document_type
+            self._enable_controls(self._config_valid)
+            if show_no_match_warning:
+                QMessageBox.warning(
+                    self,
+                    self.tr("Import Error"),
+                    self.tr("Cannot import this path: no supported document type matches."),
+                )
+            return
+
+        for cls in matches:
+            doc_type = cls.document_type
             self.type_combo.addItem(translate_document_type(doc_type), doc_type)
-            self.import_btn.setEnabled(self._config_valid)
-        else:
-            # Multiple matches - let user choose
-            for cls in matches:
-                doc_type = cls.document_type
-                self.type_combo.addItem(translate_document_type(doc_type), doc_type)
-            self.import_btn.setEnabled(self._config_valid)
+
+        self._enable_controls(self._config_valid)
 
     def _start_import(self) -> None:
         """Start the import operation in a background thread."""
         if self.worker and self.worker.isRunning():
             return
 
-        if not self.selected_path:
+        if not self.selected_path and not self.selected_paths:
             return
 
         if self._has_claim_conflict(frozenset({ResourceClaim("doc", self.book_id, "*", ClaimMode.WRITE_EXCLUSIVE)})):
@@ -354,11 +385,18 @@ class ImportView(QWidget):
         self.progress_widget.set_cancellable(True)
         self.progress_widget.message_label.setText(self.tr("Importing..."))
 
+        import_target: Path | list[Path]
+        if self.selected_paths:
+            import_target = self.selected_paths
+        else:
+            assert self.selected_path is not None
+            import_target = self.selected_path
+
         # Create and start worker
         self.worker = ImportWorker(
             self.book_manager,
             self.book_id,
-            self.selected_path,
+            import_target,
             document_type,
         )
         self.worker.finished_success.connect(self._on_import_success)
@@ -700,10 +738,13 @@ class ImportView(QWidget):
         self.import_group.setTitle(self.tr("Import New Document"))
         self.select_file_btn.setText(self.tr("Select File"))
         self.select_folder_btn.setText(self.tr("Select Folder"))
-        if self.selected_path is None:
+        if self.selected_path is None and not self.selected_paths:
             self.path_label.setText(self.tr("No file or folder selected"))
-        else:
+        elif self.selected_path is not None:
             self.path_label.setText(qarg(self.tr("Selected: %1"), self.selected_path))
+        else:
+            names = ", ".join(path.name for path in self.selected_paths)
+            self.path_label.setText(qarg(self.tr("Selected: %1"), names))
         self.type_label.setText(self.tr("Document Type:"))
         self.import_btn.setText(self.tr("Import"))
         self.docs_group.setTitle(self.tr("Imported Documents"))

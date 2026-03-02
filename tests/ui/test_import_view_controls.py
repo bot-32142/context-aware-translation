@@ -37,6 +37,7 @@ def _make_view(selected_path: Path | None, *, selected_type_data: str | None):
         view = ImportView(None, "")
 
     view.selected_path = selected_path
+    view.selected_paths = []
     view.select_file_btn = QPushButton()
     view.select_folder_btn = QPushButton()
     view.import_btn = QPushButton()
@@ -85,6 +86,18 @@ def test_enable_controls_keeps_import_disabled_for_placeholder_type():
     assert not view.import_btn.isEnabled()
 
 
+def test_enable_controls_reenables_import_for_selected_paths_and_valid_type():
+    view = _make_view(None, selected_type_data="text")
+    view.selected_paths = [Path("/tmp/ch1.txt"), Path("/tmp/ch2.txt")]
+
+    view._enable_controls(True)
+
+    assert view.select_file_btn.isEnabled()
+    assert view.select_folder_btn.isEnabled()
+    assert view.type_combo.isEnabled()
+    assert view.import_btn.isEnabled()
+
+
 def test_handle_path_selection_uses_export_document_type_translation():
     from context_aware_translation.ui.views.import_view import ImportView
 
@@ -99,18 +112,57 @@ def test_handle_path_selection_uses_export_document_type_translation():
         view = ImportView(None, "")
 
     view.selected_path = None
+    view.selected_paths = []
     view.path_label = QLabel()
     view.result_label = QLabel()
+    view.select_file_btn = QPushButton()
+    view.select_folder_btn = QPushButton()
     view.type_combo = QComboBox()
     view.import_btn = QPushButton()
     view._config_valid = True
 
-    with patch("context_aware_translation.ui.views.import_view.get_document_classes", return_value=[_PdfDoc]):
+    with patch(
+        "context_aware_translation.ui.views.import_view.get_compatible_document_classes_for_paths",
+        return_value=[_PdfDoc],
+    ):
         view._handle_path_selection(Path("/tmp/book.pdf"))
 
     assert view.type_combo.count() == 1
     assert view.type_combo.itemData(0) == "pdf"
     assert view.type_combo.itemText(0) == QCoreApplication.translate("ExportView", "PDF")
+
+
+def test_handle_paths_selection_uses_detected_compatible_types():
+    from context_aware_translation.ui.views.import_view import ImportView
+
+    class _TextDoc:
+        document_type = "text"
+
+    with patch.object(ImportView, "__init__", _noop_init):
+        view = ImportView(None, "")
+
+    selected = [Path("/tmp/ch1.txt"), Path("/tmp/ch2.txt")]
+    view.selected_path = None
+    view.selected_paths = []
+    view.path_label = QLabel()
+    view.result_label = QLabel()
+    view.select_file_btn = QPushButton()
+    view.select_folder_btn = QPushButton()
+    view.type_combo = QComboBox()
+    view.import_btn = QPushButton()
+    view._config_valid = True
+
+    with patch(
+        "context_aware_translation.ui.views.import_view.get_compatible_document_classes_for_paths",
+        return_value=[_TextDoc],
+    ):
+        view._handle_paths_selection(selected)
+
+    assert view.selected_path is None
+    assert view.selected_paths == selected
+    assert view.type_combo.count() == 1
+    assert view.type_combo.itemData(0) == "text"
+    assert view.import_btn.isEnabled()
 
 
 def test_check_config_missing_profiles_shows_warning_but_keeps_import_available():
@@ -135,6 +187,7 @@ def test_check_config_missing_profiles_shows_warning_but_keeps_import_available(
     view.type_combo = QComboBox()
     view.type_combo.addItem("PDF", "pdf")
     view.selected_path = Path("/tmp/book.pdf")
+    view.selected_paths = []
 
     view._check_config()
 

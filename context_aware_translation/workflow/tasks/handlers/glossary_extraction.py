@@ -46,7 +46,9 @@ _NON_DELETABLE_STATUSES = frozenset({STATUS_RUNNING, STATUS_CANCEL_REQUESTED, ST
 _AUTORUN_STATUSES = frozenset({STATUS_QUEUED, STATUS_PAUSED})
 
 
-def _open_doc_repo(deps: WorkerDeps, book_id: str) -> tuple[book_db.SQLiteBookDB, document_repository.DocumentRepository]:
+def _open_doc_repo(
+    deps: WorkerDeps, book_id: str
+) -> tuple[book_db.SQLiteBookDB, document_repository.DocumentRepository]:
     db = book_db.SQLiteBookDB(deps.book_manager.get_book_db_path(book_id))
     doc_repo = document_repository.DocumentRepository(db)
     return db, doc_repo

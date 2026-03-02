@@ -3111,7 +3111,7 @@ Please configure your book&apos;s profile with endpoint profiles for all require
 4. 编辑此书籍并选择配置方案</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="63"/>
+        <location filename="../views/import_view.py" line="67"/>
         <source>No configuration found for this book.
 
 You can still import documents now. Configure profiles before OCR/glossary/translation.</source>
@@ -3120,7 +3120,7 @@ You can still import documents now. Configure profiles before OCR/glossary/trans
 您仍可立即导入文档。请在OCR/术语表/翻译前配置配置文件。</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="93"/>
+        <location filename="../views/import_view.py" line="97"/>
         <source>Missing endpoint profile for: %1.
 
 Import can continue, but OCR/glossary/translation for these steps will fail until configured:
@@ -3135,185 +3135,193 @@ Import can continue, but OCR/glossary/translation for these steps will fail unti
 4. 编辑此书并选择配置文件</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="163"/>
-        <location filename="../views/import_view.py" line="700"/>
+        <location filename="../views/import_view.py" line="167"/>
+        <location filename="../views/import_view.py" line="733"/>
         <source>Import New Document</source>
         <translation>导入新文档</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="168"/>
-        <location filename="../views/import_view.py" line="701"/>
+        <location filename="../views/import_view.py" line="172"/>
+        <location filename="../views/import_view.py" line="734"/>
         <source>Select File</source>
         <translation>选择文件</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="170"/>
-        <location filename="../views/import_view.py" line="702"/>
+        <location filename="../views/import_view.py" line="174"/>
+        <location filename="../views/import_view.py" line="735"/>
         <source>Select Folder</source>
         <translation>选择文件夹</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="178"/>
-        <location filename="../views/import_view.py" line="704"/>
+        <location filename="../views/import_view.py" line="182"/>
+        <location filename="../views/import_view.py" line="737"/>
         <source>No file or folder selected</source>
         <translation>未选择文件或文件夹</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="184"/>
-        <location filename="../views/import_view.py" line="707"/>
+        <location filename="../views/import_view.py" line="188"/>
+        <location filename="../views/import_view.py" line="743"/>
         <source>Document Type:</source>
         <translation>文档类型：</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="193"/>
-        <location filename="../views/import_view.py" line="708"/>
+        <location filename="../views/import_view.py" line="197"/>
+        <location filename="../views/import_view.py" line="744"/>
         <source>Import</source>
         <translation>导入</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="213"/>
-        <location filename="../views/import_view.py" line="709"/>
+        <location filename="../views/import_view.py" line="217"/>
+        <location filename="../views/import_view.py" line="745"/>
         <source>Imported Documents</source>
         <translation>已导入文档</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="218"/>
-        <location filename="../views/import_view.py" line="710"/>
+        <location filename="../views/import_view.py" line="222"/>
+        <location filename="../views/import_view.py" line="746"/>
         <source>Refresh</source>
         <translation>刷新</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="229"/>
-        <location filename="../views/import_view.py" line="713"/>
+        <location filename="../views/import_view.py" line="233"/>
+        <location filename="../views/import_view.py" line="749"/>
         <source>ID</source>
         <translation>ID</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="230"/>
-        <location filename="../views/import_view.py" line="714"/>
+        <location filename="../views/import_view.py" line="234"/>
+        <location filename="../views/import_view.py" line="750"/>
         <source>Type</source>
         <translation>类型</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="231"/>
-        <location filename="../views/import_view.py" line="715"/>
+        <location filename="../views/import_view.py" line="235"/>
+        <location filename="../views/import_view.py" line="751"/>
         <source>Sources</source>
         <translation>源文件</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="232"/>
-        <location filename="../views/import_view.py" line="716"/>
+        <location filename="../views/import_view.py" line="236"/>
+        <location filename="../views/import_view.py" line="752"/>
         <source>OCR</source>
         <translation>OCR</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="233"/>
-        <location filename="../views/import_view.py" line="717"/>
+        <location filename="../views/import_view.py" line="237"/>
+        <location filename="../views/import_view.py" line="753"/>
         <source>Glossary</source>
         <translation>术语表</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="234"/>
-        <location filename="../views/import_view.py" line="718"/>
+        <location filename="../views/import_view.py" line="238"/>
+        <location filename="../views/import_view.py" line="754"/>
         <source>Translation</source>
         <translation>翻译</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="246"/>
-        <location filename="../views/import_view.py" line="560"/>
-        <location filename="../views/import_view.py" line="721"/>
+        <location filename="../views/import_view.py" line="250"/>
+        <location filename="../views/import_view.py" line="593"/>
+        <location filename="../views/import_view.py" line="757"/>
         <source>Reset Document</source>
         <translation>重置文档</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="248"/>
-        <location filename="../views/import_view.py" line="723"/>
+        <location filename="../views/import_view.py" line="252"/>
+        <location filename="../views/import_view.py" line="759"/>
         <source>Reset processing state for selected document and all documents after it</source>
         <translation>重置所选文档及其后所有文档的处理状态</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="254"/>
-        <location filename="../views/import_view.py" line="631"/>
-        <location filename="../views/import_view.py" line="725"/>
+        <location filename="../views/import_view.py" line="258"/>
+        <location filename="../views/import_view.py" line="664"/>
+        <location filename="../views/import_view.py" line="761"/>
         <source>Delete Document</source>
         <translation>删除文档</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="255"/>
-        <location filename="../views/import_view.py" line="726"/>
+        <location filename="../views/import_view.py" line="259"/>
+        <location filename="../views/import_view.py" line="762"/>
         <source>Delete selected document and all documents after it</source>
         <translation>删除所选文档及其后所有文档</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="269"/>
         <source>Select Document File</source>
-        <translation>选择文档文件</translation>
+        <translation type="vanished">选择文档文件</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="271"/>
+        <location filename="../views/import_view.py" line="275"/>
         <source>All Files (*.*)</source>
         <translation>所有文件 (*.*)</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="280"/>
+        <location filename="../views/import_view.py" line="284"/>
         <source>Select Document Folder</source>
         <translation>选择文档文件夹</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="289"/>
-        <location filename="../views/import_view.py" line="706"/>
+        <location filename="../views/import_view.py" line="294"/>
+        <location filename="../views/import_view.py" line="315"/>
+        <location filename="../views/import_view.py" line="739"/>
+        <location filename="../views/import_view.py" line="742"/>
         <source>Selected: %1</source>
         <translation>已选择：%1</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="300"/>
+        <location filename="../views/import_view.py" line="331"/>
         <source>(No compatible type detected)</source>
         <translation>（未检测到兼容类型）</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="305"/>
-        <location filename="../views/import_view.py" line="341"/>
-        <location filename="../views/import_view.py" line="397"/>
+        <location filename="../views/import_view.py" line="301"/>
+        <location filename="../views/import_view.py" line="322"/>
+        <location filename="../views/import_view.py" line="335"/>
+        <location filename="../views/import_view.py" line="367"/>
+        <location filename="../views/import_view.py" line="430"/>
         <source>Import Error</source>
         <translation>导入错误</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="306"/>
+        <location filename="../views/import_view.py" line="273"/>
+        <source>Select Document File(s)</source>
+        <translation>选择文档文件（可多选）</translation>
+    </message>
+    <message>
+        <location filename="../views/import_view.py" line="336"/>
         <source>Cannot import this path: no supported document type matches.</source>
         <translation>无法导入此路径：没有匹配的支持文档类型。</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="331"/>
+        <location filename="../views/import_view.py" line="357"/>
         <source>Import Unavailable</source>
         <translation>导入不可用</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="332"/>
+        <location filename="../views/import_view.py" line="358"/>
         <source>Cannot import while other tasks are modifying documents.</source>
         <translation>其他任务正在修改文档，无法导入。</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="553"/>
+        <location filename="../views/import_view.py" line="586"/>
         <source>Reset Unavailable</source>
         <translation>重置不可用</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="554"/>
+        <location filename="../views/import_view.py" line="587"/>
         <source>Cannot reset documents while other tasks are active.</source>
         <translation>其他任务正在进行，无法重置文档。</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="624"/>
+        <location filename="../views/import_view.py" line="657"/>
         <source>Delete Unavailable</source>
         <translation>删除不可用</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="625"/>
+        <location filename="../views/import_view.py" line="658"/>
         <source>Cannot delete documents while other tasks are active.</source>
         <translation>其他任务正在进行，无法删除文档。</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="730"/>
+        <location filename="../views/import_view.py" line="766"/>
         <source>Import in intended reading order: earlier imports shape later summaries and translation context. For OCR-required documents, incomplete earlier OCR blocks later glossary/translation until fixed.</source>
         <translation>请按预期阅读顺序导入：较早的导入会影响后续的摘要和翻译上下文。对于需要OCR的文档，未完成的早期OCR将阻止后续术语表/翻译，直到修复为止。</translation>
     </message>
@@ -3326,87 +3334,87 @@ Import can continue, but OCR/glossary/translation for these steps will fail unti
         <translation type="vanished">导入前请为书籍配置有效的端点配置。</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="341"/>
+        <location filename="../views/import_view.py" line="367"/>
         <source>Please select a valid document type.</source>
         <translation>请选择有效的文档类型。</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="355"/>
+        <location filename="../views/import_view.py" line="381"/>
         <source>Importing...</source>
         <translation>正在导入...</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="375"/>
+        <location filename="../views/import_view.py" line="408"/>
         <source>Cancelling...</source>
         <translation>正在取消...</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="383"/>
+        <location filename="../views/import_view.py" line="416"/>
         <source>Import completed: %1 imported, %2 skipped</source>
         <translation>导入完成：%1 已导入，%2 已跳过</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="393"/>
+        <location filename="../views/import_view.py" line="426"/>
         <source>Import failed: %1</source>
         <translation>导入失败：%1</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="397"/>
+        <location filename="../views/import_view.py" line="430"/>
         <source>Failed to import document:
 %1</source>
         <translation>导入文档失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="401"/>
+        <location filename="../views/import_view.py" line="434"/>
         <source>Import cancelled.</source>
         <translation>导入已取消。</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="467"/>
-        <location filename="../views/import_view.py" line="604"/>
-        <location filename="../views/import_view.py" line="675"/>
+        <location filename="../views/import_view.py" line="500"/>
+        <location filename="../views/import_view.py" line="637"/>
+        <location filename="../views/import_view.py" line="708"/>
         <source>Error</source>
         <translation>错误</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="467"/>
+        <location filename="../views/import_view.py" line="500"/>
         <source>Failed to load documents: %1</source>
         <translation>加载文档失败：%1</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="472"/>
+        <location filename="../views/import_view.py" line="505"/>
         <source>Pending (%1)</source>
         <translation>待处理（%1）</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="474"/>
-        <location filename="../views/import_view.py" line="488"/>
-        <location filename="../views/import_view.py" line="502"/>
+        <location filename="../views/import_view.py" line="507"/>
+        <location filename="../views/import_view.py" line="521"/>
+        <location filename="../views/import_view.py" line="535"/>
         <source>Complete</source>
         <translation>完成</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="476"/>
+        <location filename="../views/import_view.py" line="509"/>
         <source>N/A</source>
         <translation>不适用</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="482"/>
-        <location filename="../views/import_view.py" line="492"/>
-        <location filename="../views/import_view.py" line="498"/>
-        <location filename="../views/import_view.py" line="506"/>
+        <location filename="../views/import_view.py" line="515"/>
+        <location filename="../views/import_view.py" line="525"/>
+        <location filename="../views/import_view.py" line="531"/>
+        <location filename="../views/import_view.py" line="539"/>
         <source>Not Started</source>
         <translation>未开始</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="490"/>
-        <location filename="../views/import_view.py" line="504"/>
+        <location filename="../views/import_view.py" line="523"/>
+        <location filename="../views/import_view.py" line="537"/>
         <source>In Progress (%1/%2)</source>
         <translation>进行中（%1/%2）</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="563"/>
+        <location filename="../views/import_view.py" line="596"/>
         <source>This will reset Document %1 and all documents added after it.
 All glossary data, translations, and OCR processing state for affected documents will be cleared.
 
@@ -3443,24 +3451,24 @@ Do you want to continue?</source>
 是否继续？</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="590"/>
+        <location filename="../views/import_view.py" line="623"/>
         <source>Reset Complete</source>
         <translation>重置完成</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="592"/>
+        <location filename="../views/import_view.py" line="625"/>
         <source>Reset %1 document(s): %2
 Deleted %3 chunks, pruned %4 terms, deleted %5 terms.</source>
         <translation>已重置 %1 个文档：%2
 删除了 %3 个文本块，修剪了 %4 个术语，删除了 %5 个术语。</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="604"/>
+        <location filename="../views/import_view.py" line="637"/>
         <source>Failed to reset document: %1</source>
         <translation>重置文档失败：%1</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="634"/>
+        <location filename="../views/import_view.py" line="667"/>
         <source>This will PERMANENTLY DELETE Document %1 and all documents added after it.
 All sources, glossary data, translations, and OCR results for affected documents will be removed.
 
@@ -3475,19 +3483,19 @@ Do you want to continue?</source>
 是否继续？</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="661"/>
+        <location filename="../views/import_view.py" line="694"/>
         <source>Delete Complete</source>
         <translation>删除完成</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="663"/>
+        <location filename="../views/import_view.py" line="696"/>
         <source>Deleted %1 document(s): %2
 Removed %3 sources, %4 chunks, deleted %5 terms.</source>
         <translation>已删除 %1 个文档：%2
 移除了 %3 个源文件、%4 个文本块，删除了 %5 个术语。</translation>
     </message>
     <message>
-        <location filename="../views/import_view.py" line="675"/>
+        <location filename="../views/import_view.py" line="708"/>
         <source>Failed to delete document: %1</source>
         <translation>删除文档失败：%1</translation>
     </message>
