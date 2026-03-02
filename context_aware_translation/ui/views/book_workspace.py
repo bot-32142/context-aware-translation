@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QSplitter,
     QTabWidget,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -187,7 +188,11 @@ class BookWorkspace(QWidget):
             self.tab_widget.blockSignals(True)
             try:
                 # Create the actual view
-                view = factory()
+                try:
+                    view = factory()
+                except Exception as exc:
+                    logger.exception("Failed to create tab view (index=%s, title=%s)", index, tab_text)
+                    view = self._create_tab_error_view(tab_text, str(exc))
                 self._view_cache[index] = view
                 # Replace the placeholder
                 self.tab_widget.removeTab(index)
@@ -195,6 +200,23 @@ class BookWorkspace(QWidget):
                 self.tab_widget.setCurrentIndex(index)
             finally:
                 self.tab_widget.blockSignals(False)
+
+    def _create_tab_error_view(self, tab_title: str, message: str) -> QWidget:
+        """Create a visible error panel for tab-initialization failures."""
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(16, 16, 16, 16)
+        title = QLabel(qarg(self.tr("Failed to load %1 tab."), tab_title))
+        title.setStyleSheet("font-weight: bold; color: #b00020;")
+        details = QTextEdit()
+        details.setReadOnly(True)
+        details.setPlainText(message)
+        details.setMinimumHeight(120)
+        details.setToolTip(self.tr("Error details for troubleshooting."))
+        layout.addWidget(title)
+        layout.addWidget(details)
+        layout.addStretch()
+        return container
 
     def _create_import_view(self) -> QWidget:
         """Create the import view."""
@@ -361,11 +383,6 @@ class BookWorkspace(QWidget):
             running.append(self.tr("Export"))
 
         return running
-
-    def is_translation_running(self) -> bool:
-        """Backward-compatible helper for legacy translation-only checks."""
-        running = self.get_running_operations()
-        return self.tr("Translation") in running
 
     def request_cancel_running_operations(self, *, include_engine_tasks: bool = True) -> None:
         """Request cancellation for currently running workers in this workspace.

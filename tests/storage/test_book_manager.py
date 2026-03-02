@@ -931,7 +931,7 @@ class TestConfigPersistenceValidation:
             assert profile.name == "system-default-profile"
             assert profile.is_default is True
             config = profile.config
-            assert config["translation_target_language"] == "Simplified Chinese"
+            assert config["translation_target_language"] == "简体中文"
             assert config["extractor_config"]["endpoint_profile"] == "system-default-deepseek"
             assert config["summarizor_config"]["endpoint_profile"] == "system-default-deepseek"
             assert config["glossary_config"]["endpoint_profile"] == "system-default-gemini-flash"

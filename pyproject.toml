@@ -32,7 +32,7 @@ dependencies = [
     "tenacity>=8.0.0",
     "tokenizers>=0.15.0",
     "torch>=2.0.0",
-    "transformers>=4.40.0",
+    "transformers>=4.57.3",
     "protobuf>=4.25.0",
 ]
 

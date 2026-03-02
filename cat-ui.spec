@@ -94,6 +94,15 @@ hiddenimports = [
 # Bundle all model-family modules to avoid runtime ModuleNotFoundError
 # (e.g., ernie4_5, qwen, glm, etc.) in packaged builds.
 hiddenimports += collect_submodules('transformers.models')
+# Explicit ERNIE imports for OCR/layout stacks that resolve these modules dynamically.
+hiddenimports += [
+    'transformers.models.ernie4_5',
+    'transformers.models.ernie4_5.configuration_ernie4_5',
+    'transformers.models.ernie4_5.modeling_ernie4_5',
+    'transformers.models.ernie4_5_moe',
+    'transformers.models.ernie4_5_moe.configuration_ernie4_5_moe',
+    'transformers.models.ernie4_5_moe.modeling_ernie4_5_moe',
+]
 
 # Exclude unnecessary modules to reduce size
 excludes = [

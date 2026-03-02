@@ -28,7 +28,3 @@ class WorkflowContext:
         if self.owns_context_tree:
             self.context_tree.close()
         self.db.close()
-
-
-# Backward-compatible alias for existing imports.
-WorkflowRuntime = WorkflowContext

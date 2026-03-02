@@ -23,7 +23,6 @@ from context_aware_translation.storage.registry_db import RegistryDB
 # Linux:   ~/.local/share/ContextAwareTranslation
 DEFAULT_LIBRARY_ROOT = Path(user_data_dir("ContextAwareTranslation", appauthor=False))
 
-
 class BookManager:
     """
     Manages books and config profiles with folder structure and registry.
@@ -225,7 +224,7 @@ class BookManager:
             updated_at=now,
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             model="gemini-2.5-pro",
-            description="Google AI Studio - Gemini 2.5 Pro",
+            temperature=0.0,
             kwargs={"reasoning_effort": "low"},
         )
         self.registry.insert_endpoint_profile(gemini)
@@ -237,7 +236,7 @@ class BookManager:
             updated_at=now,
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             model="gemini-3-flash-preview",
-            description="Google AI Studio - Gemini 3 Flash Preview",
+            temperature=0.0,
         )
         self.registry.insert_endpoint_profile(gemini_flash)
 
@@ -248,7 +247,7 @@ class BookManager:
             updated_at=now,
             base_url="https://api.deepseek.com",
             model="deepseek-chat",
-            description="DeepSeek Chat",
+            temperature=0.0,
         )
         self.registry.insert_endpoint_profile(deepseek)
 
@@ -260,9 +259,8 @@ class BookManager:
             name="system-default-profile",
             created_at=now,
             updated_at=now,
-            description="Default profile: DeepSeek for extraction/summarization, Gemini for translation/OCR/manga",
             config={
-                "translation_target_language": "Simplified Chinese",
+                "translation_target_language": "简体中文",
                 "extractor_config": {"endpoint_profile": "system-default-deepseek"},
                 "summarizor_config": {"endpoint_profile": "system-default-deepseek"},
                 "glossary_config": {"endpoint_profile": "system-default-gemini-flash"},
@@ -284,7 +282,7 @@ class BookManager:
         api_key: str = "",
         base_url: str = "",
         model: str = "",
-        temperature: float = 0.7,
+        temperature: float = 0.0,
         kwargs: dict[str, Any] | None = None,
         timeout: int = 60,
         max_retries: int = 3,
@@ -632,6 +630,7 @@ class BookManager:
         book = self.registry.get_book(book_id)
         if book is None:
             raise ValueError(f"Book not found: {book_id}")
+
         config = Config.from_book(book, self.library_root, self.registry)
         from context_aware_translation.config import CONFIG_SNAPSHOT_VERSION
 

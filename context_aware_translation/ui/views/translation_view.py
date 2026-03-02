@@ -32,7 +32,6 @@ from context_aware_translation.ui.i18n import qarg, translate_task_block_reason
 from context_aware_translation.ui.utils import create_tip_label, translate_document_type
 from context_aware_translation.ui.views.manga_review_widget import MangaReviewWidget
 from context_aware_translation.ui.widgets.task_status_card import TaskStatusStrip
-from context_aware_translation.ui.workers.operation_tracker import DocumentOperationTracker
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 from context_aware_translation.workflow.tasks.models import (
     TERMINAL_TASK_STATUSES,
@@ -373,22 +372,7 @@ class TranslationView(QWidget):
             self.submit_batch_btn.setToolTip("")
             return
 
-        # Check per-document reservation for selected docs
         selected_doc_ids = self._get_selected_document_ids()
-        has_reservation = self._has_document_reservation(selected_doc_ids)
-        if has_reservation:
-            self.start_btn.setEnabled(False)
-            self.start_btn.setText(self.tr("Start Translation"))
-            self.start_btn.setStyleSheet("")
-            self.start_btn.setToolTip(
-                self.tr("Selected document(s) already have task history; delete overlapping task(s) to unblock.")
-            )
-            self.submit_batch_btn.setEnabled(False)
-            self.submit_batch_btn.setToolTip(
-                self.tr("Selected document(s) already have task history; delete overlapping task(s) to unblock.")
-            )
-            self._update_retranslate_chunk_button_state()
-            return
 
         pending_ocr_doc_ids = self._get_preflight_docs_with_pending_ocr()
         if pending_ocr_doc_ids:
@@ -791,18 +775,6 @@ class TranslationView(QWidget):
         Mixed selections run a preflight for each non-empty bucket first (all-or-none
         admission check). If any preflight is denied, nothing is submitted.
         """
-        selected_doc_ids = self._get_selected_document_ids()
-        if self._has_document_reservation(selected_doc_ids):
-            QMessageBox.information(
-                self,
-                self.tr("Documents Reserved"),
-                self.tr(
-                    "Selected document(s) have active operations or existing batch task history. "
-                    "Delete overlapping task(s) to unblock."
-                ),
-            )
-            return
-
         resolved = self._resolve_trigger_conditions(for_batch_submit=False)
         if resolved is None:
             return
@@ -1016,13 +988,6 @@ class TranslationView(QWidget):
         except (json.JSONDecodeError, TypeError, ValueError):
             pass
         return None
-
-    def _has_document_reservation(
-        self,
-        document_ids: list[int] | None,
-    ) -> bool:
-        """Check if documents are reserved by active local operations."""
-        return DocumentOperationTracker.has_document_overlap(self.book_id, document_ids)
 
     def _submit_batch_task(self) -> None:
         resolved = self._resolve_trigger_conditions(for_batch_submit=True)

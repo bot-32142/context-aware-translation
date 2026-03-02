@@ -285,9 +285,6 @@ class MainWindow(QMainWindow):
             running = workspace.get_running_operations()
             if isinstance(running, list):
                 return running
-        # Backward compatibility with older workspace instances.
-        if hasattr(workspace, "is_translation_running") and workspace.is_translation_running():
-            return [self.tr("Translation")]
         return []
 
     def _warn_running_operations(self, operations: list[str] | None = None) -> bool:

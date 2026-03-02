@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS endpoint_profiles (
     api_key TEXT,
     base_url TEXT,
     model TEXT,
-    temperature REAL DEFAULT 0.7,
+    temperature REAL DEFAULT 0.0,
     kwargs TEXT DEFAULT '{}',
     enable_thinking INTEGER DEFAULT 1,
     timeout INTEGER DEFAULT 60,

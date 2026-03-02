@@ -21,7 +21,7 @@ class EndpointProfile:
     api_key: str = ""  # Stored encrypted or empty if using env var
     base_url: str = ""
     model: str = ""
-    temperature: float = 0.7
+    temperature: float = 0.0
     kwargs: dict[str, Any] = None  # type: ignore[assignment]
     timeout: int = 60
     max_retries: int = 3
@@ -79,7 +79,7 @@ class EndpointProfile:
             api_key=data.get("api_key", ""),
             base_url=data.get("base_url", ""),
             model=data.get("model", ""),
-            temperature=data.get("temperature", 0.7),
+            temperature=data.get("temperature", 0.0),
             kwargs=data.get("kwargs", {}),
             timeout=data.get("timeout", 60),
             max_retries=data.get("max_retries", 3),

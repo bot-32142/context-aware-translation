@@ -79,7 +79,7 @@ class EngineCore:
 
         Note: ``_probe_cache`` is accessed without a lock.  This is intentional —
         a stale or torn read can only cause an extra (cheap) snapshot attempt,
-        and the TTL is short enough that any inconsistency self-heals within
+        and the TTL is short enough that any inconsistency expires within
         seconds.  Adding a lock here would serialize all preflight calls across
         books for negligible correctness gain.
         """

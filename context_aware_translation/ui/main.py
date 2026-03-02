@@ -1,5 +1,6 @@
 """Entry point for the PySide6 desktop application."""
 
+import importlib.resources as importlib_resources
 import os
 import sys
 import traceback
@@ -11,7 +12,18 @@ from PySide6.QtWidgets import QApplication, QStyleFactory
 
 
 def load_stylesheet() -> str:
-    """Load the application stylesheet."""
+    """Load the application stylesheet.
+
+    Use package-resource loading first so frozen builds (PyInstaller) can
+    still resolve the stylesheet consistently across platforms.
+    """
+    try:
+        resource = importlib_resources.files("context_aware_translation.ui.resources").joinpath("styles.qss")
+        return resource.read_text(encoding="utf-8")
+    except Exception:
+        # Fallback for editable/local runs.
+        pass
+
     style_path = Path(__file__).parent / "resources" / "styles.qss"
     if style_path.exists():
         return style_path.read_text(encoding="utf-8")
