@@ -127,6 +127,23 @@ jobs:
             exit 1
           fi
 
+      - name: Verify OpenCC assets (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          OPENCC_CFG="dist/${{ env.APP_NAME }}/_internal/opencc/config/jp2s.json"
+          OPENCC_DICT_DIR="dist/${{ env.APP_NAME }}/_internal/opencc/dictionary"
+          if [ ! -f "$OPENCC_CFG" ]; then
+            echo "::error::Missing OpenCC config: $OPENCC_CFG"
+            exit 1
+          fi
+          if [ ! -d "$OPENCC_DICT_DIR" ]; then
+            echo "::error::Missing OpenCC dictionary dir: $OPENCC_DICT_DIR"
+            exit 1
+          fi
+          echo "OpenCC assets verified."
+
       # ============================================================
       # macOS: Sign, package as DMG, notarize
       # ============================================================

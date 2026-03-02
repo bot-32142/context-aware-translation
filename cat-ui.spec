@@ -56,10 +56,11 @@ except Exception as exc:  # noqa: BLE001
     print(f"[cat-ui.spec] warning: failed to collect data files for pypandoc: {exc}")
 
 # OpenCC requires config/dictionary assets at runtime (e.g. config/jp2s.json).
-try:
-    datas += collect_data_files('opencc')
-except Exception as exc:  # noqa: BLE001
-    print(f"[cat-ui.spec] warning: failed to collect data files for opencc: {exc}")
+# This is critical for glossary key normalization; fail build if missing.
+opencc_datas = collect_data_files('opencc', includes=['config/*.json', 'dictionary/*.txt'])
+if not any(src.endswith('opencc/config/jp2s.json') for src, _dest in opencc_datas):
+    raise RuntimeError("cat-ui.spec: OpenCC jp2s.json not collected; packaging would be broken.")
+datas += opencc_datas
 
 # Hidden imports for PySide6 and other dependencies
 hiddenimports = [
