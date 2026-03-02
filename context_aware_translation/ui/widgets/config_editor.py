@@ -154,11 +154,11 @@ class ConfigEditorWidget(QWidget):
         self.translator_endpoint = self._create_endpoint_dropdown()
         self._translator_layout.addRow(self.tr("Endpoint Profile:"), self.translator_endpoint)
 
-        self.chunks_per_call_spin = QSpinBox()
-        self.chunks_per_call_spin.setRange(1, 20)
-        self.chunks_per_call_spin.setValue(3)
-        self.chunks_per_call_spin.setToolTip(self.tr("Number of chunks to translate per LLM call"))
-        self._translator_layout.addRow(self.tr("Chunks per Call:"), self.chunks_per_call_spin)
+        self.max_tokens_per_call_spin = QSpinBox()
+        self.max_tokens_per_call_spin.setRange(100, 100000)
+        self.max_tokens_per_call_spin.setValue(5000)
+        self.max_tokens_per_call_spin.setToolTip(self.tr("Maximum estimated request tokens per translation call"))
+        self._translator_layout.addRow(self.tr("Max Tokens per Call:"), self.max_tokens_per_call_spin)
 
         self.chunk_size_spin = QSpinBox()
         self.chunk_size_spin.setRange(100, 5000)
@@ -346,7 +346,7 @@ class ConfigEditorWidget(QWidget):
 
         # Translator form labels
         _set_label(self._translator_layout, self.translator_endpoint, self.tr("Endpoint Profile:"))
-        _set_label(self._translator_layout, self.chunks_per_call_spin, self.tr("Chunks per Call:"))
+        _set_label(self._translator_layout, self.max_tokens_per_call_spin, self.tr("Max Tokens per Call:"))
         _set_label(self._translator_layout, self.chunk_size_spin, self.tr("Chunk Size:"))
 
         # Translator batch form labels
@@ -474,8 +474,8 @@ class ConfigEditorWidget(QWidget):
         )
         self._set_field_tooltip(
             self._translator_layout,
-            self.chunks_per_call_spin,
-            self.tr("Number of text chunks sent per translation request."),
+            self.max_tokens_per_call_spin,
+            self.tr("Maximum estimated request tokens (context + source text) per translation call."),
         )
         self._set_field_tooltip(
             self._translator_layout,
@@ -611,7 +611,7 @@ class ConfigEditorWidget(QWidget):
                 "endpoint_profile": translator_endpoint,
                 # UI-level translation controls own polish behavior now.
                 "enable_polish": True,
-                "num_of_chunks_per_llm_call": self.chunks_per_call_spin.value(),
+                "max_tokens_per_llm_call": self.max_tokens_per_call_spin.value(),
                 "chunk_size": self.chunk_size_spin.value(),
             }
 
@@ -693,7 +693,7 @@ class ConfigEditorWidget(QWidget):
         translator = config.get("translator_config", {})
         if translator:
             self._set_endpoint_dropdown(self.translator_endpoint, translator.get("endpoint_profile"))
-            self.chunks_per_call_spin.setValue(translator.get("num_of_chunks_per_llm_call", 3))
+            self.max_tokens_per_call_spin.setValue(translator.get("max_tokens_per_llm_call", 5000))
             self.chunk_size_spin.setValue(translator.get("chunk_size", 1000))
 
         translator_batch = config.get("translator_batch_config", {})

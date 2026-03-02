@@ -46,11 +46,15 @@ async def translate(
 
     bootstrap_ops.check_cancel(cancel_check)
     doc_type_by_id = build_doc_type_by_id(workflow, document_ids)
+    max_tokens_per_call = int(getattr(translator_config, "max_tokens_per_llm_call", 5000) or 5000)
+    if max_tokens_per_call <= 0:
+        max_tokens_per_call = 5000
 
     await workflow.manager.translate_chunks(
         doc_type_by_id=doc_type_by_id,
         concurrency=translator_config.concurrency,
-        batch_size=translator_config.num_of_chunks_per_llm_call,
+        batch_size=0,
+        max_tokens_per_batch=max_tokens_per_call,
         force=force,
         skip_context=skip_context,
         cancel_check=cancel_check,

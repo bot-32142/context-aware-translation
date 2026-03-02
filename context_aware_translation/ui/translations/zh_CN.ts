@@ -534,15 +534,12 @@ All completed translations are already saved and won&apos;t be lost.</source>
         <translation type="vanished">启用润色：</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="160"/>
         <source>Number of chunks to translate per LLM call</source>
-        <translation>每次LLM调用翻译的文本块数</translation>
+        <translation type="vanished">每次LLM调用翻译的文本块数</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="161"/>
-        <location filename="../widgets/config_editor.py" line="349"/>
         <source>Chunks per Call:</source>
-        <translation>每次调用文本块数：</translation>
+        <translation type="vanished">每次调用文本块数：</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="166"/>
@@ -572,6 +569,17 @@ All completed translations are already saved and won&apos;t be lost.</source>
         <location filename="../widgets/config_editor.py" line="358"/>
         <source>Disabled</source>
         <translation>禁用</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="160"/>
+        <source>Maximum estimated request tokens per translation call</source>
+        <translation>每次翻译调用的最大估算请求令牌数</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="161"/>
+        <location filename="../widgets/config_editor.py" line="349"/>
+        <source>Max Tokens per Call:</source>
+        <translation>每次调用最大令牌数：</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="182"/>
@@ -680,6 +688,11 @@ All completed translations are already saved and won&apos;t be lost.</source>
         <location filename="../widgets/config_editor.py" line="372"/>
         <source>Strip Artifacts:</source>
         <translation>去除伪影：</translation>
+    </message>
+    <message>
+        <location filename="../widgets/config_editor.py" line="478"/>
+        <source>Maximum estimated request tokens (context + source text) per translation call.</source>
+        <translation>每次翻译调用的最大估算请求令牌数（上下文 + 原文）。</translation>
     </message>
     <message>
         <source>Re-embed images in translated output</source>
@@ -901,9 +914,8 @@ All completed translations are already saved and won&apos;t be lost.</source>
         <translation type="vanished">翻译后额外执行一次润色流程。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="478"/>
         <source>Number of text chunks sent per translation request.</source>
-        <translation>每次翻译请求发送的文本块数量。</translation>
+        <translation type="vanished">每次翻译请求发送的文本块数量。</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="483"/>

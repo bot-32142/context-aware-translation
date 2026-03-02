@@ -354,10 +354,16 @@ async def ensure_payload_prepared(
     if not source_language:
         raise ValueError("Source language not found in database.")
 
+    max_tokens_per_batch = int(getattr(translator_config, "max_tokens_per_llm_call", 5000) or 5000)
+    if max_tokens_per_batch <= 0:
+        max_tokens_per_batch = 5000
+
     inputs = service.workflow.manager.collect_chunk_translation_inputs(
-        batch_size=translator_config.num_of_chunks_per_llm_call,
+        batch_size=0,
+        max_tokens_per_batch=max_tokens_per_batch,
         document_ids=document_ids,
         force=service._get_force(task),
+        skip_context=skip_context,
         cancel_check=cancel_check,
         source_language=source_language,
     )

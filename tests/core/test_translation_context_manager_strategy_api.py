@@ -201,7 +201,7 @@ class FailingTermReviewerStrategy:
 
 class AdapterProbeManager:
     def __init__(self) -> None:
-        self.calls: list[tuple[tuple[int, ...], int, int, bool]] = []
+        self.calls: list[tuple[tuple[int, ...], int, int, int, bool]] = []
         self._inflight = 0
         self.max_inflight = 0
 
@@ -209,6 +209,7 @@ class AdapterProbeManager:
         self,
         concurrency: int,
         batch_size: int,
+        max_tokens_per_batch: int,
         document_ids: list[int],
         force: bool = False,
         skip_context: bool = False,
@@ -216,7 +217,7 @@ class AdapterProbeManager:
     ) -> None:
         _ = force
         _ = progress_callback
-        self.calls.append((tuple(document_ids), concurrency, batch_size, skip_context))
+        self.calls.append((tuple(document_ids), concurrency, batch_size, max_tokens_per_batch, skip_context))
         self._inflight += 1
         self.max_inflight = max(self.max_inflight, self._inflight)
         await asyncio.sleep(0.01)
@@ -378,6 +379,78 @@ async def test_translation_context_manager_translate_chunks_uses_chunk_strategy_
 
     chunk_strategy.translate.assert_awaited()
     assert term_repo.chunks[0].translation == "translated-term1 is here"
+
+
+@pytest.mark.asyncio
+async def test_translate_chunks_splits_to_single_chunk_when_token_budget_is_tiny():
+    tokenizer = DummyTokenizer()
+    context_tree = DummyContextTree()
+    term = Term(
+        key="term1",
+        descriptions={"0": "description"},
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        translated_name="term1-translation",
+    )
+    chunks = [
+        TranslationChunkRecord(chunk_id=0, hash="h0", text="first chunk"),
+        TranslationChunkRecord(chunk_id=1, hash="h1", text="second chunk"),
+    ]
+    term_repo = DummyTermRepo(source_language="English", terms=[term], chunks=chunks)
+    chunk_strategy = CapturingChunkTranslatorStrategy()
+
+    manager = TranslationContextManager(
+        term_repo=term_repo,
+        context_tree=context_tree,
+        context_extractor=DummyContextExtractor(),
+        tokenizer=tokenizer,
+        source_language_detector=DetectLanguageStrategy("English"),
+        glossary_translator=GlossaryTranslatorStrategy(),
+        chunk_translator=chunk_strategy,
+        term_reviewer=None,
+    )
+
+    await manager.translate_chunks(concurrency=1, batch_size=0, max_tokens_per_batch=1)
+
+    assert chunk_strategy.translate.await_count == 2
+    assert [len(call["texts"]) for call in chunk_strategy.calls] == [1, 1]
+
+
+@pytest.mark.asyncio
+async def test_translate_chunks_groups_more_chunks_when_token_budget_allows():
+    tokenizer = DummyTokenizer()
+    context_tree = DummyContextTree()
+    term = Term(
+        key="term1",
+        descriptions={"0": "description"},
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        translated_name="term1-translation",
+    )
+    chunks = [
+        TranslationChunkRecord(chunk_id=0, hash="h0", text="first chunk"),
+        TranslationChunkRecord(chunk_id=1, hash="h1", text="second chunk"),
+    ]
+    term_repo = DummyTermRepo(source_language="English", terms=[term], chunks=chunks)
+    chunk_strategy = CapturingChunkTranslatorStrategy()
+
+    manager = TranslationContextManager(
+        term_repo=term_repo,
+        context_tree=context_tree,
+        context_extractor=DummyContextExtractor(),
+        tokenizer=tokenizer,
+        source_language_detector=DetectLanguageStrategy("English"),
+        glossary_translator=GlossaryTranslatorStrategy(),
+        chunk_translator=chunk_strategy,
+        term_reviewer=None,
+    )
+
+    await manager.translate_chunks(concurrency=1, batch_size=0, max_tokens_per_batch=50000)
+
+    assert chunk_strategy.translate.await_count == 1
+    assert len(chunk_strategy.calls[0]["texts"]) == 2
 
 
 @pytest.mark.asyncio
@@ -638,7 +711,7 @@ async def test_translation_context_manager_adapter_forwards_skip_context_flag():
         skip_context=True,
     )
 
-    assert manager.calls == [((1,), 3, 2, True)]
+    assert manager.calls == [((1,), 3, 2, 5000, True)]
 
 
 # ---------------------------------------------------------------------------

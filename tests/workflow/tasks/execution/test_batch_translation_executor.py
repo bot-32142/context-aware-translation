@@ -785,9 +785,11 @@ async def test_ensure_payload_prepared_uses_batch_model_with_fixed_temperature()
     payload = await ensure_payload_prepared(service, task, {}, cancel_check=None)
 
     manager.collect_chunk_translation_inputs.assert_called_once_with(
-        batch_size=7,
+        batch_size=0,
+        max_tokens_per_batch=5000,
         document_ids=None,
         force=False,
+        skip_context=False,
         cancel_check=None,
         source_language="Japanese",
     )

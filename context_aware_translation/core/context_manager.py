@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import threading
 from collections import deque
@@ -1219,6 +1220,149 @@ class TranslationContextManager(ContextManager):
             batches.append(current_batch)
         return batches
 
+    def _estimate_tokens(self, text: str) -> int:
+        """Estimate token count using the manager tokenizer."""
+        try:
+            return len(self.tokenizer.encode(text, add_special_tokens=False))
+        except TypeError:
+            # Some test tokenizers don't accept add_special_tokens.
+            return len(self.tokenizer.encode(text))
+
+    @staticmethod
+    def _split_nonempty_lines(chunk_text: str) -> list[str]:
+        return [line for line in chunk_text.splitlines() if line.strip()]
+
+    def _estimate_translation_request_tokens(
+        self,
+        batch_texts: list[str],
+        batch_terms: list[tuple[str, str, str]],
+    ) -> int:
+        """Estimate translation request tokens from user payload only.
+
+        Counts context terms + original text payload and intentionally excludes
+        system prompt tokens.
+        """
+        all_blocks: list[str] = []
+        for chunk_text in batch_texts:
+            all_blocks.extend(self._split_nonempty_lines(chunk_text))
+
+        terms_json: list[dict[str, str]] = []
+        for name, translated_name, description in batch_terms:
+            entry: dict[str, str] = {
+                "标准名称": name,
+                "翻译名称": translated_name,
+            }
+            if description:
+                entry["描述"] = description
+            terms_json.append(entry)
+
+        user_payload = {
+            "术语列表": terms_json,
+            "原文": all_blocks,
+        }
+        user_prompt = json.dumps(user_payload, ensure_ascii=False, indent=2)
+        return self._estimate_tokens(user_prompt)
+
+    def _group_batches_by_token_budget(
+        self,
+        chunks: list[TranslationChunkRecord],
+        all_terms: list[Term],
+        *,
+        max_tokens_per_batch: int,
+        skip_context: bool = False,
+        max_chunks_per_batch: int | None = None,
+    ) -> list[list[TranslationChunkRecord]]:
+        """Greedily split consecutive chunks by request token budget."""
+        if max_tokens_per_batch <= 0:
+            raise ValueError("max_tokens_per_batch must be greater than 0")
+
+        if max_chunks_per_batch is None or max_chunks_per_batch <= 0:
+            max_chunks_per_batch = max(1, len(chunks))
+
+        consecutive_groups = self._group_consecutive_batches(chunks, max_chunks_per_batch)
+        batches: list[list[TranslationChunkRecord]] = []
+
+        def _estimate_range_tokens(
+            group: list[TranslationChunkRecord],
+            start: int,
+            end: int,
+        ) -> int:
+            candidate = group[start:end]
+            batch_texts, batch_terms = self.build_batch_request_payload(
+                candidate,
+                all_terms,
+                skip_context=skip_context,
+            )
+            return self._estimate_translation_request_tokens(batch_texts, batch_terms)
+
+        def _find_best_end(
+            group: list[TranslationChunkRecord],
+            start: int,
+        ) -> int:
+            """Find max end (exclusive) that fits budget using fewer probes.
+
+            Uses exponential search + binary search under the practical
+            monotonicity assumption that adding chunks usually does not reduce
+            token usage. A short linear forward pass keeps behavior robust.
+            """
+            n = len(group)
+            if start >= n:
+                return n
+
+            # Always allow one chunk even if it exceeds the token budget.
+            if start + 1 >= n:
+                return n
+
+            estimate_cache: dict[int, int] = {}
+
+            def _fits(end: int) -> bool:
+                if end <= start + 1:
+                    return True
+                if end not in estimate_cache:
+                    estimate_cache[end] = _estimate_range_tokens(group, start, end)
+                return estimate_cache[end] <= max_tokens_per_batch
+
+            # Exponential search to bracket boundary.
+            best = start + 1
+            step = 1
+            hi = min(n, start + 1 + step)
+            while hi <= n and _fits(hi):
+                best = hi
+                if hi == n:
+                    return n
+                step *= 2
+                hi = min(n, start + 1 + step)
+
+            # Binary search in (best, hi] for rightmost fit.
+            lo = best + 1
+            while lo <= hi:
+                mid = (lo + hi) // 2
+                if _fits(mid):
+                    best = mid
+                    lo = mid + 1
+                else:
+                    hi = mid - 1
+
+            # Short linear extension for robustness near boundary.
+            probe = best + 1
+            while probe <= n and probe <= best + 4:
+                if _fits(probe):
+                    best = probe
+                    probe += 1
+                else:
+                    break
+
+            return best
+
+        for group in consecutive_groups:
+            start = 0
+            while start < len(group):
+                best_end = _find_best_end(group, start)
+                batches.append(group[start:best_end])
+                start = best_end
+
+        return batches
+
     @staticmethod
     def _term_in_batch(
         term: Term,
@@ -1257,8 +1401,10 @@ class TranslationContextManager(ContextManager):
         self,
         *,
         batch_size: int,
+        max_tokens_per_batch: int = 5000,
         document_ids: list[int] | None,
         force: bool,
+        skip_context: bool = False,
         cancel_check: Callable[[], bool] | None,
         source_language: str | None = None,
     ) -> ChunkTranslationInputs | None:
@@ -1276,7 +1422,14 @@ class TranslationContextManager(ContextManager):
             raise ValueError("Source language not found in the database")
 
         all_terms = [term for term in self.term_repo.list_keyed_context() if not term.ignored]
-        batches = self._group_consecutive_batches(untranslated_chunks, batch_size)
+        max_chunks_per_batch = batch_size if batch_size > 0 else None
+        batches = self._group_batches_by_token_budget(
+            untranslated_chunks,
+            all_terms,
+            max_tokens_per_batch=max_tokens_per_batch,
+            skip_context=skip_context,
+            max_chunks_per_batch=max_chunks_per_batch,
+        )
         return ChunkTranslationInputs(
             source_language=resolved_source_language,
             all_terms=all_terms,
@@ -1300,6 +1453,7 @@ class TranslationContextManager(ContextManager):
         self,
         concurrency: int,
         batch_size: int = 5,
+        max_tokens_per_batch: int = 5000,
         document_ids: list[int] | None = None,
         force: bool = False,
         skip_context: bool = False,
@@ -1310,13 +1464,18 @@ class TranslationContextManager(ContextManager):
 
         Args:
             concurrency: Number of concurrent translation tasks
-            batch_size: Number of chunks per translation batch
+            batch_size: Optional hard cap of chunks per translation batch.
+                Set to <=0 to disable this cap.
+            max_tokens_per_batch: Max estimated request tokens per translation
+                call (user payload only; excludes system prompt).
             document_ids: Specific document IDs to translate, or None for all
         """
         inputs = self.collect_chunk_translation_inputs(
             batch_size=batch_size,
+            max_tokens_per_batch=max_tokens_per_batch,
             document_ids=document_ids,
             force=force,
+            skip_context=skip_context,
             cancel_check=cancel_check,
         )
         if inputs is None:
@@ -1442,6 +1601,7 @@ class TranslationContextManagerAdapter:
         self,
         concurrency: int,
         batch_size: int = 5,
+        max_tokens_per_batch: int = 5000,
         doc_type_by_id: dict[int, str] | None = None,
         force: bool = False,
         skip_context: bool = False,
@@ -1479,18 +1639,20 @@ class TranslationContextManagerAdapter:
             else:
                 if cancel_check is None:
                     await self._manager.translate_chunks(
-                        max_parallel,
-                        batch_size,
-                        [doc_id],
+                        concurrency=max_parallel,
+                        batch_size=batch_size,
+                        max_tokens_per_batch=max_tokens_per_batch,
+                        document_ids=[doc_id],
                         force=force,
                         skip_context=skip_context,
                         progress_callback=progress_callback,
                     )
                 else:
                     await self._manager.translate_chunks(
-                        max_parallel,
-                        batch_size,
-                        [doc_id],
+                        concurrency=max_parallel,
+                        batch_size=batch_size,
+                        max_tokens_per_batch=max_tokens_per_batch,
+                        document_ids=[doc_id],
                         force=force,
                         skip_context=skip_context,
                         cancel_check=cancel_check,

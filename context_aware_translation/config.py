@@ -190,6 +190,7 @@ class TranslatorConfig(LLMConfig):
     # Translation-specific settings
     enable_polish: bool = True
     num_of_chunks_per_llm_call: int = 3
+    max_tokens_per_llm_call: int = 5000
     chunk_size: int = 1000  # Max token size per chunk for text processing
 
     def to_dict(self) -> dict[str, Any]:
@@ -199,6 +200,7 @@ class TranslatorConfig(LLMConfig):
             {
                 "enable_polish": self.enable_polish,
                 "num_of_chunks_per_llm_call": self.num_of_chunks_per_llm_call,
+                "max_tokens_per_llm_call": self.max_tokens_per_llm_call,
                 "chunk_size": self.chunk_size,
             }
         )
@@ -220,6 +222,7 @@ class TranslatorConfig(LLMConfig):
             kwargs=data.get("kwargs", {}),
             enable_polish=data.get("enable_polish", True),
             num_of_chunks_per_llm_call=data.get("num_of_chunks_per_llm_call", 3),
+            max_tokens_per_llm_call=data.get("max_tokens_per_llm_call", 5000),
             chunk_size=data.get("chunk_size", 1000),
         )
 

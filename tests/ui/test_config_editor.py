@@ -308,7 +308,7 @@ class TestFieldTooltips:
             ("Summarizer Endpoint", widget.summarizer_endpoint),
             ("Glossary Endpoint", widget.glossary_endpoint),
             ("Translator Endpoint", widget.translator_endpoint),
-            ("Chunks per Call", widget.chunks_per_call_spin),
+            ("Max Tokens per Call", widget.max_tokens_per_call_spin),
             ("Chunk Size", widget.chunk_size_spin),
             ("Translator Batch Provider", widget.translator_batch_provider),
             ("Translator Batch API Key", widget.translator_batch_api_key),
