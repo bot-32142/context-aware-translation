@@ -31,7 +31,7 @@ def _ensure_jp2s_config() -> None:
     jp_rev_path = os.path.join(dict_dir, "JPVariantsRev.txt")
     if not os.path.exists(jp_rev_path):
         jp_path = os.path.join(dict_dir, "JPVariants.txt")
-        with open(jp_path) as f:
+        with open(jp_path, encoding="utf-8") as f:
             lines = f.readlines()
         reversed_lines = []
         for line in lines:
@@ -41,7 +41,7 @@ def _ensure_jp2s_config() -> None:
             parts = line.split("\t")
             if len(parts) == 2:
                 reversed_lines.append(f"{parts[1]}\t{parts[0]}")
-        with open(jp_rev_path, "w") as f:
+        with open(jp_rev_path, "w", encoding="utf-8") as f:
             f.write("\n".join(sorted(reversed_lines)) + "\n")
 
     # Generate jp2s config (JP shinjitai -> Traditional -> Simplified)
@@ -64,7 +64,7 @@ def _ensure_jp2s_config() -> None:
             },
         ],
     }
-    with open(jp2s_path, "w") as f:
+    with open(jp2s_path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
 
 

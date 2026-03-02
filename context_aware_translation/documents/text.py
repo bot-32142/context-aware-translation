@@ -248,6 +248,6 @@ class TextDocument(Document):
                 # Write to output folder preserving relative path
                 output_path = output_folder / relative_path
                 output_path.parent.mkdir(parents=True, exist_ok=True)
-                output_path.write_text(source_text)
+                output_path.write_text(source_text, encoding="utf-8")
 
             line_start += line_count
