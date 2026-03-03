@@ -71,15 +71,15 @@ class OpenAIImageGenerator(BaseImageGenerator):
         self,
         image_bytes: bytes,
         mime_type: str,
-        translated_text: str,
+        text_replacements: list[tuple[str, str]],
         cancel_check: Callable[[], bool] | None = None,
     ) -> bytes:
-        """Replace text in an image with translated text using OpenAI's API.
+        """Replace text in an image using mapping pairs via OpenAI's API.
 
         Args:
             image_bytes: Original image bytes
             mime_type: MIME type (e.g., "image/png")
-            translated_text: Translated text to embed
+            text_replacements: Ordered list of (original, translated) pairs
             cancel_check: Optional callable returning True when cancelled
 
         Returns:
@@ -91,7 +91,13 @@ class OpenAIImageGenerator(BaseImageGenerator):
             APITimeoutError: If request times out after retries
             APIConnectionError: If connection fails after retries
         """
-        prompt = self._build_prompt(translated_text)
+        prompt = self._build_prompt(text_replacements)
+        self._log_edit_prompt(
+            backend="openai",
+            mime_type=mime_type,
+            text_replacements=text_replacements,
+            prompt=prompt,
+        )
 
         async def _call() -> bytes:
             """Inner function for retry logic."""

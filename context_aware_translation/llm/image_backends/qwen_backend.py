@@ -102,16 +102,15 @@ class QwenImageGenerator(BaseImageGenerator):
         self,
         image_bytes: bytes,
         mime_type: str,
-        translated_text: str,
+        text_replacements: list[tuple[str, str]],
         cancel_check: Callable[[], bool] | None = None,
     ) -> bytes:
-        """Replace text in an image with translated text using Qwen's API.
+        """Replace text in an image using mapping pairs via Qwen's API.
 
         Args:
             image_bytes: Original image bytes
             mime_type: MIME type (e.g., "image/png")
-            original_text: Original embedded text to replace
-            translated_text: Translated text to embed
+            text_replacements: Ordered list of (original, translated) pairs
 
         Returns:
             Modified image bytes (PNG format)
@@ -120,7 +119,13 @@ class QwenImageGenerator(BaseImageGenerator):
             httpx.HTTPStatusError: If API returns error status after retries
             Exception: Various API errors after retries
         """
-        prompt = self._build_prompt(translated_text)
+        prompt = self._build_prompt(text_replacements)
+        self._log_edit_prompt(
+            backend="qwen",
+            mime_type=mime_type,
+            text_replacements=text_replacements,
+            prompt=prompt,
+        )
 
         # Encode image as base64 data URI
         b64_image = base64.b64encode(image_bytes).decode("utf-8")

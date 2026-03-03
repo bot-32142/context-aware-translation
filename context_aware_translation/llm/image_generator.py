@@ -6,6 +6,7 @@ Supports multiple backends: OpenAI, Gemini, Qwen.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import Awaitable, Callable
 from enum import Enum
@@ -19,6 +20,31 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+TextReplacement = tuple[str, str]
+
+
+def build_text_replacements(original_text: str, translated_text: str) -> list[TextReplacement]:
+    """Build replacement pairs from original and translated embedded text.
+
+    Always returns line-by-line pairs. If line counts differ, shorter side is
+    padded with empty strings so mapping remains item-by-item.
+    """
+    if not original_text and not translated_text:
+        return []
+
+    normalized_original = original_text.replace("\r\n", "\n").replace("\r", "\n")
+    normalized_translated = translated_text.replace("\r\n", "\n").replace("\r", "\n")
+    original_lines = normalized_original.split("\n")
+    translated_lines = normalized_translated.split("\n")
+
+    total = max(len(original_lines), len(translated_lines))
+    replacements: list[TextReplacement] = []
+    for i in range(total):
+        original_line = original_lines[i] if i < len(original_lines) else ""
+        translated_line = translated_lines[i] if i < len(translated_lines) else ""
+        replacements.append((original_line, translated_line))
+
+    return replacements
 
 
 class ImageBackend(str, Enum):
@@ -40,20 +66,41 @@ class BaseImageGenerator:
         """
         self.config = config
 
-    def _build_prompt(self, translated_text: str) -> str:
-        """Build the prompt for image text replacement.
-
-        Args:
-            translated_text: The translated text to embed in the image
-
-        Returns:
-            Formatted prompt string for the image editing API
-        """
+    def _build_prompt(self, text_replacements: list[TextReplacement]) -> str:
+        """Build the prompt for image text replacement from explicit mappings."""
+        payload = [
+            {"index": idx + 1, "original": original, "translated": translated}
+            for idx, (original, translated) in enumerate(text_replacements)
+        ]
+        mapping_json = json.dumps(payload, ensure_ascii=False, indent=2)
         return (
-            f"Edit this image to replace the text.\n"
-            f"New text: {translated_text}\n"
-            f"Preserve the original style and adjust accordingly. "
-            f"Return the edited image."
+            "Edit this image by replacing text according to the mapping below.\n\n"
+            "Text replacement mapping (JSON array):\n"
+            f"{mapping_json}\n\n"
+            "Rules:\n"
+            "1) Match each `original` text and replace it with its `translated` text.\n"
+            "2) Preserve the original style, layout, and non-text visual content.\n"
+            "3) Keep replacement text in the same regions as the original text.\n"
+            "4) Do not invent extra text not present in the mapping.\n"
+            "Return only the edited image."
+        )
+
+    def _log_edit_prompt(
+        self,
+        *,
+        backend: str,
+        mime_type: str,
+        text_replacements: list[TextReplacement],
+        prompt: str,
+    ) -> None:
+        """Log image edit prompt at DEBUG level for troubleshooting."""
+        logger.debug(
+            "Image edit request - backend: %s, model: %s, mime_type: %s, replacements: %d, prompt: %s",
+            backend,
+            self.config.model,
+            mime_type,
+            len(text_replacements),
+            prompt,
         )
 
     def _record_token_usage(self, token_usage: dict[str, Any]) -> None:
@@ -108,15 +155,15 @@ class ImageGenerator(Protocol):
         self,
         image_bytes: bytes,
         mime_type: str,
-        translated_text: str,
+        text_replacements: list[TextReplacement],
         cancel_check: Callable[[], bool] | None = None,
     ) -> bytes:
-        """Replace text in an image with translated text.
+        """Replace text in an image using original->translated mappings.
 
         Args:
             image_bytes: Original image bytes
             mime_type: MIME type (e.g., "image/png")
-            translated_text: Translated text to embed
+            text_replacements: Ordered list of (original, translated) pairs
             cancel_check: Optional callable returning True when cancelled
 
         Returns:

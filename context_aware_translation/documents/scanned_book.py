@@ -270,7 +270,10 @@ class ScannedBookDocument(Document):
         import asyncio
 
         from context_aware_translation.documents.content.ocr_items import ImageItem
-        from context_aware_translation.llm.image_generator import create_image_generator
+        from context_aware_translation.llm.image_generator import (
+            build_text_replacements,
+            create_image_generator,
+        )
 
         if self._merged_content is None:
             return 0
@@ -301,12 +304,13 @@ class ScannedBookDocument(Document):
                 if translated is None or item.image_bytes is None:
                     return
 
+                text_replacements = build_text_replacements(item.embedded_text or "", translated)
                 mime_type = detect_mime_type(item.image_bytes)
 
                 new_bytes = await generator.edit_image(
                     image_bytes=item.image_bytes,
                     mime_type=mime_type,
-                    translated_text=translated,
+                    text_replacements=text_replacements,
                     cancel_check=cancel_check,
                 )
                 raise_if_cancelled(cancel_check)

@@ -1544,7 +1544,10 @@ class EPUBDocument(Document):
         """
         import asyncio
 
-        from context_aware_translation.llm.image_generator import create_image_generator
+        from context_aware_translation.llm.image_generator import (
+            build_text_replacements,
+            create_image_generator,
+        )
 
         sources = self.repo.get_document_sources(self.document_id)
         sources_sorted = sorted(sources, key=lambda s: s["sequence_number"])
@@ -1602,10 +1605,12 @@ class EPUBDocument(Document):
 
                 source_bytes = bytes(source["binary_content"])
                 mime_type = detect_mime_type(source_bytes)
+                original_text = self._extract_image_embedded_text(source)
+                text_replacements = build_text_replacements(original_text, translated_text)
                 new_bytes = await generator.edit_image(
                     image_bytes=source_bytes,
                     mime_type=mime_type,
-                    translated_text=translated_text,
+                    text_replacements=text_replacements,
                     cancel_check=cancel_check,
                 )
                 raise_if_cancelled(cancel_check)

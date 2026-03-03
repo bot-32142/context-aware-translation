@@ -40,7 +40,7 @@ async def test_edit_image_records_thought_tokens_in_reasoning_usage() -> None:
         )
 
     generator._record_token_usage = MagicMock()
-    result = await generator.edit_image(b"fake-bytes", "image/png", "translated text")
+    result = await generator.edit_image(b"fake-bytes", "image/png", [("原文", "translated text")])
 
     assert result == b"edited-image"
     token_usage = generator._record_token_usage.call_args.args[0]
@@ -76,7 +76,7 @@ async def test_edit_image_reconciles_unattributed_total_tokens_into_reasoning() 
         )
 
     generator._record_token_usage = MagicMock()
-    await generator.edit_image(b"fake-bytes", "image/png", "translated text")
+    await generator.edit_image(b"fake-bytes", "image/png", [("原文", "translated text")])
 
     token_usage = generator._record_token_usage.call_args.args[0]
     accounted = (
