@@ -1362,6 +1362,7 @@ class GlossaryView(QWidget):
         self.bulk_delete_action.setText(self.tr("Delete Selected"))
         self.export_button.setText(self.tr("Export Glossary"))
         self.import_button.setText(self.tr("Import Glossary"))
+        self.task_status_card.set_display_label(self.tr("Glossary Task Status"))
         self._apply_button_tooltips()
         self.table_model.retranslate()
         self._update_stats()

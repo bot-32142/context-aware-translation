@@ -33,6 +33,8 @@ def _make_view():
 
     with patch.object(OCRReviewView, "__init__", _noop_init):
         view = OCRReviewView(None, "")
+    view._task_refresh_scheduled = False
+    view._tasks_dirty = False
     return view
 
 
@@ -154,7 +156,7 @@ def test_on_tasks_changed_uses_captured_run_context_for_reload():
     view._go_to_page = MagicMock()
 
     with patch("context_aware_translation.ui.views.ocr_review_view.QMessageBox.information"):
-        view._on_tasks_changed("book-1")
+        view._on_tasks_changed_now()
 
     view._load_document_sources.assert_called_once_with(7)
     view._go_to_page.assert_called_once_with(2)

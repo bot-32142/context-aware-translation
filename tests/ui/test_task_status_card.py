@@ -111,6 +111,17 @@ def test_card_visible_when_tasks_exist():
     assert card.isVisible()
 
 
+def test_card_updates_display_label():
+    r = _make_record(status="queued")
+    engine = _make_engine(records=[r])
+    card = _make_card(engine=engine, display_label="Glossary Task Status")
+
+    card.set_display_label("术语表任务状态")
+    card.retranslateUi()
+
+    assert card._title_label.text() == "术语表任务状态"
+
+
 def test_card_shows_status_chip_text():
     r = _make_record(status="running")
     engine = _make_engine(records=[r])
@@ -287,10 +298,11 @@ def test_card_run_invokes_engine_run_task():
 def test_card_refreshes_on_tasks_changed_for_matching_book():
     r = _make_record()
     engine = _make_engine(records=[r])
-    card = _make_card(engine=engine, book_id="book-1")  # noqa: F841
+    card = _make_card(engine=engine, book_id="book-1")
     initial_count = engine.get_tasks.call_count
 
     engine.tasks_changed.emit("book-1")
+    card._flush_scheduled_refresh()
 
     assert engine.get_tasks.call_count > initial_count
 
@@ -298,10 +310,11 @@ def test_card_refreshes_on_tasks_changed_for_matching_book():
 def test_card_ignores_tasks_changed_for_other_book():
     r = _make_record()
     engine = _make_engine(records=[r])
-    card = _make_card(engine=engine, book_id="book-1")  # noqa: F841
+    _card = _make_card(engine=engine, book_id="book-1")
     initial_count = engine.get_tasks.call_count
 
     engine.tasks_changed.emit("book-99")
+    QApplication.processEvents()
 
     assert engine.get_tasks.call_count == initial_count
 
@@ -314,6 +327,7 @@ def test_card_hides_after_tasks_removed():
 
     engine.get_tasks.return_value = []
     engine.tasks_changed.emit("book-1")
+    card._flush_scheduled_refresh()
 
     assert not card.isVisible()
 
@@ -343,7 +357,7 @@ def test_card_multiple_task_types_aggregates_all():
     )
     engine = _make_engine()
 
-    def _get_tasks(book_id, task_type):  # noqa: ARG001
+    def _get_tasks(book_id, task_type, limit=None):  # noqa: ARG001
         if task_type == "batch_translation":
             return [r1]
         if task_type == "translation_text":
@@ -408,20 +422,22 @@ def test_strip_open_activity_signal_forwarded():
 def test_strip_refreshes_on_tasks_changed():
     r = _make_record()
     engine = _make_engine(records=[r])
-    strip = _make_strip(engine=engine, book_id="book-1")  # noqa: F841
+    strip = _make_strip(engine=engine, book_id="book-1")
     initial = engine.get_tasks.call_count
 
     engine.tasks_changed.emit("book-1")
+    strip._flush_scheduled_refresh()
 
     assert engine.get_tasks.call_count > initial
 
 
 def test_strip_ignores_tasks_changed_for_other_book():
     engine = _make_engine(records=[])
-    strip = _make_strip(engine=engine, book_id="book-1")  # noqa: F841
+    _strip = _make_strip(engine=engine, book_id="book-1")
     initial = engine.get_tasks.call_count
 
     engine.tasks_changed.emit("book-99")
+    QApplication.processEvents()
 
     assert engine.get_tasks.call_count == initial
 
@@ -436,6 +452,7 @@ def test_strip_removes_stale_cards_on_refresh():
     # Remove r2 from results
     engine.get_tasks.return_value = [r1]
     engine.tasks_changed.emit("book-1")
+    strip._flush_scheduled_refresh()
     assert len(strip._cards) == 1
     assert "aaaa0000-0000-0000-0000-000000000001" in strip._cards
 
@@ -448,6 +465,7 @@ def test_strip_hides_after_all_tasks_removed():
 
     engine.get_tasks.return_value = []
     engine.tasks_changed.emit("book-1")
+    strip._flush_scheduled_refresh()
     assert not strip.isVisible()
 
 
@@ -456,7 +474,7 @@ def test_strip_multiple_task_types():
     r2 = _make_record(task_id="bbbb1111-0000-0000-0000-000000000002", task_type="translation_text", status="queued")
     engine = _make_engine()
 
-    def _get_tasks(book_id, task_type):  # noqa: ARG001
+    def _get_tasks(book_id, task_type, limit=None):  # noqa: ARG001
         if task_type == "batch_translation":
             return [r1]
         if task_type == "translation_text":

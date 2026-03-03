@@ -23,6 +23,7 @@ from context_aware_translation.ui.tasks.task_view_models import TaskRowVM
 from context_aware_translation.workflow.tasks.models import TaskAction
 
 _AUTO_REFRESH_INTERVAL_MS = 3000
+_TASK_CONSOLE_LIST_LIMIT = 200
 
 
 def _format_eta(seconds_left: float) -> str:
@@ -106,11 +107,11 @@ class TaskConsole(QWidget):
     def refresh(self) -> None:
         """Re-fetch tasks from the engine and repaint the list."""
         if isinstance(self._task_type, str):
-            records = self._engine.get_tasks(self._book_id, task_type=self._task_type)
+            records = self._engine.get_tasks(self._book_id, task_type=self._task_type, limit=_TASK_CONSOLE_LIST_LIMIT)
         else:
             records = []
             for tt in self._task_type:
-                records.extend(self._engine.get_tasks(self._book_id, task_type=tt))
+                records.extend(self._engine.get_tasks(self._book_id, task_type=tt, limit=_TASK_CONSOLE_LIST_LIMIT))
             records.sort(key=lambda r: r.updated_at, reverse=True)
         self._vms = map_tasks_to_row_vms(records)
 

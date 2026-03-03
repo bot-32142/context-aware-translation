@@ -248,7 +248,7 @@ def test_get_running_operations_excludes_background_translation_text():
     engine = _make_engine(records=[r])
 
     # get_tasks returns the running record for translation_text
-    def _get_tasks(_book_id, task_type=None):
+    def _get_tasks(_book_id, task_type=None, limit=None):  # noqa: ARG001
         if task_type == "translation_text":
             return [r]
         return []
@@ -269,7 +269,7 @@ def test_get_running_operations_excludes_background_translation_manga():
     r = _make_record(task_type="translation_manga", status="running")
     engine = _make_engine(records=[r])
 
-    def _get_tasks(_book_id, task_type=None):
+    def _get_tasks(_book_id, task_type=None, limit=None):  # noqa: ARG001
         if task_type == "translation_manga":
             return [r]
         return []
@@ -290,7 +290,7 @@ def test_get_running_operations_excludes_terminal_translation_tasks():
     r = _make_record(task_type="translation_text", status="completed")
     engine = _make_engine(records=[r])
 
-    def _get_tasks(_book_id, task_type=None):
+    def _get_tasks(_book_id, task_type=None, limit=None):  # noqa: ARG001
         if task_type == "translation_text":
             return [r]
         return []

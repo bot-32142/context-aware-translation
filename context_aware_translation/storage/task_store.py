@@ -215,6 +215,8 @@ class TaskStore:
         task_type: str | None = None,
         limit: int | None = None,
         exclude_statuses: frozenset[str] | None = None,
+        include_payload: bool = True,
+        include_config_snapshot: bool = True,
     ) -> list[TaskRecord]:
         where_clauses: list[str] = []
         params: list[Any] = []
@@ -233,7 +235,14 @@ class TaskStore:
         where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
         limit_sql = f"LIMIT {int(limit)}" if limit is not None else ""
 
-        query = f"SELECT * FROM tasks {where_sql} ORDER BY updated_at DESC {limit_sql}"
+        payload_col = "payload_json" if include_payload else "NULL AS payload_json"
+        snapshot_col = "config_snapshot_json" if include_config_snapshot else "NULL AS config_snapshot_json"
+        query = (
+            "SELECT task_id, book_id, task_type, status, phase, document_ids_json, "
+            f"{payload_col}, {snapshot_col}, "
+            "cancel_requested, total_items, completed_items, failed_items, last_error, created_at, updated_at "
+            f"FROM tasks {where_sql} ORDER BY updated_at DESC {limit_sql}"
+        )
         with self._lock:
             rows = self.conn.execute(query, params).fetchall()
             return [self._row_to_record(row) for row in rows]

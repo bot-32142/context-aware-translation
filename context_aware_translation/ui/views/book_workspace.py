@@ -39,6 +39,8 @@ class BookWorkspace(QWidget):
 
     _TOKEN_REFRESH_INTERVAL_MS = 1500
     TRANSLATION_TAB_INDEX = 3
+    _ACTIVITY_RESTORE_MAX_RETRIES = 12
+    _ACTIVITY_RESTORE_RETRY_MS = 40
 
     close_requested = Signal()
 
@@ -66,6 +68,11 @@ class BookWorkspace(QWidget):
         self._activity_panel_default_width = 460
         self._activity_panel_last_width = self._activity_panel_default_width
         self._activity_panel_user_resized_since_show = False
+        self._activity_restore_retries_remaining = 0
+        self._activity_restore_timer = QTimer(self)
+        self._activity_restore_timer.setSingleShot(True)
+        self._activity_restore_timer.setInterval(self._ACTIVITY_RESTORE_RETRY_MS)
+        self._activity_restore_timer.timeout.connect(self._restore_activity_panel_width_deferred)
 
         # Header with book name and close button
         header_layout = QHBoxLayout()
@@ -126,7 +133,7 @@ class BookWorkspace(QWidget):
 
         self._activity_panel = TaskActivityPanel(self._task_engine, self.book_id)
         self._activity_panel.close_requested.connect(self._on_activity_panel_close)
-        self._activity_panel.setMinimumWidth(self._activity_panel_min_width)
+        self._activity_panel.setMinimumWidth(0)
         self._activity_panel.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         self._activity_panel.setVisible(False)
 
@@ -136,9 +143,10 @@ class BookWorkspace(QWidget):
         self._main_splitter.addWidget(self._activity_panel)
         self._main_splitter.setStretchFactor(0, 3)
         self._main_splitter.setStretchFactor(1, 1)
-        self._main_splitter.setChildrenCollapsible(False)
-        self._main_splitter.setCollapsible(0, False)
-        self._main_splitter.setCollapsible(1, False)
+        # Keep the handle movable even when a tab has large minimum size hints.
+        self._main_splitter.setChildrenCollapsible(True)
+        self._main_splitter.setCollapsible(0, True)
+        self._main_splitter.setCollapsible(1, True)
         self._main_splitter.splitterMoved.connect(self._on_splitter_moved)
         self._main_splitter.setSizes([1, 0])
         self._main_splitter.setHandleWidth(6)
@@ -178,6 +186,7 @@ class BookWorkspace(QWidget):
             view = self._view_cache[index]
             if hasattr(view, "refresh"):
                 view.refresh()
+            self._ensure_activity_panel_after_tab_change()
             return
 
         factory = self._tab_factories.get(index)
@@ -199,8 +208,19 @@ class BookWorkspace(QWidget):
                 self.tab_widget.removeTab(index)
                 self.tab_widget.insertTab(index, view, tab_text)
                 self.tab_widget.setCurrentIndex(index)
+                self._ensure_activity_panel_after_tab_change()
             finally:
                 self.tab_widget.blockSignals(False)
+
+    def _ensure_activity_panel_after_tab_change(self) -> None:
+        """Keep activity panel width valid after heavy tab initialization/switch."""
+        if not hasattr(self, "_activity_panel"):
+            return
+        if not self._activity_panel.isVisible():
+            return
+        self._activity_panel_user_resized_since_show = False
+        self._activity_restore_retries_remaining = self._ACTIVITY_RESTORE_MAX_RETRIES
+        self._schedule_activity_panel_restore()
 
     def _create_tab_error_view(self, tab_title: str, message: str) -> QWidget:
         """Create a visible error panel for tab-initialization failures."""
@@ -274,7 +294,6 @@ class BookWorkspace(QWidget):
     def show_activity_panel(self) -> None:
         """Show the activity panel (callable by child views)."""
         already_visible = self._activity_panel.isVisible()
-        self._activity_panel.setMinimumWidth(self._activity_panel_min_width)
         self._activity_panel.setVisible(True)
         self.activity_btn.setChecked(True)
         self._activity_panel.refresh()
@@ -284,19 +303,18 @@ class BookWorkspace(QWidget):
             return
 
         self._activity_panel_user_resized_since_show = False
+        self._activity_restore_retries_remaining = self._ACTIVITY_RESTORE_MAX_RETRIES
         self._restore_activity_panel_width()
-        # Re-apply once after layout settles to avoid first-open zero-size races.
-        # Guarded so delayed callbacks do not override a manual user resize.
-        QTimer.singleShot(0, self._restore_activity_panel_width_deferred)
-        QTimer.singleShot(50, self._restore_activity_panel_width_deferred)
+        # Keep retrying while the panel is visible-but-zero-width; fixed-delay
+        # one-shot restores can miss slow layout settles on some platforms.
+        self._schedule_activity_panel_restore()
 
     def hide_activity_panel(self) -> None:
         """Hide the activity panel."""
+        self._activity_restore_timer.stop()
         sizes = self._main_splitter.sizes()
         if len(sizes) >= 2 and sizes[1] > 0:
             self._activity_panel_last_width = max(self._activity_panel_min_width, sizes[1])
-        # Allow full collapse while hidden even though splitter children are non-collapsible.
-        self._activity_panel.setMinimumWidth(0)
         self._activity_panel.setVisible(False)
         if len(sizes) >= 2:
             self._main_splitter.setSizes([sizes[0] + sizes[1], 0])
@@ -328,10 +346,8 @@ class BookWorkspace(QWidget):
         if total <= 0:
             return
 
-        min_main_width = max(200, self.tab_widget.minimumSizeHint().width())
-        min_panel_floor = 120
-        min_panel_width = min(self._activity_panel_min_width, max(min_panel_floor, total - min_main_width))
-        self._activity_panel.setMinimumWidth(min_panel_width)
+        min_main_width = 200
+        min_panel_width = max(1, min(self._activity_panel_min_width, total - 1))
 
         max_panel_width = max(min_panel_width, total - min_main_width)
         panel_width = max(min_panel_width, min(self._activity_panel_last_width, max_panel_width))
@@ -344,6 +360,21 @@ class BookWorkspace(QWidget):
         if self._activity_panel_user_resized_since_show:
             return
         self._restore_activity_panel_width()
+        self._schedule_activity_panel_restore()
+
+    def _schedule_activity_panel_restore(self) -> None:
+        if self._activity_panel_user_resized_since_show:
+            return
+        if not self._activity_panel.isVisible():
+            return
+        sizes = self._main_splitter.sizes()
+        if len(sizes) >= 2 and sizes[1] > 0:
+            return
+        if self._activity_restore_retries_remaining <= 0:
+            return
+        self._activity_restore_retries_remaining -= 1
+        if not self._activity_restore_timer.isActive():
+            self._activity_restore_timer.start()
 
     def _on_splitter_moved(self, _pos: int, _index: int) -> None:
         """Persist panel width while user drags the splitter handle."""
@@ -352,6 +383,21 @@ class BookWorkspace(QWidget):
             if len(sizes) >= 2 and sizes[1] > 0:
                 self._activity_panel_last_width = max(self._activity_panel_min_width, sizes[1])
                 self._activity_panel_user_resized_since_show = True
+                self._activity_restore_retries_remaining = 0
+                self._activity_restore_timer.stop()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        if not hasattr(self, "_activity_panel"):
+            return
+        if not self._activity_panel.isVisible():
+            return
+        sizes = self._main_splitter.sizes()
+        if len(sizes) >= 2 and sizes[1] > 0:
+            return
+        self._activity_panel_user_resized_since_show = False
+        self._activity_restore_retries_remaining = self._ACTIVITY_RESTORE_MAX_RETRIES
+        self._schedule_activity_panel_restore()
 
     def get_translation_view(self) -> TranslationView | None:
         """Return the translation view if it has been created, else None."""
@@ -466,6 +512,7 @@ class BookWorkspace(QWidget):
         if self._cleaned_up:
             return
         self._cleaned_up = True
+        self._activity_restore_timer.stop()
         if hasattr(self, "_token_timer"):
             self._token_timer.stop()
         if hasattr(self, "_activity_panel"):

@@ -115,8 +115,28 @@ class EngineCore:
     # Query APIs
     # ------------------------------------------------------------------
 
-    def get_tasks(self, book_id: str, task_type: str | None = None) -> list[TaskRecord]:
-        return self._store.list_tasks(book_id=book_id, task_type=task_type)
+    def get_tasks(self, book_id: str, task_type: str | None = None, limit: int | None = None) -> list[TaskRecord]:
+        """Return full task records, including payload/config snapshot fields."""
+        return self._store.list_tasks(
+            book_id=book_id,
+            task_type=task_type,
+            limit=limit,
+        )
+
+    def get_tasks_lightweight(
+        self, book_id: str, task_type: str | None = None, limit: int | None = None
+    ) -> list[TaskRecord]:
+        """Return lightweight task rows for UI listing.
+
+        payload/config snapshot blobs are omitted to avoid repeated large-row reads.
+        """
+        return self._store.list_tasks(
+            book_id=book_id,
+            task_type=task_type,
+            limit=limit,
+            include_payload=False,
+            include_config_snapshot=False,
+        )
 
     def get_task(self, task_id: str) -> TaskRecord | None:
         return self._store.get(task_id)

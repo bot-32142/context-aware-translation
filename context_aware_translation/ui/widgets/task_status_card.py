@@ -24,7 +24,10 @@ from context_aware_translation.workflow.tasks.models import (
 )
 
 _AUTO_REFRESH_INTERVAL_MS = 3000
+_TASKS_CHANGED_COALESCE_MS = 200
 _DEFAULT_STRIP_MAX_VISIBLE = 3
+_CARD_QUERY_LIMIT_PER_TYPE = 24
+_STRIP_QUERY_LIMIT_PER_TYPE_FLOOR = 8
 
 # Status → CSS background color for the chip label
 _STATUS_COLORS: dict[str, str] = {
@@ -103,6 +106,8 @@ class TaskStatusCard(QWidget):
         self._task_types = list(task_types)
         self._display_label = display_label
         self._current_vm: TaskRowVM | None = None
+        self._dirty: bool = False
+        self._refresh_scheduled: bool = False
 
         self._init_ui()
         self.retranslateUi()
@@ -113,6 +118,10 @@ class TaskStatusCard(QWidget):
         self._auto_timer.setInterval(_AUTO_REFRESH_INTERVAL_MS)
         self._auto_timer.timeout.connect(self._on_auto_refresh)
         self._auto_timer.start()
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setSingleShot(True)
+        self._refresh_timer.setInterval(_TASKS_CHANGED_COALESCE_MS)
+        self._refresh_timer.timeout.connect(self._flush_scheduled_refresh)
 
         self.refresh()
 
@@ -120,11 +129,16 @@ class TaskStatusCard(QWidget):
     # Public API
     # ------------------------------------------------------------------
 
+    def set_display_label(self, display_label: str) -> None:
+        """Update the card title label."""
+        self._display_label = display_label
+        self._title_label.setText(display_label)
+
     def refresh(self) -> None:
         """Re-fetch tasks and update the card display."""
         records = []
         for tt in self._task_types:
-            records.extend(self._engine.get_tasks(self._book_id, task_type=tt))
+            records.extend(self._engine.get_tasks(self._book_id, task_type=tt, limit=_CARD_QUERY_LIMIT_PER_TYPE))
         records.sort(key=lambda r: r.updated_at, reverse=True)
         vms = map_tasks_to_row_vms(records)
         self._current_vm = _pick_primary_vm(vms)
@@ -140,6 +154,7 @@ class TaskStatusCard(QWidget):
     def cleanup(self) -> None:
         """Stop timer and disconnect engine signal."""
         self._auto_timer.stop()
+        self._refresh_timer.stop()
         with suppress(TypeError, RuntimeError):
             self._engine.tasks_changed.disconnect(self._on_tasks_changed)
 
@@ -148,10 +163,12 @@ class TaskStatusCard(QWidget):
     # ------------------------------------------------------------------
 
     def retranslateUi(self) -> None:  # noqa: N802
+        self._title_label.setText(self._display_label)
         self._open_activity_btn.setText(self.tr("Open Activity"))
         self._cancel_btn.setText(self.tr("Cancel"))
         self._run_btn.setText(self.tr("Run"))
         if self._current_vm is not None:
+            self._update_display(self._current_vm)
             self._update_buttons(self._current_vm)
 
     def changeEvent(self, event: QEvent) -> None:  # noqa: N802
@@ -267,7 +284,7 @@ class TaskStatusCard(QWidget):
         if self._should_defer_hidden_refresh():
             self._dirty = True
             return
-        self.refresh()
+        self._schedule_refresh()
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
@@ -288,6 +305,21 @@ class TaskStatusCard(QWidget):
             if parent is not None and not parent.isVisible():
                 return True
         return False
+
+    def _schedule_refresh(self) -> None:
+        if self._refresh_scheduled:
+            return
+        self._refresh_scheduled = True
+        self._refresh_timer.start()
+
+    def _flush_scheduled_refresh(self) -> None:
+        if not self._refresh_scheduled:
+            return
+        self._refresh_scheduled = False
+        if self._should_defer_hidden_refresh():
+            self._dirty = True
+            return
+        self.refresh()
 
     def _on_cancel_clicked(self) -> None:
         if self._current_vm is None:
@@ -414,6 +446,8 @@ class TaskStatusStrip(QWidget):
         self._task_types = list(task_types)
         self._max_visible = max(1, int(max_visible))
         self._cards: dict[str, _MiniCard] = {}  # task_id -> card
+        self._dirty: bool = False
+        self._refresh_scheduled: bool = False
 
         self._init_ui()
 
@@ -423,6 +457,10 @@ class TaskStatusStrip(QWidget):
         self._auto_timer.setInterval(_AUTO_REFRESH_INTERVAL_MS)
         self._auto_timer.timeout.connect(self._on_auto_refresh)
         self._auto_timer.start()
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setSingleShot(True)
+        self._refresh_timer.setInterval(_TASKS_CHANGED_COALESCE_MS)
+        self._refresh_timer.timeout.connect(self._flush_scheduled_refresh)
 
         self.refresh()
 
@@ -433,8 +471,9 @@ class TaskStatusStrip(QWidget):
     def refresh(self) -> None:
         """Re-fetch tasks and rebuild the strip."""
         records = []
+        limit = max(_STRIP_QUERY_LIMIT_PER_TYPE_FLOOR, self._max_visible * 4)
         for tt in self._task_types:
-            records.extend(self._engine.get_tasks(self._book_id, task_type=tt))
+            records.extend(self._engine.get_tasks(self._book_id, task_type=tt, limit=limit))
         records.sort(key=lambda r: r.updated_at, reverse=True)
         vms = map_tasks_to_row_vms(records)[: self._max_visible]
 
@@ -467,6 +506,7 @@ class TaskStatusStrip(QWidget):
     def cleanup(self) -> None:
         """Stop timer and disconnect engine signal."""
         self._auto_timer.stop()
+        self._refresh_timer.stop()
         with suppress(TypeError, RuntimeError):
             self._engine.tasks_changed.disconnect(self._on_tasks_changed)
 
@@ -508,7 +548,7 @@ class TaskStatusStrip(QWidget):
         if self._should_defer_hidden_refresh():
             self._dirty = True
             return
-        self.refresh()
+        self._schedule_refresh()
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
@@ -522,3 +562,18 @@ class TaskStatusStrip(QWidget):
             if parent is not None and not parent.isVisible():
                 return True
         return False
+
+    def _schedule_refresh(self) -> None:
+        if self._refresh_scheduled:
+            return
+        self._refresh_scheduled = True
+        self._refresh_timer.start()
+
+    def _flush_scheduled_refresh(self) -> None:
+        if not self._refresh_scheduled:
+            return
+        self._refresh_scheduled = False
+        if self._should_defer_hidden_refresh():
+            self._dirty = True
+            return
+        self.refresh()

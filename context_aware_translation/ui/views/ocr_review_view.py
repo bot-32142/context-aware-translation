@@ -4,7 +4,7 @@ import contextlib
 import json
 import logging
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QComboBox,
@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QSpinBox,
     QSplitter,
     QStackedWidget,
@@ -38,6 +39,7 @@ class OCRReviewView(QWidget):
     """View for reviewing and editing OCR results from document images."""
 
     open_activity_requested = Signal()
+    _TASKS_CHANGED_COALESCE_MS = 200
 
     def __init__(
         self,
@@ -85,6 +87,12 @@ class OCRReviewView(QWidget):
         self._is_epub_image_mode: bool = False  # True when showing EPUB {"embedded_text":...}
         self._element_to_bbox: dict[int, int] = {}  # element_index -> bbox_index
         self._bbox_to_element: dict[int, int] = {}  # bbox_index -> element_index
+        self._tasks_dirty: bool = False
+        self._task_refresh_scheduled: bool = False
+        self._task_refresh_timer = QTimer(self)
+        self._task_refresh_timer.setSingleShot(True)
+        self._task_refresh_timer.setInterval(self._TASKS_CHANGED_COALESCE_MS)
+        self._task_refresh_timer.timeout.connect(self._flush_scheduled_task_refresh)
 
         # Create UI
         self._setup_ui()
@@ -102,6 +110,10 @@ class OCRReviewView(QWidget):
         self.doc_selector_label = QLabel(self.tr("Document:"))
         doc_selector_layout.addWidget(self.doc_selector_label)
         self.doc_combo = QComboBox()
+        self.doc_combo.setMinimumWidth(0)
+        self.doc_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.doc_combo.setMinimumContentsLength(1)
+        self.doc_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.doc_combo.currentIndexChanged.connect(self._on_document_changed)
         doc_selector_layout.addWidget(self.doc_combo, stretch=1)
         doc_selector_layout.addStretch()
@@ -137,72 +149,79 @@ class OCRReviewView(QWidget):
         splitter.setSizes([500, 500])
         layout.addWidget(splitter, stretch=1)
 
-        # Bottom toolbar
-        toolbar_layout = QHBoxLayout()
+        # Navigation toolbar
+        nav_layout = QHBoxLayout()
 
         # Navigation buttons
         self.first_button = QPushButton("|<")
         self.first_button.setToolTip(self.tr("First page"))
         self.first_button.clicked.connect(self._go_first)
-        toolbar_layout.addWidget(self.first_button)
+        nav_layout.addWidget(self.first_button)
 
         self.prev_button = QPushButton("<")
         self.prev_button.setToolTip(self.tr("Previous page"))
         self.prev_button.clicked.connect(self._go_prev)
-        toolbar_layout.addWidget(self.prev_button)
+        nav_layout.addWidget(self.prev_button)
 
         self.page_label = QLabel(self.tr("Page 0 of 0"))
-        toolbar_layout.addWidget(self.page_label)
+        nav_layout.addWidget(self.page_label)
 
         self.ocr_status_label = QLabel()
-        toolbar_layout.addWidget(self.ocr_status_label)
+        nav_layout.addWidget(self.ocr_status_label)
 
         self.next_button = QPushButton(">")
         self.next_button.setToolTip(self.tr("Next page"))
         self.next_button.clicked.connect(self._go_next)
-        toolbar_layout.addWidget(self.next_button)
+        nav_layout.addWidget(self.next_button)
 
         self.last_button = QPushButton(">|")
         self.last_button.setToolTip(self.tr("Last page"))
         self.last_button.clicked.connect(self._go_last)
-        toolbar_layout.addWidget(self.last_button)
+        nav_layout.addWidget(self.last_button)
 
         # Page jump input
-        toolbar_layout.addSpacing(8)
+        nav_layout.addSpacing(8)
         self.go_to_label = QLabel(self.tr("Go to:"))
-        toolbar_layout.addWidget(self.go_to_label)
+        nav_layout.addWidget(self.go_to_label)
         self.page_spinbox = QSpinBox()
         self.page_spinbox.setMinimum(1)
         self.page_spinbox.setMaximum(1)
         self.page_spinbox.setFixedWidth(60)
         self.page_spinbox.setToolTip(self.tr("Enter page number"))
-        toolbar_layout.addWidget(self.page_spinbox)
+        nav_layout.addWidget(self.page_spinbox)
 
         self.go_button = QPushButton(self.tr("Go"))
         self.go_button.setToolTip(self.tr("Jump to page"))
         self.go_button.clicked.connect(self._go_to_entered_page)
-        toolbar_layout.addWidget(self.go_button)
+        nav_layout.addWidget(self.go_button)
 
-        toolbar_layout.addStretch()
+        nav_layout.addStretch()
+        layout.addLayout(nav_layout)
 
-        # OCR buttons
+        # OCR action toolbar
+        action_layout = QHBoxLayout()
+
         self.run_ocr_button = QPushButton(self.tr("(Re)run OCR (Current Page)"))
         self.run_ocr_button.setToolTip(self.tr("Run or re-run OCR on the current page"))
+        self.run_ocr_button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         self.run_ocr_button.clicked.connect(self._run_ocr_current)
-        toolbar_layout.addWidget(self.run_ocr_button)
+        action_layout.addWidget(self.run_ocr_button)
 
         self.run_all_ocr_button = QPushButton(self.tr("Run OCR for Pending Pages"))
         self.run_all_ocr_button.setToolTip(self.tr("Run OCR on all pending pages in this document"))
+        self.run_all_ocr_button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         self.run_all_ocr_button.clicked.connect(self._run_ocr_all)
-        toolbar_layout.addWidget(self.run_all_ocr_button)
+        action_layout.addWidget(self.run_all_ocr_button)
 
         # Save button
         self.save_button = QPushButton(self.tr("Save"))
         self.save_button.setToolTip(self.tr("Save edited OCR text"))
+        self.save_button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         self.save_button.clicked.connect(self._save_current)
-        toolbar_layout.addWidget(self.save_button)
+        action_layout.addWidget(self.save_button)
 
-        layout.addLayout(toolbar_layout)
+        action_layout.addStretch()
+        layout.addLayout(action_layout)
 
         # Task status card (shown when OCR tasks exist for this book)
         self.task_status_card = TaskStatusCard(
@@ -834,11 +853,30 @@ class OCRReviewView(QWidget):
         if self._should_defer_task_refresh():
             self._tasks_dirty = True
             return
+        self._schedule_task_refresh()
 
+    def _flush_scheduled_task_refresh(self) -> None:
+        if not self._task_refresh_scheduled:
+            return
+        self._task_refresh_scheduled = False
+        if self._should_defer_task_refresh():
+            self._tasks_dirty = True
+            return
+
+        self._on_tasks_changed_now()
+
+    def _schedule_task_refresh(self) -> None:
+        if self._task_refresh_scheduled:
+            return
+        self._task_refresh_scheduled = True
+        self._task_refresh_timer.start()
+
+    def _on_tasks_changed_now(self) -> None:
+        """Handle task-change refresh after coalescing."""
         # Keep controls in sync even when OCR tasks are started externally
         # (e.g. from TaskStatusCard/Activity panel).
-        self._update_ocr_action_button_states()
         if not self._active_task_id:
+            self._update_ocr_action_button_states()
             return
 
         record = self._task_engine.get_task(self._active_task_id)
@@ -978,6 +1016,8 @@ class OCRReviewView(QWidget):
 
     def cleanup(self) -> None:
         """Clean up background worker and database resources."""
+        if hasattr(self, "_task_refresh_timer"):
+            self._task_refresh_timer.stop()
         if hasattr(self, "_task_engine"):
             with contextlib.suppress(TypeError, RuntimeError):
                 self._task_engine.tasks_changed.disconnect(self._on_tasks_changed)
@@ -1000,7 +1040,7 @@ class OCRReviewView(QWidget):
         super().showEvent(event)
         if getattr(self, "_tasks_dirty", False):
             self._tasks_dirty = False
-            self._on_tasks_changed(self.book_id)
+            self._on_tasks_changed_now()
 
     def _should_defer_task_refresh(self) -> bool:
         """Return True when task-driven refresh should wait until widget is visible."""
@@ -1025,6 +1065,7 @@ class OCRReviewView(QWidget):
         self.run_ocr_button.setText(self.tr("(Re)run OCR (Current Page)"))
         self.run_all_ocr_button.setText(self.tr("Run OCR for Pending Pages"))
         self.save_button.setText(self.tr("Save"))
+        self.task_status_card.set_display_label(self.tr("OCR"))
         self.empty_label.setText(self.tr("No image sources found in this document."))
         self._update_navigation()
 

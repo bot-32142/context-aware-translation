@@ -1013,6 +1013,7 @@ class ReembeddingView(QWidget):
         self.reembed_current_button.setText(self.tr("Reembed This Image"))
         self.reembed_pending_button.setText(self.tr("Reembed Pending"))
         self.reembed_all_button.setText(self.tr("Force Reembed All"))
+        self.task_status_card.set_display_label(self.tr("Reembedding"))
         self.empty_label.setText(self.tr("No reembeddable images found."))
         # Update toggle button / right label based on current state
         if self._right_stack.currentIndex() == 0:
