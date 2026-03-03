@@ -412,7 +412,11 @@ def test_cancel_running_tasks_ignores_other_books(engine, tmp_store):
 def test_delete_allows_queued_when_handler_allows(engine, tmp_store):
     from context_aware_translation.workflow.tasks.handlers.batch_translation import BatchTranslationHandler
 
-    engine.register_handler(BatchTranslationHandler())
+    handler = BatchTranslationHandler()
+    # This test validates delete semantics for queued tasks, not remote cleanup.
+    # Stub pre_delete to avoid opening batch cleanup stores from mock sessions.
+    handler.pre_delete = MagicMock(return_value=[])
+    engine.register_handler(handler)
     record = tmp_store.create(book_id="book-del", task_type="batch_translation", status="queued")
 
     engine.delete(record.task_id)
