@@ -358,12 +358,13 @@ class TranslationView(QWidget):
         if self._is_cleaned_up:
             return
 
-        if hasattr(self, "enable_polish_cb"):
-            self.enable_polish_cb.setEnabled(True)
         has_documents = self.doc_combo.count() > 1
         self.doc_combo.setEnabled(has_documents)
 
         if not has_documents:
+            if hasattr(self, "enable_polish_cb"):
+                self.enable_polish_cb.setEnabled(False)
+                self.enable_polish_cb.setToolTip(self.tr("Run an additional polish pass after translation."))
             self.start_btn.setEnabled(False)
             self.start_btn.setText(self.tr("Start Translation"))
             self.start_btn.setStyleSheet("")
@@ -373,6 +374,7 @@ class TranslationView(QWidget):
             return
 
         selected_doc_ids = self._get_selected_document_ids()
+        self._update_enable_polish_state(selected_doc_ids)
 
         pending_ocr_doc_ids = self._get_preflight_docs_with_pending_ocr()
         if pending_ocr_doc_ids:
@@ -678,6 +680,19 @@ class TranslationView(QWidget):
             id_set = set(document_ids)
             documents = [d for d in documents if d["document_id"] in id_set]
         return any(d.get("document_type") == "manga" for d in documents)
+
+    def _update_enable_polish_state(self, document_ids: list[int] | None) -> None:
+        """Enable polish only when current selection does not include manga."""
+        if not hasattr(self, "enable_polish_cb"):
+            return
+
+        if self._has_manga_documents(document_ids):
+            self.enable_polish_cb.setEnabled(False)
+            self.enable_polish_cb.setToolTip(self.tr("Polish pass is unavailable for manga translation."))
+            return
+
+        self.enable_polish_cb.setEnabled(True)
+        self.enable_polish_cb.setToolTip(self.tr("Run an additional polish pass after translation."))
 
     def _resolve_trigger_conditions(
         self,
@@ -1550,5 +1565,7 @@ class TranslationView(QWidget):
 
     def _is_enable_polish_enabled(self) -> bool:
         if hasattr(self, "enable_polish_cb"):
+            if not self.enable_polish_cb.isEnabled():
+                return False
             return bool(self.enable_polish_cb.isChecked())
         return True

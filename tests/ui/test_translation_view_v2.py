@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 try:
-    from PySide6.QtWidgets import QApplication, QComboBox, QPushButton
+    from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QPushButton
 
     HAS_PYSIDE6 = True
 except ImportError:
@@ -367,6 +367,63 @@ def test_update_start_button_state_unrelated_running_tasks_do_not_block_start():
     view._update_start_button_state()
 
     assert view.start_btn.isEnabled()
+
+
+def test_update_start_button_state_disables_polish_for_manga_selection():
+    """Polish checkbox is disabled when the current selection includes manga."""
+    view = _make_view()
+    view.book_id = "book-1"
+    view.doc_combo = QComboBox()
+    view.doc_combo.addItem("All Documents", None)
+    view.doc_combo.addItem("Document 3", 3)
+    view.doc_combo.setCurrentIndex(1)
+    view.start_btn = QPushButton()
+    view.submit_batch_btn = QPushButton()
+    view.enable_polish_cb = QCheckBox()
+    view.enable_polish_cb.setChecked(True)
+    view._get_preflight_docs_with_pending_ocr = MagicMock(return_value=[])
+    view._is_retranslation = MagicMock(return_value=False)
+    view._split_doc_ids_by_type = MagicMock(return_value=([], [3]))
+    view._has_manga_documents = MagicMock(return_value=True)
+    view._update_retranslate_chunk_button_state = MagicMock()
+
+    preflight_ok = MagicMock()
+    preflight_ok.allowed = True
+    view._task_engine.preflight.return_value = preflight_ok
+
+    view._update_start_button_state()
+
+    assert not view.enable_polish_cb.isEnabled()
+    assert not view._is_enable_polish_enabled()
+    assert "manga translation" in view.enable_polish_cb.toolTip().lower()
+
+
+def test_update_start_button_state_keeps_polish_enabled_for_text_selection():
+    """Polish checkbox remains enabled when selected docs are non-manga."""
+    view = _make_view()
+    view.book_id = "book-1"
+    view.doc_combo = QComboBox()
+    view.doc_combo.addItem("All Documents", None)
+    view.doc_combo.addItem("Document 1", 1)
+    view.doc_combo.setCurrentIndex(1)
+    view.start_btn = QPushButton()
+    view.submit_batch_btn = QPushButton()
+    view.enable_polish_cb = QCheckBox()
+    view.enable_polish_cb.setChecked(False)
+    view._get_preflight_docs_with_pending_ocr = MagicMock(return_value=[])
+    view._is_retranslation = MagicMock(return_value=False)
+    view._split_doc_ids_by_type = MagicMock(return_value=([1], []))
+    view._has_manga_documents = MagicMock(return_value=False)
+    view._update_retranslate_chunk_button_state = MagicMock()
+
+    preflight_ok = MagicMock()
+    preflight_ok.allowed = True
+    view._task_engine.preflight.return_value = preflight_ok
+
+    view._update_start_button_state()
+
+    assert view.enable_polish_cb.isEnabled()
+    assert not view._is_enable_polish_enabled()
 
 
 # ------------------------------------------------------------------
