@@ -10,7 +10,10 @@ from typing import TYPE_CHECKING
 from context_aware_translation.core.cancellation import OperationCancelledError, raise_if_cancelled
 from context_aware_translation.core.progress import ProgressCallback, ProgressUpdate, WorkflowStep
 from context_aware_translation.documents.base import Document
-from context_aware_translation.documents.manga_alignment import get_sources_with_nonempty_ocr_text
+from context_aware_translation.documents.manga_alignment import (
+    extract_ocr_text,
+    get_sources_with_nonempty_ocr_text,
+)
 from context_aware_translation.utils.file_utils import IMAGE_EXTENSIONS
 from context_aware_translation.utils.image_utils import compress_image_for_ocr, validate_image_bytes
 
@@ -343,7 +346,10 @@ class MangaDocument(Document):
         Uses existing DB cache to skip already-done items unless force=True.
         Returns count of pages newly generated.
         """
-        from context_aware_translation.llm.image_generator import create_image_generator
+        from context_aware_translation.llm.image_generator import (
+            build_text_replacements,
+            create_image_generator,
+        )
 
         generator = create_image_generator(image_reembedding_config)
         semaphore = asyncio.Semaphore(image_reembedding_config.concurrency)
@@ -396,7 +402,14 @@ class MangaDocument(Document):
                     return
                 image_bytes = source["binary_content"]
                 mime_type = source.get("mime_type", "image/png")
-                new_bytes = await generator.edit_image(image_bytes, mime_type, translated, cancel_check=cancel_check)
+                original_text = extract_ocr_text(source.get("ocr_json"))
+                text_replacements = build_text_replacements(original_text, translated)
+                new_bytes = await generator.edit_image(
+                    image_bytes,
+                    mime_type,
+                    text_replacements,
+                    cancel_check=cancel_check,
+                )
                 raise_if_cancelled(cancel_check)
                 self._reembedded_pages[source_id] = new_bytes
                 self.repo.save_reembedded_image(self.document_id, original_idx, new_bytes, "image/png")

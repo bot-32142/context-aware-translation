@@ -57,15 +57,15 @@ class GeminiImageGenerator(BaseImageGenerator):
         self,
         image_bytes: bytes,
         mime_type: str,
-        translated_text: str,
+        text_replacements: list[tuple[str, str]],
         cancel_check: Callable[[], bool] | None = None,
     ) -> bytes:
-        """Replace text in an image with translated text using Gemini's API.
+        """Replace text in an image using mapping pairs via Gemini's API.
 
         Args:
             image_bytes: Original image bytes
             mime_type: MIME type (e.g., "image/png")
-            translated_text: Translated text to embed
+            text_replacements: Ordered list of (original, translated) pairs
 
         Returns:
             Modified image bytes (PNG format)
@@ -74,7 +74,13 @@ class GeminiImageGenerator(BaseImageGenerator):
             ValueError: If no image in response
             Exception: Various API errors after retries
         """
-        prompt = self._build_prompt(translated_text)
+        prompt = self._build_prompt(text_replacements)
+        self._log_edit_prompt(
+            backend="gemini",
+            mime_type=mime_type,
+            text_replacements=text_replacements,
+            prompt=prompt,
+        )
 
         # Create parts for the request
         image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)

@@ -97,3 +97,7 @@ async def test_reembed_preserves_inner_exception_as_cause() -> None:
 
     assert isinstance(exc_info.value.__cause__, ValueError)
     assert str(exc_info.value.__cause__) == "boom"
+    call_args = mock_generator.edit_image.await_args
+    assert call_args.args[0] == b"img1"
+    assert call_args.args[1] == "image/png"
+    assert call_args.args[2] == [("jp1", "EN PAGE 1")]

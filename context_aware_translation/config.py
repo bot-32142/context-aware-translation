@@ -295,13 +295,6 @@ def _validate_translator_batch_config(config: TranslatorBatchConfig, *, config_n
 class MangaTranslatorConfig(LLMConfig):
     """Configuration for manga vision-based translation step."""
 
-    pages_per_call: int = 10
-
-    def to_dict(self) -> dict[str, Any]:
-        base = super().to_dict()
-        base["pages_per_call"] = self.pages_per_call
-        return base
-
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> MangaTranslatorConfig:
         return cls(
@@ -315,7 +308,6 @@ class MangaTranslatorConfig(LLMConfig):
             concurrency=data.get("concurrency", 5),
             endpoint_profile=data.get("endpoint_profile"),
             kwargs=data.get("kwargs", {}),
-            pages_per_call=data.get("pages_per_call", 10),
         )
 
 

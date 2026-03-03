@@ -21,6 +21,12 @@ MANGA_OCR_SYSTEM_PROMPT = """Extract all readable text from this manga/comic pag
 Return a JSON object with a single "text" field containing all readable text on the page.
 Include dialogue, narration, sound effects, and any other visible text.
 Preserve the reading order.
+Formatting requirements for the "text" field:
+- Output one line per text box/speech bubble/caption/SFX group.
+- Keep text from the same box on a single line (merge wrapped lines with spaces).
+- Use newline characters only to separate different boxes.
+- Do not merge multiple boxes into one line.
+- If uncertain whether two fragments are from the same box, keep them on separate lines.
 If there is no readable text, return {"text": ""}.
 Return ONLY valid JSON."""
 
