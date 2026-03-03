@@ -1,7 +1,6 @@
 """Reembedding View for reviewing and managing image reembedding results."""
 
 import contextlib
-import json
 import logging
 from dataclasses import dataclass
 
@@ -28,6 +27,7 @@ from context_aware_translation.ui.i18n import qarg, translate_progress_message, 
 from context_aware_translation.ui.utils import create_tip_label, translate_document_type
 from context_aware_translation.ui.widgets import ImageViewer, ProgressWidget
 from context_aware_translation.ui.widgets.task_status_card import TaskStatusCard
+from context_aware_translation.workflow.tasks.claims import ResourceClaim
 from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, TaskAction
 
 logger = logging.getLogger(__name__)
@@ -667,7 +667,8 @@ class ReembeddingView(QWidget):
 
         except Exception as e:
             self._active_task_id = None
-            QMessageBox.critical(self, self.tr("Error"), qarg(self.tr("Failed to start reembedding: %1"), e))
+            error_msg = translate_task_block_reason(str(e)) or self.tr("Unknown error")
+            QMessageBox.critical(self, self.tr("Error"), qarg(self.tr("Failed to start reembedding: %1"), error_msg))
 
     def _reembed_pending(self) -> None:
         """Reembed all pending images in the current document."""
@@ -713,7 +714,8 @@ class ReembeddingView(QWidget):
 
         except Exception as e:
             self._active_task_id = None
-            QMessageBox.critical(self, self.tr("Error"), qarg(self.tr("Failed to start reembedding: %1"), e))
+            error_msg = translate_task_block_reason(str(e)) or self.tr("Unknown error")
+            QMessageBox.critical(self, self.tr("Error"), qarg(self.tr("Failed to start reembedding: %1"), error_msg))
 
     def _reembed_all(self) -> None:
         """Force reembed all images in the current document."""
@@ -773,7 +775,8 @@ class ReembeddingView(QWidget):
 
         except Exception as e:
             self._active_task_id = None
-            QMessageBox.critical(self, self.tr("Error"), qarg(self.tr("Failed to start reembedding: %1"), e))
+            error_msg = translate_task_block_reason(str(e)) or self.tr("Unknown error")
+            QMessageBox.critical(self, self.tr("Error"), qarg(self.tr("Failed to start reembedding: %1"), error_msg))
 
     def _cancel_reembed(self) -> None:
         """Cancel running reembedding operation."""
@@ -847,8 +850,8 @@ class ReembeddingView(QWidget):
         if self.document_id is None:
             return
 
-        if self._is_current_document_reembedding_running():
-            running_tip = self.tr("Disabled while reembedding is running for this document.")
+        if self._has_current_document_claim_conflict():
+            running_tip = translate_task_block_reason("Blocked by active task claims")
             self.reembed_current_button.setEnabled(False)
             self.reembed_current_button.setToolTip(running_tip)
             self.reembed_pending_button.setEnabled(False)
@@ -872,24 +875,13 @@ class ReembeddingView(QWidget):
         self.reembed_all_button.setEnabled(has_items)
         self.reembed_all_button.setToolTip(self.tr("Force reembed all images in this document"))
 
-    def _is_current_document_reembedding_running(self) -> bool:
-        """Return True if there is any non-terminal reembedding task covering current document."""
+    def _has_current_document_claim_conflict(self) -> bool:
+        """Return True if active task claims block reembedding for current document."""
         if self.document_id is None:
             return False
 
-        for record in self._task_engine.get_tasks(self.book_id, task_type="image_reembedding"):
-            if record.status in TERMINAL_TASK_STATUSES:
-                continue
-            if not record.document_ids_json:
-                # No document_ids_json means "all documents"
-                return True
-            try:
-                ids = json.loads(record.document_ids_json)
-            except (json.JSONDecodeError, TypeError):
-                continue
-            if isinstance(ids, list) and int(self.document_id) in {int(i) for i in ids}:
-                return True
-        return False
+        wanted = frozenset({ResourceClaim("doc", self.book_id, str(int(self.document_id)))})
+        return self._task_engine.has_active_claims(self.book_id, wanted)
 
     # =========================================================================
     # UI State

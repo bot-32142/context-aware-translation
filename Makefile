@@ -90,7 +90,7 @@ release:
 	echo "  1. Ensure all changes are committed"; \
 	echo "  2. Run: git tag v$$VERSION"; \
 	echo "  3. Run: git push origin v$$VERSION"; \
-	echo "  GitHub Actions will build for all platforms and create a draft release."
+	echo "  GitHub Actions will build macOS and Windows installers and create a draft release."
 
 help:
 	@echo "Available commands:"

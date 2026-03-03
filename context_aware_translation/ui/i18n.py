@@ -498,6 +498,14 @@ _TASK_DECISION_CODE_LABELS: dict[str, str] = {
     "no_untranslated_terms": QT_TRANSLATE_NOOP(_TASK_DECISION_CODE_CONTEXT, "No untranslated terms found."),
 }
 
+_TASK_DECISION_WRAPPED_REASON_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"Submit rejected: (?P<reason>.+)"),
+    re.compile(r"Action [^:]+ not allowed for task [^:]+: (?P<reason>.+)"),
+    re.compile(r"Cannot (?:re)?run task [^:]+: (?P<reason>.+)"),
+    re.compile(r"Run validation failed for task [^:]+: code=(?P<code>[^,]+), reason=(?P<reason>.+)"),
+    re.compile(r"strict-start failed: [^:]+: (?P<reason>.+)"),
+]
+
 
 def _translate_task(text: str) -> str:
     return QCoreApplication.translate("TaskLabels", text)
@@ -555,22 +563,52 @@ def translate_scope_label(document_count: int | None) -> str:
 
 def translate_task_block_reason(reason: str | None, code: str | None = None) -> str:
     """Translate backend task preflight denial reason/code for UI display."""
-    reason_text = (reason or "").strip()
+    reason_text, code_text = _unwrap_task_reason((reason or "").strip(), code)
     if reason_text:
-        return _translate_task_decision_reason(reason_text)
+        translated_reason = _translate_task_decision_reason(reason_text)
+        if translated_reason != reason_text:
+            return translated_reason
+        if code_text and code_text != "ok":
+            label = _TASK_DECISION_CODE_LABELS.get(code_text)
+            if label is not None:
+                return QCoreApplication.translate(_TASK_DECISION_CODE_CONTEXT, label)
+        return translated_reason
 
-    code_text = (code or "").strip()
-    if not code_text or code_text == "ok":
-        return ""
-
-    label = _TASK_DECISION_CODE_LABELS.get(code_text)
-    if label is not None:
-        return QCoreApplication.translate(_TASK_DECISION_CODE_CONTEXT, label)
-    return _humanize_token(code_text)
+    if code_text and code_text != "ok":
+        label = _TASK_DECISION_CODE_LABELS.get(code_text)
+        if label is not None:
+            return QCoreApplication.translate(_TASK_DECISION_CODE_CONTEXT, label)
+        return _humanize_token(code_text)
+    return ""
 
 
 def _humanize_token(value: str) -> str:
     return " ".join(part for part in value.replace("_", " ").strip().split()).title()
+
+
+def _unwrap_task_reason(reason: str, code: str | None) -> tuple[str, str | None]:
+    reason_text = reason.strip()
+    code_text = (code or "").strip() or None
+
+    while reason_text:
+        unwrapped = False
+        for pattern in _TASK_DECISION_WRAPPED_REASON_PATTERNS:
+            matched = pattern.fullmatch(reason_text)
+            if matched is None:
+                continue
+            groups = matched.groupdict()
+            extracted_code = str(groups.get("code") or "").strip()
+            next_reason = str(groups.get("reason") or "").strip()
+            if extracted_code and not code_text:
+                code_text = extracted_code
+            if not next_reason or next_reason == reason_text:
+                return reason_text, code_text
+            reason_text = next_reason
+            unwrapped = True
+            break
+        if not unwrapped:
+            break
+    return reason_text, code_text
 
 
 def translate_progress_message(message: str) -> str:

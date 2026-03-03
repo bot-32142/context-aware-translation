@@ -249,81 +249,81 @@
 <context>
     <name>BookWorkspace</name>
     <message>
-        <location filename="../views/book_workspace.py" line="75"/>
-        <location filename="../views/book_workspace.py" line="471"/>
+        <location filename="../views/book_workspace.py" line="76"/>
+        <location filename="../views/book_workspace.py" line="489"/>
         <source>Back to Library</source>
         <translation>返回书库</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="76"/>
-        <location filename="../views/book_workspace.py" line="472"/>
+        <location filename="../views/book_workspace.py" line="77"/>
+        <location filename="../views/book_workspace.py" line="490"/>
         <source>Close this book and return to library</source>
         <translation>关闭此书籍并返回书库</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="80"/>
-        <location filename="../views/book_workspace.py" line="473"/>
+        <location filename="../views/book_workspace.py" line="81"/>
+        <location filename="../views/book_workspace.py" line="491"/>
         <source>Activity</source>
         <translation>活动</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="81"/>
-        <location filename="../views/book_workspace.py" line="474"/>
+        <location filename="../views/book_workspace.py" line="82"/>
+        <location filename="../views/book_workspace.py" line="492"/>
         <source>Show/hide task activity panel</source>
         <translation>显示/隐藏任务活动面板</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="113"/>
-        <location filename="../views/book_workspace.py" line="350"/>
-        <location filename="../views/book_workspace.py" line="477"/>
+        <location filename="../views/book_workspace.py" line="114"/>
+        <location filename="../views/book_workspace.py" line="368"/>
+        <location filename="../views/book_workspace.py" line="495"/>
         <source>Import</source>
         <translation>导入</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="114"/>
-        <location filename="../views/book_workspace.py" line="478"/>
+        <location filename="../views/book_workspace.py" line="115"/>
+        <location filename="../views/book_workspace.py" line="496"/>
         <source>OCR Review</source>
         <translation>OCR审核</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="115"/>
-        <location filename="../views/book_workspace.py" line="370"/>
-        <location filename="../views/book_workspace.py" line="479"/>
+        <location filename="../views/book_workspace.py" line="116"/>
+        <location filename="../views/book_workspace.py" line="388"/>
+        <location filename="../views/book_workspace.py" line="497"/>
         <source>Glossary</source>
         <translation>术语表</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="116"/>
-        <location filename="../views/book_workspace.py" line="480"/>
+        <location filename="../views/book_workspace.py" line="117"/>
+        <location filename="../views/book_workspace.py" line="498"/>
         <source>Translate</source>
         <translation>翻译</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="117"/>
-        <location filename="../views/book_workspace.py" line="378"/>
-        <location filename="../views/book_workspace.py" line="481"/>
+        <location filename="../views/book_workspace.py" line="118"/>
+        <location filename="../views/book_workspace.py" line="396"/>
+        <location filename="../views/book_workspace.py" line="499"/>
         <source>Reembedding</source>
         <translation>重新嵌入</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="118"/>
-        <location filename="../views/book_workspace.py" line="383"/>
-        <location filename="../views/book_workspace.py" line="482"/>
+        <location filename="../views/book_workspace.py" line="119"/>
+        <location filename="../views/book_workspace.py" line="401"/>
+        <location filename="../views/book_workspace.py" line="500"/>
         <source>Export</source>
         <translation>导出</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="209"/>
+        <location filename="../views/book_workspace.py" line="210"/>
         <source>Failed to load %1 tab.</source>
         <translation>加载%1标签页失败。</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="215"/>
+        <location filename="../views/book_workspace.py" line="216"/>
         <source>Error details for troubleshooting.</source>
         <translation>用于故障排查的错误详情。</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="357"/>
+        <location filename="../views/book_workspace.py" line="375"/>
         <source>OCR</source>
         <translation>OCR</translation>
     </message>
@@ -332,12 +332,12 @@
         <translation type="vanished">翻译</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="420"/>
+        <location filename="../views/book_workspace.py" line="438"/>
         <source>Operation in Progress</source>
         <translation>操作进行中</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="423"/>
+        <location filename="../views/book_workspace.py" line="441"/>
         <source>The following operations are currently running: %1.
 
 Returning to the library will stop local processing.
@@ -354,7 +354,7 @@ All completed results are already saved and won&apos;t be lost.</source>
 所有已完成的结果已保存，不会丢失。</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="487"/>
+        <location filename="../views/book_workspace.py" line="505"/>
         <source>Suggested flow: Import → OCR Review (if needed) → Glossary (optional) → Translate → Reembedding (if needed) → Export.</source>
         <translation>建议流程：导入 → OCR审核（如需要）→ 术语表（可选）→ 翻译 → 重新嵌入（如需要）→ 导出。</translation>
     </message>
@@ -375,17 +375,17 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation type="vanished">建议流程：导入 → OCR审阅（如需）→ 术语表（可选）→ 翻译 → 导出。</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="491"/>
+        <location filename="../views/book_workspace.py" line="509"/>
         <source>Live aggregate token usage across all endpoint profiles.</source>
         <translation>所有端点配置的实时汇总 token 用量。</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="518"/>
+        <location filename="../views/book_workspace.py" line="536"/>
         <source>Token usage: Total %1 | Input %2 (cached %3 / uncached %4) | Output %5 | Active endpoints %6</source>
         <translation>Token 用量：总计 %1 | 输入 %2（缓存 %3 / 非缓存 %4）| 输出 %5 | 活跃端点 %6</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="536"/>
+        <location filename="../views/book_workspace.py" line="554"/>
         <source>Token usage unavailable</source>
         <translation>Token 用量暂不可用</translation>
     </message>
@@ -4382,13 +4382,13 @@ Do you want to continue?</source>
     <name>ReembeddingView</name>
     <message>
         <location filename="../views/reembedding_view.py" line="103"/>
-        <location filename="../views/reembedding_view.py" line="1010"/>
+        <location filename="../views/reembedding_view.py" line="1002"/>
         <source>Document:</source>
         <translation>文档：</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="121"/>
-        <location filename="../views/reembedding_view.py" line="1011"/>
+        <location filename="../views/reembedding_view.py" line="1003"/>
         <source>Original</source>
         <translation>原文</translation>
     </message>
@@ -4397,7 +4397,7 @@ Do you want to continue?</source>
         <location filename="../views/reembedding_view.py" line="525"/>
         <location filename="../views/reembedding_view.py" line="550"/>
         <location filename="../views/reembedding_view.py" line="571"/>
-        <location filename="../views/reembedding_view.py" line="1027"/>
+        <location filename="../views/reembedding_view.py" line="1019"/>
         <source>Reembedded</source>
         <translation>重新嵌入后</translation>
     </message>
@@ -4405,7 +4405,7 @@ Do you want to continue?</source>
         <location filename="../views/reembedding_view.py" line="140"/>
         <location filename="../views/reembedding_view.py" line="526"/>
         <location filename="../views/reembedding_view.py" line="551"/>
-        <location filename="../views/reembedding_view.py" line="1028"/>
+        <location filename="../views/reembedding_view.py" line="1020"/>
         <source>Show Text</source>
         <translation>显示文本</translation>
     </message>
@@ -4416,98 +4416,98 @@ Do you want to continue?</source>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="157"/>
-        <location filename="../views/reembedding_view.py" line="1012"/>
+        <location filename="../views/reembedding_view.py" line="1004"/>
         <source>Translated text will appear here...</source>
         <translation>翻译文本将显示在此处...</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="171"/>
-        <location filename="../views/reembedding_view.py" line="1013"/>
+        <location filename="../views/reembedding_view.py" line="1005"/>
         <source>First image</source>
         <translation>第一张图片</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="176"/>
-        <location filename="../views/reembedding_view.py" line="1014"/>
+        <location filename="../views/reembedding_view.py" line="1006"/>
         <source>Previous image</source>
         <translation>上一张图片</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="180"/>
-        <location filename="../views/reembedding_view.py" line="922"/>
+        <location filename="../views/reembedding_view.py" line="914"/>
         <source>Image 0 of 0</source>
         <translation>图片 0 / 0</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="187"/>
-        <location filename="../views/reembedding_view.py" line="1015"/>
+        <location filename="../views/reembedding_view.py" line="1007"/>
         <source>Next image</source>
         <translation>下一张图片</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="192"/>
-        <location filename="../views/reembedding_view.py" line="1016"/>
+        <location filename="../views/reembedding_view.py" line="1008"/>
         <source>Last image</source>
         <translation>最后一张图片</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="198"/>
-        <location filename="../views/reembedding_view.py" line="1017"/>
+        <location filename="../views/reembedding_view.py" line="1009"/>
         <source>Go to:</source>
         <translation>跳转到：</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="204"/>
-        <location filename="../views/reembedding_view.py" line="1018"/>
+        <location filename="../views/reembedding_view.py" line="1010"/>
         <source>Enter image number</source>
         <translation>输入图片编号</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="207"/>
-        <location filename="../views/reembedding_view.py" line="1019"/>
+        <location filename="../views/reembedding_view.py" line="1011"/>
         <source>Go</source>
         <translation>跳转</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="208"/>
-        <location filename="../views/reembedding_view.py" line="1020"/>
+        <location filename="../views/reembedding_view.py" line="1012"/>
         <source>Jump to image</source>
         <translation>跳转到图片</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="219"/>
-        <location filename="../views/reembedding_view.py" line="1021"/>
+        <location filename="../views/reembedding_view.py" line="1013"/>
         <source>Reembed This Image</source>
         <translation>重新嵌入此图片</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="220"/>
-        <location filename="../views/reembedding_view.py" line="864"/>
+        <location filename="../views/reembedding_view.py" line="867"/>
         <source>Reembed the current image</source>
         <translation>重新嵌入当前图片</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="224"/>
-        <location filename="../views/reembedding_view.py" line="1022"/>
+        <location filename="../views/reembedding_view.py" line="1014"/>
         <source>Reembed Pending</source>
         <translation>重新嵌入待处理项</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="225"/>
-        <location filename="../views/reembedding_view.py" line="871"/>
+        <location filename="../views/reembedding_view.py" line="874"/>
         <source>Reembed all pending images in this document</source>
         <translation>重新嵌入此文档中所有待处理的图片</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="229"/>
-        <location filename="../views/reembedding_view.py" line="733"/>
-        <location filename="../views/reembedding_view.py" line="1023"/>
+        <location filename="../views/reembedding_view.py" line="735"/>
+        <location filename="../views/reembedding_view.py" line="1015"/>
         <source>Force Reembed All</source>
         <translation>强制全部重新嵌入</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="230"/>
-        <location filename="../views/reembedding_view.py" line="873"/>
+        <location filename="../views/reembedding_view.py" line="876"/>
         <source>Force reembed all images in this document</source>
         <translation>强制重新嵌入此文档中的所有图片</translation>
     </message>
@@ -4518,7 +4518,7 @@ Do you want to continue?</source>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="254"/>
-        <location filename="../views/reembedding_view.py" line="1024"/>
+        <location filename="../views/reembedding_view.py" line="1016"/>
         <source>No reembeddable images found.</source>
         <translation>未找到可重新嵌入的图片。</translation>
     </message>
@@ -4530,14 +4530,14 @@ Do you want to continue?</source>
     <message>
         <location filename="../views/reembedding_view.py" line="532"/>
         <location filename="../views/reembedding_view.py" line="545"/>
-        <location filename="../views/reembedding_view.py" line="1030"/>
+        <location filename="../views/reembedding_view.py" line="1022"/>
         <source>Translated Text</source>
         <translation>翻译文本</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="533"/>
         <location filename="../views/reembedding_view.py" line="546"/>
-        <location filename="../views/reembedding_view.py" line="1031"/>
+        <location filename="../views/reembedding_view.py" line="1023"/>
         <source>Show Image</source>
         <translation>显示图片</translation>
     </message>
@@ -4553,17 +4553,17 @@ Do you want to continue?</source>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="620"/>
-        <location filename="../views/reembedding_view.py" line="675"/>
-        <location filename="../views/reembedding_view.py" line="679"/>
-        <location filename="../views/reembedding_view.py" line="721"/>
-        <location filename="../views/reembedding_view.py" line="725"/>
+        <location filename="../views/reembedding_view.py" line="676"/>
+        <location filename="../views/reembedding_view.py" line="680"/>
+        <location filename="../views/reembedding_view.py" line="723"/>
+        <location filename="../views/reembedding_view.py" line="727"/>
         <source>Warning</source>
         <translation>警告</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="620"/>
-        <location filename="../views/reembedding_view.py" line="675"/>
-        <location filename="../views/reembedding_view.py" line="721"/>
+        <location filename="../views/reembedding_view.py" line="676"/>
+        <location filename="../views/reembedding_view.py" line="723"/>
         <source>Reembedding is already running.</source>
         <translation>重新嵌入正在运行中。</translation>
     </message>
@@ -4574,15 +4574,15 @@ Do you want to continue?</source>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="627"/>
-        <location filename="../views/reembedding_view.py" line="868"/>
+        <location filename="../views/reembedding_view.py" line="871"/>
         <source>Current-image reembedding is only available for manga and EPUB documents.</source>
         <translation>单张图片重新嵌入仅适用于漫画和EPUB文档。</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="633"/>
         <location filename="../views/reembedding_view.py" line="647"/>
-        <location filename="../views/reembedding_view.py" line="695"/>
-        <location filename="../views/reembedding_view.py" line="754"/>
+        <location filename="../views/reembedding_view.py" line="696"/>
+        <location filename="../views/reembedding_view.py" line="756"/>
         <source>Cannot Reembed</source>
         <translation>无法重新嵌入</translation>
     </message>
@@ -4592,27 +4592,27 @@ Do you want to continue?</source>
         <translation>当前项目没有来源ID。</translation>
     </message>
     <message>
-        <location filename="../views/reembedding_view.py" line="670"/>
-        <location filename="../views/reembedding_view.py" line="716"/>
-        <location filename="../views/reembedding_view.py" line="776"/>
+        <location filename="../views/reembedding_view.py" line="671"/>
+        <location filename="../views/reembedding_view.py" line="718"/>
+        <location filename="../views/reembedding_view.py" line="779"/>
         <source>Error</source>
         <translation>错误</translation>
     </message>
     <message>
-        <location filename="../views/reembedding_view.py" line="670"/>
-        <location filename="../views/reembedding_view.py" line="716"/>
-        <location filename="../views/reembedding_view.py" line="776"/>
+        <location filename="../views/reembedding_view.py" line="671"/>
+        <location filename="../views/reembedding_view.py" line="718"/>
+        <location filename="../views/reembedding_view.py" line="779"/>
         <source>Failed to start reembedding: %1</source>
         <translation>启动重新嵌入失败：%1</translation>
     </message>
     <message>
-        <location filename="../views/reembedding_view.py" line="679"/>
-        <location filename="../views/reembedding_view.py" line="725"/>
+        <location filename="../views/reembedding_view.py" line="680"/>
+        <location filename="../views/reembedding_view.py" line="727"/>
         <source>No images to process.</source>
         <translation>没有可处理的图片。</translation>
     </message>
     <message>
-        <location filename="../views/reembedding_view.py" line="735"/>
+        <location filename="../views/reembedding_view.py" line="737"/>
         <source>This will reembed all images in this document, including those already reembedded.
 
 Do you want to continue?</source>
@@ -4621,47 +4621,49 @@ Do you want to continue?</source>
 是否继续？</translation>
     </message>
     <message>
-        <location filename="../views/reembedding_view.py" line="825"/>
+        <location filename="../views/reembedding_view.py" line="828"/>
         <source>Reembedding Complete</source>
         <translation>重新嵌入完成</translation>
     </message>
     <message>
-        <location filename="../views/reembedding_view.py" line="826"/>
+        <location filename="../views/reembedding_view.py" line="829"/>
         <source>Reembedding completed successfully. %1 items processed.</source>
         <translation>重新嵌入已成功完成。已处理 %1 个项目。</translation>
     </message>
     <message>
-        <location filename="../views/reembedding_view.py" line="836"/>
+        <location filename="../views/reembedding_view.py" line="670"/>
+        <location filename="../views/reembedding_view.py" line="717"/>
+        <location filename="../views/reembedding_view.py" line="778"/>
+        <location filename="../views/reembedding_view.py" line="839"/>
         <source>Unknown error</source>
         <translation>未知错误</translation>
     </message>
     <message>
-        <location filename="../views/reembedding_view.py" line="837"/>
+        <location filename="../views/reembedding_view.py" line="840"/>
         <source>Reembedding Error</source>
         <translation>重新嵌入错误</translation>
     </message>
     <message>
-        <location filename="../views/reembedding_view.py" line="837"/>
+        <location filename="../views/reembedding_view.py" line="840"/>
         <source>Reembedding failed: %1</source>
         <translation>重新嵌入失败：%1</translation>
     </message>
     <message>
-        <location filename="../views/reembedding_view.py" line="840"/>
+        <location filename="../views/reembedding_view.py" line="843"/>
         <source>Cancelled</source>
         <translation>已取消</translation>
     </message>
     <message>
-        <location filename="../views/reembedding_view.py" line="840"/>
+        <location filename="../views/reembedding_view.py" line="843"/>
         <source>Reembedding cancelled.</source>
         <translation>重新嵌入已取消。</translation>
     </message>
     <message>
-        <location filename="../views/reembedding_view.py" line="851"/>
         <source>Disabled while reembedding is running for this document.</source>
-        <translation>此文档正在进行重新嵌入时禁用。</translation>
+        <translation type="vanished">此文档正在进行重新嵌入时禁用。</translation>
     </message>
     <message>
-        <location filename="../views/reembedding_view.py" line="1035"/>
+        <location filename="../views/reembedding_view.py" line="1027"/>
         <source>Compare original images with their reembedded versions side by side.</source>
         <translation>并排比较原始图片和重新嵌入后的版本。</translation>
     </message>

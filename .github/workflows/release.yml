@@ -23,8 +23,6 @@ jobs:
             platform_name: macos-arm64
           - os: windows-latest
             platform_name: windows-x86_64
-          - os: ubuntu-22.04
-            platform_name: linux-x86_64
 
     runs-on: ${{ matrix.os }}
 
@@ -55,8 +53,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
-      - name: Install CPU-only PyTorch (Linux/Windows)
-        if: runner.os != 'macOS'
+      - name: Install CPU-only PyTorch (Windows)
+        if: runner.os == 'Windows'
         run: uv pip install torch --index-url https://download.pytorch.org/whl/cpu --reinstall --no-deps
 
       # ============================================================
@@ -324,18 +322,6 @@ jobs:
 
           Remove-Item $certPath -Force
           Write-Host 'Installer signing complete'
-
-      # ============================================================
-      # Linux: Create AppImage
-      # ============================================================
-      - name: Create AppImage (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get install -y libfuse2
-          chmod +x scripts/create_appimage.sh
-          ./scripts/create_appimage.sh \
-            "${{ steps.version.outputs.version }}" \
-            "${{ matrix.platform_name }}"
 
       # ============================================================
       # Upload

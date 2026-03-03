@@ -62,9 +62,10 @@ class BookWorkspace(QWidget):
     def _init_ui(self) -> None:
         """Initialize the user interface."""
         layout = QVBoxLayout(self)
-        self._activity_panel_min_width = 260
+        self._activity_panel_min_width = 120
         self._activity_panel_default_width = 460
         self._activity_panel_last_width = self._activity_panel_default_width
+        self._activity_panel_user_resized_since_show = False
 
         # Header with book name and close button
         header_layout = QHBoxLayout()
@@ -272,14 +273,22 @@ class BookWorkspace(QWidget):
 
     def show_activity_panel(self) -> None:
         """Show the activity panel (callable by child views)."""
+        already_visible = self._activity_panel.isVisible()
         self._activity_panel.setMinimumWidth(self._activity_panel_min_width)
         self._activity_panel.setVisible(True)
         self.activity_btn.setChecked(True)
         self._activity_panel.refresh()
+
+        sizes = self._main_splitter.sizes()
+        if already_visible and len(sizes) >= 2 and sizes[1] > 0:
+            return
+
+        self._activity_panel_user_resized_since_show = False
         self._restore_activity_panel_width()
         # Re-apply once after layout settles to avoid first-open zero-size races.
-        QTimer.singleShot(0, self._restore_activity_panel_width)
-        QTimer.singleShot(50, self._restore_activity_panel_width)
+        # Guarded so delayed callbacks do not override a manual user resize.
+        QTimer.singleShot(0, self._restore_activity_panel_width_deferred)
+        QTimer.singleShot(50, self._restore_activity_panel_width_deferred)
 
     def hide_activity_panel(self) -> None:
         """Hide the activity panel."""
@@ -308,6 +317,8 @@ class BookWorkspace(QWidget):
 
     def _restore_activity_panel_width(self) -> None:
         """Restore panel to a usable non-zero width when opening."""
+        if not self._activity_panel.isVisible():
+            return
         sizes = self._main_splitter.sizes()
         total = sum(sizes)
         if total <= 0:
@@ -317,7 +328,7 @@ class BookWorkspace(QWidget):
         if total <= 0:
             return
 
-        min_main_width = 200
+        min_main_width = max(200, self.tab_widget.minimumSizeHint().width())
         min_panel_floor = 120
         min_panel_width = min(self._activity_panel_min_width, max(min_panel_floor, total - min_main_width))
         self._activity_panel.setMinimumWidth(min_panel_width)
@@ -328,12 +339,19 @@ class BookWorkspace(QWidget):
 
         self._main_splitter.setSizes([main_width, panel_width])
 
+    def _restore_activity_panel_width_deferred(self) -> None:
+        """Deferred restore after layout settles, unless user already resized."""
+        if self._activity_panel_user_resized_since_show:
+            return
+        self._restore_activity_panel_width()
+
     def _on_splitter_moved(self, _pos: int, _index: int) -> None:
         """Persist panel width while user drags the splitter handle."""
         if self._activity_panel.isVisible():
             sizes = self._main_splitter.sizes()
             if len(sizes) >= 2 and sizes[1] > 0:
                 self._activity_panel_last_width = max(self._activity_panel_min_width, sizes[1])
+                self._activity_panel_user_resized_since_show = True
 
     def get_translation_view(self) -> TranslationView | None:
         """Return the translation view if it has been created, else None."""

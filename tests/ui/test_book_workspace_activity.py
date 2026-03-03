@@ -329,3 +329,32 @@ def test_cleanup_calls_activity_panel_cleanup():
     ws.cleanup()
 
     mock_panel.cleanup.assert_called_once()
+
+
+def test_show_activity_panel_does_not_reset_width_when_already_visible():
+    ws = _make_workspace()
+    ws.show_activity_panel()
+    ws._main_splitter.setSizes([700, 320])
+    before = ws._main_splitter.sizes()
+
+    # Simulate stale cached width that would otherwise force a reset.
+    ws._activity_panel_last_width = 460
+    ws.show_activity_panel()
+
+    after = ws._main_splitter.sizes()
+    assert after[1] == before[1]
+
+
+def test_deferred_restore_respects_user_resize():
+    ws = _make_workspace()
+    ws.show_activity_panel()
+    ws._main_splitter.setSizes([650, 280])
+    ws._on_splitter_moved(0, 0)  # marks user-resized and persists width
+    before = ws._main_splitter.sizes()
+
+    # If deferred restore runs despite user drag, this stale width could override.
+    ws._activity_panel_last_width = 460
+    ws._restore_activity_panel_width_deferred()
+
+    after = ws._main_splitter.sizes()
+    assert after[1] == before[1]
