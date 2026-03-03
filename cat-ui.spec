@@ -67,10 +67,25 @@ if not opencc_config_dir.exists() or not opencc_dict_dir.exists():
         f"cat-ui.spec: OpenCC package data dirs missing: config={opencc_config_dir.exists()} "
         f"dictionary={opencc_dict_dir.exists()}"
     )
-datas += [
-    (str(opencc_config_dir), 'opencc/config'),
-    (str(opencc_dict_dir), 'opencc/dictionary'),
-]
+
+jp2s_cfg = opencc_config_dir / 'jp2s.json'
+if not jp2s_cfg.exists():
+    raise RuntimeError(f"cat-ui.spec: required OpenCC config missing: {jp2s_cfg}")
+
+
+def _add_data_tree(src_dir: Path, dst_root: str) -> None:
+    """Add all files under *src_dir* to datas, preserving relative layout."""
+    for file_path in sorted(src_dir.rglob('*')):
+        if not file_path.is_file():
+            continue
+        rel_parent = file_path.parent.relative_to(src_dir)
+        dst_dir = dst_root if rel_parent == Path('.') else f"{dst_root}/{rel_parent.as_posix()}"
+        datas.append((str(file_path), dst_dir))
+
+
+# Add OpenCC assets file-by-file; this is more reliable across PyInstaller platforms.
+_add_data_tree(opencc_config_dir, 'opencc/config')
+_add_data_tree(opencc_dict_dir, 'opencc/dictionary')
 
 # Hidden imports for PySide6 and other dependencies
 hiddenimports = [
