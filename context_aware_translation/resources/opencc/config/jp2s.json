@@ -1,0 +1,33 @@
+{
+  "name": "Japanese Shinjitai + Traditional to Simplified Chinese",
+  "segmentation": {
+    "type": "mmseg",
+    "dict": {
+      "type": "txt",
+      "file": "TSPhrases.txt"
+    }
+  },
+  "conversion_chain": [
+    {
+      "dict": {
+        "type": "txt",
+        "file": "JPVariantsRev.txt"
+      }
+    },
+    {
+      "dict": {
+        "type": "group",
+        "dicts": [
+          {
+            "type": "txt",
+            "file": "TSPhrases.txt"
+          },
+          {
+            "type": "txt",
+            "file": "TSCharacters.txt"
+          }
+        ]
+      }
+    }
+  ]
+}
