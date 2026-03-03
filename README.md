@@ -2,15 +2,15 @@
 
 # Context-Aware Translation (CAT)
 
-CAT is a desktop translation tool for long-form text and various document types (books, PDFs, EPUBs, comics, scanned pages), with a focus on terminology consistency and cross-document context.
+CAT is a desktop translation tool for long-form text and various document types (books, PDFs, EPUBs, manga, scanned pages), with a focus on terminology consistency and cross-document context.
 
 ## Why CAT
 
 - Automatically extracts terms and their descriptions from source material to build a usable glossary.
 - Each term accumulates context in import order; relevant descriptions are injected during translation.
 - Ensures consistent translations for related terms.
-- Preserves original structure/layout where supported (e.g., EPUB structure, text table-of-contents export).
-- One pipeline covers text, EPUB, PDF, scanned images, and comics.
+- Preserves original structure/layout where supported (e.g., EPUB structure, text line-to-line mapping).
+- One pipeline covers text, EPUB, PDF, scanned images, and manga.
 - Supports OCR with manual review before export.
 - Supports image text embedding.
 
@@ -44,7 +44,7 @@ The result: better long-document consistency without sending the entire book as 
 | Text | Single or folder: `.txt` / `.md` | `txt` | No |
 | PDF | Single `.pdf` | `epub`, `md` | Yes |
 | Scanned Book | Image files/folder | `epub`, `md` | Yes |
-| Comic | `.cbz` or image folder | `cbz` | Yes |
+| Manga | `.cbz` or image folder | `cbz` | Yes |
 | EPUB | Single `.epub` | `epub`, `md`, `docx`, `html` | No (but supports image OCR) |
 
 ## LLM Endpoint Configuration
@@ -59,14 +59,14 @@ You can bind different endpoints/models to different steps to balance cost, spee
 | **Body Translation** | Execute the main document translation | This is the most quality-sensitive step. Prefer models with high translation quality, stable style, and strong long-text performance. Gemini 2.5 Pro with low thinking is strongly recommended. Gemini 3 or other strong reasoning models tend to produce overly stilted translations. |
 | **OCR** (optional) | Recognize text in images and output editable text | Requires a vision model (multimodal). Prefer models with high OCR accuracy and good adaptation to mixed layouts, vertical text, and noisy images, such as Gemini 3 Flash. |
 | **Term Review** (optional) | Automated term quality review | Suited for models with strong reasoning and stable instruction-following; can be separated from body translation to control cost. |
-| **Manga Translation** (optional) | Page-level comic translation (with image context) | Requires a multimodal model with strong visual comprehension and conversational tone handling. |
+| **Manga Translation** (optional) | Page-level manga translation (with image context) | Requires a multimodal model with strong visual comprehension and conversational tone handling. |
 | **Image Text Embedding** (optional) | Re-embed translated text into images | Requires a backend supporting image editing/inpainting. Prefer models with stable layout preservation. |
 
 Recommended practices:
 
 1. Use a "low-cost caching model" for **Term Extraction** + **Term Description Summarization**.
 2. Use a "high-quality translation model" for **Body Translation** (and optionally for **Term Translation**).
-3. Bind vision-related steps (**OCR** / **Comic Translation** / **Image Text Embedding**) to separate multimodal endpoints to avoid quota and performance interference.
+3. Bind vision-related steps (**OCR** / **Manga Translation** / **Image Text Embedding**) to separate multimodal endpoints to avoid quota and performance interference.
 
 These recommendations are already pre-configured in the default endpoint and config profiles (except **Image Text Embedding**, which requires separate setup). You only need to fill in the API keys to get started.
 
