@@ -132,17 +132,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          OPENCC_CFG="dist/${{ env.APP_NAME }}/_internal/opencc/config/jp2s.json"
-          OPENCC_DICT_DIR="dist/${{ env.APP_NAME }}/_internal/opencc/dictionary"
-          if [ ! -f "$OPENCC_CFG" ]; then
-            echo "::error::Missing OpenCC config: $OPENCC_CFG"
+          APP_DIST="dist/${{ env.APP_NAME }}"
+
+          # PyInstaller layout may vary across versions/platforms:
+          # - dist/CAT-UI/_internal/opencc/...
+          # - dist/CAT-UI/opencc/...
+          OPENCC_BASE=""
+          for base in "$APP_DIST/_internal" "$APP_DIST"; do
+            if [ -f "$base/opencc/config/jp2s.json" ] && [ -d "$base/opencc/dictionary" ]; then
+              OPENCC_BASE="$base/opencc"
+              break
+            fi
+          done
+
+          if [ -z "$OPENCC_BASE" ]; then
+            echo "::group::OpenCC asset debug"
+            echo "Expected one of:"
+            echo "  $APP_DIST/_internal/opencc/config/jp2s.json"
+            echo "  $APP_DIST/opencc/config/jp2s.json"
+            echo "Actual opencc-related paths:"
+            find "$APP_DIST" -maxdepth 5 \( -type d -name opencc -o -type f -name 'jp2s.json' \) 2>/dev/null | sort || true
+            echo "::endgroup::"
+            echo "::error::Missing OpenCC config/dictionary assets under $APP_DIST"
             exit 1
           fi
-          if [ ! -d "$OPENCC_DICT_DIR" ]; then
-            echo "::error::Missing OpenCC dictionary dir: $OPENCC_DICT_DIR"
-            exit 1
-          fi
-          echo "OpenCC assets verified."
+
+          echo "OpenCC assets verified at: $OPENCC_BASE"
 
       # ============================================================
       # macOS: Sign, package as DMG, notarize

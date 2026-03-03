@@ -25,7 +25,9 @@ def _configure_opencc_paths_for_frozen_build() -> None:
         return
 
     base = Path(base_dir)
-    candidates = (base, base / "_internal")
+    # PyInstaller may expose _MEIPASS as either the app root or the contents dir.
+    # Check nearby layouts to keep frozen builds resilient across platforms/versions.
+    candidates = (base, base / "_internal", base.parent, base.parent / "_internal")
     for candidate in candidates:
         config_dir = candidate / "opencc" / "config"
         dict_dir = candidate / "opencc" / "dictionary"
