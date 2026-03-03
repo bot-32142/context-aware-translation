@@ -3,6 +3,7 @@
 
 import sys
 import tomllib
+from importlib import metadata as importlib_metadata
 from pathlib import Path
 
 import opencc
@@ -58,34 +59,80 @@ except Exception as exc:  # noqa: BLE001
     print(f"[cat-ui.spec] warning: failed to collect data files for pypandoc: {exc}")
 
 # OpenCC requires config/dictionary assets at runtime (e.g. config/jp2s.json).
-# Include directories directly from installed package path to avoid hook/glob variance.
-opencc_pkg_dir = Path(opencc.__file__).resolve().parent
-opencc_config_dir = opencc_pkg_dir / 'config'
-opencc_dict_dir = opencc_pkg_dir / 'dictionary'
-if not opencc_config_dir.exists() or not opencc_dict_dir.exists():
-    raise RuntimeError(
-        f"cat-ui.spec: OpenCC package data dirs missing: config={opencc_config_dir.exists()} "
-        f"dictionary={opencc_dict_dir.exists()}"
-    )
-
-jp2s_cfg = opencc_config_dir / 'jp2s.json'
-if not jp2s_cfg.exists():
-    raise RuntimeError(f"cat-ui.spec: required OpenCC config missing: {jp2s_cfg}")
+# Collect file-by-file to avoid platform-specific directory-copy behavior.
 
 
-def _add_data_tree(src_dir: Path, dst_root: str) -> None:
-    """Add all files under *src_dir* to datas, preserving relative layout."""
+def _collect_data_tree(src_dir: Path, dst_root: str) -> list[tuple[str, str]]:
+    items: list[tuple[str, str]] = []
     for file_path in sorted(src_dir.rglob('*')):
         if not file_path.is_file():
             continue
         rel_parent = file_path.parent.relative_to(src_dir)
         dst_dir = dst_root if rel_parent == Path('.') else f"{dst_root}/{rel_parent.as_posix()}"
-        datas.append((str(file_path), dst_dir))
+        items.append((str(file_path), dst_dir))
+    return items
 
 
-# Add OpenCC assets file-by-file; this is more reliable across PyInstaller platforms.
-_add_data_tree(opencc_config_dir, 'opencc/config')
-_add_data_tree(opencc_dict_dir, 'opencc/dictionary')
+def _collect_opencc_assets() -> list[tuple[str, str]]:
+    """Collect OpenCC config/dictionary files across platform-specific wheel layouts."""
+    collected: list[tuple[str, str]] = []
+
+    # Preferred: use wheel manifest, which remains accurate even if files are not under opencc/config.
+    try:
+        dist = importlib_metadata.distribution('opencc-python-reimplemented')
+        for rel_path in dist.files or []:
+            abs_path = Path(dist.locate_file(rel_path))
+            if not abs_path.is_file():
+                continue
+            rel_posix = str(rel_path).replace('\\', '/')
+            marker = f"/{rel_posix}"
+            if '/config/' in marker and abs_path.suffix.lower() == '.json':
+                collected.append((str(abs_path), 'opencc/config'))
+            elif '/dictionary/' in marker:
+                collected.append((str(abs_path), 'opencc/dictionary'))
+    except importlib_metadata.PackageNotFoundError:
+        pass
+
+    # Also scan imported package location to cover files omitted from wheel RECORD on some builds.
+    opencc_pkg_dir = Path(opencc.__file__).resolve().parent
+    for file_path in sorted((opencc_pkg_dir / 'config').glob('*.json')):
+        if file_path.is_file():
+            collected.append((str(file_path), 'opencc/config'))
+    for file_path in sorted((opencc_pkg_dir / 'dictionary').glob('*')):
+        if file_path.is_file():
+            collected.append((str(file_path), 'opencc/dictionary'))
+
+    # De-duplicate while preserving order.
+    deduped: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for src, dst in collected:
+        key = (str(Path(src)), dst)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append((src, dst))
+    return deduped
+
+
+opencc_datas = _collect_opencc_assets()
+vendored_opencc_root = project_root / 'context_aware_translation' / 'resources' / 'opencc'
+vendored_config_dir = vendored_opencc_root / 'config'
+vendored_dict_dir = vendored_opencc_root / 'dictionary'
+if vendored_config_dir.exists() and vendored_dict_dir.exists():
+    opencc_datas = _collect_data_tree(vendored_config_dir, 'opencc/config') + _collect_data_tree(
+        vendored_dict_dir, 'opencc/dictionary'
+    )
+
+has_jp2s = any(dst == 'opencc/config' and Path(src).name == 'jp2s.json' for src, dst in opencc_datas)
+has_dictionary = any(dst == 'opencc/dictionary' for _src, dst in opencc_datas)
+if not has_jp2s or not has_dictionary:
+    opencc_pkg_dir = Path(opencc.__file__).resolve().parent
+    raise RuntimeError(
+        'cat-ui.spec: OpenCC assets not found. '
+        f'has_jp2s={has_jp2s}, has_dictionary={has_dictionary}, '
+        f'opencc_pkg_dir={opencc_pkg_dir}'
+    )
+datas += opencc_datas
 
 # Hidden imports for PySide6 and other dependencies
 hiddenimports = [
