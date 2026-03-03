@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from context_aware_translation.documents.base import is_ocr_required_for_type
+from context_aware_translation.documents.manga_alignment import list_nonempty_ocr_source_ids
 from context_aware_translation.storage.book_db import SQLiteBookDB, TranslationChunkRecord
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.document_repository import DocumentRepository
@@ -508,6 +509,30 @@ class TranslationView(QWidget):
         if reason:
             return False, reason
         return False, self.tr("Retranslate is unavailable due to active task constraints.")
+
+    def _resolve_manga_source_id_for_chunk(self, *, document_id: int, chunk_id: int) -> int | None:
+        """Resolve the manga source_id that corresponds to *chunk_id* in *document_id*.
+
+        Mapping follows the same positional alignment rule used by manga translation:
+        sorted chunks by chunk_id <-> non-empty OCR sources by sequence_number.
+        """
+        chunks = sorted(self.term_db.list_chunks(document_id=document_id), key=lambda c: int(c.chunk_id))
+        chunk_idx = next((idx for idx, rec in enumerate(chunks) if int(rec.chunk_id) == int(chunk_id)), None)
+        if chunk_idx is None:
+            return None
+        sources = self.document_repo.get_document_sources(document_id)
+        source_ids = list_nonempty_ocr_source_ids(sources)
+        if len(source_ids) != len(chunks):
+            logger.warning(
+                "Manga source/chunk alignment mismatch during retranslate: doc=%s chunks=%s sources=%s",
+                document_id,
+                len(chunks),
+                len(source_ids),
+            )
+            return None
+        if chunk_idx >= len(source_ids):
+            return None
+        return int(source_ids[chunk_idx])
 
     def _update_retranslate_chunk_button_state(self) -> None:
         """Enable/disable chunk retranslate based on task state and selection."""
@@ -1227,9 +1252,25 @@ class TranslationView(QWidget):
             return
 
         is_manga = self._is_manga_document(int(chunk.document_id))
+        manga_source_id: int | None = None
+        if is_manga:
+            manga_source_id = self._resolve_manga_source_id_for_chunk(
+                document_id=int(chunk.document_id),
+                chunk_id=int(chunk.chunk_id),
+            )
+            if manga_source_id is None:
+                QMessageBox.warning(
+                    self,
+                    self.tr("Retranslate Unavailable"),
+                    self.tr(
+                        "Could not map the selected manga chunk to a page source. "
+                        "Please rebuild glossary after OCR edits and try again."
+                    ),
+                )
+                return
         confirm_message = (
             self.tr(
-                "This will retranslate all chunks in manga document #%1 using the manga translator.\n"
+                "This will retranslate the selected manga page in document #%1 using the manga translator.\n"
                 "LLM API costs will be incurred.\n\nContinue?"
             )
             if is_manga
@@ -1249,11 +1290,13 @@ class TranslationView(QWidget):
         self.retranslate_chunk_btn.setText(self.tr("Retranslating..."))
 
         if is_manga:
-            # Manga retranslation is document-scoped and must use the manga handler.
+            # Manga retranslation uses the manga handler but targets only
+            # the selected page source (not the whole document).
             record = self._task_engine.submit_and_start(
                 "translation_manga",
                 self.book_id,
                 document_ids=[int(chunk.document_id)],
+                source_ids=[int(manga_source_id)],
                 force=True,
                 enable_polish=self._is_enable_polish_enabled(),
             )

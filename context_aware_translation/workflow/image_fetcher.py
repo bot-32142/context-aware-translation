@@ -1,4 +1,4 @@
-from context_aware_translation.documents.manga_alignment import list_nonempty_ocr_source_ids
+from context_aware_translation.documents.manga_alignment import extract_ocr_text, list_nonempty_ocr_source_ids
 from context_aware_translation.storage.document_repository import DocumentRepository
 
 
@@ -25,7 +25,7 @@ class RepoImageFetcher:
             self._ensure_cached(doc_row["document_id"])
         self._all_documents_cached = True
 
-    def fetch_source_image(self, source_id: int) -> tuple[bytes, str]:
+    def _get_source(self, source_id: int) -> dict:
         source = self._source_index.get(source_id)
         if source is None:
             if self._all_documents_cached:
@@ -33,11 +33,19 @@ class RepoImageFetcher:
                 self._all_documents_cached = False
             self._ensure_all_cached()
             source = self._source_index.get(source_id)
-        if source is not None:
-            if source.get("binary_content") is None:
-                raise ValueError(f"No image data for source {source_id}")
-            return (source["binary_content"], source.get("mime_type", "image/png"))
-        raise ValueError(f"Source {source_id} not found")
+        if source is None:
+            raise ValueError(f"Source {source_id} not found")
+        return source
+
+    def fetch_source_image(self, source_id: int) -> tuple[bytes, str]:
+        source = self._get_source(source_id)
+        if source.get("binary_content") is None:
+            raise ValueError(f"No image data for source {source_id}")
+        return (source["binary_content"], source.get("mime_type", "image/png"))
+
+    def fetch_source_ocr_text(self, source_id: int) -> str:
+        source = self._get_source(source_id)
+        return extract_ocr_text(source.get("ocr_json"))
 
     def list_page_source_ids(self, document_id: int) -> list[int]:
         """Return non-empty OCR source ids ordered by sequence_number."""

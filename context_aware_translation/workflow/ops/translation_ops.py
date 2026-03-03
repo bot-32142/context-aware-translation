@@ -28,6 +28,7 @@ async def translate(
     workflow: WorkflowContext,
     *,
     document_ids: list[int] | None = None,
+    source_ids: list[int] | None = None,
     progress_callback: ProgressCallback | None = None,
     force: bool = False,
     cancel_check: Callable[[], bool] | None = None,
@@ -44,12 +45,21 @@ async def translate(
 
     bootstrap_ops.check_cancel(cancel_check)
     doc_type_by_id = build_doc_type_by_id(workflow, document_ids)
+    source_ids_by_document: dict[int, list[int]] | None = None
+    if source_ids is not None:
+        if len(doc_type_by_id) != 1:
+            raise ValueError("source_ids filtering requires exactly one selected document.")
+        only_doc_id, only_doc_type = next(iter(doc_type_by_id.items()))
+        if only_doc_type != "manga":
+            raise ValueError("source_ids filtering is only supported for manga translation.")
+        source_ids_by_document = {int(only_doc_id): [int(source_id) for source_id in source_ids]}
     max_tokens_per_call = int(getattr(translator_config, "max_tokens_per_llm_call", 4000) or 4000)
     if max_tokens_per_call <= 0:
         max_tokens_per_call = 4000
 
     await workflow.manager.translate_chunks(
         doc_type_by_id=doc_type_by_id,
+        source_ids_by_document=source_ids_by_document,
         concurrency=translator_config.concurrency,
         batch_size=0,
         max_tokens_per_batch=max_tokens_per_call,

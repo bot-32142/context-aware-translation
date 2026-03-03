@@ -541,6 +541,10 @@ def test_retranslate_chunk_for_manga_submits_translation_manga():
     view.book_id = "book-id"
     view._task_engine.get_tasks.return_value = []
     view.document_repo.get_document_by_id.return_value = {"document_type": "manga"}
+    view.term_db.list_chunks.return_value = [MagicMock(chunk_id=7)]
+    view.document_repo.get_document_sources.return_value = [
+        {"source_id": 101, "sequence_number": 0, "ocr_json": '{"text":"a"}'}
+    ]
 
     chunk = MagicMock()
     chunk.chunk_id = 7
@@ -568,6 +572,7 @@ def test_retranslate_chunk_for_manga_submits_translation_manga():
         "translation_manga",
         "book-id",
         document_ids=[2],
+        source_ids=[101],
         force=True,
         enable_polish=True,
     )

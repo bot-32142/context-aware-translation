@@ -22,6 +22,7 @@ async def translate_manga_pages(
     manga_config: MangaTranslatorConfig,
     source_language: str,
     target_language: str,
+    extracted_texts: list[str] | None = None,
     cancel_check: Callable[[], bool] | None = None,
 ) -> list[str]:
     """Translate manga pages using vision LLM.
@@ -30,14 +31,12 @@ async def translate_manga_pages(
     """
     with llm_session_scope() as session_id:
         num_pages = len(page_images)
-        system_prompt = f"""You are a professional manga translator. Translate all visible text in the provided manga pages from {source_language} to {target_language}.
-
-Use the glossary below for consistent term translation.
-Output a JSON array with exactly {num_pages} element(s), one per page in the same order as the input.
-Each element is a string containing all translated text for that page.
-If a page has no text, use an empty string.
-Example for 2 pages: ["translated text page 1", "translated text page 2"]
-Return ONLY the JSON array."""
+        if num_pages != 1:
+            raise ValueError(f"Manga translation requires exactly 1 page per call, got {num_pages}")
+        if extracted_texts is None:
+            raise ValueError("Manga translation requires extracted_texts for strict line mapping")
+        if len(extracted_texts) != num_pages:
+            raise ValueError(f"Expected {num_pages} extracted text entries, got {len(extracted_texts)}")
 
         # Build glossary section
         glossary_items = []
@@ -46,21 +45,43 @@ Return ONLY the JSON array."""
             if description:
                 entry["context"] = description
             glossary_items.append(entry)
+        source_text = extracted_texts[0].replace("\r\n", "\n").replace("\r", "\n")
+        source_lines = [] if source_text == "" else source_text.split("\n")
+        payload_json = json.dumps(
+            {
+                "glossary": glossary_items,
+                "source_lines": source_lines,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
 
-        # Build user content with images
-        user_content: list[dict[str, Any]] = []
-        for img_bytes, mime_type in page_images:
-            b64 = base64.b64encode(img_bytes).decode("ascii")
-            data_uri = f"data:{mime_type};base64,{b64}"
-            user_content.append({"type": "image_url", "image_url": {"url": data_uri}})
+        system_prompt = f"""You are a professional manga translator. Translate from {source_language} to {target_language}.
 
-        glossary_text = json.dumps(glossary_items, ensure_ascii=False, indent=2) if glossary_items else "[]"
-        user_content.append(
+Use the manga page image only as context for tone, scene, and OCR ambiguity.
+Use extracted source lines as the single source of truth.
+
+Output format (strict):
+Return ONLY valid JSON object:
+{{"translations": ["line1", "line2", ...]}}
+
+Rules:
+1) translations length MUST equal source_lines length exactly.
+2) translations[i] MUST translate source_lines[i] only.
+3) Do not merge, split, reorder, or drop lines.
+4) Keep empty source lines as empty strings.
+5) Use glossary terms when applicable."""
+
+        img_bytes, mime_type = page_images[0]
+        b64 = base64.b64encode(img_bytes).decode("ascii")
+        data_uri = f"data:{mime_type};base64,{b64}"
+        user_content: list[dict[str, Any]] = [
+            {"type": "image_url", "image_url": {"url": data_uri}},
             {
                 "type": "text",
-                "text": f"Glossary:\n{glossary_text}\n\nTranslate all text in the {len(page_images)} manga page(s) above.",
-            }
-        )
+                "text": payload_json,
+            },
+        ]
 
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
@@ -78,15 +99,15 @@ Return ONLY the JSON array."""
                 )
                 response = clean_llm_response(response)
                 parsed = json.loads(response)
-                if isinstance(parsed, list):
-                    translations = parsed
-                elif isinstance(parsed, dict) and isinstance(parsed.get("translations"), list):
+                if isinstance(parsed, dict) and isinstance(parsed.get("translations"), list):
                     translations = parsed["translations"]
                 else:
-                    raise ValueError(f"Expected a JSON array, got {type(parsed).__name__}")
-                if len(translations) != len(page_images):
-                    raise ValueError(f"Expected {len(page_images)} translations, got {len(translations)}")
-                return [str(t) for t in translations]
+                    raise ValueError(f"Expected JSON object with translations list, got {type(parsed).__name__}")
+
+                if len(translations) != len(source_lines):
+                    raise ValueError(f"Expected {len(source_lines)} line translations, got {len(translations)}")
+                translated_lines = [str(item) for item in translations]
+                return ["\n".join(translated_lines)]
             except Exception as e:
                 if isinstance(e, OperationCancelledError):
                     raise
@@ -99,4 +120,4 @@ Return ONLY the JSON array."""
                 )
                 if attempt >= attempts - 1:
                     raise
-        raise ValueError(f"[llm_session={session_id}] Failed to translate manga pages after {attempts} attempts")
+        raise ValueError(f"[llm_session={session_id}] Failed to translate manga page after {attempts} attempts")

@@ -77,6 +77,7 @@ class MangaPageTranslationStrategy(Protocol):
         page_images: list[tuple[bytes, str]],
         terms: list[tuple[str, str, str]],
         source_language: str,
+        extracted_texts: list[str] | None = None,
     ) -> list[str]: ...
 
 
@@ -98,6 +99,13 @@ class ImageFetcher(Protocol):
 
         Must match the filtering in MangaDocument.get_text() + add_text()
         skipping so that positional zip with chunks is correct.
+        """
+        ...
+
+    def fetch_source_ocr_text(self, source_id: int) -> str:
+        """Return extracted OCR text for a source.
+
+        Returns empty string if OCR text is missing.
         """
         ...
 
@@ -124,6 +132,7 @@ class DocumentTypeHandler(Protocol):
         document_ids: list[int],
         manager: TranslationContextManager,
         force: bool = False,
+        source_ids: list[int] | None = None,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> None:

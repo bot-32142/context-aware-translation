@@ -210,6 +210,10 @@ class TranslationMangaHandler:
 
         force: bool = bool((payload or {}).get("force", False))
         enable_polish: bool = bool((payload or {}).get("enable_polish", True))
+        source_ids: list[int] | None = None
+        parsed_source_ids = (payload or {}).get("source_ids")
+        if isinstance(parsed_source_ids, list):
+            source_ids = [int(i) for i in parsed_source_ids]
 
         if action == TaskAction.RUN:
             return TranslationMangaTaskWorker(
@@ -218,6 +222,7 @@ class TranslationMangaHandler:
                 action="run",
                 task_id=record.task_id,
                 document_ids=doc_ids,
+                source_ids=source_ids,
                 force=force,
                 enable_polish=enable_polish,
                 task_store=deps.task_store,

@@ -5563,26 +5563,26 @@ Do you want to continue?</source>
         </translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="126"/>
-        <location filename="../views/translation_view.py" line="203"/>
-        <location filename="../views/translation_view.py" line="1529"/>
-        <location filename="../views/translation_view.py" line="1540"/>
+        <location filename="../views/translation_view.py" line="127"/>
+        <location filename="../views/translation_view.py" line="204"/>
+        <location filename="../views/translation_view.py" line="1572"/>
+        <location filename="../views/translation_view.py" line="1583"/>
         <source>Document:</source>
         <translation>文档：</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="129"/>
-        <location filename="../views/translation_view.py" line="206"/>
-        <location filename="../views/translation_view.py" line="625"/>
-        <location filename="../views/translation_view.py" line="1043"/>
+        <location filename="../views/translation_view.py" line="130"/>
+        <location filename="../views/translation_view.py" line="207"/>
+        <location filename="../views/translation_view.py" line="650"/>
+        <location filename="../views/translation_view.py" line="1068"/>
         <source>All Documents</source>
         <translation>所有文档</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="142"/>
-        <location filename="../views/translation_view.py" line="369"/>
-        <location filename="../views/translation_view.py" line="382"/>
-        <location filename="../views/translation_view.py" line="425"/>
+        <location filename="../views/translation_view.py" line="143"/>
+        <location filename="../views/translation_view.py" line="370"/>
+        <location filename="../views/translation_view.py" line="383"/>
+        <location filename="../views/translation_view.py" line="426"/>
         <source>Start Translation</source>
         <translation>开始翻译</translation>
     </message>
@@ -5591,14 +5591,14 @@ Do you want to continue?</source>
         <translation type="vanished">跳过上下文（仅使用首条描述）</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="152"/>
-        <location filename="../views/translation_view.py" line="1533"/>
+        <location filename="../views/translation_view.py" line="153"/>
+        <location filename="../views/translation_view.py" line="1576"/>
         <source>Async Batch Tasks</source>
         <translation>异步批量任务</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="157"/>
-        <location filename="../views/translation_view.py" line="1534"/>
+        <location filename="../views/translation_view.py" line="158"/>
+        <location filename="../views/translation_view.py" line="1577"/>
         <source>Submit Batch Task</source>
         <translation>提交批量任务</translation>
     </message>
@@ -5619,85 +5619,85 @@ Do you want to continue?</source>
         <translation type="vanished">删除选中的任务</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="182"/>
-        <location filename="../views/translation_view.py" line="1530"/>
+        <location filename="../views/translation_view.py" line="183"/>
+        <location filename="../views/translation_view.py" line="1573"/>
         <source>Review Translations</source>
         <translation>审阅翻译</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="197"/>
-        <location filename="../views/translation_view.py" line="1539"/>
+        <location filename="../views/translation_view.py" line="198"/>
+        <location filename="../views/translation_view.py" line="1582"/>
         <source>Back to Progress</source>
         <translation>返回进度</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="242"/>
-        <location filename="../views/translation_view.py" line="1543"/>
+        <location filename="../views/translation_view.py" line="243"/>
+        <location filename="../views/translation_view.py" line="1586"/>
         <source>Chunks:</source>
         <translation>文本块：</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="257"/>
-        <location filename="../views/translation_view.py" line="1544"/>
+        <location filename="../views/translation_view.py" line="258"/>
+        <location filename="../views/translation_view.py" line="1587"/>
         <source>Original:</source>
         <translation>原文：</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="267"/>
-        <location filename="../views/translation_view.py" line="1545"/>
+        <location filename="../views/translation_view.py" line="268"/>
+        <location filename="../views/translation_view.py" line="1588"/>
         <source>Translation:</source>
         <translation>翻译：</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="274"/>
-        <location filename="../views/translation_view.py" line="1546"/>
+        <location filename="../views/translation_view.py" line="275"/>
+        <location filename="../views/translation_view.py" line="1589"/>
         <source>Find...</source>
         <translation>查找...</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="276"/>
-        <location filename="../views/translation_view.py" line="1547"/>
+        <location filename="../views/translation_view.py" line="277"/>
+        <location filename="../views/translation_view.py" line="1590"/>
         <source>Replace with...</source>
         <translation>替换为...</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="277"/>
-        <location filename="../views/translation_view.py" line="1548"/>
+        <location filename="../views/translation_view.py" line="278"/>
+        <location filename="../views/translation_view.py" line="1591"/>
         <source>Find Next</source>
         <translation>查找下一个</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="278"/>
-        <location filename="../views/translation_view.py" line="1549"/>
+        <location filename="../views/translation_view.py" line="279"/>
+        <location filename="../views/translation_view.py" line="1592"/>
         <source>Replace</source>
         <translation>替换</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="279"/>
-        <location filename="../views/translation_view.py" line="1550"/>
+        <location filename="../views/translation_view.py" line="280"/>
+        <location filename="../views/translation_view.py" line="1593"/>
         <source>Replace All</source>
         <translation>全部替换</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="300"/>
-        <location filename="../views/translation_view.py" line="1551"/>
+        <location filename="../views/translation_view.py" line="301"/>
+        <location filename="../views/translation_view.py" line="1594"/>
         <source>Save Changes</source>
         <translation>保存更改</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="312"/>
-        <location filename="../views/translation_view.py" line="1553"/>
+        <location filename="../views/translation_view.py" line="313"/>
+        <location filename="../views/translation_view.py" line="1596"/>
         <source>Previous</source>
         <translation>上一个</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="314"/>
-        <location filename="../views/translation_view.py" line="1554"/>
+        <location filename="../views/translation_view.py" line="315"/>
+        <location filename="../views/translation_view.py" line="1597"/>
         <source>Next</source>
         <translation>下一个</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="346"/>
+        <location filename="../views/translation_view.py" line="347"/>
         <source>Document %1 (%2) [OCR pending]</source>
         <translation>文档 %1（%2）[OCR待处理]</translation>
     </message>
@@ -5706,32 +5706,32 @@ Do you want to continue?</source>
         <translation type="vanished">所选文档已有任务记录；请删除重叠的任务以解除阻止。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="386"/>
+        <location filename="../views/translation_view.py" line="387"/>
         <source>OCR is pending for document(s): %1. Complete OCR first.</source>
         <translation>以下文档OCR待处理：%1。请先完成OCR。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="510"/>
+        <location filename="../views/translation_view.py" line="511"/>
         <source>Retranslate is unavailable due to active task constraints.</source>
         <translation>由于活动任务约束，无法重新翻译。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="536"/>
+        <location filename="../views/translation_view.py" line="561"/>
         <source>Chunk ID is missing.</source>
         <translation>缺少分块ID。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="540"/>
+        <location filename="../views/translation_view.py" line="565"/>
         <source>Retranslate is unavailable while the selected chunk has an active retranslation.</source>
         <translation>所选分块正在重新翻译，当前无法重新翻译。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1159"/>
+        <location filename="../views/translation_view.py" line="1184"/>
         <source>Save Unavailable</source>
         <translation>保存不可用</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1160"/>
+        <location filename="../views/translation_view.py" line="1185"/>
         <source>Cannot save while tasks are actively modifying this document.</source>
         <translation>任务正在修改此文档，无法保存。</translation>
     </message>
@@ -5744,78 +5744,78 @@ Do you want to continue?</source>
         <translation type="vanished">批量任务覆盖了此文档，重新翻译不可用。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="766"/>
+        <location filename="../views/translation_view.py" line="791"/>
         <source>Retranslate is unavailable while async batch tasks are active for this book.</source>
         <translation>本书有异步批量任务正在运行，无法重新翻译。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="812"/>
+        <location filename="../views/translation_view.py" line="837"/>
         <source>No Documents</source>
         <translation>无文档</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="812"/>
+        <location filename="../views/translation_view.py" line="837"/>
         <source>No translatable documents found.</source>
         <translation>未找到可翻译的文档。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="830"/>
+        <location filename="../views/translation_view.py" line="855"/>
         <source>Cannot Start</source>
         <translation>无法启动</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="860"/>
-        <location filename="../views/translation_view.py" line="1024"/>
+        <location filename="../views/translation_view.py" line="885"/>
+        <location filename="../views/translation_view.py" line="1049"/>
         <source>Submit Failed</source>
         <translation>提交失败</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="861"/>
+        <location filename="../views/translation_view.py" line="886"/>
         <source>Failed to submit translation task:
 %1</source>
         <translation>提交翻译任务失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="867"/>
-        <location filename="../views/translation_view.py" line="888"/>
+        <location filename="../views/translation_view.py" line="892"/>
+        <location filename="../views/translation_view.py" line="913"/>
         <source>Partial Start</source>
         <translation>部分启动</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="868"/>
+        <location filename="../views/translation_view.py" line="893"/>
         <source>First task started but second submit failed:
 %1</source>
         <translation>第一个任务已启动，但第二个提交失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="879"/>
+        <location filename="../views/translation_view.py" line="904"/>
         <source>Start Failed</source>
         <translation>启动失败</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="881"/>
+        <location filename="../views/translation_view.py" line="906"/>
         <source>Failed to start translation task:
 %1</source>
         <translation>启动翻译任务失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="882"/>
-        <location filename="../views/translation_view.py" line="891"/>
+        <location filename="../views/translation_view.py" line="907"/>
+        <location filename="../views/translation_view.py" line="916"/>
         <source>Unknown error</source>
         <translation>未知错误</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="890"/>
+        <location filename="../views/translation_view.py" line="915"/>
         <source>First task started but second task failed:
 %1</source>
         <translation>第一个任务已启动，但第二个任务失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1025"/>
+        <location filename="../views/translation_view.py" line="1050"/>
         <source>Failed to submit batch task:
 %1</source>
         <translation>提交批量任务失败：
@@ -5826,7 +5826,7 @@ Do you want to continue?</source>
         <translation type="vanished">所选文档有正在进行的操作，重新翻译暂不可用。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="765"/>
+        <location filename="../views/translation_view.py" line="790"/>
         <source>Batch Task Running</source>
         <translation>批量任务运行中</translation>
     </message>
@@ -5835,12 +5835,12 @@ Do you want to continue?</source>
         <translation type="vanished">批量任务操作正在运行，请等待完成。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="719"/>
+        <location filename="../views/translation_view.py" line="744"/>
         <source>OCR Not Complete</source>
         <translation>OCR未完成</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="713"/>
+        <location filename="../views/translation_view.py" line="738"/>
         <source>Cannot translate yet. Documents with pending OCR in the selected stack: %1.
 
 Please complete OCR from the OCR Review tab first.</source>
@@ -5861,7 +5861,7 @@ Please complete OCR from the OCR Review tab first.</source>
         <translation type="vanished">正在暂停...</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="708"/>
+        <location filename="../views/translation_view.py" line="733"/>
         <source>Cannot submit batch task yet. Documents with pending OCR in the selected stack: %1.
 
 Please complete OCR from the OCR Review tab first.</source>
@@ -5876,7 +5876,7 @@ Please complete OCR from the OCR Review tab first.</source>
         </translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="739"/>
+        <location filename="../views/translation_view.py" line="764"/>
         <source>Not Supported</source>
         <translation>不支持</translation>
     </message>
@@ -5885,7 +5885,7 @@ Please complete OCR from the OCR Review tab first.</source>
         <translation type="vanished">漫画文档不支持异步批量任务。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="747"/>
+        <location filename="../views/translation_view.py" line="772"/>
         <source>translator_batch_config is required to submit async batch tasks.</source>
         <translation>提交异步批量任务需要配置 translator_batch_config。</translation>
     </message>
@@ -5976,23 +5976,23 @@ Please complete OCR from the OCR Review tab first.</source>
         <translation type="vanished">批量任务操作已暂停。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1213"/>
+        <location filename="../views/translation_view.py" line="1238"/>
         <source>Error</source>
         <translation>错误</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="534"/>
-        <location filename="../views/translation_view.py" line="1213"/>
+        <location filename="../views/translation_view.py" line="559"/>
+        <location filename="../views/translation_view.py" line="1238"/>
         <source>Chunk has no associated document.</source>
         <translation>该分块没有关联的文档。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1241"/>
+        <location filename="../views/translation_view.py" line="1282"/>
         <source>Retranslate Chunk</source>
         <translation>重新翻译分块</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1236"/>
+        <location filename="../views/translation_view.py" line="1277"/>
         <source>This will retranslate chunk #%1 using the LLM.
 LLM API costs will be incurred.
 
@@ -6003,47 +6003,47 @@ Continue?</source>
 是否继续？</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="147"/>
-        <location filename="../views/translation_view.py" line="1532"/>
+        <location filename="../views/translation_view.py" line="148"/>
+        <location filename="../views/translation_view.py" line="1575"/>
         <source>Enable polish pass</source>
         <translation>启用润色阶段</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="549"/>
-        <location filename="../views/translation_view.py" line="1249"/>
+        <location filename="../views/translation_view.py" line="574"/>
+        <location filename="../views/translation_view.py" line="1290"/>
         <source>Retranslating...</source>
         <translation>正在重新翻译...</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1224"/>
+        <location filename="../views/translation_view.py" line="1249"/>
+        <location filename="../views/translation_view.py" line="1264"/>
         <source>Retranslate Unavailable</source>
         <translation>重新翻译不可用</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1232"/>
         <source>This will retranslate all chunks in manga document #%1 using the manga translator.
 LLM API costs will be incurred.
 
 Continue?</source>
-        <translation>这将使用漫画翻译器重新翻译漫画文档 #%1 的所有分块。
+        <translation type="vanished">这将使用漫画翻译器重新翻译漫画文档 #%1 的所有分块。
 会产生 LLM API 费用。
 
 是否继续？</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1304"/>
+        <location filename="../views/translation_view.py" line="1347"/>
         <source>Retranslation Error</source>
         <translation>重新翻译错误</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1305"/>
+        <location filename="../views/translation_view.py" line="1348"/>
         <source>Failed to retranslate chunk:
 %1</source>
         <translation>重新翻译分块失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1511"/>
+        <location filename="../views/translation_view.py" line="1554"/>
         <source>Start translation for selected documents. If already translated, this will retranslate.</source>
         <translation>开始翻译所选文档；若已翻译，将执行重新翻译。</translation>
     </message>
@@ -6052,19 +6052,35 @@ Continue?</source>
         <translation type="vanished">仅使用每个术语最早的描述，而非基于分块位置的上下文摘要。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="367"/>
-        <location filename="../views/translation_view.py" line="695"/>
-        <location filename="../views/translation_view.py" line="1514"/>
+        <location filename="../views/translation_view.py" line="368"/>
+        <location filename="../views/translation_view.py" line="720"/>
+        <location filename="../views/translation_view.py" line="1557"/>
         <source>Run an additional polish pass after translation.</source>
         <translation>在翻译后额外执行一次润色阶段。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="691"/>
+        <location filename="../views/translation_view.py" line="716"/>
         <source>Polish pass is unavailable for manga translation.</source>
         <translation>漫画翻译不支持润色阶段。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1516"/>
+        <location filename="../views/translation_view.py" line="1266"/>
+        <source>Could not map the selected manga chunk to a page source. Please rebuild glossary after OCR edits and try again.</source>
+        <translation>无法将所选漫画分块映射到页面来源。请在 OCR 编辑后重建术语表并重试。</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1273"/>
+        <source>This will retranslate the selected manga page in document #%1 using the manga translator.
+LLM API costs will be incurred.
+
+Continue?</source>
+        <translation>这将使用漫画翻译器重新翻译文档 #%1 中选中的漫画页面。
+会产生 LLM API 费用。
+
+是否继续？</translation>
+    </message>
+    <message>
+        <location filename="../views/translation_view.py" line="1559"/>
         <source>Create and run an async batch translation task.</source>
         <translation>创建并运行异步批量翻译任务。</translation>
     </message>
@@ -6081,8 +6097,8 @@ Continue?</source>
         <translation type="vanished">请求取消所选的异步任务和服务端批量作业。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="546"/>
-        <location filename="../views/translation_view.py" line="1521"/>
+        <location filename="../views/translation_view.py" line="571"/>
+        <location filename="../views/translation_view.py" line="1564"/>
         <source>Retranslate the selected chunk using the LLM (incurs API cost).</source>
         <translation>使用 LLM 重新翻译所选分块（会产生 API 费用）。</translation>
     </message>
@@ -6095,7 +6111,7 @@ Continue?</source>
         <translation type="vanished">从本地历史中删除选中的异步任务。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1562"/>
+        <location filename="../views/translation_view.py" line="1605"/>
         <source>Translate selected documents directly (glossary extraction is optional, but glossary terms are always used).
 For OCR-required document types, complete OCR first. Keep original line count when editing text chunks.</source>
         <translation>直接翻译选中的文档（术语表提取为可选，但术语表术语始终会被使用）。
@@ -6238,27 +6254,27 @@ This action cannot be undone. Continue?</source>
         <translation type="vanished">导入失败</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1517"/>
+        <location filename="../views/translation_view.py" line="1560"/>
         <source>Open review mode to inspect and edit translated chunks.</source>
         <translation>打开审阅模式以检查并编辑已翻译分块。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1518"/>
+        <location filename="../views/translation_view.py" line="1561"/>
         <source>Return to progress mode and translation controls.</source>
         <translation>返回进度模式和翻译控制界面。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1519"/>
+        <location filename="../views/translation_view.py" line="1562"/>
         <source>Save edits for the currently selected chunk translation.</source>
         <translation>保存当前所选分块翻译的编辑。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1523"/>
+        <location filename="../views/translation_view.py" line="1566"/>
         <source>Go to the previous chunk in the review list.</source>
         <translation>跳转到审阅列表中的上一个分块。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1524"/>
+        <location filename="../views/translation_view.py" line="1567"/>
         <source>Go to the next chunk in the review list.</source>
         <translation>跳转到审阅列表中的下一个分块。</translation>
     </message>
@@ -6283,26 +6299,26 @@ This action cannot be undone. Continue?</source>
         <translation type="vanished">保存</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="348"/>
+        <location filename="../views/translation_view.py" line="349"/>
         <source>Document %1 (%2) [Translated]</source>
         <translation>文档 %1（%2）[已翻译]</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="350"/>
+        <location filename="../views/translation_view.py" line="351"/>
         <source>Document %1 (%2) [%3/%4 translated]</source>
         <translation>文档 %1（%2）[%3/%4 已翻译]</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="352"/>
-        <location filename="../views/translation_view.py" line="1034"/>
+        <location filename="../views/translation_view.py" line="353"/>
+        <location filename="../views/translation_view.py" line="1059"/>
         <source>Document %1 (%2)</source>
         <translation>文档 %1（%2）</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="304"/>
-        <location filename="../views/translation_view.py" line="422"/>
-        <location filename="../views/translation_view.py" line="551"/>
-        <location filename="../views/translation_view.py" line="1552"/>
+        <location filename="../views/translation_view.py" line="305"/>
+        <location filename="../views/translation_view.py" line="423"/>
+        <location filename="../views/translation_view.py" line="576"/>
+        <location filename="../views/translation_view.py" line="1595"/>
         <source>Retranslate</source>
         <translation>重新翻译</translation>
     </message>
@@ -6311,28 +6327,28 @@ This action cannot be undone. Continue?</source>
         <translation type="vanished">同步翻译任务</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="671"/>
+        <location filename="../views/translation_view.py" line="696"/>
         <source>Chunks: %1 translated / %2 total (%3%)</source>
         <translation>文本块：%1 已翻译 / 共 %2 个（%3%）</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="746"/>
-        <location filename="../views/translation_view.py" line="753"/>
+        <location filename="../views/translation_view.py" line="771"/>
+        <location filename="../views/translation_view.py" line="778"/>
         <source>Configuration Required</source>
         <translation>需要配置</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="755"/>
+        <location filename="../views/translation_view.py" line="780"/>
         <source>manga_translator_config is required to translate manga documents. Please configure it in your book settings.</source>
         <translation>翻译漫画文档需要 manga_translator_config。请在书籍设置中进行配置。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="772"/>
+        <location filename="../views/translation_view.py" line="797"/>
         <source>Retranslate Document</source>
         <translation>重新翻译文档</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="774"/>
+        <location filename="../views/translation_view.py" line="799"/>
         <source>This will retranslate all chunks in the selected document(s). Existing translations will be overwritten and LLM API costs will be incurred.
 
 Are you sure you want to continue?</source>
@@ -6345,29 +6361,29 @@ Are you sure you want to continue?</source>
         <translation type="vanished">正在取消翻译...</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="906"/>
+        <location filename="../views/translation_view.py" line="931"/>
         <source>Translation completed successfully!</source>
         <translation>翻译成功完成！</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="915"/>
+        <location filename="../views/translation_view.py" line="940"/>
         <source>Translation failed: %1</source>
         <translation>翻译失败：%1</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="921"/>
+        <location filename="../views/translation_view.py" line="946"/>
         <source>Translation Error</source>
         <translation>翻译错误</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="922"/>
+        <location filename="../views/translation_view.py" line="947"/>
         <source>Failed to translate chunks:
 %1</source>
         <translation>翻译文本块失败：
 %1</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="927"/>
+        <location filename="../views/translation_view.py" line="952"/>
         <source>Translation cancelled.</source>
         <translation>翻译已取消。</translation>
     </message>
@@ -6380,12 +6396,12 @@ Are you sure you want to continue?</source>
         <translation type="vanished">批量任务因临时错误已暂停。请重新运行所选任务。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1171"/>
+        <location filename="../views/translation_view.py" line="1196"/>
         <source>Line Count Mismatch</source>
         <translation>行数不匹配</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1174"/>
+        <location filename="../views/translation_view.py" line="1199"/>
         <source>Cannot save: translation has %1 lines but original has %2 lines.
 
 The number of lines must remain the same.</source>
@@ -6394,12 +6410,12 @@ The number of lines must remain the same.</source>
 行数必须保持一致。</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1204"/>
+        <location filename="../views/translation_view.py" line="1229"/>
         <source>Saved</source>
         <translation>已保存</translation>
     </message>
     <message>
-        <location filename="../views/translation_view.py" line="1204"/>
+        <location filename="../views/translation_view.py" line="1229"/>
         <source>Translation saved successfully!</source>
         <translation>翻译保存成功！</translation>
     </message>

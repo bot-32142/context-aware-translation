@@ -12,13 +12,16 @@ class DummyImageFetcher:
     def fetch_source_image(self, source_id: int) -> tuple[bytes, str]:  # noqa: ARG002
         return (b"image", "image/png")
 
+    def fetch_source_ocr_text(self, source_id: int) -> str:  # noqa: ARG002
+        return ""
+
     def list_page_source_ids(self, document_id: int) -> list[int]:
         assert document_id == 1
         return [10]
 
 
 class DummyMangaPageTranslator:
-    async def translate(self, page_images, terms, source_language):  # noqa: ANN001, ARG002
+    async def translate(self, page_images, terms, source_language, extracted_texts=None):  # noqa: ANN001, ARG002
         raise AssertionError("translate should not be called when alignment is invalid")
 
 
@@ -81,13 +84,16 @@ class TwoPageImageFetcher:
     def fetch_source_image(self, source_id: int) -> tuple[bytes, str]:
         return (f"img-{source_id}".encode(), "image/png")
 
+    def fetch_source_ocr_text(self, source_id: int) -> str:
+        return f"ocr-{source_id}"
+
     def list_page_source_ids(self, document_id: int) -> list[int]:
         assert document_id == 1
         return [101, 102]
 
 
 class PartiallyFailingMangaPageTranslator:
-    async def translate(self, page_images, terms, source_language):  # noqa: ANN001, ARG002
+    async def translate(self, page_images, terms, source_language, extracted_texts=None):  # noqa: ANN001, ARG002
         marker = page_images[0][0]
         if marker == b"img-102":
             raise RuntimeError("failed-page-102")
@@ -100,7 +106,7 @@ class LLMRateLimitError(Exception):
 
 
 class MixedPriorityFailingMangaPageTranslator:
-    async def translate(self, page_images, terms, source_language):  # noqa: ANN001, ARG002
+    async def translate(self, page_images, terms, source_language, extracted_texts=None):  # noqa: ANN001, ARG002
         marker = page_images[0][0]
         if marker == b"img-101":
             raise ValueError("translation: '翻译文本' length mismatch — expected 1, got 0")
@@ -111,7 +117,7 @@ class MixedPriorityFailingMangaPageTranslator:
 
 
 class FinalMismatchMangaPageTranslator:
-    async def translate(self, page_images, terms, source_language):  # noqa: ANN001, ARG002
+    async def translate(self, page_images, terms, source_language, extracted_texts=None):  # noqa: ANN001, ARG002
         marker = page_images[0][0]
         if marker == b"img-101":
             raise LLMRateLimitError("Rate limit exceeded: HTTP 429 Too Many Requests")
@@ -119,6 +125,16 @@ class FinalMismatchMangaPageTranslator:
             await asyncio.sleep(0.05)
             raise ValueError("translation: '翻译文本' length mismatch — expected 1, got 0")
         return [f"translated-{marker.decode()}"]
+
+
+class RecordingMangaPageTranslator:
+    def __init__(self) -> None:
+        self.calls: list[list[bytes]] = []
+
+    async def translate(self, page_images, terms, source_language, extracted_texts=None):  # noqa: ANN001, ARG002
+        markers = [img_bytes for (img_bytes, _mime) in page_images]
+        self.calls.append(markers)
+        return [f"translated-{marker.decode()}" for marker in markers]
 
 
 @pytest.mark.asyncio
@@ -176,3 +192,27 @@ async def test_manga_document_handler_raises_last_exception_even_if_not_rate_lim
 
     with pytest.raises(ValueError, match="length mismatch"):
         await handler.translate_chunks([1], manager)
+
+
+@pytest.mark.asyncio
+async def test_manga_document_handler_respects_source_ids_filter() -> None:
+    chunks = [
+        TranslationChunkRecord(chunk_id=0, hash="h0", text="p1", document_id=1),
+        TranslationChunkRecord(chunk_id=1, hash="h1", text="p2", document_id=1),
+    ]
+    manager = DummyManager(chunks)
+    translator = RecordingMangaPageTranslator()
+    handler = MangaDocumentHandler(
+        manga_page_translator=translator,
+        image_fetcher=TwoPageImageFetcher(),
+        concurrency=1,
+    )
+
+    await handler.translate_chunks([1], manager, source_ids=[102])
+
+    assert translator.calls == [[b"img-102"]]
+    chunks_by_id = {chunk.chunk_id: chunk for chunk in manager.term_repo.list_chunks(document_id=1)}
+    assert chunks_by_id[0].translation is None
+    assert chunks_by_id[0].is_translated is False
+    assert chunks_by_id[1].translation == "translated-img-102"
+    assert chunks_by_id[1].is_translated is True

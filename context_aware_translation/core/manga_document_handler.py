@@ -78,6 +78,7 @@ class MangaDocumentHandler:
         document_ids: list[int],
         manager: TranslationContextManager,
         force: bool = False,
+        source_ids: list[int] | None = None,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> None:
@@ -107,17 +108,17 @@ class MangaDocumentHandler:
                 continue
 
             # Source IDs with non-empty OCR text, matching add_text() filtering
-            source_ids = self._image_fetcher.list_page_source_ids(doc_id)
-            if len(source_ids) != len(all_chunks):
+            doc_source_ids = self._image_fetcher.list_page_source_ids(doc_id)
+            if len(doc_source_ids) != len(all_chunks):
                 raise ValueError(
                     f"Manga source/chunk alignment mismatch for document {doc_id}: "
-                    f"{len(source_ids)} non-empty OCR pages vs {len(all_chunks)} chunks. "
+                    f"{len(doc_source_ids)} non-empty OCR pages vs {len(all_chunks)} chunks. "
                     "Rebuild glossary after OCR edits."
                 )
 
             # Derive positional mapping: chunk_to_source using chunk_id as key
             chunk_to_source: dict[int, int] = {}
-            for chunk, sid in zip(all_chunks, source_ids, strict=True):
+            for chunk, sid in zip(all_chunks, doc_source_ids, strict=True):
                 chunk_to_source[chunk.chunk_id] = sid
 
             # Filter to untranslated chunks that have source mappings
@@ -129,6 +130,9 @@ class MangaDocumentHandler:
                 ],
                 key=lambda c: c.chunk_id,
             )
+            if source_ids is not None:
+                source_id_set = {int(source_id) for source_id in source_ids}
+                untranslated = [c for c in untranslated if chunk_to_source.get(c.chunk_id) in source_id_set]
             if not untranslated:
                 continue
 
@@ -158,10 +162,12 @@ class MangaDocumentHandler:
                         raise_if_cancelled(cancel_check)
                         # Fetch images
                         page_images = []
+                        extracted_texts = []
                         for chunk in batch:
                             source_id = _chunk_to_source[chunk.chunk_id]
                             image_bytes, mime_type = self._image_fetcher.fetch_source_image(source_id)
                             page_images.append((image_bytes, mime_type))
+                            extracted_texts.append(self._image_fetcher.fetch_source_ocr_text(source_id))
 
                         # Collect relevant terms
                         batch_texts = [chunk.text for chunk in batch]
@@ -183,6 +189,7 @@ class MangaDocumentHandler:
                             page_images,
                             batch_terms,
                             source_language,
+                            extracted_texts=extracted_texts,
                         )
 
                         # Store translations (persist before cancel check to avoid losing work)

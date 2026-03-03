@@ -28,6 +28,7 @@ class TranslationMangaTaskWorker(BaseWorker):
         action: str,
         task_id: str | None = None,
         document_ids: list[int] | None = None,
+        source_ids: list[int] | None = None,
         force: bool = False,
         enable_polish: bool = True,
         task_store: TaskStore | None = None,
@@ -41,6 +42,7 @@ class TranslationMangaTaskWorker(BaseWorker):
         self._action = action
         self._task_id = task_id
         self._document_ids = document_ids
+        self._source_ids = source_ids
         self._force = force
         self._enable_polish = enable_polish
         self._task_store = task_store
@@ -74,6 +76,7 @@ class TranslationMangaTaskWorker(BaseWorker):
                     translation_ops.translate(
                         context,
                         document_ids=self._document_ids,
+                        source_ids=self._source_ids,
                         progress_callback=self._on_progress,
                         force=self._force,
                         cancel_check=self._is_cancelled,

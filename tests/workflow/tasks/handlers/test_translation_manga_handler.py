@@ -410,6 +410,18 @@ def test_build_worker_run_wires_document_ids():
     assert worker._document_ids == [10, 20]
 
 
+def test_build_worker_run_wires_source_ids_from_payload():
+    deps = MagicMock()
+    record = _make_record(
+        status=STATUS_QUEUED,
+        document_ids_json=json.dumps([10]),
+        payload_json=json.dumps({"source_ids": [101, 102]}),
+    )
+    payload = handler.decode_payload(record)
+    worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
+    assert worker._source_ids == [101, 102]
+
+
 def test_build_worker_run_passes_config_snapshot():
     from context_aware_translation.ui.workers.translation_manga_task_worker import TranslationMangaTaskWorker
 

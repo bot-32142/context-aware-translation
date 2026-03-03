@@ -188,6 +188,7 @@ class LLMMangaPageTranslator:
         page_images: list[tuple[bytes, str]],
         terms: list[tuple[str, str, str]],
         source_language: str,
+        extracted_texts: list[str] | None = None,
     ) -> list[str]:
         return await translate_manga_pages(
             page_images,
@@ -196,4 +197,5 @@ class LLMMangaPageTranslator:
             self.manga_config,
             source_language,
             self.target_language,
+            extracted_texts=extracted_texts,
         )

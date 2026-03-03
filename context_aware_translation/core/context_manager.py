@@ -1588,6 +1588,7 @@ class TranslationContextManagerAdapter:
         batch_size: int = 5,
         max_tokens_per_batch: int = 4000,
         doc_type_by_id: dict[int, str] | None = None,
+        source_ids_by_document: dict[int, list[int]] | None = None,
         force: bool = False,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
@@ -1603,21 +1604,41 @@ class TranslationContextManagerAdapter:
             doc_type = doc_type_by_id[doc_id]
             handler = self._handlers.get(doc_type)
             if handler is not None:
+                selected_source_ids = None if source_ids_by_document is None else source_ids_by_document.get(doc_id)
                 if cancel_check is None:
-                    await handler.translate_chunks(
-                        [doc_id],
-                        self._manager,
-                        force=force,
-                        progress_callback=progress_callback,
-                    )
+                    if selected_source_ids is None:
+                        await handler.translate_chunks(
+                            [doc_id],
+                            self._manager,
+                            force=force,
+                            progress_callback=progress_callback,
+                        )
+                    else:
+                        await handler.translate_chunks(
+                            [doc_id],
+                            self._manager,
+                            force=force,
+                            source_ids=selected_source_ids,
+                            progress_callback=progress_callback,
+                        )
                 else:
-                    await handler.translate_chunks(
-                        [doc_id],
-                        self._manager,
-                        force=force,
-                        cancel_check=cancel_check,
-                        progress_callback=progress_callback,
-                    )
+                    if selected_source_ids is None:
+                        await handler.translate_chunks(
+                            [doc_id],
+                            self._manager,
+                            force=force,
+                            cancel_check=cancel_check,
+                            progress_callback=progress_callback,
+                        )
+                    else:
+                        await handler.translate_chunks(
+                            [doc_id],
+                            self._manager,
+                            force=force,
+                            source_ids=selected_source_ids,
+                            cancel_check=cancel_check,
+                            progress_callback=progress_callback,
+                        )
             else:
                 if cancel_check is None:
                     await self._manager.translate_chunks(

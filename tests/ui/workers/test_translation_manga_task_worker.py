@@ -10,6 +10,7 @@ def _make_worker(
     task_id: str = "task-manga-1",
     book_id: str = "book-1",
     document_ids: list[int] | None = None,
+    source_ids: list[int] | None = None,
     config_snapshot_json: str | None = None,
 ):
     from context_aware_translation.ui.workers.translation_manga_task_worker import TranslationMangaTaskWorker
@@ -24,6 +25,7 @@ def _make_worker(
         action=action,
         task_id=task_id,
         document_ids=document_ids,
+        source_ids=source_ids,
         task_store=task_store,
         notify_task_changed=notify_task_changed,
         config_snapshot_json=config_snapshot_json,
@@ -165,6 +167,32 @@ def test_worker_run_passes_document_ids():
 
     assert len(calls) == 1
     assert calls[0][1].get("document_ids") == [1, 2, 3]
+
+
+def test_worker_run_passes_source_ids():
+    worker = _make_worker(action="run", document_ids=[2], source_ids=[101])
+
+    fake_context = MagicMock()
+    fake_session = MagicMock()
+    fake_session.__enter__ = MagicMock(return_value=fake_context)
+    fake_session.__exit__ = MagicMock(return_value=False)
+    calls: list[tuple[tuple, dict]] = []
+
+    async def _translate(*args, **kwargs):
+        calls.append((args, kwargs))
+
+    with (
+        patch("context_aware_translation.ui.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.ui.workers.translation_manga_task_worker.translation_ops.translate",
+            new=_translate,
+        ),
+    ):
+        mock_session_cls.from_book.return_value = fake_session
+        worker._run_translation()
+
+    assert len(calls) == 1
+    assert calls[0][1].get("source_ids") == [101]
 
 
 def test_worker_run_sets_failed_status_on_exception():
