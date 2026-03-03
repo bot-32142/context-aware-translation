@@ -59,8 +59,17 @@ class TaskEngine(QObject):
     def register_handler(self, handler: TaskTypeHandler) -> None:
         self._core.register_handler(handler)
 
-    def get_tasks(self, book_id: str, task_type: str | None = None) -> list[TaskRecord]:
-        return self._core.get_tasks(book_id, task_type)
+    def get_tasks(
+        self,
+        book_id: str,
+        task_type: str | None = None,
+        limit: int | None = None,
+        *,
+        full: bool = False,
+    ) -> list[TaskRecord]:
+        if full:
+            return self._core.get_tasks(book_id, task_type, limit)
+        return self._core.get_tasks_lightweight(book_id, task_type, limit)
 
     def get_task(self, task_id: str) -> TaskRecord | None:
         return self._core.get_task(task_id)

@@ -149,7 +149,7 @@ def test_get_tasks_called_with_no_task_type_filter():
     _panel = _make_panel(engine=engine, book_id="book-42")
 
     # get_tasks should be called with only book_id (no task_type filter)
-    engine.get_tasks.assert_called_with("book-42")
+    engine.get_tasks.assert_called_with("book-42", limit=200)
 
 
 # ---------------------------------------------------------------------------
@@ -287,12 +287,16 @@ def test_delete_cancelled_by_user_does_not_invoke_engine():
 def test_tasks_changed_refreshes_for_matching_book_id():
     r = _make_record()
     engine = _make_engine(records=[r])
-    panel = _make_panel(engine=engine, book_id="book-1")  # noqa: F841
+    panel = _make_panel(engine=engine, book_id="book-1")
+    panel.show()
+    QApplication.processEvents()
 
     initial_count = engine.get_tasks.call_count
     engine.tasks_changed.emit("book-1")
+    panel._flush_scheduled_refresh()
 
     assert engine.get_tasks.call_count > initial_count
+    panel.cleanup()
 
 
 # ---------------------------------------------------------------------------
@@ -302,12 +306,16 @@ def test_tasks_changed_refreshes_for_matching_book_id():
 
 def test_tasks_changed_ignores_different_book_id():
     engine = _make_engine(records=[])
-    panel = _make_panel(engine=engine, book_id="book-1")  # noqa: F841
+    panel = _make_panel(engine=engine, book_id="book-1")
+    panel.show()
+    QApplication.processEvents()
 
     initial_count = engine.get_tasks.call_count
     engine.tasks_changed.emit("book-99")
+    QApplication.processEvents()
 
     assert engine.get_tasks.call_count == initial_count
+    panel.cleanup()
 
 
 # ---------------------------------------------------------------------------
@@ -491,3 +499,57 @@ def test_row_shows_eta_for_partial_running_progress():
 
     row = panel._rows["eta-task"]
     assert "ETA" in row._timing_label.text()
+
+
+def test_progress_only_refresh_reapplies_preflight():
+    now = time.time()
+    r1 = _make_record(task_id="task-1", status="running", completed_items=1, total_items=10, updated_at=now)
+    engine = _make_engine(records=[r1])
+    panel = _make_panel(engine=engine)
+
+    engine.preflight_task.reset_mock()
+    r1_progress = _make_record(
+        task_id="task-1",
+        status="running",
+        completed_items=2,
+        total_items=10,
+        updated_at=now + 1,
+    )
+    engine.get_tasks.return_value = [r1_progress]
+    panel.refresh(recompute_preflight=True)
+
+    # Preflight is recomputed on each refresh so policy/config changes are
+    # reflected immediately even when lifecycle status is unchanged.
+    assert engine.preflight_task.call_count == 3
+
+
+def test_status_change_refresh_reapplies_preflight():
+    now = time.time()
+    r1 = _make_record(task_id="task-1", status="running", completed_items=1, total_items=10, updated_at=now)
+    engine = _make_engine(records=[r1])
+    panel = _make_panel(engine=engine)
+
+    engine.preflight_task.reset_mock()
+    r1_done = _make_record(
+        task_id="task-1",
+        status="completed",
+        completed_items=10,
+        total_items=10,
+        updated_at=now + 1,
+    )
+    engine.get_tasks.return_value = [r1_done]
+    panel.refresh(recompute_preflight=True)
+
+    # RUN/CANCEL/DELETE should be re-evaluated when lifecycle status changes.
+    assert engine.preflight_task.call_count == 3
+
+
+def test_long_error_is_truncated_inline_but_full_in_tooltip():
+    long_error = "x" * 500
+    r = _make_record(task_id="task-err", last_error=long_error)
+    engine = _make_engine(records=[r])
+    panel = _make_panel(engine=engine)
+
+    row = panel._rows["task-err"]
+    assert len(row._error_label.text()) < len(long_error)
+    assert row._error_label.toolTip() == long_error

@@ -249,81 +249,81 @@
 <context>
     <name>BookWorkspace</name>
     <message>
-        <location filename="../views/book_workspace.py" line="76"/>
-        <location filename="../views/book_workspace.py" line="489"/>
+        <location filename="../views/book_workspace.py" line="83"/>
+        <location filename="../views/book_workspace.py" line="536"/>
         <source>Back to Library</source>
         <translation>返回书库</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="77"/>
-        <location filename="../views/book_workspace.py" line="490"/>
+        <location filename="../views/book_workspace.py" line="84"/>
+        <location filename="../views/book_workspace.py" line="537"/>
         <source>Close this book and return to library</source>
         <translation>关闭此书籍并返回书库</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="81"/>
-        <location filename="../views/book_workspace.py" line="491"/>
+        <location filename="../views/book_workspace.py" line="88"/>
+        <location filename="../views/book_workspace.py" line="538"/>
         <source>Activity</source>
         <translation>活动</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="82"/>
-        <location filename="../views/book_workspace.py" line="492"/>
+        <location filename="../views/book_workspace.py" line="89"/>
+        <location filename="../views/book_workspace.py" line="539"/>
         <source>Show/hide task activity panel</source>
         <translation>显示/隐藏任务活动面板</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="114"/>
-        <location filename="../views/book_workspace.py" line="368"/>
-        <location filename="../views/book_workspace.py" line="495"/>
+        <location filename="../views/book_workspace.py" line="121"/>
+        <location filename="../views/book_workspace.py" line="414"/>
+        <location filename="../views/book_workspace.py" line="542"/>
         <source>Import</source>
         <translation>导入</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="115"/>
-        <location filename="../views/book_workspace.py" line="496"/>
+        <location filename="../views/book_workspace.py" line="122"/>
+        <location filename="../views/book_workspace.py" line="543"/>
         <source>OCR Review</source>
         <translation>OCR审核</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="116"/>
-        <location filename="../views/book_workspace.py" line="388"/>
-        <location filename="../views/book_workspace.py" line="497"/>
+        <location filename="../views/book_workspace.py" line="123"/>
+        <location filename="../views/book_workspace.py" line="434"/>
+        <location filename="../views/book_workspace.py" line="544"/>
         <source>Glossary</source>
         <translation>术语表</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="117"/>
-        <location filename="../views/book_workspace.py" line="498"/>
+        <location filename="../views/book_workspace.py" line="124"/>
+        <location filename="../views/book_workspace.py" line="545"/>
         <source>Translate</source>
         <translation>翻译</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="118"/>
-        <location filename="../views/book_workspace.py" line="396"/>
-        <location filename="../views/book_workspace.py" line="499"/>
+        <location filename="../views/book_workspace.py" line="125"/>
+        <location filename="../views/book_workspace.py" line="442"/>
+        <location filename="../views/book_workspace.py" line="546"/>
         <source>Reembedding</source>
         <translation>重新嵌入</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="119"/>
-        <location filename="../views/book_workspace.py" line="401"/>
-        <location filename="../views/book_workspace.py" line="500"/>
+        <location filename="../views/book_workspace.py" line="126"/>
+        <location filename="../views/book_workspace.py" line="447"/>
+        <location filename="../views/book_workspace.py" line="547"/>
         <source>Export</source>
         <translation>导出</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="210"/>
+        <location filename="../views/book_workspace.py" line="230"/>
         <source>Failed to load %1 tab.</source>
         <translation>加载%1标签页失败。</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="216"/>
+        <location filename="../views/book_workspace.py" line="236"/>
         <source>Error details for troubleshooting.</source>
         <translation>用于故障排查的错误详情。</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="375"/>
+        <location filename="../views/book_workspace.py" line="421"/>
         <source>OCR</source>
         <translation>OCR</translation>
     </message>
@@ -332,12 +332,12 @@
         <translation type="vanished">翻译</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="438"/>
+        <location filename="../views/book_workspace.py" line="484"/>
         <source>Operation in Progress</source>
         <translation>操作进行中</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="441"/>
+        <location filename="../views/book_workspace.py" line="487"/>
         <source>The following operations are currently running: %1.
 
 Returning to the library will stop local processing.
@@ -354,7 +354,7 @@ All completed results are already saved and won&apos;t be lost.</source>
 所有已完成的结果已保存，不会丢失。</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="505"/>
+        <location filename="../views/book_workspace.py" line="552"/>
         <source>Suggested flow: Import → OCR Review (if needed) → Glossary (optional) → Translate → Reembedding (if needed) → Export.</source>
         <translation>建议流程：导入 → OCR审核（如需要）→ 术语表（可选）→ 翻译 → 重新嵌入（如需要）→ 导出。</translation>
     </message>
@@ -375,17 +375,17 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation type="vanished">建议流程：导入 → OCR审阅（如需）→ 术语表（可选）→ 翻译 → 导出。</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="509"/>
+        <location filename="../views/book_workspace.py" line="556"/>
         <source>Live aggregate token usage across all endpoint profiles.</source>
         <translation>所有端点配置的实时汇总 token 用量。</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="536"/>
+        <location filename="../views/book_workspace.py" line="583"/>
         <source>Token usage: Total %1 | Input %2 (cached %3 / uncached %4) | Output %5 | Active endpoints %6</source>
         <translation>Token 用量：总计 %1 | 输入 %2（缓存 %3 / 非缓存 %4）| 输出 %5 | 活跃端点 %6</translation>
     </message>
     <message>
-        <location filename="../views/book_workspace.py" line="554"/>
+        <location filename="../views/book_workspace.py" line="601"/>
         <source>Token usage unavailable</source>
         <translation>Token 用量暂不可用</translation>
     </message>
@@ -2867,7 +2867,7 @@ Continue?</source>
         <translation>删除不可用</translation>
     </message>
     <message>
-        <location filename="../views/glossary_view.py" line="1371"/>
+        <location filename="../views/glossary_view.py" line="1372"/>
         <source>Glossary is optional: build it after OCR if you want auto-extracted terms, or import your own glossary.
 Review/ignore/translate glossary terms before main translation for best consistency.
 During translation, relevant terms are selected per chunk via normalized substring matching and sent alongside the source text. Each term includes its name, translation, and a summarized description to guide the translator for consistent output.</source>
@@ -3037,6 +3037,7 @@ Continue?</source>
     </message>
     <message>
         <location filename="../views/glossary_view.py" line="219"/>
+        <location filename="../views/glossary_view.py" line="1365"/>
         <source>Glossary Task Status</source>
         <translation>术语表任务状态</translation>
     </message>
@@ -3866,44 +3867,44 @@ Non-empty OCR pages: %1, chunks: %2</source>
 <context>
     <name>OCRReviewView</name>
     <message>
-        <location filename="../views/ocr_review_view.py" line="102"/>
-        <location filename="../views/ocr_review_view.py" line="1015"/>
+        <location filename="../views/ocr_review_view.py" line="110"/>
+        <location filename="../views/ocr_review_view.py" line="1055"/>
         <source>Document:</source>
         <translation>文档：</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="126"/>
-        <location filename="../views/ocr_review_view.py" line="1016"/>
+        <location filename="../views/ocr_review_view.py" line="138"/>
+        <location filename="../views/ocr_review_view.py" line="1056"/>
         <source>OCR text will appear here...</source>
         <translation>OCR文本将显示在此处...</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="145"/>
-        <location filename="../views/ocr_review_view.py" line="1017"/>
+        <location filename="../views/ocr_review_view.py" line="157"/>
+        <location filename="../views/ocr_review_view.py" line="1057"/>
         <source>First page</source>
         <translation>第一页</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="150"/>
-        <location filename="../views/ocr_review_view.py" line="1018"/>
+        <location filename="../views/ocr_review_view.py" line="162"/>
+        <location filename="../views/ocr_review_view.py" line="1058"/>
         <source>Previous page</source>
         <translation>上一页</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="154"/>
-        <location filename="../views/ocr_review_view.py" line="351"/>
+        <location filename="../views/ocr_review_view.py" line="166"/>
+        <location filename="../views/ocr_review_view.py" line="370"/>
         <source>Page 0 of 0</source>
         <translation>第 0 页，共 0 页</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="161"/>
-        <location filename="../views/ocr_review_view.py" line="1019"/>
+        <location filename="../views/ocr_review_view.py" line="173"/>
+        <location filename="../views/ocr_review_view.py" line="1059"/>
         <source>Next page</source>
         <translation>下一页</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="166"/>
-        <location filename="../views/ocr_review_view.py" line="1020"/>
+        <location filename="../views/ocr_review_view.py" line="178"/>
+        <location filename="../views/ocr_review_view.py" line="1060"/>
         <source>Last page</source>
         <translation>最后一页</translation>
     </message>
@@ -3912,83 +3913,84 @@ Non-empty OCR pages: %1, chunks: %2</source>
         <translation type="vanished">  跳转至：</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="172"/>
-        <location filename="../views/ocr_review_view.py" line="1021"/>
+        <location filename="../views/ocr_review_view.py" line="184"/>
+        <location filename="../views/ocr_review_view.py" line="1061"/>
         <source>Go to:</source>
         <translation>跳转到:</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="178"/>
-        <location filename="../views/ocr_review_view.py" line="1022"/>
+        <location filename="../views/ocr_review_view.py" line="190"/>
+        <location filename="../views/ocr_review_view.py" line="1062"/>
         <source>Enter page number</source>
         <translation>输入页码</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="181"/>
-        <location filename="../views/ocr_review_view.py" line="1023"/>
+        <location filename="../views/ocr_review_view.py" line="193"/>
+        <location filename="../views/ocr_review_view.py" line="1063"/>
         <source>Go</source>
         <translation>跳转</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="182"/>
-        <location filename="../views/ocr_review_view.py" line="1024"/>
+        <location filename="../views/ocr_review_view.py" line="194"/>
+        <location filename="../views/ocr_review_view.py" line="1064"/>
         <source>Jump to page</source>
         <translation>跳转到页面</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="189"/>
-        <location filename="../views/ocr_review_view.py" line="1025"/>
+        <location filename="../views/ocr_review_view.py" line="204"/>
+        <location filename="../views/ocr_review_view.py" line="1065"/>
         <source>(Re)run OCR (Current Page)</source>
         <translation>（重新）运行OCR（当前页）</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="190"/>
-        <location filename="../views/ocr_review_view.py" line="930"/>
+        <location filename="../views/ocr_review_view.py" line="205"/>
+        <location filename="../views/ocr_review_view.py" line="968"/>
         <source>Run or re-run OCR on the current page</source>
         <translation>在当前页运行或重新运行OCR</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="194"/>
-        <location filename="../views/ocr_review_view.py" line="1026"/>
+        <location filename="../views/ocr_review_view.py" line="210"/>
+        <location filename="../views/ocr_review_view.py" line="1066"/>
         <source>Run OCR for Pending Pages</source>
         <translation>对待处理页面运行OCR</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="195"/>
-        <location filename="../views/ocr_review_view.py" line="931"/>
+        <location filename="../views/ocr_review_view.py" line="211"/>
+        <location filename="../views/ocr_review_view.py" line="969"/>
         <source>Run OCR on all pending pages in this document</source>
         <translation>对此文档中所有待处理页面运行OCR</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="200"/>
-        <location filename="../views/ocr_review_view.py" line="1027"/>
+        <location filename="../views/ocr_review_view.py" line="217"/>
+        <location filename="../views/ocr_review_view.py" line="1067"/>
         <source>Save</source>
         <translation>保存</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="201"/>
-        <location filename="../views/ocr_review_view.py" line="929"/>
+        <location filename="../views/ocr_review_view.py" line="218"/>
+        <location filename="../views/ocr_review_view.py" line="967"/>
         <source>Save edited OCR text</source>
         <translation>保存编辑后的OCR文本</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="212"/>
+        <location filename="../views/ocr_review_view.py" line="231"/>
+        <location filename="../views/ocr_review_view.py" line="1068"/>
         <source>OCR</source>
         <translation>OCR</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="224"/>
-        <location filename="../views/ocr_review_view.py" line="1028"/>
+        <location filename="../views/ocr_review_view.py" line="243"/>
+        <location filename="../views/ocr_review_view.py" line="1069"/>
         <source>No image sources found in this document.</source>
         <translation>此文档中未找到图片源。</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="248"/>
+        <location filename="../views/ocr_review_view.py" line="267"/>
         <source>Document %1 (%2)</source>
         <translation>文档 %1（%2）</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="455"/>
+        <location filename="../views/ocr_review_view.py" line="474"/>
         <source>[Invalid OCR data - unable to parse]</source>
         <translation>[无效的OCR数据 - 无法解析]</translation>
     </message>
@@ -4001,49 +4003,49 @@ Non-empty OCR pages: %1, chunks: %2</source>
         <translation type="vanished">文本已添加到翻译栈后禁用（术语表构建或翻译预检）。请从导入标签页重置以进行修改。</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="913"/>
+        <location filename="../views/ocr_review_view.py" line="951"/>
         <source>Disabled after text has been added to the translation stack (glossary build or translation start). Reset from the Import tab to make changes.</source>
         <translation>文本已添加到翻译栈后禁用（术语表构建或翻译开始）。请从导入标签页重置以进行修改。</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="473"/>
+        <location filename="../views/ocr_review_view.py" line="492"/>
         <source>Page %1 of %2</source>
         <translation>第 %1 页，共 %2 页</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="484"/>
+        <location filename="../views/ocr_review_view.py" line="503"/>
         <source>OCR Done</source>
         <translation>OCR已完成</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="487"/>
+        <location filename="../views/ocr_review_view.py" line="506"/>
         <source>Pending OCR</source>
         <translation>待处理OCR</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="541"/>
+        <location filename="../views/ocr_review_view.py" line="560"/>
         <source>Cannot save OCR text while an OCR task is running for this document.</source>
         <translation>该文档的OCR任务正在运行，无法保存OCR文本。</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="551"/>
+        <location filename="../views/ocr_review_view.py" line="570"/>
         <source>Info</source>
         <translation>提示</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="551"/>
+        <location filename="../views/ocr_review_view.py" line="570"/>
         <source>No editable content on this page.</source>
         <translation>此页面无可编辑内容。</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="560"/>
-        <location filename="../views/ocr_review_view.py" line="586"/>
+        <location filename="../views/ocr_review_view.py" line="579"/>
+        <location filename="../views/ocr_review_view.py" line="605"/>
         <source>Line Count Mismatch</source>
         <translation>行数不匹配</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="563"/>
-        <location filename="../views/ocr_review_view.py" line="589"/>
+        <location filename="../views/ocr_review_view.py" line="582"/>
+        <location filename="../views/ocr_review_view.py" line="608"/>
         <source>Edited text has %1 lines but original has %2 lines.
 
 Please ensure the line count matches. You can edit the text within each line, but cannot add or remove lines.</source>
@@ -4052,62 +4054,62 @@ Please ensure the line count matches. You can edit the text within each line, bu
 请确保行数一致。您可以编辑每行内的文本，但不能增加或删除行。</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="608"/>
-        <location filename="../views/ocr_review_view.py" line="631"/>
+        <location filename="../views/ocr_review_view.py" line="627"/>
+        <location filename="../views/ocr_review_view.py" line="650"/>
         <source>Success</source>
         <translation>成功</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="608"/>
-        <location filename="../views/ocr_review_view.py" line="631"/>
+        <location filename="../views/ocr_review_view.py" line="627"/>
+        <location filename="../views/ocr_review_view.py" line="650"/>
         <source>OCR text saved successfully.</source>
         <translation>OCR文本保存成功。</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="610"/>
-        <location filename="../views/ocr_review_view.py" line="633"/>
-        <location filename="../views/ocr_review_view.py" line="715"/>
-        <location filename="../views/ocr_review_view.py" line="767"/>
+        <location filename="../views/ocr_review_view.py" line="629"/>
+        <location filename="../views/ocr_review_view.py" line="652"/>
+        <location filename="../views/ocr_review_view.py" line="734"/>
+        <location filename="../views/ocr_review_view.py" line="786"/>
         <source>Error</source>
         <translation>错误</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="610"/>
-        <location filename="../views/ocr_review_view.py" line="633"/>
+        <location filename="../views/ocr_review_view.py" line="629"/>
+        <location filename="../views/ocr_review_view.py" line="652"/>
         <source>Failed to save OCR text: %1</source>
         <translation>保存OCR文本失败：%1</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="540"/>
-        <location filename="../views/ocr_review_view.py" line="612"/>
+        <location filename="../views/ocr_review_view.py" line="559"/>
+        <location filename="../views/ocr_review_view.py" line="631"/>
         <source>Cannot Save</source>
         <translation>无法保存</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="612"/>
+        <location filename="../views/ocr_review_view.py" line="631"/>
         <source>No OCR data available. Please run OCR first.</source>
         <translation>无可用OCR数据。请先运行OCR。</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="644"/>
-        <location filename="../views/ocr_review_view.py" line="720"/>
-        <location filename="../views/ocr_review_view.py" line="724"/>
+        <location filename="../views/ocr_review_view.py" line="663"/>
+        <location filename="../views/ocr_review_view.py" line="739"/>
+        <location filename="../views/ocr_review_view.py" line="743"/>
         <source>Warning</source>
         <translation>警告</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="644"/>
-        <location filename="../views/ocr_review_view.py" line="720"/>
+        <location filename="../views/ocr_review_view.py" line="663"/>
+        <location filename="../views/ocr_review_view.py" line="739"/>
         <source>OCR is already running.</source>
         <translation>OCR正在运行中。</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="654"/>
+        <location filename="../views/ocr_review_view.py" line="673"/>
         <source>Re-run OCR</source>
         <translation>重新运行OCR</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="656"/>
+        <location filename="../views/ocr_review_view.py" line="675"/>
         <source>Re-running OCR will overwrite the current OCR results for this page.
 
 Do you want to continue?</source>
@@ -4116,19 +4118,19 @@ Do you want to continue?</source>
 是否继续？</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="690"/>
-        <location filename="../views/ocr_review_view.py" line="740"/>
+        <location filename="../views/ocr_review_view.py" line="709"/>
+        <location filename="../views/ocr_review_view.py" line="759"/>
         <source>Cannot Run OCR</source>
         <translation>无法运行OCR</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="715"/>
-        <location filename="../views/ocr_review_view.py" line="767"/>
+        <location filename="../views/ocr_review_view.py" line="734"/>
+        <location filename="../views/ocr_review_view.py" line="786"/>
         <source>Failed to run OCR: %1</source>
         <translation>运行OCR失败：%1</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="724"/>
+        <location filename="../views/ocr_review_view.py" line="743"/>
         <source>No image sources to process.</source>
         <translation>没有可处理的图片源。</translation>
     </message>
@@ -4137,47 +4139,47 @@ Do you want to continue?</source>
         <translation type="vanished">正在取消...</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="873"/>
+        <location filename="../views/ocr_review_view.py" line="911"/>
         <source>OCR Complete</source>
         <translation>OCR完成</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="874"/>
+        <location filename="../views/ocr_review_view.py" line="912"/>
         <source>OCR completed successfully. %1 pages processed.</source>
         <translation>OCR成功完成。已处理 %1 个页面。</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="885"/>
+        <location filename="../views/ocr_review_view.py" line="923"/>
         <source>Unknown error</source>
         <translation>未知错误</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="886"/>
+        <location filename="../views/ocr_review_view.py" line="924"/>
         <source>OCR Error</source>
         <translation>OCR错误</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="886"/>
+        <location filename="../views/ocr_review_view.py" line="924"/>
         <source>OCR failed: %1</source>
         <translation>OCR失败：%1</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="890"/>
+        <location filename="../views/ocr_review_view.py" line="928"/>
         <source>Cancelled</source>
         <translation>已取消</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="890"/>
+        <location filename="../views/ocr_review_view.py" line="928"/>
         <source>OCR cancelled.</source>
         <translation>OCR已取消。</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="901"/>
+        <location filename="../views/ocr_review_view.py" line="939"/>
         <source>Disabled while OCR is running for this document.</source>
         <translation>该文档的OCR正在运行，此操作已禁用。</translation>
     </message>
     <message>
-        <location filename="../views/ocr_review_view.py" line="1033"/>
+        <location filename="../views/ocr_review_view.py" line="1074"/>
         <source>Run OCR and save edits before text is added to translation chunks. After glossary build or translation start, OCR editing is locked.</source>
         <translation>在文本添加到翻译分块前运行OCR并保存编辑。术语表构建或翻译开始后，OCR编辑将被锁定。</translation>
     </message>
@@ -4393,7 +4395,7 @@ Do you want to continue?</source>
         <location filename="../views/reembedding_view.py" line="525"/>
         <location filename="../views/reembedding_view.py" line="550"/>
         <location filename="../views/reembedding_view.py" line="571"/>
-        <location filename="../views/reembedding_view.py" line="1019"/>
+        <location filename="../views/reembedding_view.py" line="1020"/>
         <source>Reembedded</source>
         <translation>重新嵌入后</translation>
     </message>
@@ -4401,7 +4403,7 @@ Do you want to continue?</source>
         <location filename="../views/reembedding_view.py" line="140"/>
         <location filename="../views/reembedding_view.py" line="526"/>
         <location filename="../views/reembedding_view.py" line="551"/>
-        <location filename="../views/reembedding_view.py" line="1020"/>
+        <location filename="../views/reembedding_view.py" line="1021"/>
         <source>Show Text</source>
         <translation>显示文本</translation>
     </message>
@@ -4509,12 +4511,13 @@ Do you want to continue?</source>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="242"/>
+        <location filename="../views/reembedding_view.py" line="1016"/>
         <source>Reembedding</source>
         <translation>重新嵌入</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="254"/>
-        <location filename="../views/reembedding_view.py" line="1016"/>
+        <location filename="../views/reembedding_view.py" line="1017"/>
         <source>No reembeddable images found.</source>
         <translation>未找到可重新嵌入的图片。</translation>
     </message>
@@ -4526,14 +4529,14 @@ Do you want to continue?</source>
     <message>
         <location filename="../views/reembedding_view.py" line="532"/>
         <location filename="../views/reembedding_view.py" line="545"/>
-        <location filename="../views/reembedding_view.py" line="1022"/>
+        <location filename="../views/reembedding_view.py" line="1023"/>
         <source>Translated Text</source>
         <translation>翻译文本</translation>
     </message>
     <message>
         <location filename="../views/reembedding_view.py" line="533"/>
         <location filename="../views/reembedding_view.py" line="546"/>
-        <location filename="../views/reembedding_view.py" line="1023"/>
+        <location filename="../views/reembedding_view.py" line="1024"/>
         <source>Show Image</source>
         <translation>显示图片</translation>
     </message>
@@ -4659,7 +4662,7 @@ Do you want to continue?</source>
         <translation type="vanished">此文档正在进行重新嵌入时禁用。</translation>
     </message>
     <message>
-        <location filename="../views/reembedding_view.py" line="1027"/>
+        <location filename="../views/reembedding_view.py" line="1028"/>
         <source>Compare original images with their reembedded versions side by side.</source>
         <translation>并排比较原始图片和重新嵌入后的版本。</translation>
     </message>
@@ -4761,22 +4764,22 @@ Do you want to continue?</source>
 <context>
     <name>TaskActivityPanel</name>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="245"/>
+        <location filename="../widgets/task_activity_panel.py" line="279"/>
         <source>Activity</source>
         <translation>活动</translation>
     </message>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="246"/>
+        <location filename="../widgets/task_activity_panel.py" line="280"/>
         <source>Close</source>
         <translation>关闭</translation>
     </message>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="376"/>
+        <location filename="../widgets/task_activity_panel.py" line="435"/>
         <source>Cannot Run Task</source>
         <translation>无法运行任务</translation>
     </message>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="377"/>
+        <location filename="../widgets/task_activity_panel.py" line="436"/>
         <source>The task could not be started:
 
 {0}</source>
@@ -4785,12 +4788,12 @@ Do you want to continue?</source>
 {0}</translation>
     </message>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="387"/>
+        <location filename="../widgets/task_activity_panel.py" line="446"/>
         <source>Cannot Cancel Task</source>
         <translation>无法取消任务</translation>
     </message>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="388"/>
+        <location filename="../widgets/task_activity_panel.py" line="447"/>
         <source>The task could not be cancelled:
 
 {0}</source>
@@ -4799,22 +4802,22 @@ Do you want to continue?</source>
 {0}</translation>
     </message>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="394"/>
+        <location filename="../widgets/task_activity_panel.py" line="453"/>
         <source>Delete Task</source>
         <translation>删除任务</translation>
     </message>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="395"/>
+        <location filename="../widgets/task_activity_panel.py" line="454"/>
         <source>Delete the selected task from local history?</source>
         <translation>是否从本地历史记录中删除所选任务？</translation>
     </message>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="405"/>
+        <location filename="../widgets/task_activity_panel.py" line="464"/>
         <source>Cannot Delete Task</source>
         <translation>无法删除任务</translation>
     </message>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="406"/>
+        <location filename="../widgets/task_activity_panel.py" line="465"/>
         <source>The task could not be deleted:
 
 {0}</source>
@@ -4826,27 +4829,27 @@ Do you want to continue?</source>
 <context>
     <name>TaskConsole</name>
     <message>
-        <location filename="../tasks/task_console.py" line="147"/>
+        <location filename="../tasks/task_console.py" line="148"/>
         <source>Run Selected Task</source>
         <translation>运行所选任务</translation>
     </message>
     <message>
-        <location filename="../tasks/task_console.py" line="148"/>
+        <location filename="../tasks/task_console.py" line="149"/>
         <source>Cancel Selected Task</source>
         <translation>取消所选任务</translation>
     </message>
     <message>
-        <location filename="../tasks/task_console.py" line="149"/>
+        <location filename="../tasks/task_console.py" line="150"/>
         <source>Delete Selected Task</source>
         <translation>删除选中的任务</translation>
     </message>
     <message>
-        <location filename="../tasks/task_console.py" line="283"/>
+        <location filename="../tasks/task_console.py" line="284"/>
         <source>Cannot Run Task</source>
         <translation>无法运行任务</translation>
     </message>
     <message>
-        <location filename="../tasks/task_console.py" line="284"/>
+        <location filename="../tasks/task_console.py" line="285"/>
         <source>The task could not be started:
 
 {0}</source>
@@ -4855,12 +4858,12 @@ Do you want to continue?</source>
 {0}</translation>
     </message>
     <message>
-        <location filename="../tasks/task_console.py" line="297"/>
+        <location filename="../tasks/task_console.py" line="298"/>
         <source>Cannot Cancel Task</source>
         <translation>无法取消任务</translation>
     </message>
     <message>
-        <location filename="../tasks/task_console.py" line="298"/>
+        <location filename="../tasks/task_console.py" line="299"/>
         <source>The task could not be cancelled:
 
 {0}</source>
@@ -4869,22 +4872,22 @@ Do you want to continue?</source>
 {0}</translation>
     </message>
     <message>
-        <location filename="../tasks/task_console.py" line="307"/>
+        <location filename="../tasks/task_console.py" line="308"/>
         <source>Delete Task</source>
         <translation>删除任务</translation>
     </message>
     <message>
-        <location filename="../tasks/task_console.py" line="308"/>
+        <location filename="../tasks/task_console.py" line="309"/>
         <source>Delete the selected task from local history?</source>
         <translation>是否从本地历史记录中删除所选任务？</translation>
     </message>
     <message>
-        <location filename="../tasks/task_console.py" line="318"/>
+        <location filename="../tasks/task_console.py" line="319"/>
         <source>Cannot Delete Task</source>
         <translation>无法删除任务</translation>
     </message>
     <message>
-        <location filename="../tasks/task_console.py" line="319"/>
+        <location filename="../tasks/task_console.py" line="320"/>
         <source>The task could not be deleted:
 
 {0}</source>
@@ -5416,38 +5419,38 @@ Do you want to continue?</source>
 <context>
     <name>TaskStatusCard</name>
     <message>
-        <location filename="../widgets/task_status_card.py" line="151"/>
+        <location filename="../widgets/task_status_card.py" line="167"/>
         <source>Open Activity</source>
         <translation>打开活动</translation>
     </message>
     <message>
-        <location filename="../widgets/task_status_card.py" line="152"/>
+        <location filename="../widgets/task_status_card.py" line="168"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
     <message>
-        <location filename="../widgets/task_status_card.py" line="153"/>
-        <location filename="../widgets/task_status_card.py" line="253"/>
+        <location filename="../widgets/task_status_card.py" line="169"/>
+        <location filename="../widgets/task_status_card.py" line="270"/>
         <source>Run</source>
         <translation>运行</translation>
     </message>
     <message>
-        <location filename="../widgets/task_status_card.py" line="54"/>
+        <location filename="../widgets/task_status_card.py" line="57"/>
         <source>{0}/{1} items</source>
         <translation>{0}/{1}项</translation>
     </message>
     <message>
-        <location filename="../widgets/task_status_card.py" line="224"/>
+        <location filename="../widgets/task_status_card.py" line="241"/>
         <source>Phase: {0}</source>
         <translation>阶段：{0}</translation>
     </message>
     <message>
-        <location filename="../widgets/task_status_card.py" line="236"/>
+        <location filename="../widgets/task_status_card.py" line="253"/>
         <source>Last error: {0}</source>
         <translation>最后错误：{0}</translation>
     </message>
     <message>
-        <location filename="../widgets/task_status_card.py" line="251"/>
+        <location filename="../widgets/task_status_card.py" line="268"/>
         <source>Retry</source>
         <translation>重试</translation>
     </message>
@@ -6442,12 +6445,12 @@ Non-empty OCR pages: %1, chunks: %2</source>
 <context>
     <name>_MiniCard</name>
     <message>
-        <location filename="../widgets/task_status_card.py" line="382"/>
+        <location filename="../widgets/task_status_card.py" line="414"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
     <message>
-        <location filename="../widgets/task_status_card.py" line="383"/>
+        <location filename="../widgets/task_status_card.py" line="415"/>
         <source>Open Activity</source>
         <translation>打开活动</translation>
     </message>
@@ -6455,48 +6458,48 @@ Non-empty OCR pages: %1, chunks: %2</source>
 <context>
     <name>_TaskRow</name>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="144"/>
+        <location filename="../widgets/task_activity_panel.py" line="152"/>
         <source>Run</source>
         <translation>运行</translation>
     </message>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="145"/>
+        <location filename="../widgets/task_activity_panel.py" line="153"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="146"/>
+        <location filename="../widgets/task_activity_panel.py" line="154"/>
         <source>Delete</source>
         <translation>删除</translation>
     </message>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="152"/>
-        <location filename="../widgets/task_activity_panel.py" line="156"/>
+        <location filename="../widgets/task_activity_panel.py" line="160"/>
+        <location filename="../widgets/task_activity_panel.py" line="164"/>
         <source>Stage: {0}</source>
         <translation>阶段：{0}</translation>
     </message>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="178"/>
+        <location filename="../widgets/task_activity_panel.py" line="186"/>
         <source>ETA {0} (elapsed {1})</source>
         <translation>预计剩余 {0}（已用时 {1}）</translation>
     </message>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="181"/>
+        <location filename="../widgets/task_activity_panel.py" line="189"/>
         <source>ETA calculating... (elapsed {0})</source>
         <translation>预计时间计算中...（已用时 {0}）</translation>
     </message>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="182"/>
+        <location filename="../widgets/task_activity_panel.py" line="190"/>
         <source>ETA calculating...</source>
         <translation>预计时间计算中...</translation>
     </message>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="184"/>
+        <location filename="../widgets/task_activity_panel.py" line="192"/>
         <source>Elapsed {0}</source>
         <translation>已用时 {0}</translation>
     </message>
     <message>
-        <location filename="../widgets/task_activity_panel.py" line="188"/>
+        <location filename="../widgets/task_activity_panel.py" line="196"/>
         <source>Duration {0}</source>
         <translation>耗时 {0}</translation>
     </message>

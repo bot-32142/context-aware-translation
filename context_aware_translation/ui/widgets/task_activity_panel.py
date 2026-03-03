@@ -28,6 +28,10 @@ from context_aware_translation.ui.tasks.task_view_models import TaskRowVM
 from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, TaskAction
 
 _AUTO_REFRESH_INTERVAL_MS = 3000
+_TASKS_CHANGED_COALESCE_MS = 150
+_PREFLIGHT_RECHECK_INTERVAL_S = 15.0
+_MAX_INLINE_ERROR_CHARS = 280
+_ACTIVITY_LIST_LIMIT = 200
 
 
 def _format_duration(total_seconds: float) -> str:
@@ -61,11 +65,13 @@ class _TaskRow(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(2)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         # Top row: title + status chip
         top = QHBoxLayout()
         self._title_label = QLabel(vm.title)
         self._title_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self._title_label.setWordWrap(True)
         top.addWidget(self._title_label)
 
         self._status_label = QLabel(vm.status)
@@ -87,10 +93,10 @@ class _TaskRow(QWidget):
         layout.addLayout(mid)
 
         # Error row (only shown when non-empty)
-        self._error_label = QLabel(vm.last_error or "")
+        self._error_label = QLabel("")
         self._error_label.setObjectName("errorLabel")
-        self._error_label.setVisible(bool(vm.last_error))
         self._error_label.setWordWrap(True)
+        self._error_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         layout.addWidget(self._error_label)
 
         # Button row
@@ -128,8 +134,10 @@ class _TaskRow(QWidget):
         self._timing_label.setText(timing)
         self._timing_label.setVisible(bool(timing))
 
-        self._error_label.setText(vm.last_error or "")
-        self._error_label.setVisible(bool(vm.last_error))
+        inline_error = self._inline_error_text(vm.last_error)
+        self._error_label.setText(inline_error)
+        self._error_label.setToolTip(vm.last_error or "")
+        self._error_label.setVisible(bool(inline_error))
 
     def apply_preflight(self, run_d, cancel_d, delete_d) -> None:
         """Apply preflight decisions to buttons (enabled state + tooltip)."""
@@ -189,6 +197,15 @@ class _TaskRow(QWidget):
 
         return ""
 
+    @staticmethod
+    def _inline_error_text(last_error: str | None) -> str:
+        if not last_error:
+            return ""
+        compact = " ".join(last_error.split())
+        if len(compact) <= _MAX_INLINE_ERROR_CHARS:
+            return compact
+        return compact[: _MAX_INLINE_ERROR_CHARS - 1] + "\u2026"
+
 
 class TaskActivityPanel(QWidget):
     """Panel showing all tasks for a book with per-row Run/Cancel/Delete actions.
@@ -207,6 +224,10 @@ class TaskActivityPanel(QWidget):
         self._book_id = book_id
         self._vms: list[TaskRowVM] = []
         self._rows: dict[str, _TaskRow] = {}  # task_id -> _TaskRow widget
+        self._dirty: bool = False
+        self._refresh_scheduled: bool = False
+        self._last_preflight_signature: tuple[tuple[str, str], ...] = ()
+        self._next_preflight_refresh_monotonic: float = 0.0
 
         self._init_ui()
         self.retranslate_ui()
@@ -215,6 +236,10 @@ class TaskActivityPanel(QWidget):
         self._auto_timer.setInterval(_AUTO_REFRESH_INTERVAL_MS)
         self._auto_timer.timeout.connect(self._on_auto_refresh)
         self._auto_timer.start()
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setSingleShot(True)
+        self._refresh_timer.setInterval(_TASKS_CHANGED_COALESCE_MS)
+        self._refresh_timer.timeout.connect(self._flush_scheduled_refresh)
 
         # Initial data load
         self.refresh()
@@ -223,16 +248,25 @@ class TaskActivityPanel(QWidget):
     # Public API
     # ------------------------------------------------------------------
 
-    def refresh(self) -> None:
+    def refresh(self, *, recompute_preflight: bool | None = None) -> None:
         """Re-fetch all tasks and rebuild the scroll area rows."""
-        records = self._engine.get_tasks(self._book_id)
+        records = self._engine.get_tasks(self._book_id, limit=_ACTIVITY_LIST_LIMIT)
         self._vms = map_tasks_to_row_vms(records)
         self._repopulate_rows()
-        self._apply_preflight_to_all_rows()
+        signature = self._preflight_signature()
+        if recompute_preflight is None:
+            now = time.monotonic()
+            recompute_preflight = (
+                signature != self._last_preflight_signature or now >= self._next_preflight_refresh_monotonic
+            )
+        if recompute_preflight:
+            self._apply_preflight_to_all_rows()
+            self._record_preflight_refresh(signature)
 
     def cleanup(self) -> None:
         """Disconnect engine signal."""
         self._auto_timer.stop()
+        self._refresh_timer.stop()
         with suppress(TypeError, RuntimeError):
             self._engine.tasks_changed.disconnect(self._on_tasks_changed)
 
@@ -247,6 +281,7 @@ class TaskActivityPanel(QWidget):
         for row in self._rows.values():
             row.retranslate()
         self._apply_preflight_to_all_rows()
+        self._record_preflight_refresh(self._preflight_signature())
 
     def changeEvent(self, event: QEvent) -> None:  # noqa: N802
         if event.type() == QEvent.Type.LanguageChange:
@@ -334,6 +369,13 @@ class TaskActivityPanel(QWidget):
             delete_d = self._engine.preflight_task(vm.task_id, TaskAction.DELETE)
             row.apply_preflight(run_d, cancel_d, delete_d)
 
+    def _preflight_signature(self) -> tuple[tuple[str, str], ...]:
+        return tuple(sorted((vm.task_id, vm.status) for vm in self._vms))
+
+    def _record_preflight_refresh(self, signature: tuple[tuple[str, str], ...]) -> None:
+        self._last_preflight_signature = signature
+        self._next_preflight_refresh_monotonic = time.monotonic() + _PREFLIGHT_RECHECK_INTERVAL_S
+
     # ------------------------------------------------------------------
     # Slots
     # ------------------------------------------------------------------
@@ -344,7 +386,7 @@ class TaskActivityPanel(QWidget):
         if self._should_defer_hidden_refresh():
             self._dirty = True
             return
-        self.refresh()
+        self._schedule_refresh()
 
     def _on_auto_refresh(self) -> None:
         # Avoid background churn while panel is hidden; BookWorkspace triggers
@@ -356,7 +398,7 @@ class TaskActivityPanel(QWidget):
         super().showEvent(event)
         if getattr(self, "_dirty", False):
             self._dirty = False
-            self.refresh()
+            self.refresh(recompute_preflight=True)
 
     def _should_defer_hidden_refresh(self) -> bool:
         """Return True when refresh should wait until this panel is shown."""
@@ -365,6 +407,23 @@ class TaskActivityPanel(QWidget):
                 return False
             return self.parentWidget() is not None
         return False
+
+    def _schedule_refresh(self) -> None:
+        if self._refresh_scheduled:
+            return
+        self._refresh_scheduled = True
+        self._refresh_timer.start()
+
+    def _flush_scheduled_refresh(self) -> None:
+        if not self._refresh_scheduled:
+            return
+        self._refresh_scheduled = False
+        if not self.isVisible():
+            self._dirty = True
+            return
+        # Coalesced task-change refresh uses the signature/TTL heuristic.
+        # This avoids expensive per-row preflight churn on every burst.
+        self.refresh()
 
     def _on_run_clicked(self, task_id: str) -> None:
         try:

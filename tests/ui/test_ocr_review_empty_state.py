@@ -149,3 +149,26 @@ def test_tip_text_hides_preflight_wording():
     tip = view._tip_text().lower()
     assert "preflight" not in tip
     assert "translation start" in tip
+
+
+def test_ocr_action_buttons_use_minimum_size_policy():
+    from context_aware_translation.ui.views.ocr_review_view import OCRReviewView
+
+    book_manager = MagicMock()
+    book_manager.get_book.return_value = {"book_id": "b1"}
+    book_manager.get_book_db_path.return_value = "/tmp/ocr-view-test.db"
+    task_engine = MagicMock()
+    task_engine.tasks_changed = MagicMock()
+
+    with (
+        patch("context_aware_translation.ui.views.ocr_review_view.SQLiteBookDB"),
+        patch("context_aware_translation.ui.views.ocr_review_view.DocumentRepository") as mock_repo_cls,
+    ):
+        mock_repo = MagicMock()
+        mock_repo.list_documents_with_image_sources.return_value = []
+        mock_repo_cls.return_value = mock_repo
+        view = OCRReviewView(book_manager, "b1", task_engine=task_engine)
+
+    assert view.run_ocr_button.sizePolicy().horizontalPolicy().name == "Minimum"
+    assert view.run_all_ocr_button.sizePolicy().horizontalPolicy().name == "Minimum"
+    assert view.save_button.sizePolicy().horizontalPolicy().name == "Minimum"
