@@ -24,6 +24,12 @@ class DummyContextTree:
     def get_context(self, key: str, _max_chunk_id: int) -> list[str]:
         return self.context_map.get(key, [])
 
+    def get_longest_context_summary(self, key: str, _max_chunk_id: int) -> str:
+        summaries = self.get_context(key, _max_chunk_id)
+        if not summaries:
+            return ""
+        return max(summaries, key=lambda s: len((s or "").strip()))
+
     def close(self) -> None:
         pass
 
@@ -201,7 +207,7 @@ class FailingTermReviewerStrategy:
 
 class AdapterProbeManager:
     def __init__(self) -> None:
-        self.calls: list[tuple[tuple[int, ...], int, int, int, bool]] = []
+        self.calls: list[tuple[tuple[int, ...], int, int, int]] = []
         self._inflight = 0
         self.max_inflight = 0
 
@@ -212,12 +218,11 @@ class AdapterProbeManager:
         max_tokens_per_batch: int,
         document_ids: list[int],
         force: bool = False,
-        skip_context: bool = False,
         progress_callback=None,
     ) -> None:
         _ = force
         _ = progress_callback
-        self.calls.append((tuple(document_ids), concurrency, batch_size, max_tokens_per_batch, skip_context))
+        self.calls.append((tuple(document_ids), concurrency, batch_size, max_tokens_per_batch))
         self._inflight += 1
         self.max_inflight = max(self.max_inflight, self._inflight)
         await asyncio.sleep(0.01)
@@ -226,7 +231,7 @@ class AdapterProbeManager:
 
 class AdapterProbeHandler:
     def __init__(self) -> None:
-        self.calls: list[tuple[tuple[int, ...], bool]] = []
+        self.calls: list[tuple[int, ...]] = []
         self._inflight = 0
         self.max_inflight = 0
 
@@ -235,12 +240,11 @@ class AdapterProbeHandler:
         document_ids: list[int],
         _manager,
         force: bool = False,
-        skip_context: bool = False,
         progress_callback=None,
     ) -> None:
         _ = force
         _ = progress_callback
-        self.calls.append((tuple(document_ids), skip_context))
+        self.calls.append(tuple(document_ids))
         self._inflight += 1
         self.max_inflight = max(self.max_inflight, self._inflight)
         await asyncio.sleep(0.01)
@@ -493,7 +497,7 @@ async def test_translate_chunks_uses_context_tree_description_for_imported_gloss
 
 
 @pytest.mark.asyncio
-async def test_translate_chunks_skip_context_uses_first_description_only():
+async def test_translate_chunks_prefers_late_context_summary_over_imported_description():
     tokenizer = DummyTokenizer()
     context_tree = DummyContextTree({"term1": ["late context summary"]})
     term = Term(
@@ -524,11 +528,11 @@ async def test_translate_chunks_skip_context_uses_first_description_only():
         term_reviewer=None,
     )
 
-    await manager.translate_chunks(concurrency=1, batch_size=1, skip_context=True)
+    await manager.translate_chunks(concurrency=1, batch_size=1)
 
     assert chunk_strategy.translate.await_count == 1
     sent_terms = chunk_strategy.calls[0]["terms"]
-    assert sent_terms == [("term1", "term1-translation", "Imported glossary description")]
+    assert sent_terms == [("term1", "term1-translation", "late context summary")]
 
 
 @pytest.mark.asyncio
@@ -696,11 +700,11 @@ async def test_translation_context_manager_adapter_translate_chunks_serial_handl
     )
 
     assert handler.max_inflight == 1
-    assert sorted(handler.calls) == [((1,), False), ((2,), False), ((3,), False)]
+    assert sorted(handler.calls) == [(1,), (2,), (3,)]
 
 
 @pytest.mark.asyncio
-async def test_translation_context_manager_adapter_forwards_skip_context_flag():
+async def test_translation_context_manager_adapter_forwards_default_arguments():
     manager = AdapterProbeManager()
     adapter = TranslationContextManagerAdapter(manager)  # type: ignore[arg-type]
 
@@ -708,10 +712,9 @@ async def test_translation_context_manager_adapter_forwards_skip_context_flag():
         concurrency=3,
         batch_size=2,
         doc_type_by_id={1: "text"},
-        skip_context=True,
     )
 
-    assert manager.calls == [((1,), 3, 2, 4000, True)]
+    assert manager.calls == [((1,), 3, 2, 4000)]
 
 
 # ---------------------------------------------------------------------------

@@ -98,16 +98,8 @@ def test_scope_returns_no_documents():
 # --- claims ---
 
 
-def test_claims_skip_context_true_returns_glossary_state_read_shared_only():
+def test_claims_always_include_glossary_and_context_tree():
     record = _make_record(payload_json='{"output_path": "/tmp/glossary.xlsx", "skip_context": true}')
-    claims = handler.claims(record, {})
-    expected = ResourceClaim("glossary_state", "book-1", "*", ClaimMode.READ_SHARED)
-    assert expected in claims
-    assert len(claims) == 1
-
-
-def test_claims_skip_context_false_adds_context_tree_write_cooperative():
-    record = _make_record(payload_json='{"output_path": "/tmp/glossary.xlsx", "skip_context": false}')
     claims = handler.claims(record, {})
     expected_glossary = ResourceClaim("glossary_state", "book-1", "*", ClaimMode.READ_SHARED)
     expected_context = ResourceClaim("context_tree", "book-1", "*", ClaimMode.WRITE_COOPERATIVE)
@@ -420,7 +412,7 @@ def test_build_worker_cancel_returns_glossary_export_task_worker():
     assert isinstance(worker, GlossaryExportTaskWorker)
 
 
-def test_build_worker_extracts_output_path_and_skip_context_from_payload():
+def test_build_worker_extracts_output_path_from_payload():
     from pathlib import Path
 
     from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
@@ -433,7 +425,6 @@ def test_build_worker_extracts_output_path_and_skip_context_from_payload():
     worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
     assert isinstance(worker, GlossaryExportTaskWorker)
     assert worker._output_path == Path("/custom/path/glossary.xlsx")
-    assert worker._skip_context is True
 
 
 def test_build_worker_raises_on_unknown_action():

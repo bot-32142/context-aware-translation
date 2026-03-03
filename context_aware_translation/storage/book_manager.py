@@ -23,6 +23,7 @@ from context_aware_translation.storage.registry_db import RegistryDB
 # Linux:   ~/.local/share/ContextAwareTranslation
 DEFAULT_LIBRARY_ROOT = Path(user_data_dir("ContextAwareTranslation", appauthor=False))
 
+
 class BookManager:
     """
     Manages books and config profiles with folder structure and registry.

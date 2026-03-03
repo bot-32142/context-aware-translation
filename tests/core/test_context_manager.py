@@ -282,7 +282,7 @@ def test_get_term_description_for_query_prefers_longest_summary(mock_context_man
         "mid",
     ]
 
-    description = mock_context_manager.get_term_description_for_query(term, 10, skip_context=False)
+    description = mock_context_manager.get_term_description_for_query(term, 10)
     assert description == "this is the longest summary"
 
 
@@ -300,7 +300,7 @@ def test_context_manager_build_fully_summarized_descriptions_raises_for_non_chun
         mock_context_manager.build_fully_summarized_descriptions()
 
 
-def test_context_manager_build_fully_summarized_descriptions_skip_context_uses_first_description(mock_context_manager):
+def test_context_manager_build_fully_summarized_descriptions_uses_context_tree_summary(mock_context_manager):
     term = Term(
         key="term_skip_context",
         descriptions={"1": "first", "5": "second"},
@@ -310,8 +310,8 @@ def test_context_manager_build_fully_summarized_descriptions_skip_context_uses_f
     )
     mock_context_manager.term_repo.keyed_contexts["term_skip_context"] = term
 
-    summaries = mock_context_manager.build_fully_summarized_descriptions(skip_context=True)
-    assert summaries["term_skip_context"] == "first"
+    summaries = mock_context_manager.build_fully_summarized_descriptions()
+    assert summaries["term_skip_context"] == "first | second"
 
 
 def test_context_manager_build_fully_summarized_descriptions_allows_empty_description(mock_context_manager):

@@ -430,7 +430,7 @@ def test_build_button_disabled_for_text_selection_when_earlier_pdf_has_pending_o
 
 
 def test_export_glossary_warns_that_export_triggers_summarization():
-    """Export confirmation dialog warns about summarization and provides skip_context checkbox."""
+    """Export confirmation dialog warns that export will summarize descriptions."""
     view = _make_view()
     view.book_manager = MagicMock()
     view.book_id = "book"
@@ -455,9 +455,6 @@ def test_export_glossary_warns_that_export_triggers_summarization():
         def setStandardButtons(self, _buttons) -> None:  # noqa: ANN001
             pass
 
-        def setCheckBox(self, _checkbox) -> None:  # noqa: ANN001
-            pass
-
         def exec(self) -> QMessageBox.StandardButton:
             return QMessageBox.StandardButton.No
 
@@ -467,21 +464,15 @@ def test_export_glossary_warns_that_export_triggers_summarization():
             return_value=("/tmp/glossary.json", ""),
         ),
         patch("context_aware_translation.ui.views.glossary_view.QMessageBox", _FakeMessageBox),
-        patch("context_aware_translation.ui.views.glossary_view.QCheckBox") as checkbox_cls,
     ):
-        checkbox = MagicMock()
-        checkbox.isChecked.return_value = True
-        checkbox_cls.return_value = checkbox
         view._on_export_glossary()
 
     view._task_engine.submit_and_start.assert_not_called()
-    assert checkbox_cls.call_count == 1
-    assert "Skip context" in checkbox_cls.call_args.args[0]
     assert "summarize glossary descriptions" in captured["text"]
 
 
-def test_export_glossary_forwards_skip_context_to_engine():
-    """Export submits task with skip_context flag when user confirms."""
+def test_export_glossary_submits_output_path_to_engine():
+    """Export submits task with output_path when user confirms."""
     from context_aware_translation.workflow.tasks.models import Decision
 
     view = _make_view()
@@ -506,7 +497,6 @@ def test_export_glossary_forwards_skip_context_to_engine():
         "glossary_export",
         "book",
         output_path="/tmp/glossary.json",
-        skip_context=True,
     )
     assert view._task_engine.preflight.call_count >= 1
 
@@ -603,30 +593,24 @@ def test_on_review_terms_shows_error_when_submit_raises():
 
 
 def test_update_export_button_state_mode_aware_preflight():
-    """Export button checks both skip_context modes and enables if either is allowed."""
+    """Export button checks a single preflight and enables when allowed."""
     from context_aware_translation.workflow.tasks.models import Decision
 
     view = _make_view()
-    view._task_engine.preflight.side_effect = [
-        Decision(allowed=True),
-        Decision(allowed=False, reason="Context tree locked"),
-    ]
+    view._task_engine.preflight.return_value = Decision(allowed=True)
 
     view._update_export_button_state()
 
     assert view.export_button.isEnabled()
-    assert view._task_engine.preflight.call_count == 2
+    assert view._task_engine.preflight.call_count == 1
 
 
 def test_update_export_button_state_both_modes_blocked():
-    """Export button disabled when both skip_context modes are blocked."""
+    """Export button disabled when preflight is blocked."""
     from context_aware_translation.workflow.tasks.models import Decision
 
     view = _make_view()
-    view._task_engine.preflight.side_effect = [
-        Decision(allowed=False, reason="No terms"),
-        Decision(allowed=False, reason="No terms"),
-    ]
+    view._task_engine.preflight.return_value = Decision(allowed=False, reason="No terms")
 
     view._update_export_button_state()
 
@@ -672,7 +656,7 @@ def test_on_tasks_changed_shows_export_completion_dialog():
         [export_record] if task_type == "glossary_export" else []
     )
     mock_record = MagicMock()
-    mock_record.payload_json = '{"output_path": "/tmp/glossary.json", "skip_context": true}'
+    mock_record.payload_json = '{"output_path": "/tmp/glossary.json"}'
     view._task_engine.get_task.return_value = mock_record
 
     with patch("context_aware_translation.ui.views.glossary_view.QMessageBox.information") as info_mock:

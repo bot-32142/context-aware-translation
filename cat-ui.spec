@@ -4,6 +4,8 @@
 import sys
 import tomllib
 from pathlib import Path
+
+import opencc
 import PySide6
 from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
 
@@ -56,11 +58,19 @@ except Exception as exc:  # noqa: BLE001
     print(f"[cat-ui.spec] warning: failed to collect data files for pypandoc: {exc}")
 
 # OpenCC requires config/dictionary assets at runtime (e.g. config/jp2s.json).
-# This is critical for glossary key normalization; fail build if missing.
-opencc_datas = collect_data_files('opencc', includes=['config/*.json', 'dictionary/*.txt'])
-if not any(src.endswith('opencc/config/jp2s.json') for src, _dest in opencc_datas):
-    raise RuntimeError("cat-ui.spec: OpenCC jp2s.json not collected; packaging would be broken.")
-datas += opencc_datas
+# Include directories directly from installed package path to avoid hook/glob variance.
+opencc_pkg_dir = Path(opencc.__file__).resolve().parent
+opencc_config_dir = opencc_pkg_dir / 'config'
+opencc_dict_dir = opencc_pkg_dir / 'dictionary'
+if not opencc_config_dir.exists() or not opencc_dict_dir.exists():
+    raise RuntimeError(
+        f"cat-ui.spec: OpenCC package data dirs missing: config={opencc_config_dir.exists()} "
+        f"dictionary={opencc_dict_dir.exists()}"
+    )
+datas += [
+    (str(opencc_config_dir), 'opencc/config'),
+    (str(opencc_dict_dir), 'opencc/dictionary'),
+]
 
 # Hidden imports for PySide6 and other dependencies
 hiddenimports = [

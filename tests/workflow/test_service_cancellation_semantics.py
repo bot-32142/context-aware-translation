@@ -316,7 +316,7 @@ async def test_ensure_glossary_source_language_propagates_non_missing_detect_lan
 
 
 @pytest.mark.asyncio
-async def test_translate_skip_context_bypasses_context_tree_and_forwards_flag():
+async def test_translate_builds_context_tree_and_forwards_force_flag():
     config = MagicMock()
     config.translator_config = SimpleNamespace(concurrency=2, num_of_chunks_per_llm_call=4)
 
@@ -340,19 +340,18 @@ async def test_translate_skip_context_bypasses_context_tree_and_forwards_flag():
     )
 
     with patch.object(bootstrap_ops, "process_document", new=AsyncMock()):
-        await translation_ops.translate(service, document_ids=[2], skip_context=True, force=True)
+        await translation_ops.translate(service, document_ids=[2], force=True)
 
     manager.detect_language.assert_awaited_once()
-    manager.build_context_tree.assert_not_called()
+    manager.build_context_tree.assert_called_once_with(cancel_check=None)
     manager.translate_chunks.assert_awaited_once()
     call_kwargs = manager.translate_chunks.await_args.kwargs
     assert call_kwargs["doc_type_by_id"] == {2: "manga"}
-    assert call_kwargs["skip_context"] is True
     assert call_kwargs["force"] is True
 
 
 @pytest.mark.asyncio
-async def test_translate_without_skip_context_builds_context_tree():
+async def test_translate_builds_context_tree():
     config = MagicMock()
     config.translator_config = SimpleNamespace(concurrency=2, num_of_chunks_per_llm_call=4)
 
@@ -373,12 +372,11 @@ async def test_translate_without_skip_context_builds_context_tree():
     )
 
     with patch.object(bootstrap_ops, "process_document", new=AsyncMock()):
-        await translation_ops.translate(service, skip_context=False)
+        await translation_ops.translate(service)
 
     manager.detect_language.assert_awaited_once()
     manager.build_context_tree.assert_called_once_with(cancel_check=None)
     manager.translate_chunks.assert_awaited_once()
-    assert manager.translate_chunks.await_args.kwargs["skip_context"] is False
 
 
 @pytest.mark.asyncio
@@ -406,7 +404,7 @@ async def test_translate_does_not_preflight_earlier_stack_for_text_selection():
         document_repo=document_repo,
     )
     with patch.object(bootstrap_ops, "process_document", new=AsyncMock()) as process_document:
-        await translation_ops.translate(service, document_ids=[2], skip_context=True)
+        await translation_ops.translate(service, document_ids=[2])
 
     manager.detect_language.assert_awaited_once()
     process_document.assert_awaited_once_with(service, [2], cancel_check=None)
@@ -439,7 +437,7 @@ async def test_translate_preflights_stack_for_ocr_required_selection():
         document_repo=document_repo,
     )
     with patch.object(bootstrap_ops, "process_document", new=AsyncMock()) as process_document:
-        await translation_ops.translate(service, document_ids=[2], skip_context=True)
+        await translation_ops.translate(service, document_ids=[2])
 
     manager.detect_language.assert_awaited_once()
     process_document.assert_awaited_once_with(service, [1, 2], cancel_check=None)

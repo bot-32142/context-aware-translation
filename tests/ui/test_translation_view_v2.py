@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 try:
-    from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QPushButton
+    from PySide6.QtWidgets import QApplication, QComboBox, QPushButton
 
     HAS_PYSIDE6 = True
 except ImportError:
@@ -90,8 +90,6 @@ def test_start_translation_text_only_submits_translation_text():
     view._split_doc_ids_by_type = MagicMock(return_value=([1, 2], []))
     view.start_btn = QPushButton()
     view.doc_combo = QComboBox()
-    view.skip_context_cb = QCheckBox()
-    view.skip_context_cb.setChecked(False)
     view.status_label = MagicMock()
 
     preflight_ok = MagicMock()
@@ -111,7 +109,6 @@ def test_start_translation_text_only_submits_translation_text():
         "book-id",
         document_ids=[1, 2],
         force=False,
-        skip_context=False,
         enable_polish=True,
     )
 
@@ -125,8 +122,6 @@ def test_start_translation_manga_only_submits_translation_manga():
     view._split_doc_ids_by_type = MagicMock(return_value=([], [3]))
     view.start_btn = QPushButton()
     view.doc_combo = QComboBox()
-    view.skip_context_cb = QCheckBox()
-    view.skip_context_cb.setChecked(False)
     view.status_label = MagicMock()
 
     preflight_ok = MagicMock()
@@ -146,7 +141,6 @@ def test_start_translation_manga_only_submits_translation_manga():
         "book-id",
         document_ids=[3],
         force=False,
-        skip_context=False,
         enable_polish=True,
     )
 
@@ -160,8 +154,6 @@ def test_start_translation_mixed_selection_submits_both_task_types():
     view._split_doc_ids_by_type = MagicMock(return_value=([1], [3]))
     view.start_btn = QPushButton()
     view.doc_combo = QComboBox()
-    view.skip_context_cb = QCheckBox()
-    view.skip_context_cb.setChecked(False)
     view.status_label = MagicMock()
 
     preflight_ok = MagicMock()
@@ -190,8 +182,6 @@ def test_start_translation_mixed_selection_submits_nothing_when_text_preflight_d
     view._split_doc_ids_by_type = MagicMock(return_value=([1], [3]))
     view.start_btn = QPushButton()
     view.doc_combo = QComboBox()
-    view.skip_context_cb = QCheckBox()
-    view.skip_context_cb.setChecked(False)
     view.status_label = MagicMock()
 
     def _preflight(task_type, _book_id, _params, _action):
@@ -218,8 +208,6 @@ def test_start_translation_mixed_selection_submits_nothing_when_manga_preflight_
     view._split_doc_ids_by_type = MagicMock(return_value=([1], [3]))
     view.start_btn = QPushButton()
     view.doc_combo = QComboBox()
-    view.skip_context_cb = QCheckBox()
-    view.skip_context_cb.setChecked(False)
     view.status_label = MagicMock()
 
     def _preflight(task_type, _book_id, _params, _action):
@@ -246,8 +234,6 @@ def test_start_translation_partial_start_error_when_second_submit_fails():
     view._split_doc_ids_by_type = MagicMock(return_value=([1], [3]))
     view.start_btn = QPushButton()
     view.doc_combo = QComboBox()
-    view.skip_context_cb = QCheckBox()
-    view.skip_context_cb.setChecked(False)
     view.status_label = MagicMock()
 
     preflight_ok = MagicMock()
@@ -278,8 +264,8 @@ def test_start_translation_partial_start_error_when_second_submit_fails():
     warn_mock.assert_called_once()
 
 
-def test_start_translation_skip_context_forwarded_to_submit():
-    """skip_context checkbox value is forwarded to submit_and_start."""
+def test_start_translation_does_not_forward_skip_context():
+    """skip_context is removed and must not be forwarded to submit_and_start."""
     view = _make_view()
     view.book_id = "book-id"
     view._resolve_trigger_conditions = MagicMock(return_value=([1], False))
@@ -287,8 +273,6 @@ def test_start_translation_skip_context_forwarded_to_submit():
     view._split_doc_ids_by_type = MagicMock(return_value=([1], []))
     view.start_btn = QPushButton()
     view.doc_combo = QComboBox()
-    view.skip_context_cb = QCheckBox()
-    view.skip_context_cb.setChecked(True)
     view.status_label = MagicMock()
 
     preflight_ok = MagicMock()
@@ -304,7 +288,7 @@ def test_start_translation_skip_context_forwarded_to_submit():
     view._start_translation()
 
     _, kwargs = view._task_engine.submit_and_start.call_args
-    assert kwargs.get("skip_context") is True
+    assert "skip_context" not in kwargs
 
 
 # ------------------------------------------------------------------
@@ -320,7 +304,6 @@ def test_update_start_button_state_enabled_when_preflight_allowed():
     view.doc_combo.addItem("All Documents", None)
     view.doc_combo.addItem("Document 1", 1)
     view.start_btn = QPushButton()
-    view.skip_context_cb = QCheckBox()
     view.submit_batch_btn = QPushButton()
     view._get_preflight_docs_with_pending_ocr = MagicMock(return_value=[])
     view._is_retranslation = MagicMock(return_value=False)
@@ -331,11 +314,7 @@ def test_update_start_button_state_enabled_when_preflight_allowed():
     preflight_ok.allowed = True
     view._task_engine.preflight.return_value = preflight_ok
 
-    with patch(
-        "context_aware_translation.ui.views.translation_view.DocumentOperationTracker.has_document_overlap",
-        return_value=False,
-    ):
-        view._update_start_button_state()
+    view._update_start_button_state()
 
     assert view.start_btn.isEnabled()
 
@@ -348,7 +327,6 @@ def test_update_start_button_state_disabled_when_preflight_denied():
     view.doc_combo.addItem("All Documents", None)
     view.doc_combo.addItem("Document 1", 1)
     view.start_btn = QPushButton()
-    view.skip_context_cb = QCheckBox()
     view.submit_batch_btn = QPushButton()
     view._get_preflight_docs_with_pending_ocr = MagicMock(return_value=[])
     view._is_retranslation = MagicMock(return_value=False)
@@ -360,11 +338,7 @@ def test_update_start_button_state_disabled_when_preflight_denied():
     preflight_denied.reason = "Task already running"
     view._task_engine.preflight.return_value = preflight_denied
 
-    with patch(
-        "context_aware_translation.ui.views.translation_view.DocumentOperationTracker.has_document_overlap",
-        return_value=False,
-    ):
-        view._update_start_button_state()
+    view._update_start_button_state()
 
     assert not view.start_btn.isEnabled()
     assert "Task already running" in view.start_btn.toolTip()
@@ -378,7 +352,6 @@ def test_update_start_button_state_unrelated_running_tasks_do_not_block_start():
     view.doc_combo.addItem("All Documents", None)
     view.doc_combo.addItem("Document 5", 5)
     view.start_btn = QPushButton()
-    view.skip_context_cb = QCheckBox()
     view.submit_batch_btn = QPushButton()
     view._get_preflight_docs_with_pending_ocr = MagicMock(return_value=[])
     view._is_retranslation = MagicMock(return_value=False)
@@ -391,11 +364,7 @@ def test_update_start_button_state_unrelated_running_tasks_do_not_block_start():
     preflight_ok.allowed = True
     view._task_engine.preflight.return_value = preflight_ok
 
-    with patch(
-        "context_aware_translation.ui.views.translation_view.DocumentOperationTracker.has_document_overlap",
-        return_value=False,
-    ):
-        view._update_start_button_state()
+    view._update_start_button_state()
 
     assert view.start_btn.isEnabled()
 
@@ -454,8 +423,6 @@ def test_submit_batch_task_submits_batch_translation():
     view = _make_view()
     view.book_id = "book-1"
     view._resolve_trigger_conditions = MagicMock(return_value=([1], False))
-    view.skip_context_cb = QCheckBox()
-    view.skip_context_cb.setChecked(False)
 
     view._submit_batch_task()
 
@@ -464,7 +431,6 @@ def test_submit_batch_task_submits_batch_translation():
         "book-1",
         document_ids=[1],
         force=False,
-        skip_context=False,
         enable_polish=True,
     )
 
@@ -486,8 +452,6 @@ def test_retranslate_chunk_submits_chunk_retranslation():
     chunk.chunk_id = 7
     chunk.document_id = 2
     view._current_chunk = chunk
-    view.skip_context_cb = QCheckBox()
-    view.skip_context_cb.setChecked(False)
     view.retranslate_chunk_btn = QPushButton()
 
     submitted = MagicMock()
@@ -507,7 +471,6 @@ def test_retranslate_chunk_submits_chunk_retranslation():
         "book-id",
         chunk_id=7,
         document_id=2,
-        skip_context=False,
         enable_polish=True,
     )
     assert "cr-1" in view._pending_retranslations
@@ -526,8 +489,6 @@ def test_retranslate_chunk_for_manga_submits_translation_manga():
     chunk.chunk_id = 7
     chunk.document_id = 2
     view._current_chunk = chunk
-    view.skip_context_cb = QCheckBox()
-    view.skip_context_cb.setChecked(False)
     view.retranslate_chunk_btn = QPushButton()
 
     preflight_ok = MagicMock()
@@ -551,7 +512,6 @@ def test_retranslate_chunk_for_manga_submits_translation_manga():
         "book-id",
         document_ids=[2],
         force=True,
-        skip_context=False,
         enable_polish=True,
     )
     assert "tm-rt-1" in view._pending_retranslations
@@ -565,8 +525,6 @@ def test_retranslate_chunk_allows_parallel_different_chunk_same_document():
     view.book_id = "book-id"
     view._task_engine.get_tasks.return_value = []
     view.retranslate_chunk_btn = QPushButton()
-    view.skip_context_cb = QCheckBox()
-    view.skip_context_cb.setChecked(False)
     view._pending_retranslations = {"cr-1": (7, 2)}
 
     active_record = MagicMock()
@@ -599,7 +557,6 @@ def test_retranslate_chunk_allows_parallel_different_chunk_same_document():
         "book-id",
         chunk_id=8,
         document_id=2,
-        skip_context=False,
         enable_polish=True,
     )
     assert "cr-1" in view._pending_retranslations
@@ -612,8 +569,6 @@ def test_retranslate_chunk_blocks_duplicate_submit_for_same_chunk():
     view.book_id = "book-id"
     view._task_engine.get_tasks.return_value = []
     view.retranslate_chunk_btn = QPushButton()
-    view.skip_context_cb = QCheckBox()
-    view.skip_context_cb.setChecked(False)
     view._pending_retranslations = {"cr-1": (7, 2)}
 
     active_record = MagicMock()

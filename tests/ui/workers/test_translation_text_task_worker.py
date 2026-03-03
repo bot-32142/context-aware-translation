@@ -70,7 +70,6 @@ def test_run_action_calls_session_translate(monkeypatch: pytest.MonkeyPatch, tmp
         task_id="task-1",
         task_store=task_store,
         force=False,
-        skip_context=False,
     )
 
     mock_context = MagicMock()

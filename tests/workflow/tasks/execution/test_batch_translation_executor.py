@@ -780,7 +780,6 @@ async def test_ensure_payload_prepared_uses_batch_model_with_fixed_temperature()
     service.translator_config.return_value = translator_config
     service.batch_config.return_value = batch_config
     service._get_force.return_value = False
-    service._get_skip_context.return_value = False
 
     payload = await ensure_payload_prepared(service, task, {}, cancel_check=None)
 
@@ -789,7 +788,6 @@ async def test_ensure_payload_prepared_uses_batch_model_with_fixed_temperature()
         max_tokens_per_batch=4000,
         document_ids=None,
         force=False,
-        skip_context=False,
         cancel_check=None,
         source_language="Japanese",
     )

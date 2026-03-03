@@ -265,7 +265,7 @@ def test_validate_submit_rejects_missing_manga_config(tmp_path):
     fake_config = MagicMock()
     fake_config.manga_translator_config = None
 
-    with patch(f"{_HANDLER_MOD}.Config") as mock_config_cls:
+    with patch(f"{_HANDLER_MOD}.config_module.Config") as mock_config_cls:
         mock_config_cls.from_book.return_value = fake_config
         result = handler.validate_submit("book-1", {}, deps)
 
@@ -281,9 +281,9 @@ def test_validate_submit_rejects_non_manga_documents(tmp_path):
     deps, fake_config, fake_db, fake_repo = _make_submit_deps(tmp_path, docs)
 
     with (
-        patch(f"{_HANDLER_MOD}.Config") as mock_config_cls,
-        patch(f"{_HANDLER_MOD}.SQLiteBookDB", return_value=fake_db),
-        patch(f"{_HANDLER_MOD}.DocumentRepository", return_value=fake_repo),
+        patch(f"{_HANDLER_MOD}.config_module.Config") as mock_config_cls,
+        patch(f"{_HANDLER_MOD}.book_db.SQLiteBookDB", return_value=fake_db),
+        patch(f"{_HANDLER_MOD}.document_repository.DocumentRepository", return_value=fake_repo),
     ):
         mock_config_cls.from_book.return_value = fake_config
         result = handler.validate_submit("book-1", {}, deps)
@@ -297,9 +297,9 @@ def test_validate_submit_allows_all_manga_documents(tmp_path):
     deps, fake_config, fake_db, fake_repo = _make_submit_deps(tmp_path, docs)
 
     with (
-        patch(f"{_HANDLER_MOD}.Config") as mock_config_cls,
-        patch(f"{_HANDLER_MOD}.SQLiteBookDB", return_value=fake_db),
-        patch(f"{_HANDLER_MOD}.DocumentRepository", return_value=fake_repo),
+        patch(f"{_HANDLER_MOD}.config_module.Config") as mock_config_cls,
+        patch(f"{_HANDLER_MOD}.book_db.SQLiteBookDB", return_value=fake_db),
+        patch(f"{_HANDLER_MOD}.document_repository.DocumentRepository", return_value=fake_repo),
     ):
         mock_config_cls.from_book.return_value = fake_config
         result = handler.validate_submit("book-1", {}, deps)
@@ -315,9 +315,9 @@ def test_validate_submit_with_selected_manga_doc_ids(tmp_path):
     deps, fake_config, fake_db, fake_repo = _make_submit_deps(tmp_path, docs)
 
     with (
-        patch(f"{_HANDLER_MOD}.Config") as mock_config_cls,
-        patch(f"{_HANDLER_MOD}.SQLiteBookDB", return_value=fake_db),
-        patch(f"{_HANDLER_MOD}.DocumentRepository", return_value=fake_repo),
+        patch(f"{_HANDLER_MOD}.config_module.Config") as mock_config_cls,
+        patch(f"{_HANDLER_MOD}.book_db.SQLiteBookDB", return_value=fake_db),
+        patch(f"{_HANDLER_MOD}.document_repository.DocumentRepository", return_value=fake_repo),
     ):
         mock_config_cls.from_book.return_value = fake_config
         result = handler.validate_submit("book-1", {"document_ids": [1]}, deps)
@@ -347,7 +347,7 @@ def test_validate_run_rejects_missing_manga_config(tmp_path):
 
     record = _make_record(status=STATUS_QUEUED)
 
-    with patch(f"{_HANDLER_MOD}.Config") as mock_config_cls:
+    with patch(f"{_HANDLER_MOD}.config_module.Config") as mock_config_cls:
         mock_config_cls.from_book.return_value = fake_config
         result = handler.validate_run(record, {}, deps)
 
@@ -362,9 +362,9 @@ def test_validate_run_rejects_non_manga_documents(tmp_path):
     record = _make_record(status=STATUS_QUEUED)
 
     with (
-        patch(f"{_HANDLER_MOD}.Config") as mock_config_cls,
-        patch(f"{_HANDLER_MOD}.SQLiteBookDB", return_value=fake_db),
-        patch(f"{_HANDLER_MOD}.DocumentRepository", return_value=fake_repo),
+        patch(f"{_HANDLER_MOD}.config_module.Config") as mock_config_cls,
+        patch(f"{_HANDLER_MOD}.book_db.SQLiteBookDB", return_value=fake_db),
+        patch(f"{_HANDLER_MOD}.document_repository.DocumentRepository", return_value=fake_repo),
     ):
         mock_config_cls.from_book.return_value = fake_config
         result = handler.validate_run(record, {}, deps)
@@ -379,9 +379,9 @@ def test_validate_run_allows_manga_documents(tmp_path):
     record = _make_record(status=STATUS_QUEUED)
 
     with (
-        patch(f"{_HANDLER_MOD}.Config") as mock_config_cls,
-        patch(f"{_HANDLER_MOD}.SQLiteBookDB", return_value=fake_db),
-        patch(f"{_HANDLER_MOD}.DocumentRepository", return_value=fake_repo),
+        patch(f"{_HANDLER_MOD}.config_module.Config") as mock_config_cls,
+        patch(f"{_HANDLER_MOD}.book_db.SQLiteBookDB", return_value=fake_db),
+        patch(f"{_HANDLER_MOD}.document_repository.DocumentRepository", return_value=fake_repo),
     ):
         mock_config_cls.from_book.return_value = fake_config
         result = handler.validate_run(record, {}, deps)

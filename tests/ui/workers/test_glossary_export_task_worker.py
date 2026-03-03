@@ -74,7 +74,6 @@ def test_run_action_calls_build_fully_summarized_descriptions_and_export(
         task_id="task-1",
         task_store=task_store,
         output_path=output_path,
-        skip_context=False,
     )
 
     mock_db = MagicMock()
@@ -102,7 +101,6 @@ def test_run_action_calls_build_fully_summarized_descriptions_and_export(
     call_kwargs = mock_manager.build_fully_summarized_descriptions.call_args[1]
     assert "cancel_check" in call_kwargs
     assert "progress_callback" in call_kwargs
-    assert call_kwargs["skip_context"] is False
 
     mock_export_glossary.assert_called_once()
     call_args = mock_export_glossary.call_args
@@ -286,7 +284,8 @@ def test_progress_updates_task_store(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     mock_db = MagicMock()
     mock_manager = MagicMock()
 
-    def mock_build_with_progress(_cancel_check=None, progress_callback=None, _skip_context=False):
+    def mock_build_with_progress(cancel_check=None, progress_callback=None):
+        _ = cancel_check
         if progress_callback:
             progress_callback(ProgressUpdate(step=WorkflowStep.EXPORT, current=3, total=10, message="building"))
         return {}
@@ -313,48 +312,6 @@ def test_progress_updates_task_store(monkeypatch: pytest.MonkeyPatch, tmp_path: 
 
 
 # --- parameter forwarding ---
-
-
-def test_skip_context_forwarded_to_build_fully_summarized_descriptions(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    """Test that skip_context parameter is forwarded to build_fully_summarized_descriptions."""
-    from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
-
-    task_store = MagicMock()
-    output_path = tmp_path / "glossary.csv"
-    worker = GlossaryExportTaskWorker(
-        _book_manager_with_db(tmp_path),
-        "book-id",
-        action="run",
-        task_id="task-1",
-        task_store=task_store,
-        output_path=output_path,
-        skip_context=True,
-    )
-
-    # Mock session and manager
-    mock_db = MagicMock()
-    mock_manager = MagicMock()
-    mock_manager.build_fully_summarized_descriptions.return_value = {}
-
-    class _Session:
-        db = mock_db
-        manager = mock_manager
-
-    mock_export_glossary = MagicMock(return_value=5)
-    monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_export_task_worker.WorkflowSession.from_book",
-        lambda *_args, **_kwargs: _WorkflowSessionContext(_Session()),
-    )
-    monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_export_task_worker.export_glossary",
-        mock_export_glossary,
-    )
-
-    worker.run()
-
-    # Verify skip_context=True was passed
-    call_kwargs = mock_manager.build_fully_summarized_descriptions.call_args[1]
-    assert call_kwargs["skip_context"] is True
 
 
 def test_output_path_used_for_export_glossary(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
