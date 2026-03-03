@@ -106,7 +106,6 @@ def _build_manager(
         manga_handler = MangaDocumentHandler(
             manga_page_translator=manga_translator,
             image_fetcher=RepoImageFetcher(document_repo),
-            pages_per_call=manga_config.pages_per_call,
             concurrency=manga_config.concurrency,
         )
         manager.register_handler("manga", manga_handler)

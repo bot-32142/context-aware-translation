@@ -322,7 +322,6 @@ class TestFieldTooltips:
             ("Reembedding Backend", widget.reembedding_backend_combo),
             ("Reembedding Endpoint", widget.reembedding_endpoint),
             ("Manga Endpoint", widget.manga_endpoint),
-            ("Manga Pages per Call", widget.manga_pages_per_call_spin),
         ]
         missing = [name for name, field in fields if not field.toolTip().strip()]
         assert missing == []

@@ -42,12 +42,10 @@ class MangaDocumentHandler:
         self,
         manga_page_translator: MangaPageTranslationStrategy,
         image_fetcher: ImageFetcher,
-        pages_per_call: int = 2,
         concurrency: int = 5,
     ) -> None:
         self._manga_page_translator = manga_page_translator
         self._image_fetcher = image_fetcher
-        self._pages_per_call = pages_per_call
         self._concurrency = concurrency
 
     def add_text(
@@ -89,7 +87,7 @@ class MangaDocumentHandler:
         1. Get ALL chunks (sorted by chunk_id) to derive positional mapping
         2. Get source_ids with non-empty OCR text via image_fetcher
         3. Positionally zip chunks ↔ source_ids
-        4. Filter to untranslated, batch by pages_per_call, translate
+        4. Filter to untranslated, send one page per translation call
         """
         raise_if_cancelled(cancel_check)
         source_language = manager.term_repo.get_source_language()
@@ -134,10 +132,8 @@ class MangaDocumentHandler:
             if not untranslated:
                 continue
 
-            # Batch by pages_per_call
-            batches = []
-            for i in range(0, len(untranslated), self._pages_per_call):
-                batches.append(untranslated[i : i + self._pages_per_call])
+            # Send one page per LLM call to avoid multi-page response coupling.
+            batches = [[chunk] for chunk in untranslated]
 
             total_batches = len(batches)
             completed = 0

@@ -70,7 +70,6 @@ async def test_manga_document_handler_raises_on_source_chunk_mismatch() -> None:
     handler = MangaDocumentHandler(
         manga_page_translator=DummyMangaPageTranslator(),
         image_fetcher=DummyImageFetcher(),
-        pages_per_call=2,
         concurrency=1,
     )
 
@@ -132,7 +131,6 @@ async def test_manga_document_handler_persists_successful_batches_when_some_fail
     handler = MangaDocumentHandler(
         manga_page_translator=PartiallyFailingMangaPageTranslator(),
         image_fetcher=TwoPageImageFetcher(),
-        pages_per_call=1,
         concurrency=2,
     )
 
@@ -156,7 +154,6 @@ async def test_manga_document_handler_surfaces_rate_limit_over_validation_error(
     handler = MangaDocumentHandler(
         manga_page_translator=MixedPriorityFailingMangaPageTranslator(),
         image_fetcher=TwoPageImageFetcher(),
-        pages_per_call=1,
         concurrency=2,
     )
 
@@ -174,7 +171,6 @@ async def test_manga_document_handler_raises_last_exception_even_if_not_rate_lim
     handler = MangaDocumentHandler(
         manga_page_translator=FinalMismatchMangaPageTranslator(),
         image_fetcher=TwoPageImageFetcher(),
-        pages_per_call=1,
         concurrency=2,
     )
 

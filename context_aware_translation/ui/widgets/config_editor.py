@@ -278,12 +278,6 @@ class ConfigEditorWidget(QWidget):
         self.manga_endpoint = self._create_endpoint_dropdown()
         self._manga_layout.addRow(self.tr("Endpoint Profile:"), self.manga_endpoint)
 
-        self.manga_pages_per_call_spin = QSpinBox()
-        self.manga_pages_per_call_spin.setRange(1, 50)
-        self.manga_pages_per_call_spin.setValue(10)
-        self.manga_pages_per_call_spin.setToolTip(self.tr("Number of manga pages to send per LLM call"))
-        self._manga_layout.addRow(self.tr("Pages per Call:"), self.manga_pages_per_call_spin)
-
         self._manga_section.set_content(manga_widget)
         layout.addWidget(self._manga_section)
 
@@ -377,7 +371,6 @@ class ConfigEditorWidget(QWidget):
 
         # Manga form labels
         _set_label(self._manga_layout, self.manga_endpoint, self.tr("Endpoint Profile:"))
-        _set_label(self._manga_layout, self.manga_pages_per_call_spin, self.tr("Pages per Call:"))
 
         self._apply_tooltips()
 
@@ -547,11 +540,6 @@ class ConfigEditorWidget(QWidget):
             self.manga_endpoint,
             self.tr("Endpoint profile used for manga page translation."),
         )
-        self._set_field_tooltip(
-            self._manga_layout,
-            self.manga_pages_per_call_spin,
-            self.tr("Number of manga pages sent per translation request."),
-        )
 
     def _set_endpoint_dropdown(self, combo: QComboBox, profile_ref: str | None) -> None:
         """Set endpoint dropdown by profile reference (profile ID)."""
@@ -654,7 +642,6 @@ class ConfigEditorWidget(QWidget):
         if manga_endpoint:
             config["manga_translator_config"] = {
                 "endpoint_profile": manga_endpoint,
-                "pages_per_call": self.manga_pages_per_call_spin.value(),
             }
 
         return config
@@ -743,7 +730,6 @@ class ConfigEditorWidget(QWidget):
         manga = config.get("manga_translator_config", {})
         if manga:
             self._set_endpoint_dropdown(self.manga_endpoint, manga.get("endpoint_profile"))
-            self.manga_pages_per_call_spin.setValue(manga.get("pages_per_call", 10))
 
     def validate(self) -> str | None:
         """

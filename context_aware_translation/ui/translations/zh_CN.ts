@@ -450,19 +450,19 @@ All completed translations are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="78"/>
-        <location filename="../widgets/config_editor.py" line="305"/>
+        <location filename="../widgets/config_editor.py" line="299"/>
         <source>Target Language</source>
         <translation>目标语言</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="86"/>
-        <location filename="../widgets/config_editor.py" line="334"/>
+        <location filename="../widgets/config_editor.py" line="328"/>
         <source>Target Language*:</source>
         <translation>目标语言*：</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="93"/>
-        <location filename="../widgets/config_editor.py" line="306"/>
+        <location filename="../widgets/config_editor.py" line="300"/>
         <source>Extractor (Term Extraction)</source>
         <translation>提取器（术语提取）</translation>
     </message>
@@ -475,14 +475,14 @@ All completed translations are already saved and won&apos;t be lost.</source>
         <location filename="../widgets/config_editor.py" line="233"/>
         <location filename="../widgets/config_editor.py" line="265"/>
         <location filename="../widgets/config_editor.py" line="279"/>
-        <location filename="../widgets/config_editor.py" line="337"/>
+        <location filename="../widgets/config_editor.py" line="331"/>
+        <location filename="../widgets/config_editor.py" line="336"/>
+        <location filename="../widgets/config_editor.py" line="339"/>
         <location filename="../widgets/config_editor.py" line="342"/>
-        <location filename="../widgets/config_editor.py" line="345"/>
-        <location filename="../widgets/config_editor.py" line="348"/>
-        <location filename="../widgets/config_editor.py" line="367"/>
+        <location filename="../widgets/config_editor.py" line="361"/>
+        <location filename="../widgets/config_editor.py" line="364"/>
         <location filename="../widgets/config_editor.py" line="370"/>
-        <location filename="../widgets/config_editor.py" line="376"/>
-        <location filename="../widgets/config_editor.py" line="379"/>
+        <location filename="../widgets/config_editor.py" line="373"/>
         <source>Endpoint Profile:</source>
         <translation>端点配置：</translation>
     </message>
@@ -493,7 +493,7 @@ All completed translations are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="107"/>
-        <location filename="../widgets/config_editor.py" line="338"/>
+        <location filename="../widgets/config_editor.py" line="332"/>
         <source>Max Gleaning:</source>
         <translation>最大采集轮次：</translation>
     </message>
@@ -504,13 +504,13 @@ All completed translations are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="113"/>
-        <location filename="../widgets/config_editor.py" line="339"/>
+        <location filename="../widgets/config_editor.py" line="333"/>
         <source>Max Term Name Length:</source>
         <translation>术语名称最大长度：</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="119"/>
-        <location filename="../widgets/config_editor.py" line="307"/>
+        <location filename="../widgets/config_editor.py" line="301"/>
         <source>Summarizer (Term Description)</source>
         <translation>摘要器（术语描述）</translation>
     </message>
@@ -524,13 +524,13 @@ All completed translations are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="133"/>
-        <location filename="../widgets/config_editor.py" line="308"/>
+        <location filename="../widgets/config_editor.py" line="302"/>
         <source>Glossary Translation</source>
         <translation>术语表翻译</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="147"/>
-        <location filename="../widgets/config_editor.py" line="309"/>
+        <location filename="../widgets/config_editor.py" line="303"/>
         <source>Translator (Main Translation)</source>
         <translation>翻译器（主翻译）</translation>
     </message>
@@ -557,25 +557,25 @@ All completed translations are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="167"/>
-        <location filename="../widgets/config_editor.py" line="350"/>
+        <location filename="../widgets/config_editor.py" line="344"/>
         <source>Chunk Size:</source>
         <translation>文本块大小：</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="173"/>
-        <location filename="../widgets/config_editor.py" line="310"/>
+        <location filename="../widgets/config_editor.py" line="304"/>
         <source>Translator Batch (Optional)</source>
         <translation>翻译批量任务（可选）</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="183"/>
-        <location filename="../widgets/config_editor.py" line="353"/>
+        <location filename="../widgets/config_editor.py" line="347"/>
         <source>Provider:</source>
         <translation>提供商：</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="181"/>
-        <location filename="../widgets/config_editor.py" line="358"/>
+        <location filename="../widgets/config_editor.py" line="352"/>
         <source>Disabled</source>
         <translation>禁用</translation>
     </message>
@@ -586,13 +586,13 @@ All completed translations are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="161"/>
-        <location filename="../widgets/config_editor.py" line="349"/>
+        <location filename="../widgets/config_editor.py" line="343"/>
         <source>Max Tokens per Call:</source>
         <translation>每次调用最大令牌数：</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="182"/>
-        <location filename="../widgets/config_editor.py" line="359"/>
+        <location filename="../widgets/config_editor.py" line="353"/>
         <source>Gemini AI Studio</source>
         <translation>Gemini AI Studio</translation>
     </message>
@@ -603,7 +603,7 @@ All completed translations are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="188"/>
-        <location filename="../widgets/config_editor.py" line="354"/>
+        <location filename="../widgets/config_editor.py" line="348"/>
         <source>API Key:</source>
         <translation>API Key：</translation>
     </message>
@@ -614,19 +614,19 @@ All completed translations are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="192"/>
-        <location filename="../widgets/config_editor.py" line="355"/>
+        <location filename="../widgets/config_editor.py" line="349"/>
         <source>Model:</source>
         <translation>模型：</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="197"/>
-        <location filename="../widgets/config_editor.py" line="356"/>
+        <location filename="../widgets/config_editor.py" line="350"/>
         <source>Batch Size:</source>
         <translation>批次大小：</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="205"/>
-        <location filename="../widgets/config_editor.py" line="357"/>
+        <location filename="../widgets/config_editor.py" line="351"/>
         <source>Thinking Mode:</source>
         <translation>思考模式：</translation>
     </message>
@@ -636,43 +636,43 @@ All completed translations are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="200"/>
-        <location filename="../widgets/config_editor.py" line="360"/>
+        <location filename="../widgets/config_editor.py" line="354"/>
         <source>Auto</source>
         <translation>自动</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="201"/>
-        <location filename="../widgets/config_editor.py" line="361"/>
+        <location filename="../widgets/config_editor.py" line="355"/>
         <source>Off</source>
         <translation>关闭</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="202"/>
-        <location filename="../widgets/config_editor.py" line="362"/>
+        <location filename="../widgets/config_editor.py" line="356"/>
         <source>Low</source>
         <translation>低</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="203"/>
-        <location filename="../widgets/config_editor.py" line="363"/>
+        <location filename="../widgets/config_editor.py" line="357"/>
         <source>Medium</source>
         <translation>中</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="204"/>
-        <location filename="../widgets/config_editor.py" line="364"/>
+        <location filename="../widgets/config_editor.py" line="358"/>
         <source>High</source>
         <translation>高</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="211"/>
-        <location filename="../widgets/config_editor.py" line="311"/>
+        <location filename="../widgets/config_editor.py" line="305"/>
         <source>Review (Optional)</source>
         <translation>审校（可选）</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="225"/>
-        <location filename="../widgets/config_editor.py" line="312"/>
+        <location filename="../widgets/config_editor.py" line="306"/>
         <source>OCR (Optional)</source>
         <translation>OCR（可选）</translation>
     </message>
@@ -683,7 +683,7 @@ All completed translations are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="239"/>
-        <location filename="../widgets/config_editor.py" line="371"/>
+        <location filename="../widgets/config_editor.py" line="365"/>
         <source>OCR DPI:</source>
         <translation>OCR DPI：</translation>
     </message>
@@ -694,12 +694,12 @@ All completed translations are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="244"/>
-        <location filename="../widgets/config_editor.py" line="372"/>
+        <location filename="../widgets/config_editor.py" line="366"/>
         <source>Strip Artifacts:</source>
         <translation>去除伪影：</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="478"/>
+        <location filename="../widgets/config_editor.py" line="471"/>
         <source>Maximum estimated request tokens (context + source text) per translation call.</source>
         <translation>每次翻译调用的最大估算请求令牌数（上下文 + 原文）。</translation>
     </message>
@@ -713,7 +713,7 @@ All completed translations are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="250"/>
-        <location filename="../widgets/config_editor.py" line="313"/>
+        <location filename="../widgets/config_editor.py" line="307"/>
         <source>Image Reembedding (Optional)</source>
         <translation>图片重嵌入（可选）</translation>
     </message>
@@ -724,39 +724,36 @@ All completed translations are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="262"/>
-        <location filename="../widgets/config_editor.py" line="375"/>
+        <location filename="../widgets/config_editor.py" line="369"/>
         <source>Backend:</source>
         <translation>后端：</translation>
     </message>
     <message>
         <location filename="../widgets/config_editor.py" line="271"/>
-        <location filename="../widgets/config_editor.py" line="314"/>
+        <location filename="../widgets/config_editor.py" line="308"/>
         <source>Manga Translator (Optional)</source>
         <translation>漫画翻译器（可选）</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="284"/>
         <source>Number of manga pages to send per LLM call</source>
-        <translation>每次LLM调用发送的漫画页数</translation>
+        <translation type="vanished">每次LLM调用发送的漫画页数</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="285"/>
-        <location filename="../widgets/config_editor.py" line="380"/>
         <source>Pages per Call:</source>
-        <translation>每次调用页数：</translation>
+        <translation type="vanished">每次调用页数：</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="385"/>
+        <location filename="../widgets/config_editor.py" line="378"/>
         <source>Output language used by glossary translation and final translation.</source>
         <translation>术语翻译与正文翻译统一使用该输出语言。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="389"/>
+        <location filename="../widgets/config_editor.py" line="382"/>
         <source>Extracts candidate terms from imported text. We strongly recommend using the cheapest model with input caching (e.g. DeepSeek) as this step processes large volumes of text repeatedly.</source>
         <translation>从已导入文本中提取候选术语。强烈建议使用支持输入缓存的低成本模型（如 DeepSeek），因为此步骤会反复处理大量文本。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="396"/>
+        <location filename="../widgets/config_editor.py" line="389"/>
         <source>Builds term descriptions from accumulated context. Earlier imports influence later summaries. We strongly recommend using the cheapest model with input caching (e.g. DeepSeek) as this step re-reads all accumulated context for each term.</source>
         <translation>基于累计上下文生成术语描述。较早导入的内容会影响后续摘要结果。强烈建议使用支持输入缓存的低成本模型（如 DeepSeek），因为此步骤会为每个术语重新读取所有累计上下文。</translation>
     </message>
@@ -769,42 +766,42 @@ All completed translations are already saved and won&apos;t be lost.</source>
         <translation type="vanished">基于累计上下文生成术语描述。较早导入的内容会影响后续摘要结果。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="402"/>
+        <location filename="../widgets/config_editor.py" line="395"/>
         <source>Translates extracted terms into the target language before main translation.</source>
         <translation>在正文翻译前，将已提取术语翻译为目标语言。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="406"/>
+        <location filename="../widgets/config_editor.py" line="399"/>
         <source>Main document translation. Uses glossary plus accumulated context from earlier imported content.</source>
         <translation>正文翻译步骤：使用术语表，并结合此前导入内容形成的累计上下文。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="411"/>
+        <location filename="../widgets/config_editor.py" line="404"/>
         <source>Optional Gemini AI Studio config for async batch translation tasks. Initial translation and polish calls are sent through provider batch jobs.</source>
         <translation>可选：为异步批量翻译任务配置 Gemini AI Studio。初始翻译与润色会通过提供商批处理任务提交。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="416"/>
+        <location filename="../widgets/config_editor.py" line="409"/>
         <source>Optional LLM review pass for glossary quality before translation.</source>
         <translation>可选：在翻译前使用LLM进行一轮术语质量审校。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="419"/>
+        <location filename="../widgets/config_editor.py" line="412"/>
         <source>For image-based documents. Run OCR before glossary build.</source>
         <translation>用于图片类文档。请先完成OCR，再构建术语表。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="422"/>
+        <location filename="../widgets/config_editor.py" line="415"/>
         <source>Optional: write translated text back into images.</source>
         <translation>可选：将翻译后的文字回写到图片中。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="425"/>
+        <location filename="../widgets/config_editor.py" line="418"/>
         <source>Optional manga-specific translation path for image pages.</source>
         <translation>可选：用于漫画图片页的专用翻译路径。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="439"/>
+        <location filename="../widgets/config_editor.py" line="432"/>
         <source>Target language used for glossary and final translation output.</source>
         <translation>章</translation>
     </message>
@@ -889,32 +886,32 @@ All completed translations are already saved and won&apos;t be lost.</source>
         <translation type="vanished">正在翻译分块 %1/%2</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="445"/>
+        <location filename="../widgets/config_editor.py" line="438"/>
         <source>Endpoint profile used for term extraction.</source>
         <translation>用于术语提取的端点配置。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="450"/>
+        <location filename="../widgets/config_editor.py" line="443"/>
         <source>Number of extraction passes to find more terms.</source>
         <translation>用于发现更多术语的提取轮数。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="455"/>
+        <location filename="../widgets/config_editor.py" line="448"/>
         <source>Maximum character length for extracted term names.</source>
         <translation>提取术语名称的最大字符长度。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="461"/>
+        <location filename="../widgets/config_editor.py" line="454"/>
         <source>Endpoint profile used to build term descriptions from context.</source>
         <translation>用于基于上下文生成术语描述的端点配置。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="467"/>
+        <location filename="../widgets/config_editor.py" line="460"/>
         <source>Endpoint profile used to translate glossary terms.</source>
         <translation>用于翻译术语表术语的端点配置。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="473"/>
+        <location filename="../widgets/config_editor.py" line="466"/>
         <source>Endpoint profile used for main text translation.</source>
         <translation>用于正文翻译的端点配置。</translation>
     </message>
@@ -927,32 +924,32 @@ All completed translations are already saved and won&apos;t be lost.</source>
         <translation type="vanished">每次翻译请求发送的文本块数量。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="483"/>
+        <location filename="../widgets/config_editor.py" line="476"/>
         <source>Maximum token size for each translation chunk.</source>
         <translation>每个翻译文本块的最大 token 大小。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="489"/>
+        <location filename="../widgets/config_editor.py" line="482"/>
         <source>Batch provider used for async translation/polish tasks. Leave disabled to turn off batch tasks.</source>
         <translation>用于异步翻译/润色任务的批处理提供商。设为“禁用”可关闭批任务。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="494"/>
+        <location filename="../widgets/config_editor.py" line="487"/>
         <source>API key used for provider batch submission.</source>
         <translation>用于提供商批任务提交的 API Key。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="499"/>
+        <location filename="../widgets/config_editor.py" line="492"/>
         <source>Model used for async translation and polish batch jobs.</source>
         <translation>异步翻译与润色批任务使用的模型。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="504"/>
+        <location filename="../widgets/config_editor.py" line="497"/>
         <source>Maximum number of requests submitted per provider batch job.</source>
         <translation>每个提供商批任务提交的最大请求数。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="509"/>
+        <location filename="../widgets/config_editor.py" line="502"/>
         <source>Thinking policy for Gemini batch jobs.</source>
         <translation>Gemini 批任务的思考策略。</translation>
     </message>
@@ -961,12 +958,12 @@ All completed translations are already saved and won&apos;t be lost.</source>
         <translation type="vanished">可选 JSON 对象，会合并到 Gemini 请求配置中。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="761"/>
+        <location filename="../widgets/config_editor.py" line="747"/>
         <source>Translator batch API key is required when provider is enabled.</source>
         <translation>启用批处理提供商时必须填写 Translator Batch API Key。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="763"/>
+        <location filename="../widgets/config_editor.py" line="749"/>
         <source>Translator batch model is required when provider is enabled.</source>
         <translation>启用批处理提供商时必须填写 Translator Batch 模型。</translation>
     </message>
@@ -979,22 +976,22 @@ All completed translations are already saved and won&apos;t be lost.</source>
         <translation type="vanished">Translator Batch 高级参数必须是 JSON 对象。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="515"/>
+        <location filename="../widgets/config_editor.py" line="508"/>
         <source>Endpoint profile used for optional glossary review.</source>
         <translation>用于可选术语审校的端点配置。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="521"/>
+        <location filename="../widgets/config_editor.py" line="514"/>
         <source>Endpoint profile used for OCR on image-based content.</source>
         <translation>用于图像内容 OCR 的端点配置。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="526"/>
+        <location filename="../widgets/config_editor.py" line="519"/>
         <source>DPI used when compressing images before OCR.</source>
         <translation>OCR 前压缩图片时使用的 DPI。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="531"/>
+        <location filename="../widgets/config_editor.py" line="524"/>
         <source>Remove common LLM artifact patterns from OCR text.</source>
         <translation>从 OCR 文本中移除常见 LLM 伪影模式。</translation>
     </message>
@@ -1003,27 +1000,26 @@ All completed translations are already saved and won&apos;t be lost.</source>
         <translation type="vanished">启用将翻译文本写回图片。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="537"/>
+        <location filename="../widgets/config_editor.py" line="530"/>
         <source>Backend service used for image text replacement.</source>
         <translation>用于图片文字替换的后端服务。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="542"/>
+        <location filename="../widgets/config_editor.py" line="535"/>
         <source>Endpoint profile used by the image reembedding backend.</source>
         <translation>图片重嵌入后端使用的端点配置。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="548"/>
+        <location filename="../widgets/config_editor.py" line="541"/>
         <source>Endpoint profile used for manga page translation.</source>
         <translation>用于漫画页面翻译的端点配置。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="553"/>
         <source>Number of manga pages sent per translation request.</source>
-        <translation>每次翻译请求发送的漫画页数。</translation>
+        <translation type="vanished">每次翻译请求发送的漫画页数。</translation>
     </message>
     <message>
-        <location filename="../widgets/config_editor.py" line="756"/>
+        <location filename="../widgets/config_editor.py" line="742"/>
         <source>Target language is required.</source>
         <translation>目标语言为必填项。</translation>
     </message>
