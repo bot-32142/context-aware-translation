@@ -15,6 +15,7 @@ from context_aware_translation.core.translation_strategies import (
     ImageFetcher,
     MangaPageTranslationStrategy,
 )
+from context_aware_translation.utils.image_utils import compress_image_for_ocr
 
 if TYPE_CHECKING:
     from context_aware_translation.core.context_manager import TranslationContextManager
@@ -166,7 +167,11 @@ class MangaDocumentHandler:
                         for chunk in batch:
                             source_id = _chunk_to_source[chunk.chunk_id]
                             image_bytes, mime_type = self._image_fetcher.fetch_source_image(source_id)
-                            page_images.append((image_bytes, mime_type))
+                            try:
+                                prepared_image_bytes = compress_image_for_ocr(image_bytes, max_dpi=150)
+                            except Exception:
+                                prepared_image_bytes = image_bytes
+                            page_images.append((prepared_image_bytes, mime_type))
                             extracted_texts.append(self._image_fetcher.fetch_source_ocr_text(source_id))
 
                         # Collect relevant terms

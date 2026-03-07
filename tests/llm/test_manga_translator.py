@@ -85,3 +85,19 @@ async def test_translate_manga_requires_extracted_texts() -> None:
             target_language="Chinese",
             extracted_texts=None,
         )
+
+
+@pytest.mark.asyncio
+async def test_translate_manga_strips_newlines_inside_each_translation_element() -> None:
+    llm = _MockLLMClient('{"translations":["A\\nB","C\\r\\nD"]}')
+    result = await translate_manga_pages(
+        page_images=[(b"img", "image/png")],
+        terms=[],
+        llm_client=llm,
+        manga_config=_manga_config(),
+        source_language="Japanese",
+        target_language="English",
+        extracted_texts=["line1\nline2"],
+    )
+
+    assert result == ["AB\nCD"]

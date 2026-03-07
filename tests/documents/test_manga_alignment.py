@@ -5,6 +5,7 @@ import pytest
 from context_aware_translation.documents.manga_alignment import (
     align_sources_to_chunks,
     count_nonempty_ocr_sources,
+    extract_ocr_text,
     list_nonempty_ocr_source_ids,
 )
 
@@ -40,3 +41,13 @@ def test_align_sources_to_chunks_non_strict_maps_intersection() -> None:
 
     mapping = align_sources_to_chunks(sources, chunk_count=2, strict=False)
     assert mapping == {0: 0, 1: 1}
+
+
+def test_extract_ocr_text_prefers_regions_and_strips_embedded_newlines() -> None:
+    ocr_json = '{"text":"legacy","regions":[{"text":"A\\nB"},{"text":"C\\r\\nD"},{"text":" E "}]}'
+
+    assert extract_ocr_text(ocr_json) == "AB\nCD\nE"
+
+
+def test_extract_ocr_text_falls_back_to_text_when_regions_missing() -> None:
+    assert extract_ocr_text('{"text":"line1\\nline2"}') == "line1\nline2"
