@@ -17,7 +17,7 @@ CAT is a desktop translation tool for long-form text and various document types 
 ## Disclaimer
 
 **As an individual, I'm unable to extensively test different languages, models, and formats. You will most likely see bugs. Please report to help.**
-**This entire project is vibe-coded and I only reviewed critial pieces of code + ai review/summary, and manually tested.**
+**This entire project is vibe-coded and I only reviewed critial pieces of code + ai review/summary.**
 
 ## Core Idea: Context Management
 
@@ -75,4 +75,4 @@ These recommendations are already pre-configured in the default endpoint and con
 * OCR cannot handle overly complex layouts. **The OCR is not designed to keep the original layout but to render the original content in an opinioned way.**
 * If a single sentence in the source text spans multiple paragraphs, formatting may break, and may result in translation failure.
 * All llm responses are cached and persisted at the earliest possible time so cancellation won't result in data loss if you want to stop and resume from where you left out.
-* Image edit API hallucinates badly for long texts (e.g. complicated manga page with many words) when tested using gemini-3-pro-image-preview. In other words, full-automation of manga translation would require stronger/fine-tuned model. We just need to be patient and wait for the next-gen image edit model release probably.
+* Image text embedding (`gemini-3-pro-image-preview`) performs poorly on text-heavy images. For manga, only text-containing regions are grouped for embedding, so quality is generally reliable except for a small amount of OCR-missed text. For normal images, this optimization is currently not applied due to cost and usage tradeoffs.
