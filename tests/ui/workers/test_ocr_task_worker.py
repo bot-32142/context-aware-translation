@@ -275,7 +275,7 @@ def test_run_ocr_loader_targets_selected_document_only(monkeypatch: pytest.Monke
 
 
 def test_run_ocr_for_manga_uses_manga_ocr_pipeline(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    """A manga OCR task must execute MangaDocument.process_ocr -> ocr_manga_image."""
+    """A manga OCR task must execute MangaDocument.process_ocr -> two-pass manga OCR."""
     from context_aware_translation.config import OCRConfig
     from context_aware_translation.storage.book_db import SQLiteBookDB
     from context_aware_translation.storage.document_repository import DocumentRepository
@@ -311,9 +311,14 @@ def test_run_ocr_for_manga_uses_manga_ocr_pipeline(monkeypatch: pytest.MonkeyPat
         llm_client=MagicMock(),
     )
 
-    mock_manga_ocr = AsyncMock(return_value="hello manga")
+    mock_manga_ocr = AsyncMock(
+        return_value={
+            "text": "hello manga",
+            "regions": [{"x": 0.1, "y": 0.2, "width": 0.3, "height": 0.2, "text": "hello manga"}],
+        }
+    )
     mock_epub_ocr = AsyncMock(return_value=None)
-    monkeypatch.setattr("context_aware_translation.llm.manga_ocr.ocr_manga_image", mock_manga_ocr)
+    monkeypatch.setattr("context_aware_translation.llm.manga_ocr.ocr_manga_image_with_regions", mock_manga_ocr)
     monkeypatch.setattr("context_aware_translation.llm.epub_ocr.ocr_epub_images", mock_epub_ocr)
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",

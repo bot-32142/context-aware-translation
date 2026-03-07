@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from PIL import Image
 
 from context_aware_translation.core.cancellation import OperationCancelledError, raise_if_cancelled
 from context_aware_translation.core.progress import ProgressCallback, ProgressUpdate, WorkflowStep
@@ -14,8 +17,17 @@ from context_aware_translation.documents.manga_alignment import (
     extract_ocr_text,
     get_sources_with_nonempty_ocr_text,
 )
+from context_aware_translation.documents.manga_reembed_planner import (
+    build_manga_crop_plans,
+    crop_to_png_bytes,
+    normalize_to_size,
+    parse_regions_from_ocr_json,
+    render_live_crop,
+    stitch_plan,
+)
 from context_aware_translation.utils.file_utils import IMAGE_EXTENSIONS
 from context_aware_translation.utils.image_utils import compress_image_for_ocr, validate_image_bytes
+from context_aware_translation.utils.symbol_check import symbol_only
 
 if TYPE_CHECKING:
     from context_aware_translation.config import ImageReembeddingConfig, OCRConfig
@@ -37,6 +49,27 @@ _MIME_TO_EXT: dict[str, str] = {
 def _mime_to_ext(mime_type: str) -> str:
     """Convert MIME type to file extension. Defaults to .png."""
     return _MIME_TO_EXT.get(mime_type, ".png")
+
+
+def _get_manga_reembed_params() -> tuple[float, int]:
+    return 0.15, 6
+
+
+def _split_lines(text: str) -> list[str]:
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines: list[str] = []
+    for raw_line in normalized.split("\n"):
+        line = raw_line.strip()
+        if not line:
+            continue
+        if symbol_only(line):
+            continue
+        lines.append(line)
+    return lines
+
+
+class _LegacyFullPageFallback(Exception):
+    """Indicates grouped-crop mode cannot run and should use legacy full-page edit."""
 
 
 class MangaDocument(Document):
@@ -226,14 +259,14 @@ class MangaDocument(Document):
         cancel_check: Callable[[], bool] | None = None,
         on_item_processed: Callable[[], None] | None = None,
     ) -> int:
-        """OCR using simple manga text extraction (not structured OCR)."""
+        """OCR using manga text extraction + normalized text-region bboxes."""
         raise_if_cancelled(cancel_check)
         if self._ocr_config is None:
             raise ValueError("ocr_config is required for process_ocr")
 
         ocr_config = self._ocr_config
 
-        from context_aware_translation.llm.manga_ocr import ocr_manga_image
+        from context_aware_translation.llm.manga_ocr import ocr_manga_image_with_regions
 
         sources = self.repo.get_document_sources_needing_ocr(self.document_id)
         if source_ids is not None:
@@ -252,9 +285,15 @@ class MangaDocument(Document):
             raise_if_cancelled(cancel_check)
             async with semaphore:
                 raise_if_cancelled(cancel_check)
-                text = await ocr_manga_image(img_bytes, mime_type, llm_client, ocr_config)
+                ocr_payload = await ocr_manga_image_with_regions(
+                    image_bytes=img_bytes,
+                    mime_type=mime_type,
+                    llm_client=llm_client,
+                    ocr_config=ocr_config,
+                    cancel_check=cancel_check,
+                )
                 raise_if_cancelled(cancel_check)
-                ocr_result = json.dumps({"text": text})
+                ocr_result = json.dumps(ocr_payload, ensure_ascii=False)
                 self.repo.update_source_ocr(sources[index]["source_id"], ocr_result)
                 self.repo.update_source_ocr_completed(sources[index]["source_id"])
                 if on_item_processed is not None:
@@ -385,6 +424,77 @@ class MangaDocument(Document):
 
         completed = 0
         progress_lock = asyncio.Lock()
+        context_pad_ratio, context_pad_px = _get_manga_reembed_params()
+
+        async def _reembed_with_legacy_single_call(
+            *,
+            image_bytes: bytes,
+            mime_type: str,
+            original_text: str,
+            translated_text: str,
+        ) -> bytes:
+            text_replacements = build_text_replacements(original_text, translated_text)
+            return await generator.edit_image(
+                image_bytes,
+                mime_type,
+                text_replacements,
+                cancel_check=cancel_check,
+            )
+
+        async def _reembed_with_grouped_crops(
+            *,
+            image_bytes: bytes,
+            ocr_json: str | None,
+            translated_text: str,
+        ) -> bytes:
+            page = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            try:
+                regions = parse_regions_from_ocr_json(ocr_json, page_w=page.width, page_h=page.height)
+            except Exception as exc:
+                raise _LegacyFullPageFallback(f"Invalid or missing regions: {exc}") from exc
+            if not regions:
+                raise _LegacyFullPageFallback("No normalized regions available")
+
+            translated_lines = _split_lines(translated_text)
+            if len(translated_lines) != len(regions):
+                raise _LegacyFullPageFallback(
+                    f"Translation line count mismatch: expected {len(regions)} from OCR regions, got {len(translated_lines)}"
+                )
+
+            plans = build_manga_crop_plans(
+                page=page,
+                regions=regions,
+                context_pad_ratio=context_pad_ratio,
+                context_pad_px=context_pad_px,
+            )
+            if not plans:
+                raise _LegacyFullPageFallback("No valid crop plans generated from OCR regions")
+
+            stitched = page.copy()
+            for plan in plans:
+                raise_if_cancelled(cancel_check)
+                original_group_lines = [regions[idx].text for idx in plan.member_indices]
+                translated_group_lines = [translated_lines[idx] for idx in plan.member_indices]
+                original_group_text = "\n".join(original_group_lines)
+                translated_group_text = "\n".join(translated_group_lines)
+
+                if not original_group_text.strip() and not translated_group_text.strip():
+                    continue
+
+                live_crop = render_live_crop(stitched, plan)
+                crop_png_bytes = crop_to_png_bytes(live_crop)
+                text_replacements = build_text_replacements(original_group_text, translated_group_text)
+                edited_bytes = await generator.edit_image(
+                    crop_png_bytes,
+                    "image/png",
+                    text_replacements,
+                    cancel_check=cancel_check,
+                )
+                edited = Image.open(io.BytesIO(edited_bytes)).convert("RGB")
+                edited = normalize_to_size(edited, target_w=plan.crop_side, target_h=plan.crop_side)
+                stitch_plan(stitched_page=stitched, plan=plan, edited_crop=edited)
+
+            return crop_to_png_bytes(stitched)
 
         async def process_page(source: dict) -> None:
             nonlocal completed
@@ -403,13 +513,24 @@ class MangaDocument(Document):
                 image_bytes = source["binary_content"]
                 mime_type = source.get("mime_type", "image/png")
                 original_text = extract_ocr_text(source.get("ocr_json"))
-                text_replacements = build_text_replacements(original_text, translated)
-                new_bytes = await generator.edit_image(
-                    image_bytes,
-                    mime_type,
-                    text_replacements,
-                    cancel_check=cancel_check,
-                )
+                try:
+                    new_bytes = await _reembed_with_grouped_crops(
+                        image_bytes=image_bytes,
+                        ocr_json=source.get("ocr_json"),
+                        translated_text=translated,
+                    )
+                except _LegacyFullPageFallback as grouped_error:
+                    logger.info(
+                        "Manga grouped-crop reembed fallback to legacy full-page edit for source %s: %s",
+                        source_id,
+                        grouped_error,
+                    )
+                    new_bytes = await _reembed_with_legacy_single_call(
+                        image_bytes=image_bytes,
+                        mime_type=mime_type,
+                        original_text=original_text,
+                        translated_text=translated,
+                    )
                 raise_if_cancelled(cancel_check)
                 self._reembedded_pages[source_id] = new_bytes
                 self.repo.save_reembedded_image(self.document_id, original_idx, new_bytes, "image/png")

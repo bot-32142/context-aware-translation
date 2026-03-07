@@ -5,6 +5,10 @@ from collections.abc import Sequence
 from typing import Any
 
 
+def _strip_newlines(text: str) -> str:
+    return text.replace("\r\n", "").replace("\r", "").replace("\n", "")
+
+
 def extract_ocr_text(ocr_json: str | None) -> str:
     """Extract plain text from OCR JSON payload.
 
@@ -16,6 +20,17 @@ def extract_ocr_text(ocr_json: str | None) -> str:
         parsed = json.loads(ocr_json)
     except (TypeError, ValueError):
         return ""
+    if not isinstance(parsed, dict):
+        return ""
+
+    regions = parsed.get("regions")
+    if isinstance(regions, list):
+        lines: list[str] = []
+        for region in regions:
+            raw_text = region.get("text", "") if isinstance(region, dict) else ""
+            line = _strip_newlines(str(raw_text if raw_text is not None else "")).strip()
+            lines.append(line)
+        return "\n".join(lines)
 
     text = parsed.get("text", "")
     if isinstance(text, str):

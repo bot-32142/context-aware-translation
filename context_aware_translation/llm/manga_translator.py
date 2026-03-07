@@ -15,6 +15,10 @@ from context_aware_translation.utils.llm_json_cleaner import clean_llm_response
 logger = logging.getLogger(__name__)
 
 
+def _strip_newlines(text: str) -> str:
+    return text.replace("\r\n", "").replace("\r", "").replace("\n", "")
+
+
 async def translate_manga_pages(
     page_images: list[tuple[bytes, str]],
     terms: list[tuple[str, str, str]],
@@ -106,7 +110,7 @@ Rules:
 
                 if len(translations) != len(source_lines):
                     raise ValueError(f"Expected {len(source_lines)} line translations, got {len(translations)}")
-                translated_lines = [str(item) for item in translations]
+                translated_lines = [_strip_newlines(str(item)) for item in translations]
                 return ["\n".join(translated_lines)]
             except Exception as e:
                 if isinstance(e, OperationCancelledError):
