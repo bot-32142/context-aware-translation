@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CAT Studio Document v3</title>
+    <link rel="stylesheet" href="./minimal_v3.css" />
+    <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+  </head>
+  <body>
+    <main class="page">
+      <header class="intro">
+        <p class="eyebrow">IA v3</p>
+        <h1>Document-level work lives under Work</h1>
+        <p>
+          OCR, Terms, Translation, Images, and Export are document tools. The
+          Terms tab uses the same table UI as global Terms, just filtered to the
+          current document.
+        </p>
+      </header>
+
+      <section class="frame">
+        <div class="window">
+          <div class="topbar">
+            <div class="brand">
+              <div class="mark">CAT</div>
+              <div>
+                <strong>CAT Studio</strong>
+                <p>Document workspace · 03.png</p>
+              </div>
+            </div>
+            <nav class="nav">
+              <span>Work</span>
+              <span>Terms</span>
+              <span>Setup</span>
+            </nav>
+            <button class="pill secondary">Queue</button>
+          </div>
+
+          <div class="subnav">
+            <span>Overview</span>
+            <span>OCR</span>
+            <span class="active">Terms</span>
+            <span>Translation</span>
+            <span>Images</span>
+            <span>Export</span>
+          </div>
+
+          <div class="doc-shell">
+            <section class="main-pane">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Terms in this document</p>
+                  <h2>03.png</h2>
+                </div>
+                <button class="pill primary">Build Terms</button>
+              </div>
+
+              <div class="status-strip inner">
+                <span>OCR complete</span>
+                <span class="divider"></span>
+                <span>Build Terms is the next step</span>
+              </div>
+
+              <div class="term-table-row head">
+                <span>Source</span>
+                <span>Translation</span>
+                <span>Status</span>
+                <span>Used in</span>
+                <span>Action</span>
+              </div>
+
+              <div class="term-table-row">
+                <span>エルバフ</span>
+                <span>Elbaf</span>
+                <span class="mini-tag cool">Reviewed</span>
+                <span>03 only</span>
+                <button class="text-button">Edit</button>
+              </div>
+
+              <div class="term-table-row">
+                <span>ロキ</span>
+                <span>Loki</span>
+                <span class="mini-tag">Pending</span>
+                <span>03 only</span>
+                <button class="text-button">Translate</button>
+              </div>
+
+              <div class="term-table-row">
+                <span>ドン!!</span>
+                <span>Don!!</span>
+                <span class="mini-tag warm">Noise?</span>
+                <span>03 only</span>
+                <button class="text-button strong">Ignore</button>
+              </div>
+            </section>
+
+            <aside class="side-pane">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Scope</p>
+                  <h2>Shared Terms, filtered</h2>
+                </div>
+              </div>
+
+              <div class="term-row plain">
+                <div>
+                  <strong>Same table, document scope</strong>
+                  <p>This is not a separate glossary.</p>
+                </div>
+              </div>
+
+              <div class="term-row plain">
+                <div>
+                  <strong>Build Terms updates the shared table</strong>
+                  <p>New terms become available project-wide.</p>
+                </div>
+              </div>
+
+              <div class="term-row plain">
+                <div>
+                  <strong>Existing translations stay unchanged</strong>
+                  <p>No reruns happen automatically after term edits.</p>
+                </div>
+              </div>
+
+              <div class="plain-note">
+                Global Terms and document Terms should feel like the same UI.
+                The only difference is scope.
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

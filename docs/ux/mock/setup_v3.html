@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CAT Studio Setup v4</title>
+    <link rel="stylesheet" href="./minimal_v3.css" />
+    <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+  </head>
+  <body>
+    <main class="page">
+      <header class="intro">
+        <p class="eyebrow">Setup v4</p>
+        <h1>App Setup and Project Setup</h1>
+        <p>
+          Connections live at the app level. Projects mostly inherit those
+          defaults and only override when necessary.
+        </p>
+      </header>
+
+      <section class="frame">
+        <div class="window stack-window">
+          <div class="topbar">
+            <div class="brand">
+              <div class="mark">CAT</div>
+              <div>
+                <strong>CAT Studio</strong>
+                <p>App Setup</p>
+              </div>
+            </div>
+            <nav class="nav">
+              <span class="active">App Setup</span>
+            </nav>
+          </div>
+
+          <div class="setup-grid two-up">
+            <section class="list-card wizard-card">
+              <div class="list-header">
+                <div>
+                  <p class="eyebrow">Step 1 of 4</p>
+                  <h2>What services do you already use?</h2>
+                </div>
+                <button class="pill secondary">Advanced</button>
+              </div>
+
+              <div class="provider-grid">
+                <article class="provider-card selected">
+                  <strong>Gemini</strong>
+                  <p>Image text reading and image editing</p>
+                  <div class="field masked">AIza********************************</div>
+                </article>
+                <article class="provider-card selected">
+                  <strong>DeepSeek</strong>
+                  <p>Translation</p>
+                  <div class="field masked">sk-********************************</div>
+                </article>
+                <article class="provider-card">
+                  <strong>OpenAI</strong>
+                  <p>Optional backup translation or image work</p>
+                  <div class="field ghost">Add key</div>
+                </article>
+                <article class="provider-card custom">
+                  <strong>OpenAI-compatible / Custom</strong>
+                  <p>Use for custom endpoints</p>
+                  <div class="field">Base URL</div>
+                </article>
+              </div>
+
+              <div class="test-matrix">
+                <div class="matrix-row">
+                  <span>Translation</span>
+                  <span class="status good">DeepSeek ready</span>
+                </div>
+                <div class="matrix-row">
+                  <span>Image text reading</span>
+                  <span class="status good">Gemini ready</span>
+                </div>
+                <div class="matrix-row">
+                  <span>Image editing</span>
+                  <span class="status good">Gemini ready</span>
+                </div>
+              </div>
+
+              <div class="setup-actions">
+                <button class="pill secondary">Adjust routing</button>
+                <button class="pill primary">Use recommended setup</button>
+              </div>
+            </section>
+
+            <aside class="side-pane route-pane">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Default routing</p>
+                  <h2>Recommended setup</h2>
+                </div>
+              </div>
+
+              <div class="route-list">
+                <div class="route-row">
+                  <span>Translation</span>
+                  <strong>DeepSeek</strong>
+                </div>
+                <div class="route-row">
+                  <span>Image text reading</span>
+                  <strong>Gemini</strong>
+                </div>
+                <div class="route-row">
+                  <span>Image editing</span>
+                  <strong>Gemini</strong>
+                </div>
+              </div>
+
+              <div class="note-card soft-note">
+                <strong>Advanced stays optional.</strong>
+                <p>
+                  Known providers hide endpoint and model details by default.
+                  Custom endpoints and exact models live under Advanced.
+                </p>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+
+      <section class="frame">
+        <div class="window stack-window">
+          <div class="topbar">
+            <div class="brand">
+              <div class="mark">CAT</div>
+              <div>
+                <strong>CAT Studio</strong>
+                <p>Project Setup</p>
+              </div>
+            </div>
+            <nav class="nav">
+              <span>Work</span>
+              <span>Terms</span>
+              <span class="active">Setup</span>
+            </nav>
+            <button class="pill secondary">Queue</button>
+          </div>
+
+          <div class="setup-grid project-grid">
+            <section class="list-card project-setup-card">
+              <div class="list-header">
+                <div>
+                  <p class="eyebrow">Project defaults</p>
+                  <h2>Use app setup unless this project needs something different</h2>
+                </div>
+              </div>
+
+              <div class="setup-step split-step">
+                <div>
+                  <strong>Target language</strong>
+                  <div class="field">English</div>
+                </div>
+                <div>
+                  <strong>Quality preset</strong>
+                  <div class="chip-row">
+                    <span class="mini-tag">Fast</span>
+                    <span class="mini-tag cool">Balanced</span>
+                    <span class="mini-tag">Best</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="capability-block">
+                <div class="capability-head">
+                  <div>
+                    <strong>Translation</strong>
+                    <p>Using app default</p>
+                  </div>
+                  <span class="status good">DeepSeek</span>
+                </div>
+                <div class="capability-actions">
+                  <button class="pill secondary small">Use app defaults</button>
+                  <button class="pill secondary small">Override for this project</button>
+                </div>
+              </div>
+
+              <div class="capability-block">
+                <div class="capability-head">
+                  <div>
+                    <strong>Image text reading</strong>
+                    <p>Using app default</p>
+                  </div>
+                  <span class="status good">Gemini</span>
+                </div>
+                <div class="capability-actions">
+                  <button class="pill secondary small">Use app defaults</button>
+                  <button class="pill secondary small">Override for this project</button>
+                </div>
+              </div>
+
+              <div class="capability-block warn-block">
+                <div class="capability-head">
+                  <div>
+                    <strong>Image editing</strong>
+                    <p>Missing in app setup</p>
+                  </div>
+                  <span class="status warn">Needs setup</span>
+                </div>
+                <div class="capability-actions">
+                  <button class="pill secondary small">Open App Setup</button>
+                </div>
+              </div>
+
+              <div class="setup-actions">
+                <button class="pill secondary">Advanced</button>
+                <button class="pill primary">Save project setup</button>
+              </div>
+            </section>
+
+            <aside class="side-pane route-pane">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">What this project will use</p>
+                  <h2>Current routing</h2>
+                </div>
+              </div>
+
+              <div class="route-list compact">
+                <div class="route-row">
+                  <span>Translation</span>
+                  <strong>App default: DeepSeek</strong>
+                </div>
+                <div class="route-row">
+                  <span>Image text reading</span>
+                  <strong>App default: Gemini</strong>
+                </div>
+                <div class="route-row">
+                  <span>Image editing</span>
+                  <strong>Missing</strong>
+                </div>
+              </div>
+
+              <div class="note-card warm-note">
+                <strong>Global vs project scope</strong>
+                <p>
+                  App Setup stores reusable connections. Project Setup decides
+                  whether this project inherits them or overrides them.
+                </p>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
