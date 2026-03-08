@@ -12,6 +12,9 @@ Establish a stable application-contract boundary between UI and backend so that:
 
 ## Locked Architectural Direction
 
+Foundation boundary ADR:
+- [ADR 0001: Application Boundary and UI Isolation](adr-0001-application-boundary.md)
+
 - UI must talk only to an application layer.
 - The application layer owns commands, queries, DTOs, events, and errors.
 - Backend internals (`workflow`, `storage`, `core`, `documents`, `llm`) stay behind that boundary.

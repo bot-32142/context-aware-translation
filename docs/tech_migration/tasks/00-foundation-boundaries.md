@@ -40,6 +40,9 @@ Define and document:
 
 ## Deliverables
 
+Primary output for this task:
+- [ADR 0001: Application Boundary and UI Isolation](../adr-0001-application-boundary.md)
+
 1. An ADR or technical design doc under `docs/tech_migration/` or `docs/adr/`.
 2. A package/dependency diagram.
 3. A fixed import rule set.
