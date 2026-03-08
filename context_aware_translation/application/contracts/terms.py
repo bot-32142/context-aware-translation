@@ -34,6 +34,7 @@ class TermsScope(ContractModel):
 
 class TermTableRow(ContractModel):
     term_id: int
+    term_key: str
     term: str
     translation: str | None = None
     description: str | None = None
@@ -65,6 +66,7 @@ class TermsTableState(ContractModel):
 class UpdateTermRequest(ContractModel):
     scope: TermsScope
     term_id: int
+    term_key: str | None = None
     translation: str | None = None
     description: str | None = None
     ignored: bool | None = None

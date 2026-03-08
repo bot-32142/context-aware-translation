@@ -2,14 +2,37 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from context_aware_translation.application.contracts.common import AcceptedCommand, ExportResult
+from context_aware_translation.application.contracts.common import (
+    AcceptedCommand,
+    BlockerCode,
+    BlockerInfo,
+    DocumentRowActionKind,
+    ExportOption,
+    ExportResult,
+    NavigationTarget,
+    NavigationTargetKind,
+    SurfaceStatus,
+)
 from context_aware_translation.application.contracts.work import (
+    ContextFrontierState,
+    DocumentRowAction,
     ExportDialogState,
     ImportDocumentsRequest,
     PrepareExportRequest,
     RunExportRequest,
     WorkboardState,
+    WorkDocumentRow,
 )
+from context_aware_translation.application.errors import ApplicationErrorCode
+from context_aware_translation.application.runtime import (
+    ApplicationRuntime,
+    make_blocker,
+    make_document_ref,
+    raise_application_error,
+)
+from context_aware_translation.documents.base import get_supported_formats_for_type, is_ocr_required_for_type
+
+_IMAGE_DOCUMENT_TYPES = {"manga", "pdf", "epub", "scanned_book"}
 
 
 class WorkService(Protocol):
@@ -20,3 +43,230 @@ class WorkService(Protocol):
     def prepare_export(self, request: PrepareExportRequest) -> ExportDialogState: ...
 
     def run_export(self, request: RunExportRequest) -> ExportResult: ...
+
+
+class DefaultWorkService:
+    def __init__(self, runtime: ApplicationRuntime) -> None:
+        self._runtime = runtime
+
+    def get_workboard(self, project_id: str) -> WorkboardState:
+        project = self._runtime.get_project_ref(project_id)
+        config = self._runtime.get_effective_config_payload(project_id)
+        setup_blocker = None
+        if not config.get("translation_target_language"):
+            setup_blocker = make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                "Target language is not configured for this project.",
+                target_kind=NavigationTargetKind.PROJECT_SETUP,
+                project_id=project_id,
+            )
+        with self._runtime.open_book_db(project_id) as dbx:
+            docs = dbx.document_repo.get_documents_with_status()
+            pending_glossary_ids = {int(doc["document_id"]) for doc in dbx.document_repo.list_documents_pending_glossary()}
+            pending_translation_ids = {int(doc["document_id"]) for doc in dbx.document_repo.list_documents_pending_translation()}
+
+        rows: list[WorkDocumentRow] = []
+        frontier_last_ready = None
+        blocking_doc_id: int | None = None
+        blocking_message: str | None = None
+        for doc in docs:
+            document_id = int(doc["document_id"])
+            document_type = str(doc.get("document_type") or "")
+            total_chunks = int(doc.get("total_chunks", 0) or 0)
+            translated_chunks = int(doc.get("chunks_translated", 0) or 0)
+            ocr_pending = int(doc.get("ocr_pending", 0) or 0)
+            ref = make_document_ref(document_id, f"Document {document_id}", document_type)
+
+            if blocking_doc_id is not None and document_id > blocking_doc_id:
+                row_blocker = make_blocker(
+                    BlockerCode.NEEDS_EARLIER_DOCUMENT_FIRST,
+                    f"Waiting for Document {blocking_doc_id} before continuing in order.",
+                    target_kind=NavigationTargetKind.WORK,
+                    project_id=project_id,
+                    document_id=blocking_doc_id,
+                )
+                rows.append(
+                    WorkDocumentRow(
+                        document=ref,
+                        status=SurfaceStatus.BLOCKED,
+                        state_summary="Waiting in order",
+                        blocker=row_blocker,
+                        primary_action=DocumentRowAction(
+                            kind=DocumentRowActionKind.BLOCKED,
+                            label="Blocked",
+                            blocker=row_blocker,
+                        ),
+                    )
+                )
+                continue
+
+            blocker: BlockerInfo | None = None
+            if setup_blocker is not None:
+                blocker = setup_blocker
+                status = SurfaceStatus.BLOCKED
+                summary = "Needs setup"
+                action = DocumentRowAction(
+                    kind=DocumentRowActionKind.FIX_SETUP,
+                    label="Open Setup",
+                    target=NavigationTarget(kind=NavigationTargetKind.PROJECT_SETUP, project_id=project_id),
+                    blocker=blocker,
+                )
+            elif is_ocr_required_for_type(document_type) and ocr_pending > 0:
+                status = SurfaceStatus.READY
+                summary = "Needs OCR review"
+                action = DocumentRowAction(
+                    kind=DocumentRowActionKind.OPEN_OCR,
+                    label="Open OCR",
+                    target=NavigationTarget(
+                        kind=NavigationTargetKind.DOCUMENT_OCR,
+                        project_id=project_id,
+                        document_id=document_id,
+                    ),
+                )
+                blocking_doc_id = document_id
+                blocking_message = summary
+            elif document_id in pending_glossary_ids:
+                status = SurfaceStatus.READY
+                summary = "Open Terms to build terms"
+                action = DocumentRowAction(
+                    kind=DocumentRowActionKind.OPEN_TERMS,
+                    label="Open Terms",
+                    target=NavigationTarget(
+                        kind=NavigationTargetKind.DOCUMENT_TERMS,
+                        project_id=project_id,
+                        document_id=document_id,
+                    ),
+                )
+                blocking_doc_id = document_id
+                blocking_message = summary
+            elif document_id in pending_translation_ids or (total_chunks > 0 and translated_chunks < total_chunks):
+                status = SurfaceStatus.READY
+                summary = "Open Translation"
+                action = DocumentRowAction(
+                    kind=DocumentRowActionKind.OPEN_TRANSLATION,
+                    label="Open Translation",
+                    target=NavigationTarget(
+                        kind=NavigationTargetKind.DOCUMENT_TRANSLATION,
+                        project_id=project_id,
+                        document_id=document_id,
+                    ),
+                )
+                blocking_doc_id = document_id
+                blocking_message = summary
+            elif document_type in _IMAGE_DOCUMENT_TYPES and total_chunks > 0:
+                status = SurfaceStatus.DONE
+                summary = "Inspect images"
+                action = DocumentRowAction(
+                    kind=DocumentRowActionKind.OPEN_IMAGES,
+                    label="Open Images",
+                    target=NavigationTarget(
+                        kind=NavigationTargetKind.DOCUMENT_IMAGES,
+                        project_id=project_id,
+                        document_id=document_id,
+                    ),
+                )
+                frontier_last_ready = ref
+            elif total_chunks > 0 and translated_chunks == total_chunks:
+                status = SurfaceStatus.DONE
+                summary = "Ready to export"
+                action = DocumentRowAction(kind=DocumentRowActionKind.EXPORT, label="Export")
+                frontier_last_ready = ref
+            else:
+                status = SurfaceStatus.READY
+                summary = "Open"
+                action = DocumentRowAction(
+                    kind=DocumentRowActionKind.OPEN,
+                    label="Open",
+                    target=NavigationTarget(
+                        kind=NavigationTargetKind.DOCUMENT_OVERVIEW,
+                        project_id=project_id,
+                        document_id=document_id,
+                    ),
+                )
+
+            rows.append(
+                WorkDocumentRow(
+                    document=ref,
+                    status=status,
+                    state_summary=summary,
+                    blocker=blocker,
+                    primary_action=action,
+                )
+            )
+        context_frontier = ContextFrontierState(
+            summary=(
+                f"Context ready through Document {frontier_last_ready.document_id}."
+                if frontier_last_ready is not None
+                else "Context not ready yet."
+            ),
+            last_ready_document=frontier_last_ready,
+            blocker=(
+                make_blocker(
+                    BlockerCode.NEEDS_REVIEW,
+                    f"Blocked by {blocking_message or 'pending work'} on Document {blocking_doc_id}.",
+                    target_kind=NavigationTargetKind.WORK,
+                    project_id=project_id,
+                    document_id=blocking_doc_id,
+                )
+                if blocking_doc_id is not None
+                else None
+            ),
+        )
+        return WorkboardState(project=project, context_frontier=context_frontier, rows=rows, setup_blocker=setup_blocker)
+
+    def import_documents(self, request: ImportDocumentsRequest) -> AcceptedCommand:
+        raise_application_error(
+            ApplicationErrorCode.UNSUPPORTED,
+            "Document import is still owned by the existing import flow and has not been migrated into the application layer yet.",
+            project_id=request.project_id,
+        )
+
+    def prepare_export(self, request: PrepareExportRequest) -> ExportDialogState:
+        if not request.document_ids:
+            raise_application_error(ApplicationErrorCode.VALIDATION, "At least one document must be selected for export.")
+        project_id = request.project_id
+        with self._runtime.open_book_db(project_id) as dbx:
+            raw_docs = [dbx.document_repo.get_document_by_id(document_id) for document_id in request.document_ids]
+            docs = [doc for doc in raw_docs if doc is not None]
+            status_by_id = {int(doc["document_id"]): doc for doc in dbx.document_repo.get_documents_with_status()}
+        if len(docs) != len(request.document_ids):
+            raise_application_error(ApplicationErrorCode.NOT_FOUND, "One or more documents could not be loaded for export.")
+        doc_types = {str(doc["document_type"]) for doc in docs}
+        if len(doc_types) != 1:
+            raise_application_error(ApplicationErrorCode.VALIDATION, "Mixed document types cannot be exported together.")
+        doc_type = next(iter(doc_types))
+        available_formats = [ExportOption(format_id=fmt, label=fmt, is_default=(idx == 0)) for idx, fmt in enumerate(get_supported_formats_for_type(doc_type))]
+        blocker = None
+        for doc in docs:
+            status = status_by_id.get(int(doc["document_id"]))
+            if status is None:
+                raise_application_error(
+                    ApplicationErrorCode.NOT_FOUND,
+                    f"Export status missing for document {int(doc['document_id'])}.",
+                )
+            total_chunks = int(status.get("total_chunks", 0) or 0)
+            translated_chunks = int(status.get("chunks_translated", 0) or 0)
+            if total_chunks <= 0 or translated_chunks < total_chunks:
+                blocker = make_blocker(
+                    BlockerCode.NEEDS_REVIEW,
+                    "Selected documents must be fully translated before export.",
+                    target_kind=NavigationTargetKind.DOCUMENT_TRANSLATION,
+                    project_id=project_id,
+                    document_id=int(doc["document_id"]),
+                )
+                break
+        return ExportDialogState(
+            project_id=project_id,
+            document_ids=request.document_ids,
+            document_labels=[f"Document {int(doc['document_id'])}" for doc in docs],
+            available_formats=available_formats,
+            default_output_path=str(self._runtime.book_manager.get_book_path(project_id) / "export"),
+            blocker=blocker,
+        )
+
+    def run_export(self, request: RunExportRequest) -> ExportResult:
+        raise_application_error(
+            ApplicationErrorCode.UNSUPPORTED,
+            "Export execution is still owned by the existing export worker flow and has not been migrated into the application layer yet.",
+            project_id=request.project_id,
+        )

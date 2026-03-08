@@ -225,6 +225,7 @@ def test_terms_queue_and_errors_expose_ui_safe_contracts() -> None:
         rows=[
             TermTableRow(
                 term_id=1,
+                term_key="ニカ",
                 term="ニカ",
                 translation="Nika",
                 description="Sun god reference",
