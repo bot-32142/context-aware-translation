@@ -157,6 +157,11 @@ class BlockerInfo(ContractModel):
     target: NavigationTarget | None = None
 
 
+class ActionState(ContractModel):
+    enabled: bool = False
+    blocker: BlockerInfo | None = None
+
+
 class ProgressInfo(ContractModel):
     current: int | None = None
     total: int | None = None

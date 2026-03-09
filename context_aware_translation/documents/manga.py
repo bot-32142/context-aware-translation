@@ -268,9 +268,15 @@ class MangaDocument(Document):
 
         from context_aware_translation.llm.manga_ocr import ocr_manga_image_with_regions
 
-        sources = self.repo.get_document_sources_needing_ocr(self.document_id)
-        if source_ids is not None:
-            sources = [s for s in sources if s["source_id"] in source_ids]
+        if source_ids is None:
+            sources = self.repo.get_document_sources_needing_ocr(self.document_id)
+        else:
+            source_ids_set = frozenset(source_ids)
+            sources = [
+                source
+                for source in self.repo.get_document_sources(self.document_id)
+                if source["source_type"] == "image" and source["source_id"] in source_ids_set
+            ]
         if not sources:
             return 0
 

@@ -499,11 +499,10 @@ def test_validate_submit_with_valid_explicit_source_ids(tmp_path):
     assert result.allowed
 
 
-def test_validate_submit_rejects_explicit_source_ids_all_completed(tmp_path):
-    """All explicitly specified sources are already OCR-completed."""
+def test_validate_submit_allows_explicit_source_ids_even_if_already_completed(tmp_path):
+    """Explicit source_ids allow rerun of already OCR-completed pages."""
     doc = {"document_id": 1, "document_type": "scanned_book"}
     all_sources = [{"source_id": 10}, {"source_id": 11}]
-    # pending = empty, so source 10 is already completed
     pending_sources: list[dict] = []
     deps = _make_deps_for_submit(
         tmp_path,
@@ -513,8 +512,7 @@ def test_validate_submit_rejects_explicit_source_ids_all_completed(tmp_path):
     )
     with deps._patches[0], deps._patches[1]:
         result = handler.validate_submit("book-1", {"document_ids": [1], "source_ids": [10]}, deps)
-    assert not result.allowed
-    assert "no pending" in result.reason.lower()
+    assert result.allowed
 
 
 # ---------------------------------------------------------------------------
@@ -614,7 +612,7 @@ def test_validate_run_with_valid_source_ids_in_payload(tmp_path):
     record = _make_record(document_ids_json=json.dumps([1]))
     doc = {"document_id": 1, "document_type": "pdf"}
     all_sources = [{"source_id": 10}, {"source_id": 11}]
-    pending = [{"source_id": 10}]
+    pending = []
     deps = _make_deps_for_run(tmp_path, doc=doc, ocr_sources=pending, all_sources=all_sources)
     with deps._patches[0], deps._patches[1]:
         result = handler.validate_run(record, {"source_ids": [10]}, deps)

@@ -5,6 +5,7 @@ from enum import StrEnum
 from pydantic import Field
 
 from context_aware_translation.application.contracts.common import (
+    ActionState,
     BlockerInfo,
     ContractModel,
     DocumentRef,
@@ -55,10 +56,17 @@ class OCRPageState(ContractModel):
     blocker: BlockerInfo | None = None
 
 
+class DocumentOCRActions(ContractModel):
+    save: ActionState = Field(default_factory=ActionState)
+    run_current: ActionState = Field(default_factory=ActionState)
+    run_pending: ActionState = Field(default_factory=ActionState)
+
+
 class DocumentOCRState(ContractModel):
     workspace: DocumentWorkspaceState
     pages: list[OCRPageState] = Field(default_factory=list)
     current_page_index: int | None = None
+    actions: DocumentOCRActions = Field(default_factory=DocumentOCRActions)
     progress: ProgressInfo | None = None
     active_task_id: str | None = None
 

@@ -187,8 +187,10 @@ def test_run_ocr_filters_cross_document_source_ids(monkeypatch: pytest.MonkeyPat
     )
 
     mock_repo = MagicMock()
-    # Only IDs 10 and 20 are pending for document 10
-    mock_repo.get_document_sources_needing_ocr.return_value = _make_pending_sources(10, 20)
+    mock_repo.get_document_sources_metadata.return_value = [
+        {"source_id": 10, "source_type": "image"},
+        {"source_id": 20, "source_type": "image"},
+    ]
 
     monkeypatch.setattr(
         "context_aware_translation.ui.workers.ocr_task_worker.SQLiteBookDB",
@@ -220,6 +222,54 @@ def test_run_ocr_filters_cross_document_source_ids(monkeypatch: pytest.MonkeyPat
     assert 30 not in captured_source_ids
     assert 10 in captured_source_ids
     assert 20 in captured_source_ids
+
+
+def test_run_ocr_explicit_source_ids_allow_completed_pages(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """Explicit source_ids keep completed pages instead of intersecting pending-only rows."""
+    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+
+    task_store = MagicMock()
+    worker = OCRTaskWorker(
+        _book_manager_with_db(tmp_path),
+        "book-id",
+        action="run",
+        task_id="task-rerun-completed",
+        document_id=10,
+        source_ids=[10],
+        task_store=task_store,
+    )
+
+    mock_repo = MagicMock()
+    mock_repo.get_document_sources_metadata.return_value = [{"source_id": 10, "source_type": "image"}]
+
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.ocr_task_worker.SQLiteBookDB",
+        lambda *_args, **_kwargs: MagicMock(),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.ocr_task_worker.DocumentRepository",
+        lambda *_args, **_kwargs: mock_repo,
+    )
+
+    captured_source_ids: list[int] = []
+    mock_context = MagicMock()
+
+    async def _capture_run_ocr(_context, **kwargs):
+        ids = kwargs.get("source_ids", [])
+        captured_source_ids.extend(ids or [])
+
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
+        lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        _capture_run_ocr,
+    )
+
+    worker.run()
+
+    assert captured_source_ids == [10]
 
 
 def test_run_ocr_loader_targets_selected_document_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):

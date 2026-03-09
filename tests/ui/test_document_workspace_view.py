@@ -3,15 +3,19 @@ from __future__ import annotations
 import pytest
 
 from context_aware_translation.application.contracts.common import (
+    ActionState,
     DocumentRef,
     DocumentSection,
     ProjectRef,
     SurfaceStatus,
 )
 from context_aware_translation.application.contracts.document import (
+    DocumentOCRActions,
+    DocumentOCRState,
     DocumentOverviewState,
     DocumentSectionCard,
     DocumentWorkspaceState,
+    OCRPageState,
 )
 from context_aware_translation.application.contracts.terms import (
     TermsScope,
@@ -88,6 +92,34 @@ def _make_terms_state() -> TermsTableState:
     )
 
 
+def _make_ocr_state() -> DocumentOCRState:
+    return DocumentOCRState(
+        workspace=_make_workspace_state().model_copy(update={"active_tab": DocumentSection.OCR}),
+        pages=[
+            OCRPageState(
+                source_id=101,
+                page_number=1,
+                total_pages=2,
+                status=SurfaceStatus.DONE,
+                extracted_text="hello\nworld",
+            ),
+            OCRPageState(
+                source_id=102,
+                page_number=2,
+                total_pages=2,
+                status=SurfaceStatus.READY,
+                extracted_text="second page",
+            ),
+        ],
+        current_page_index=0,
+        actions=DocumentOCRActions(
+            save=ActionState(enabled=True),
+            run_current=ActionState(enabled=True),
+            run_pending=ActionState(enabled=True),
+        ),
+    )
+
+
 def _make_view():
     from context_aware_translation.ui.features.document_workspace_view import DocumentWorkspaceView
 
@@ -104,6 +136,8 @@ def _make_view():
                 )
             ],
         ),
+        ocr=_make_ocr_state(),
+        ocr_page_images={101: None, 102: None},
     )
     terms_service = FakeTermsService(project_state=_make_terms_state(), document_state=_make_terms_state())
     work_service = FakeWorkService(state_by_project={"proj-1": object()})
@@ -148,6 +182,27 @@ def test_document_workspace_terms_tab_uses_shared_terms_component():
         view.cleanup()
 
 
+def test_document_workspace_ocr_tab_routes_save_and_run_actions():
+    view, _bus, document_service, _terms_service = _make_view()
+    try:
+        view.show_section(DocumentSection.OCR)
+        ocr_tab = view.tab_widget.currentWidget()
+        assert ocr_tab is not None
+        assert hasattr(ocr_tab, "save_button")
+        assert ocr_tab.page_combo.count() == 2
+
+        ocr_tab.text_edit.setPlainText("edited\npage")
+        ocr_tab.save_button.click()
+        ocr_tab.run_current_button.click()
+        ocr_tab.run_pending_button.click()
+
+        call_names = [name for name, _payload in document_service.calls]
+        assert "save_ocr" in call_names
+        assert call_names.count("run_ocr") == 2
+    finally:
+        view.cleanup()
+
+
 def test_document_workspace_refreshes_on_invalidations():
     view, bus, document_service, terms_service = _make_view()
     try:
@@ -157,8 +212,10 @@ def test_document_workspace_refreshes_on_invalidations():
         QApplication.processEvents()
 
         workspace_calls = [name for name, _payload in document_service.calls if name == "get_workspace"]
+        ocr_calls = [name for name, _payload in document_service.calls if name == "get_ocr"]
         terms_calls = [name for name, _payload in terms_service.calls if name == "get_document_terms"]
         assert len(workspace_calls) == 4
+        assert len(ocr_calls) == 4
         assert len(terms_calls) == 4
     finally:
         view.cleanup()

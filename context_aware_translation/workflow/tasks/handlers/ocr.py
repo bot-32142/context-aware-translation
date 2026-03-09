@@ -180,12 +180,10 @@ class OCRHandler:
                         )
                 explicit_source_ids = [int(s) for s in raw_source_ids]
 
-            # Resolve pending OCR sources
+            # Resolve sources to run. Explicit source_ids allow rerun of already-
+            # completed pages; default document runs remain pending-only.
             if explicit_source_ids is not None:
-                # Filter to only those that still need OCR
-                pending = doc_repo.get_document_sources_needing_ocr(doc_id)
-                pending_ids = {s["source_id"] for s in pending}
-                resolved = [sid for sid in explicit_source_ids if sid in pending_ids]
+                resolved = explicit_source_ids
             else:
                 resolved = [s["source_id"] for s in doc_repo.get_document_sources_needing_ocr(doc_id)]
 
@@ -252,9 +250,7 @@ class OCRHandler:
                             allowed=False,
                             reason=f"source_id {sid} does not belong to document {doc_id}.",
                         )
-                pending = doc_repo.get_document_sources_needing_ocr(doc_id)
-                pending_ids = {s["source_id"] for s in pending}
-                resolved = [sid for sid in source_ids if sid in pending_ids]
+                resolved = source_ids
             else:
                 resolved = [s["source_id"] for s in doc_repo.get_document_sources_needing_ocr(doc_id)]
 

@@ -59,24 +59,23 @@ class OCRTaskWorker(BaseWorker):
     def _resolve_source_ids_for_document(self) -> list[int]:
         """Resolve which source IDs to OCR for this document.
 
-        Returns only pending (needs-OCR) source IDs that belong to document_id.
         If source_ids is None, returns all pending sources for the document.
         If source_ids is explicit, validates they belong to this document and
-        intersects with the pending set.
+        returns them even if OCR was already completed, so current-page reruns
+        can overwrite existing OCR safely without pre-clearing DB state.
         """
         db_path = self._book_manager.get_book_db_path(self._book_id)
         db = SQLiteBookDB(db_path)
         try:
             repo = DocumentRepository(db)
-            pending_rows = repo.get_document_sources_needing_ocr(self._document_id)
-            pending_ids = {row["source_id"] for row in pending_rows}
-
             if self._source_ids is None:
+                pending_rows = repo.get_document_sources_needing_ocr(self._document_id)
+                pending_ids = {row["source_id"] for row in pending_rows}
                 return list(pending_ids)
 
-            # Explicit source_ids: validate they belong to this document by
-            # intersecting with the pending set (cross-document IDs are excluded).
-            return [sid for sid in self._source_ids if sid in pending_ids]
+            all_rows = repo.get_document_sources_metadata(self._document_id)
+            all_ids = {int(row["source_id"]) for row in all_rows if row.get("source_type") == "image"}
+            return [sid for sid in self._source_ids if sid in all_ids]
         finally:
             db.close()
 

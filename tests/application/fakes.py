@@ -13,11 +13,12 @@ from context_aware_translation.application.contracts.app_setup import (
     SetupWizardState,
     SetupWizardStep,
 )
-from context_aware_translation.application.contracts.common import AcceptedCommand
+from context_aware_translation.application.contracts.common import AcceptedCommand, DocumentSection
 from context_aware_translation.application.contracts.document import (
     DocumentExportResult,
     DocumentExportState,
     DocumentImagesState,
+    DocumentOCRActions,
     DocumentOCRState,
     DocumentOverviewState,
     DocumentTranslationState,
@@ -229,6 +230,7 @@ class FakeDocumentService:
     export: DocumentExportState | None = None
     export_result: DocumentExportResult | None = None
     command_result: AcceptedCommand | None = None
+    ocr_page_images: dict[int, bytes | None] = field(default_factory=dict)
     calls: list[tuple[str, Any]] = field(default_factory=list)
 
     def get_workspace(self, project_id: str, document_id: int) -> DocumentWorkspaceState:
@@ -237,11 +239,24 @@ class FakeDocumentService:
 
     def get_overview(self, project_id: str, document_id: int) -> DocumentOverviewState:
         self.calls.append(("get_overview", (project_id, document_id)))
-        return self.overview  # type: ignore[return-value]
+        if self.overview is not None:
+            return self.overview
+        return DocumentOverviewState(workspace=self.workspace, sections=[])
 
     def get_ocr(self, project_id: str, document_id: int) -> DocumentOCRState:
         self.calls.append(("get_ocr", (project_id, document_id)))
-        return self.ocr  # type: ignore[return-value]
+        if self.ocr is not None:
+            return self.ocr
+        return DocumentOCRState(
+            workspace=self.workspace.model_copy(update={"active_tab": DocumentSection.OCR}),
+            pages=[],
+            current_page_index=None,
+            actions=DocumentOCRActions(),
+        )
+
+    def get_ocr_page_image(self, project_id: str, document_id: int, source_id: int) -> bytes | None:
+        self.calls.append(("get_ocr_page_image", (project_id, document_id, source_id)))
+        return self.ocr_page_images.get(source_id)
 
     def save_ocr(self, request: SaveOCRPageRequest) -> DocumentOCRState:
         self.calls.append(("save_ocr", request))
