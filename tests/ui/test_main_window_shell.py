@@ -109,6 +109,21 @@ class _FakeBookWorkspace(QWidget):
         self.cleanup_calls += 1
 
 
+class _FakeProjectSetupView(QWidget):
+    open_app_setup_requested = Signal()
+    save_completed = Signal(str)
+
+    def __init__(self, project_id, service, events, parent: QWidget | None = None):  # noqa: ANN001
+        super().__init__(parent)
+        self.project_id = project_id
+        self.service = service
+        self.events = events
+        self.cleanup_calls = 0
+
+    def cleanup(self) -> None:
+        self.cleanup_calls += 1
+
+
 def _make_context():
     book_manager = MagicMock()
     book_manager.library_root = Path("/tmp/context-aware-translation-tests")
@@ -122,7 +137,7 @@ def _make_context():
             task_engine=task_engine,
             worker_deps=object(),
         ),
-        services=SimpleNamespace(app_setup=app_setup_service),
+        services=SimpleNamespace(app_setup=app_setup_service, project_setup=MagicMock()),
         events=InMemoryApplicationEventBus(),
     )
 
@@ -138,6 +153,9 @@ def _make_window():
     patch_stack.enter_context(patch("context_aware_translation.ui.main_window.LibraryView", _FakeProjectsView))
     patch_stack.enter_context(patch("context_aware_translation.ui.main_window.AppSetupView", _FakeAppSetupView))
     patch_stack.enter_context(patch("context_aware_translation.ui.main_window.BookWorkspace", _FakeBookWorkspace))
+    patch_stack.enter_context(
+        patch("context_aware_translation.ui.main_window.ProjectSetupView", _FakeProjectSetupView)
+    )
     try:
         window = MainWindow()
     except Exception:
@@ -189,10 +207,18 @@ def test_main_window_routes_projects_into_project_shell():
         assert shell.tab_widget.tabText(1) == shell.tr("Terms")
         assert shell.tab_widget.tabText(2) == shell.tr("Setup")
         assert shell.work_tab.embedded is True
+        assert isinstance(shell.setup_tab, _FakeProjectSetupView)
         assert window._book_nav_item.text() == window.tr("Project: One Piece")
 
         shell.queue_button.click()
         assert "Queue drawer" in window.statusBar().currentMessage()
+
+        shell.setup_tab.open_app_setup_requested.emit()
+        assert window._stack.currentWidget() is window.app_setup_view
+
+        shell.setup_tab.save_completed.emit("project-1")
+        assert shell.tab_widget.currentWidget() is shell.work_tab
+        assert "Project setup saved" in window.statusBar().currentMessage()
     finally:
         window.close()
         QApplication.processEvents()

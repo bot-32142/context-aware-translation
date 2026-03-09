@@ -4,8 +4,10 @@ from typing import Protocol
 
 from context_aware_translation.application.contracts.common import (
     BindingSource,
+    BlockerCode,
     CapabilityAvailability,
     CapabilityCode,
+    NavigationTargetKind,
     PresetCode,
 )
 from context_aware_translation.application.contracts.project_setup import (
@@ -20,6 +22,7 @@ from context_aware_translation.application.runtime import (
     ApplicationRuntime,
     build_default_routes_from_config,
     build_workflow_profile_payload,
+    make_blocker,
     raise_application_error,
     read_ui_preset,
 )
@@ -43,18 +46,35 @@ class DefaultProjectSetupService:
         default_routes = {route.capability: route.connection_id for route in build_default_routes_from_config(default_config)}
         current_routes = {route.capability: route.connection_id for route in build_default_routes_from_config(config)}
         options = [ProjectConnectionOption(connection_id=conn_id, connection_label=label) for conn_id, label in self._runtime.list_connection_options()]
+        option_ids = {option.connection_id for option in options}
 
         bindings: list[ProjectCapabilityBinding] = []
         cards: list[ProjectCapabilityCard] = []
         for capability in CapabilityCode:
             current_id = current_routes.get(capability)
             default_id = default_routes.get(capability)
-            if current_id:
+            if current_id is not None:
                 source = BindingSource.APP_DEFAULT if current_id == default_id else BindingSource.PROJECT_OVERRIDE
-                availability = CapabilityAvailability.READY
             else:
                 source = BindingSource.MISSING
+
+            blocker = None
+            if current_id is None:
                 availability = CapabilityAvailability.MISSING
+                blocker = make_blocker(
+                    BlockerCode.NEEDS_SETUP,
+                    f"{capability.value.replace('_', ' ').title()} needs a shared connection in App Setup.",
+                    target_kind=NavigationTargetKind.APP_SETUP,
+                )
+            elif current_id not in option_ids:
+                availability = CapabilityAvailability.MISSING
+                blocker = make_blocker(
+                    code=BlockerCode.NEEDS_SETUP,
+                    message=f"{capability.value.replace('_', ' ').title()} needs a shared connection in App Setup.",
+                    target_kind=NavigationTargetKind.APP_SETUP,
+                )
+            else:
+                availability = CapabilityAvailability.READY
             label = next((opt.connection_label for opt in options if opt.connection_id == current_id), current_id)
             bindings.append(
                 ProjectCapabilityBinding(
@@ -63,6 +83,7 @@ class DefaultProjectSetupService:
                     source=source,
                     connection_id=current_id,
                     connection_label=label,
+                    blocker=blocker,
                 )
             )
             cards.append(
@@ -73,6 +94,7 @@ class DefaultProjectSetupService:
                     connection_id=current_id,
                     connection_label=label,
                     options=options,
+                    blocker=blocker,
                 )
             )
         preset_value = read_ui_preset(config) or "balanced"

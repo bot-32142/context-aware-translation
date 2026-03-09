@@ -6,7 +6,17 @@ from PySide6.QtCore import QCoreApplication
 
 from context_aware_translation.application.composition import build_application_context
 from context_aware_translation.application.contracts.app_setup import ConnectionDraft, SetupWizardRequest
-from context_aware_translation.application.contracts.common import ProviderKind
+from context_aware_translation.application.contracts.common import (
+    CapabilityAvailability,
+    CapabilityCode,
+    NavigationTargetKind,
+    PresetCode,
+    ProviderKind,
+)
+from context_aware_translation.application.contracts.project_setup import (
+    ProjectCapabilityOverride,
+    SaveProjectSetupRequest,
+)
 from context_aware_translation.application.contracts.projects import CreateProjectRequest
 
 
@@ -92,5 +102,46 @@ def test_app_setup_preview_exposes_recommended_routing(tmp_path: Path) -> None:
         assert preview.test_results
         assert preview.recommendation is not None
         assert preview.recommendation.routes
+    finally:
+        context.close()
+
+
+def test_project_setup_marks_deleted_shared_connections_as_missing(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    try:
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Setup Target", target_language="English")
+        )
+        project_id = created.project.project_id
+
+        endpoint = context.runtime.book_manager.create_endpoint_profile(
+            name="Gemini Shared",
+            api_key="test-key",
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai",
+            model="gemini-3-flash-preview",
+        )
+        context.services.project_setup.save(
+            SaveProjectSetupRequest(
+                project_id=project_id,
+                target_language="English",
+                preset=PresetCode.BALANCED,
+                overrides=[
+                    ProjectCapabilityOverride(
+                        capability=CapabilityCode.TRANSLATION,
+                        connection_id=endpoint.profile_id,
+                    )
+                ],
+            )
+        )
+        context.runtime.book_manager.delete_endpoint_profile(endpoint.profile_id)
+
+        state = context.services.project_setup.get_state(project_id)
+        translation_card = next(card for card in state.capability_cards if card.capability is CapabilityCode.TRANSLATION)
+
+        assert translation_card.availability is CapabilityAvailability.MISSING
+        assert translation_card.blocker is not None
+        assert translation_card.blocker.target is not None
+        assert translation_card.blocker.target.kind is NavigationTargetKind.APP_SETUP
     finally:
         context.close()

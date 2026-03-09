@@ -113,6 +113,9 @@ class ProjectShellView(QWidget):
             if child is not None and hasattr(child, "cleanup"):
                 child.cleanup()
 
+    def show_work(self) -> None:
+        self.tab_widget.setCurrentIndex(0)
+
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:
             self.retranslateUi()
@@ -130,7 +133,21 @@ class ProjectShellView(QWidget):
         self.tab_widget.setTabText(2, self.tr("Setup"))
 
     def _tip_text(self) -> str:
+        terms_attached = self._terms_widget is not None
+        setup_attached = self._setup_widget is not None
+        if terms_attached and setup_attached:
+            return qarg(self.tr("Project shell for %1."), self.project_name)
+        if setup_attached:
+            return qarg(
+                self.tr("Project shell for %1. Work and Setup are available now; Terms will attach in a later migration task."),
+                self.project_name,
+            )
+        if terms_attached:
+            return qarg(
+                self.tr("Project shell for %1. Work and Terms are available now; Setup will attach in a later migration task."),
+                self.project_name,
+            )
         return qarg(
-            self.tr("Project shell for %1. Work is available now; Terms and Setup will attach to this shell in later migration tasks."),
+            self.tr("Project shell for %1. Work is available now; Terms and Setup will attach in later migration tasks."),
             self.project_name,
         )

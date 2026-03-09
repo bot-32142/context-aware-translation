@@ -25,7 +25,7 @@ from context_aware_translation.ui.constants import (
     MIN_WINDOW_WIDTH,
     SIDEBAR_WIDTH,
 )
-from context_aware_translation.ui.features import AppSetupView, ProjectShellView
+from context_aware_translation.ui.features import AppSetupView, ProjectSetupView, ProjectShellView
 from context_aware_translation.ui.i18n import qarg
 from context_aware_translation.ui.sleep_inhibitor import SleepInhibitor
 from context_aware_translation.ui.views import BookWorkspace, LibraryView
@@ -363,13 +363,21 @@ class MainWindow(QMainWindow):
             task_engine=self._task_engine,
             embedded=True,
         )
+        setup_view = ProjectSetupView(
+            book_id,
+            self._app_context.services.project_setup,
+            self._app_context.events,
+        )
         project_shell = ProjectShellView(
             project_id=book_id,
             project_name=book_name,
             work_widget=work_view,
+            setup_widget=setup_view,
         )
         project_shell.close_requested.connect(self.close_book)
         project_shell.queue_requested.connect(self._on_queue_requested)
+        setup_view.open_app_setup_requested.connect(self._open_app_setup)
+        setup_view.save_completed.connect(lambda _project_id: self._on_project_setup_saved(project_shell))
         self.register_view(f"project_{book_id}", project_shell)
 
         self._nav_list.setCurrentItem(project_item)
@@ -415,6 +423,14 @@ class MainWindow(QMainWindow):
     def _refresh_app_setup_view(self, _event: object) -> None:
         if hasattr(self.app_setup_view, "refresh"):
             self.app_setup_view.refresh()
+
+    def _open_app_setup(self) -> None:
+        if self._profiles_nav_item is not None:
+            self._nav_list.setCurrentItem(self._profiles_nav_item)
+
+    def _on_project_setup_saved(self, shell: ProjectShellView) -> None:
+        shell.show_work()
+        self.show_status(self.tr("Project setup saved."), 3000)
 
     def _on_queue_requested(self) -> None:
         self.show_status(self.tr("Queue drawer will attach to the new shell in a later migration task."), 3000)
