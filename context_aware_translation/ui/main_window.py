@@ -1,7 +1,5 @@
 """Main application window with sidebar navigation."""
 
-import logging
-
 from PySide6.QtCore import QEvent, QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
@@ -16,10 +14,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from context_aware_translation.llm.token_tracker import TokenTracker
-from context_aware_translation.storage.book_manager import BookManager
-from context_aware_translation.storage.task_store import TaskStore
+from context_aware_translation.application.composition import build_application_context
 from context_aware_translation.ui import i18n
+from context_aware_translation.ui.adapters import QtApplicationEventBridge
 from context_aware_translation.ui.constants import (
     APP_VERSION,
     DEFAULT_WINDOW_HEIGHT,
@@ -28,24 +25,10 @@ from context_aware_translation.ui.constants import (
     MIN_WINDOW_WIDTH,
     SIDEBAR_WIDTH,
 )
+from context_aware_translation.ui.features.project_shell_view import ProjectShellView
 from context_aware_translation.ui.i18n import qarg
 from context_aware_translation.ui.sleep_inhibitor import SleepInhibitor
-from context_aware_translation.ui.tasks.qt_task_engine import TaskEngine
 from context_aware_translation.ui.views import BookWorkspace, LibraryView, ProfileView
-from context_aware_translation.workflow.session import WorkflowSession
-from context_aware_translation.workflow.tasks.handlers.batch_translation import BatchTranslationHandler
-from context_aware_translation.workflow.tasks.handlers.chunk_retranslation import ChunkRetranslationHandler
-from context_aware_translation.workflow.tasks.handlers.glossary_export import GlossaryExportHandler
-from context_aware_translation.workflow.tasks.handlers.glossary_extraction import GlossaryExtractionHandler
-from context_aware_translation.workflow.tasks.handlers.glossary_review import GlossaryReviewHandler
-from context_aware_translation.workflow.tasks.handlers.glossary_translation import GlossaryTranslationHandler
-from context_aware_translation.workflow.tasks.handlers.image_reembedding import ImageReembeddingHandler
-from context_aware_translation.workflow.tasks.handlers.ocr import OCRHandler
-from context_aware_translation.workflow.tasks.handlers.translation_manga import TranslationMangaHandler
-from context_aware_translation.workflow.tasks.handlers.translation_text import TranslationTextHandler
-from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
-
-logger = logging.getLogger(__name__)
 
 
 class MainWindow(QMainWindow):
@@ -60,7 +43,7 @@ class MainWindow(QMainWindow):
         # View registry: name -> widget reference
         self._view_registry: dict[str, QWidget] = {}
 
-        # Current book state
+        # Current project state (legacy internal naming retained for compatibility)
         self._current_book_id: str | None = None
         self._current_book_name: str | None = None
         self._book_nav_item: QListWidgetItem | None = None
@@ -71,43 +54,16 @@ class MainWindow(QMainWindow):
         self._profiles_nav_item: QListWidgetItem | None = None
         self._sleep_inhibitor = SleepInhibitor()
 
-        # Initialize book manager
-        self.book_manager = BookManager()
-        self.book_manager.seed_system_defaults()
-
-        # Initialize TokenTracker
-        TokenTracker.initialize(self.book_manager.registry)
-
-        # Initialize centralized TaskEngine
-        self._task_store = TaskStore(self.book_manager.library_root / "task_store.db")
-        # Bootstrap WorkerDeps without enqueue_followup so TaskEngine can be constructed first,
-        # then rebuild with the enqueue_followup reference and patch the core.
-        _deps_bootstrap = WorkerDeps(
-            book_manager=self.book_manager,
-            task_store=self._task_store,
-            create_workflow_session=lambda book_id: WorkflowSession.from_book(self.book_manager, book_id),
-            notify_task_changed=self._enqueue_task_changed,
-        )
-        self._task_engine = TaskEngine(store=self._task_store, deps=_deps_bootstrap, parent=self)
-        self._worker_deps = WorkerDeps(
-            book_manager=self.book_manager,
-            task_store=self._task_store,
-            create_workflow_session=lambda book_id: WorkflowSession.from_book(self.book_manager, book_id),
-            notify_task_changed=self._enqueue_task_changed,
-            enqueue_followup=self._task_engine.enqueue_followup_task,
-        )
-        self._task_engine._core._deps = self._worker_deps
-        self._task_engine.register_handler(BatchTranslationHandler())
-        self._task_engine.register_handler(GlossaryExtractionHandler())
-        self._task_engine.register_handler(GlossaryReviewHandler())
-        self._task_engine.register_handler(GlossaryTranslationHandler())
-        self._task_engine.register_handler(ChunkRetranslationHandler())
-        self._task_engine.register_handler(GlossaryExportHandler())
-        self._task_engine.register_handler(TranslationTextHandler())
-        self._task_engine.register_handler(TranslationMangaHandler())
-        self._task_engine.register_handler(OCRHandler())
-        self._task_engine.register_handler(ImageReembeddingHandler())
+        # Initialize the application composition root and bridge application events.
+        self._app_context = build_application_context(task_parent=self)
+        self._app_events = QtApplicationEventBridge(self._app_context.events, parent=self)
+        self.book_manager = self._app_context.runtime.book_manager
+        self._task_store = self._app_context.runtime.task_store
+        self._task_engine = self._app_context.runtime.task_engine
+        self._worker_deps = self._app_context.runtime.worker_deps
         self._task_engine.running_work_changed.connect(self._on_engine_running_work_changed)
+        self._app_events.projects_invalidated.connect(self._refresh_projects_view)
+        self._app_events.setup_invalidated.connect(self._refresh_app_setup_view)
 
         self._sleep_check_timer = QTimer(self)
         self._sleep_check_timer.timeout.connect(self._update_sleep_inhibitor)
@@ -124,14 +80,12 @@ class MainWindow(QMainWindow):
 
     def _init_ui(self) -> None:
         """Initialize the main UI layout."""
-        # Central widget with horizontal layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Sidebar navigation
         self._nav_list = QListWidget()
         self._nav_list.setFixedWidth(SIDEBAR_WIDTH)
         self._nav_list.setStyleSheet(
@@ -159,52 +113,47 @@ class MainWindow(QMainWindow):
         )
         self._nav_list.currentItemChanged.connect(self._on_nav_changed)
 
-        # Add default navigation items
-        self._library_nav_item = QListWidgetItem(self.tr("Library"))
-        self._library_nav_item.setData(Qt.ItemDataRole.UserRole, "library")
+        self._library_nav_item = QListWidgetItem(self.tr("Projects"))
+        self._library_nav_item.setData(Qt.ItemDataRole.UserRole, "projects")
         self._nav_list.addItem(self._library_nav_item)
 
-        self._profiles_nav_item = QListWidgetItem(self.tr("Profiles"))
-        self._profiles_nav_item.setData(Qt.ItemDataRole.UserRole, "profiles")
+        self._profiles_nav_item = QListWidgetItem(self.tr("App Setup"))
+        self._profiles_nav_item.setData(Qt.ItemDataRole.UserRole, "app_setup")
         self._nav_list.addItem(self._profiles_nav_item)
 
-        # Select Library by default
-        self._nav_list.setCurrentRow(0)
-
-        # Stacked widget for views
         self._stack = QStackedWidget()
 
-        # Create and register views
-        self.library_view = LibraryView(self.book_manager)
-        self.library_view.book_opened.connect(self._on_book_opened)
-        self.register_view("library", self.library_view)
+        self.projects_view = LibraryView(self.book_manager)
+        self.projects_view.book_opened.connect(self._on_book_opened)
+        self.library_view = self.projects_view
+        self.register_view("projects", self.projects_view)
 
-        self.profile_view = ProfileView(self.book_manager)
-        self.register_view("profiles", self.profile_view)
+        self.app_setup_view = ProfileView(self.book_manager)
+        self.profile_view = self.app_setup_view
+        self.register_view("app_setup", self.app_setup_view)
 
-        # Add to main layout
         main_layout.addWidget(self._nav_list)
         main_layout.addWidget(self._stack, 1)
+
+        self._nav_list.setCurrentRow(0)
 
     def _init_menu_bar(self) -> None:
         """Initialize the menu bar."""
         menubar = self.menuBar()
         menubar.setNativeMenuBar(False)
 
-        # File menu
         self._file_menu = menubar.addMenu(self.tr("&File"))
 
         self._open_data_action = QAction(self.tr("Open &Data Folder"), self)
         self._open_data_action.triggered.connect(self._on_open_data_folder)
         self._file_menu.addAction(self._open_data_action)
 
-        # Language menu
         self._language_menu = menubar.addMenu(self.tr("&Language"))
         self._language_group = QActionGroup(self)
         self._language_group.setExclusive(True)
 
         for locale_code, display_name in i18n.SUPPORTED_LANGUAGES.items():
-            action = QAction(display_name, self)  # Display names NOT translated (shown in native script)
+            action = QAction(display_name, self)
             action.setCheckable(True)
             action.setData(locale_code)
             if locale_code == i18n.get_current_language():
@@ -214,7 +163,6 @@ class MainWindow(QMainWindow):
 
         self._language_group.triggered.connect(self._on_language_changed)
 
-        # Help menu
         self._help_menu = menubar.addMenu(self.tr("&Help"))
 
         self._about_action = QAction(self.tr("&About"), self)
@@ -241,10 +189,6 @@ class MainWindow(QMainWindow):
         settings = QSettings("CAT", "Context-Aware Translation")
         settings.setValue("geometry", self.saveGeometry())
 
-    def _enqueue_task_changed(self, book_id: str) -> None:
-        """Thread-safe relay: emit engine signal from any thread."""
-        self._task_engine.enqueue_task_changed.emit(book_id)
-
     def _on_engine_running_work_changed(self, is_running: bool) -> None:
         """React to TaskEngine running-work state changes."""
         self._update_sleep_inhibitor()
@@ -260,7 +204,7 @@ class MainWindow(QMainWindow):
             return
 
         for view_name, widget in self._view_registry.items():
-            if not view_name.startswith("book_"):
+            if not view_name.startswith(("project_", "book_")):
                 continue
 
             if hasattr(widget, "get_running_operations"):
@@ -270,14 +214,27 @@ class MainWindow(QMainWindow):
                     return
         self._sleep_inhibitor.release()
 
+    def _current_project_view_name(self) -> str | None:
+        if self._current_book_id is None:
+            return None
+        project_view_name = f"project_{self._current_book_id}"
+        if project_view_name in self._view_registry:
+            return project_view_name
+        legacy_view_name = f"book_{self._current_book_id}"
+        if legacy_view_name in self._view_registry:
+            return legacy_view_name
+        return None
+
     def _get_book_running_operations(self) -> list[str]:
-        """Return running operations in the current book workspace."""
+        """Return running operations in the current project shell."""
         if getattr(self, "_is_closing", False):
             return []
 
         if self._current_book_id is None:
             return []
-        view_name = f"book_{self._current_book_id}"
+        view_name = self._current_project_view_name()
+        if view_name is None:
+            return []
         workspace = self._view_registry.get(view_name)
         if workspace is None:
             return []
@@ -299,7 +256,7 @@ class MainWindow(QMainWindow):
             qarg(
                 self.tr(
                     "The following operations are currently running: %1.\n\n"
-                    "Leaving the book may stop local non-task processing.\n\n"
+                    "Leaving the project may stop local non-task processing.\n\n"
                     "Engine-managed tasks continue in background and can be resumed later.\n\n"
                     "All completed results are already saved and won't be lost."
                 ),
@@ -322,24 +279,17 @@ class MainWindow(QMainWindow):
         if not view_name or not isinstance(view_name, str):
             return
 
-        # If navigating away from a book, warn about running operations
-        is_navigating_away_from_book = (
-            self._current_book_id is not None and view_name != f"book_{self._current_book_id}"
-        )
+        current_project_view = self._current_project_view_name()
+        is_navigating_away_from_project = self._current_book_id is not None and view_name != current_project_view
         running_operations = self._get_book_running_operations()
-        if is_navigating_away_from_book and running_operations:
+        if is_navigating_away_from_project and running_operations:
             if not self._warn_running_operations(running_operations):
-                # Revert sidebar selection back to book
                 self._nav_list.blockSignals(True)
                 self._nav_list.setCurrentItem(self._book_nav_item)
                 self._nav_list.blockSignals(False)
                 return
-            # User confirmed — request cancellation in-place and navigate.
-            # Avoid synchronous close/cleanup here because cleanup waits on
-            # workers and can block the UI thread while cancellation propagates.
-            if self._current_book_id is not None:
-                view_name_current = f"book_{self._current_book_id}"
-                workspace = self._view_registry.get(view_name_current)
+            if current_project_view is not None:
+                workspace = self._view_registry.get(current_project_view)
                 if workspace is not None and hasattr(workspace, "request_cancel_running_operations"):
                     workspace.request_cancel_running_operations(include_engine_tasks=False)
 
@@ -377,27 +327,16 @@ class MainWindow(QMainWindow):
             i18n.save_language(locale_code)
 
     def _on_book_opened(self, book_id: str, book_name: str) -> None:
-        """Handle book opened signal from LibraryView."""
-        self.open_book(book_id, book_name)
+        """Handle project opened signal from the Projects view."""
+        self.open_project(book_id, book_name)
 
     def register_view(self, name: str, widget: QWidget) -> None:
-        """
-        Register a view widget with the stacked widget.
-
-        Args:
-            name: Unique identifier for the view
-            widget: The widget to register
-        """
+        """Register a view widget with the stacked widget."""
         self._stack.addWidget(widget)
         self._view_registry[name] = widget
 
     def switch_view(self, view_name: str) -> None:
-        """
-        Switch to a registered view.
-
-        Args:
-            view_name: The name of the view to switch to
-        """
+        """Switch to a registered view."""
         if view_name not in self._view_registry:
             self.show_status(qarg(self.tr("View '%1' not found"), view_name), 3000)
             return
@@ -405,49 +344,54 @@ class MainWindow(QMainWindow):
         widget = self._view_registry[view_name]
         self._stack.setCurrentWidget(widget)
 
-    def open_book(self, book_id: str, book_name: str) -> None:
-        """
-        Open a book workspace and add it to navigation.
-
-        Args:
-            book_id: Unique identifier for the book
-            book_name: Display name of the book
-        """
-        # Close any existing book first
+    def open_project(self, book_id: str, book_name: str) -> None:
+        """Open a project shell and add it to navigation."""
         self.close_book()
 
-        # Store current book state
         self._current_book_id = book_id
         self._current_book_name = book_name
 
-        # Create and add book navigation item
-        book_item = QListWidgetItem(qarg(self.tr("Book: %1"), book_name))
-        book_item.setData(Qt.ItemDataRole.UserRole, f"book_{book_id}")
-        self._nav_list.addItem(book_item)
-        self._book_nav_item = book_item
+        project_item = QListWidgetItem(qarg(self.tr("Project: %1"), book_name))
+        project_item.setData(Qt.ItemDataRole.UserRole, f"project_{book_id}")
+        self._nav_list.addItem(project_item)
+        self._book_nav_item = project_item
 
-        # Create book workspace
-        workspace = BookWorkspace(self.book_manager, book_id, book_name, task_engine=self._task_engine)
-        workspace.close_requested.connect(self.close_book)
-        self.register_view(f"book_{book_id}", workspace)
+        work_view = BookWorkspace(
+            self.book_manager,
+            book_id,
+            book_name,
+            task_engine=self._task_engine,
+            embedded=True,
+        )
+        project_shell = ProjectShellView(
+            project_id=book_id,
+            project_name=book_name,
+            work_widget=work_view,
+        )
+        project_shell.close_requested.connect(self.close_book)
+        project_shell.queue_requested.connect(self._on_queue_requested)
+        self.register_view(f"project_{book_id}", project_shell)
 
-        # Switch to book view
-        self._nav_list.setCurrentItem(book_item)
-        self.show_status(qarg(self.tr("Opened book: %1"), book_name))
+        self._nav_list.setCurrentItem(project_item)
+        self.show_status(qarg(self.tr("Opened project: %1"), book_name))
+
+    def open_book(self, book_id: str, book_name: str) -> None:
+        """Compatibility wrapper during the shell migration."""
+        self.open_project(book_id, book_name)
 
     def close_book(self) -> None:
-        """Close the current book workspace and remove it from navigation."""
+        """Close the current project shell and remove it from navigation."""
         if self._current_book_id is None:
             return
 
-        # Remove book navigation item
+        book_name = self._current_book_name
+        view_name = self._current_project_view_name() or f"project_{self._current_book_id}"
+
         if self._book_nav_item is not None:
             row = self._nav_list.row(self._book_nav_item)
             self._nav_list.takeItem(row)
             self._book_nav_item = None
 
-        # Remove book view from registry
-        view_name = f"book_{self._current_book_id}"
         if view_name in self._view_registry:
             widget = self._view_registry[view_name]
             if widget is not None:
@@ -457,25 +401,26 @@ class MainWindow(QMainWindow):
                 widget.deleteLater()
             del self._view_registry[view_name]
 
-        # Switch back to library view
-        self._nav_list.setCurrentRow(0)
-
-        # Clear current book state
-        book_name = self._current_book_name
         self._current_book_id = None
         self._current_book_name = None
+        self._nav_list.setCurrentRow(0)
 
         if book_name:
-            self.show_status(qarg(self.tr("Closed book: %1"), book_name))
+            self.show_status(qarg(self.tr("Closed project: %1"), book_name))
+
+    def _refresh_projects_view(self, _event: object) -> None:
+        if hasattr(self.projects_view, "refresh"):
+            self.projects_view.refresh()
+
+    def _refresh_app_setup_view(self, _event: object) -> None:
+        if hasattr(self.app_setup_view, "refresh"):
+            self.app_setup_view.refresh()
+
+    def _on_queue_requested(self) -> None:
+        self.show_status(self.tr("Queue drawer will attach to the new shell in a later migration task."), 3000)
 
     def show_status(self, message: str, timeout_ms: int = 5000) -> None:
-        """
-        Show a status message in the status bar.
-
-        Args:
-            message: The message to display
-            timeout_ms: How long to show the message in milliseconds (0 = permanent)
-        """
+        """Show a status message in the status bar."""
         self._status_bar.showMessage(message, timeout_ms)
 
     def changeEvent(self, event: QEvent) -> None:
@@ -486,27 +431,22 @@ class MainWindow(QMainWindow):
 
     def retranslateUi(self) -> None:
         """Retranslate all UI elements."""
-        # Window title
         self.setWindowTitle(self.tr("Context-Aware Translation"))
 
-        # Navigation items
         if self._library_nav_item is not None:
-            self._library_nav_item.setText(self.tr("Library"))
+            self._library_nav_item.setText(self.tr("Projects"))
         if self._profiles_nav_item is not None:
-            self._profiles_nav_item.setText(self.tr("Profiles"))
+            self._profiles_nav_item.setText(self.tr("App Setup"))
         if self._book_nav_item is not None and self._current_book_name is not None:
-            self._book_nav_item.setText(qarg(self.tr("Book: %1"), self._current_book_name))
+            self._book_nav_item.setText(qarg(self.tr("Project: %1"), self._current_book_name))
 
-        # Menu titles
         self._file_menu.setTitle(self.tr("&File"))
         self._language_menu.setTitle(self.tr("&Language"))
         self._help_menu.setTitle(self.tr("&Help"))
 
-        # Menu actions
         self._open_data_action.setText(self.tr("Open &Data Folder"))
         self._about_action.setText(self.tr("&About"))
 
-        # Status bar (keep current message if any, or show "Ready")
         current_message = self._status_bar.currentMessage()
         if not current_message:
             self.show_status(self.tr("Ready"))
@@ -516,7 +456,10 @@ class MainWindow(QMainWindow):
         self._is_closing = True
         self._sleep_check_timer.stop()
         self.close_book()
+        self._app_events.close()
         self._task_engine.close()
+        self._task_store.close()
+        self.book_manager.close()
         self._sleep_inhibitor.release()
         self._save_geometry()
-        event.accept()
+        super().closeEvent(event)

@@ -50,6 +50,8 @@ class BookWorkspace(QWidget):
         book_id: str,
         book_name: str,
         task_engine: "TaskEngine",
+        *,
+        embedded: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -57,6 +59,7 @@ class BookWorkspace(QWidget):
         self.book_id = book_id
         self.book_name = book_name
         self._task_engine = task_engine
+        self._embedded = embedded
         self._cleaned_up = False
 
         self._init_ui()
@@ -74,16 +77,19 @@ class BookWorkspace(QWidget):
         self._activity_restore_timer.setInterval(self._ACTIVITY_RESTORE_RETRY_MS)
         self._activity_restore_timer.timeout.connect(self._restore_activity_panel_width_deferred)
 
-        # Header with book name and close button
+        # Header with title, close button, and activity toggle.
         header_layout = QHBoxLayout()
-        self.title_label = QLabel(f"<h2>{self.book_name}</h2>")
+        title_text = self.tr("Work") if self._embedded else self.book_name
+        self.title_label = QLabel(f"<h2>{title_text}</h2>")
         header_layout.addWidget(self.title_label)
         header_layout.addStretch()
 
-        self.close_btn = QPushButton("\u2190 " + self.tr("Back to Library"))
-        self.close_btn.setToolTip(self.tr("Close this book and return to library"))
-        self.close_btn.clicked.connect(self._on_close_requested)
-        header_layout.addWidget(self.close_btn)
+        self.close_btn = None
+        if not self._embedded:
+            self.close_btn = QPushButton("\u2190 " + self.tr("Back to Projects"))
+            self.close_btn.setToolTip(self.tr("Close this project and return to Projects"))
+            self.close_btn.clicked.connect(self._on_close_requested)
+            header_layout.addWidget(self.close_btn)
 
         self.activity_btn = QPushButton(self.tr("Activity"))
         self.activity_btn.setToolTip(self.tr("Show/hide task activity panel"))
@@ -532,9 +538,13 @@ class BookWorkspace(QWidget):
         super().closeEvent(event)
 
     def retranslateUi(self) -> None:
-        self.title_label.setText(f"<h2>{self.book_name}</h2>")
-        self.close_btn.setText("\u2190 " + self.tr("Back to Library"))
-        self.close_btn.setToolTip(self.tr("Close this book and return to library"))
+        if self._embedded:
+            self.title_label.setText(f"<h2>{self.tr('Work')}</h2>")
+        else:
+            self.title_label.setText(f"<h2>{self.book_name}</h2>")
+            if self.close_btn is not None:
+                self.close_btn.setText("\u2190 " + self.tr("Back to Projects"))
+                self.close_btn.setToolTip(self.tr("Close this project and return to Projects"))
         self.activity_btn.setText(self.tr("Activity"))
         self.activity_btn.setToolTip(self.tr("Show/hide task activity panel"))
         self.tip_label.setText(self._workflow_tip_text())

@@ -1,4 +1,4 @@
-"""Main library view for managing books."""
+"""Main projects view for managing books/projects."""
 
 from PySide6.QtCore import QEvent, QPoint, Qt, Signal, Slot
 from PySide6.QtWidgets import (
@@ -20,7 +20,7 @@ from context_aware_translation.ui.utils import create_tip_label
 
 
 class LibraryView(QWidget):
-    """Main library view for managing books."""
+    """Main projects view for managing books/projects."""
 
     # Signal emitted when a book should be opened (book_id, book_name)
     book_opened = Signal(str, str)
@@ -68,7 +68,7 @@ class LibraryView(QWidget):
         toolbar = QHBoxLayout()
 
         # Action buttons
-        self.new_button = QPushButton(self.tr("New Book"))
+        self.new_button = QPushButton(self.tr("New Project"))
         self.open_button = QPushButton(self.tr("Open"))
         self.edit_button = QPushButton(self.tr("Edit"))
         self.delete_button = QPushButton(self.tr("Delete"))
@@ -103,7 +103,7 @@ class LibraryView(QWidget):
         """Handle open book button click."""
         selection = self.table_view.selectionModel()
         if not selection.hasSelection():
-            QMessageBox.information(self, self.tr("No Selection"), self.tr("Please select a book to open."))
+            QMessageBox.information(self, self.tr("No Selection"), self.tr("Please select a project to open."))
             return
 
         row = selection.selectedRows()[0].row()
@@ -116,7 +116,7 @@ class LibraryView(QWidget):
         """Handle edit book button click."""
         selection = self.table_view.selectionModel()
         if not selection.hasSelection():
-            QMessageBox.information(self, self.tr("No Selection"), self.tr("Please select a book to edit."))
+            QMessageBox.information(self, self.tr("No Selection"), self.tr("Please select a project to edit."))
             return
 
         row = selection.selectedRows()[0].row()
@@ -131,7 +131,7 @@ class LibraryView(QWidget):
         """Handle delete book button click."""
         selection = self.table_view.selectionModel()
         if not selection.hasSelection():
-            QMessageBox.information(self, self.tr("No Selection"), self.tr("Please select a book to delete."))
+            QMessageBox.information(self, self.tr("No Selection"), self.tr("Please select a project to delete."))
             return
 
         row = selection.selectedRows()[0].row()
@@ -145,8 +145,8 @@ class LibraryView(QWidget):
             self.tr("Confirm Deletion"),
             qarg(
                 self.tr(
-                    "Are you sure you want to delete '%1'?\n\n"
-                    "This will permanently remove all book data including documents, "
+                    "Are you sure you want to delete project '%1'?\n\n"
+                    "This will permanently remove all project data including documents, "
                     "translations, and glossary entries."
                 ),
                 book.name,
@@ -162,10 +162,10 @@ class LibraryView(QWidget):
                 QMessageBox.information(
                     self,
                     self.tr("Success"),
-                    qarg(self.tr("Book '%1' has been deleted."), book.name),
+                    qarg(self.tr("Project '%1' has been deleted."), book.name),
                 )
             else:
-                QMessageBox.critical(self, self.tr("Error"), self.tr("Failed to delete book."))
+                QMessageBox.critical(self, self.tr("Error"), self.tr("Failed to delete project."))
 
     @Slot()
     def _on_row_double_clicked(self) -> None:
@@ -212,11 +212,11 @@ class LibraryView(QWidget):
 
     def retranslateUi(self) -> None:
         self.tip_label.setText(self._tip_text())
-        self.new_button.setText(self.tr("New Book"))
+        self.new_button.setText(self.tr("New Project"))
         self.open_button.setText(self.tr("Open"))
         self.edit_button.setText(self.tr("Edit"))
         self.delete_button.setText(self.tr("Delete"))
         self.model.retranslate()
 
     def _tip_text(self) -> str:
-        return self.tr("Create a book, assign a config profile, then open it to run the workflow tabs.")
+        return self.tr("Create a project, finish setup, then open it to work through the document pipeline.")

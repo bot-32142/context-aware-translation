@@ -53,4 +53,6 @@ class ProfileView(QWidget):
         self.tab_widget.setTabText(1, self.tr("Config Profiles"))
 
     def _tip_text(self) -> str:
-        return self.tr("Endpoint Profile = API/model settings. Config Profile = which endpoint each step uses.")
+        return self.tr(
+            "App Setup manages shared connections and default routing. Endpoint Profiles store API/model settings; Config Profiles decide which connection each step uses."
+        )
