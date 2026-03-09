@@ -39,6 +39,12 @@ Implement the new `App Setup` feature:
 - recommended routing generation
 - advanced endpoint/model editing behind a secondary affordance
 
+Implementation note for the first migrated version:
+- `Test connection` may infer capabilities from the selected provider type
+  instead of performing live provider probing.
+- This is acceptable for the slice because the application contract already
+  supports replacing inference with real probing later.
+
 ## Ownership Boundary
 
 Primary paths this task should own:
@@ -57,3 +63,5 @@ Avoid touching Work, Terms, or document feature code.
 - setup actions and capability blockers are rendered from backend query state
 - setup refresh uses application invalidation events + requery, not direct
   profile-storage listeners
+- if capability tests are provider-inferred rather than live-probed, that
+  limitation must be explicit in task notes and user-facing copy

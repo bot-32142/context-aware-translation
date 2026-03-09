@@ -161,6 +161,15 @@ Can start after Wave 0. Recommended order:
 
 Task 11 and Task 12 can run in parallel once Task 10 provides the navigation shell.
 
+Current implementation notes for Wave 1:
+- Task 10 intentionally keeps `Work` backed by the embedded legacy
+  `BookWorkspace` until the dedicated Work slice lands.
+- Task 11 currently performs provider-inferred capability testing in its first
+  migrated version. Real provider probing can be added later without changing
+  the application contract.
+- Task 12 intentionally keeps project-level `Advanced` as informational only.
+  Raw endpoint/model editing belongs in App Setup, not Project Setup.
+
 ### Wave 2: Project-Level Surfaces
 Can start after Wave 1 skeletons exist:
 - [Task 20](tasks/20-work-slice.md)

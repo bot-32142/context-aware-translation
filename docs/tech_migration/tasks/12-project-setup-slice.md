@@ -37,6 +37,11 @@ Implement `Project Setup`:
 - deep-link to App Setup when the global connection is missing
 - advanced override section
 
+Implementation note:
+- In the first migrated version, the `Advanced` area may be informational only.
+- Raw endpoint/model editing should remain in App Setup. Project Setup should
+  focus on inherit-vs-override and capability selection.
+
 ## Acceptance Criteria
 
 - project setup clearly distinguishes app defaults from project overrides
@@ -44,3 +49,5 @@ Implement `Project Setup`:
 - saving project setup returns cleanly to the project shell
 - capability cards and setup actions come from backend query state
 - project setup refreshes via application invalidation + requery
+- any project-level `Advanced` section must not reintroduce raw endpoint/model
+  editing that belongs in App Setup

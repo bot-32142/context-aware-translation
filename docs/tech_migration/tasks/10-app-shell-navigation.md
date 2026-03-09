@@ -40,6 +40,11 @@ Build the shell/navigation skeleton for:
 
 This task should create containers and navigation targets, not fully implement all surfaces.
 
+Implementation note:
+- `Work` may temporarily host the embedded legacy `BookWorkspace` as a
+  transitional container. That is acceptable for this task because the shell
+  contract matters more than replacing the Work surface immediately.
+
 ## Deliverables
 
 1. New top-level navigation structure.
@@ -56,3 +61,5 @@ This task should create containers and navigation targets, not fully implement a
 
 - the app has a visible shell compatible with the approved UX IA
 - feature tasks can attach their screens without redefining navigation
+- the Work target can remain backed by the embedded legacy workspace until the
+  dedicated Work slice replaces it
