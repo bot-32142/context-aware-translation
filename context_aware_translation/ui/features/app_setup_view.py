@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -450,21 +451,26 @@ class AppSetupView(QWidget):
         self.tip_label = create_tip_label(self._tip_text())
         layout.addWidget(self.tip_label)
 
-        toolbar = QHBoxLayout()
+        self.summary_label = create_tip_label("")
+        layout.addWidget(self.summary_label)
+
+        self.setup_tabs = QTabWidget()
+        layout.addWidget(self.setup_tabs, 1)
+
+        self.connections_tab = QWidget()
+        connections_tab_layout = QVBoxLayout(self.connections_tab)
+        connections_toolbar = QHBoxLayout()
         self.run_wizard_button = QPushButton(self.tr("Run Setup Wizard"))
         self.run_wizard_button.clicked.connect(self._on_run_wizard)
         self.add_connection_button = QPushButton(self.tr("Add Connection"))
         self.add_connection_button.clicked.connect(self._on_add_connection)
         self.refresh_button = QPushButton(self.tr("Refresh"))
         self.refresh_button.clicked.connect(self.refresh)
-        toolbar.addWidget(self.run_wizard_button)
-        toolbar.addWidget(self.add_connection_button)
-        toolbar.addWidget(self.refresh_button)
-        toolbar.addStretch()
-        layout.addLayout(toolbar)
-
-        self.summary_label = create_tip_label("")
-        layout.addWidget(self.summary_label)
+        connections_toolbar.addWidget(self.run_wizard_button)
+        connections_toolbar.addWidget(self.add_connection_button)
+        connections_toolbar.addWidget(self.refresh_button)
+        connections_toolbar.addStretch()
+        connections_tab_layout.addLayout(connections_toolbar)
 
         self.connections_group = QGroupBox(self.tr("Connections"))
         connections_layout = QVBoxLayout(self.connections_group)
@@ -490,18 +496,7 @@ class AppSetupView(QWidget):
         connection_actions.addWidget(self.delete_connection_button)
         connection_actions.addStretch()
         connections_layout.addLayout(connection_actions)
-        layout.addWidget(self.connections_group)
-
-        self.capabilities_group = QGroupBox(self.tr("Capability summary"))
-        capabilities_layout = QVBoxLayout(self.capabilities_group)
-        self.capabilities_table = QTableWidget(0, 4)
-        self.capabilities_table.setHorizontalHeaderLabels(
-            [self.tr("Capability"), self.tr("Status"), self.tr("Connection"), self.tr("Message")]
-        )
-        self.capabilities_table.verticalHeader().setVisible(False)
-        self.capabilities_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        capabilities_layout.addWidget(self.capabilities_table)
-        layout.addWidget(self.capabilities_group)
+        connections_tab_layout.addWidget(self.connections_group)
 
         self.profiles_group = QGroupBox(self.tr("Shared workflow profiles"))
         profiles_layout = QVBoxLayout(self.profiles_group)
@@ -513,7 +508,7 @@ class AppSetupView(QWidget):
         self.profiles_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.profiles_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.profiles_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.profiles_table.itemSelectionChanged.connect(self._update_profile_details)
+        self.profiles_table.itemSelectionChanged.connect(self._update_profile_buttons)
         profiles_layout.addWidget(self.profiles_table)
         profile_actions = QHBoxLayout()
         self.edit_profile_button = QPushButton(self.tr("Edit workflow profile"))
@@ -521,18 +516,11 @@ class AppSetupView(QWidget):
         profile_actions.addWidget(self.edit_profile_button)
         profile_actions.addStretch()
         profiles_layout.addLayout(profile_actions)
-        layout.addWidget(self.profiles_group)
 
-        self.profile_detail_group = QGroupBox(self.tr("Selected workflow profile"))
-        profile_detail_layout = QVBoxLayout(self.profile_detail_group)
-        self.profile_detail_label = create_tip_label("")
-        profile_detail_layout.addWidget(self.profile_detail_label)
-        self.profile_routes_table = QTableWidget(0, 3)
-        self.profile_routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
-        self.profile_routes_table.verticalHeader().setVisible(False)
-        self.profile_routes_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        profile_detail_layout.addWidget(self.profile_routes_table)
-        layout.addWidget(self.profile_detail_group)
+        self.profiles_tab = QWidget()
+        profiles_tab_layout = QVBoxLayout(self.profiles_tab)
+        profiles_tab_layout.addWidget(self.profiles_group)
+        profiles_tab_layout.addStretch()
 
         self.advanced_section = CollapsibleSection(self.tr("Advanced"))
         advanced_content = QWidget()
@@ -548,23 +536,24 @@ class AppSetupView(QWidget):
         advanced_layout.addWidget(self.seed_defaults_button)
         advanced_layout.addStretch()
         self.advanced_section.set_content(advanced_content)
-        layout.addWidget(self.advanced_section)
+        connections_tab_layout.addWidget(self.advanced_section)
+        connections_tab_layout.addStretch()
 
-        layout.addStretch()
+        self.setup_tabs.addTab(self.connections_tab, self.tr("Connections"))
+        self.setup_tabs.addTab(self.profiles_tab, self.tr("Workflow Profiles"))
         self._update_connection_buttons()
         self.edit_profile_button.setEnabled(False)
 
     def refresh(self) -> None:
         self._state = self._service.get_state()
         self._populate_connections(self._state.connections)
-        self._populate_capabilities(self._state)
         self._populate_profiles(self._state)
         self.summary_label.setText(self._summary_text(self._state))
         self.run_wizard_button.setText(
             self.tr("Run Setup Wizard") if self._state.requires_wizard else self.tr("Open Setup Wizard")
         )
         self._update_connection_buttons()
-        self._update_profile_details()
+        self._update_profile_buttons()
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:
@@ -578,6 +567,8 @@ class AppSetupView(QWidget):
         )
         self.add_connection_button.setText(self.tr("Add Connection"))
         self.refresh_button.setText(self.tr("Refresh"))
+        self.setup_tabs.setTabText(self.setup_tabs.indexOf(self.connections_tab), self.tr("Connections"))
+        self.setup_tabs.setTabText(self.setup_tabs.indexOf(self.profiles_tab), self.tr("Workflow Profiles"))
         self.connections_group.setTitle(self.tr("Connections"))
         self.connections_table.setHorizontalHeaderLabels(
             [self.tr("Name"), self.tr("Provider"), self.tr("Status"), self.tr("Model"), self.tr("Base URL")]
@@ -585,17 +576,11 @@ class AppSetupView(QWidget):
         self.edit_connection_button.setText(self.tr("Edit"))
         self.test_connection_button.setText(self.tr("Test"))
         self.delete_connection_button.setText(self.tr("Delete"))
-        self.capabilities_group.setTitle(self.tr("Capability summary"))
-        self.capabilities_table.setHorizontalHeaderLabels(
-            [self.tr("Capability"), self.tr("Status"), self.tr("Connection"), self.tr("Message")]
-        )
         self.profiles_group.setTitle(self.tr("Shared workflow profiles"))
         self.profiles_table.setHorizontalHeaderLabels(
             [self.tr("Name"), self.tr("Target language"), self.tr("Preset"), self.tr("Default")]
         )
         self.edit_profile_button.setText(self.tr("Edit workflow profile"))
-        self.profile_detail_group.setTitle(self.tr("Selected workflow profile"))
-        self.profile_routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
         self.advanced_section.toggle_button.setText(self.tr("Advanced"))
         self.advanced_label.setText(
             self.tr(
@@ -605,9 +590,8 @@ class AppSetupView(QWidget):
         self.seed_defaults_button.setText(self.tr("Seed System Defaults"))
         if self._state is not None:
             self.summary_label.setText(self._summary_text(self._state))
-            self._populate_capabilities(self._state)
             self._populate_profiles(self._state)
-            self._update_profile_details()
+            self._update_profile_buttons()
 
     def _populate_connections(self, connections: Sequence[ConnectionSummary]) -> None:
         self.connections_table.setRowCount(0)
@@ -622,19 +606,6 @@ class AppSetupView(QWidget):
             self._set_table_item(self.connections_table, row, 3, connection.default_model or "")
             self._set_table_item(self.connections_table, row, 4, connection.base_url or "")
         self.connections_table.resizeColumnsToContents()
-
-    def _populate_capabilities(self, state: AppSetupState) -> None:
-        self.capabilities_table.setRowCount(0)
-        for capability in state.capabilities:
-            row = self.capabilities_table.rowCount()
-            self.capabilities_table.insertRow(row)
-            self._set_table_item(self.capabilities_table, row, 0, _CAPABILITY_LABELS[capability.capability])
-            status_item = QTableWidgetItem(_AVAILABILITY_LABELS[capability.availability])
-            status_item.setForeground(Qt.GlobalColor.black)
-            self.capabilities_table.setItem(row, 1, status_item)
-            self._set_table_item(self.capabilities_table, row, 2, capability.connection_label or "")
-            self._set_table_item(self.capabilities_table, row, 3, capability.message or "")
-        self.capabilities_table.resizeColumnsToContents()
 
     def _populate_profiles(self, state: AppSetupState) -> None:
         self.profiles_table.setRowCount(0)
@@ -679,23 +650,9 @@ class AppSetupView(QWidget):
         self.test_connection_button.setEnabled(selected)
         self.delete_connection_button.setEnabled(selected)
 
-    def _update_profile_details(self) -> None:
+    def _update_profile_buttons(self) -> None:
         profile = self._selected_profile()
         self.edit_profile_button.setEnabled(profile is not None)
-        self.profile_routes_table.setRowCount(0)
-        if profile is None:
-            self.profile_detail_label.setText("")
-            return
-        self.profile_detail_label.setText(
-            self.tr("Target language: %1 | Preset: %2").replace("%1", profile.target_language).replace("%2", profile.preset.value)
-        )
-        for route in profile.routes:
-            row = self.profile_routes_table.rowCount()
-            self.profile_routes_table.insertRow(row)
-            self._set_table_item(self.profile_routes_table, row, 0, route.step_label)
-            self._set_table_item(self.profile_routes_table, row, 1, route.connection_label or "")
-            self._set_table_item(self.profile_routes_table, row, 2, route.model or "")
-        self.profile_routes_table.resizeColumnsToContents()
 
     def _on_run_wizard(self) -> None:
         dialog = SetupWizardDialog(self._service, self._service.get_wizard_state(), self)
@@ -818,18 +775,15 @@ class AppSetupView(QWidget):
         table.setItem(row, column, item)
 
     def _summary_text(self, state: AppSetupState) -> str:
-        ready_capabilities = sum(
-            1 for capability in state.capabilities if capability.availability is CapabilityAvailability.READY
-        )
         if state.requires_wizard:
-            return self.tr("No connections are configured yet. Run the setup wizard to create reusable connections and a shared workflow profile.")
+            return self.tr(
+                "No connections are configured yet. Run the setup wizard to create reusable connections and a shared workflow profile."
+            )
         return (
             f"{len(state.connections)} "
             + self.tr("connections configured.")
             + f" {len(state.shared_profiles)} "
             + self.tr("shared workflow profiles available.")
-            + f" {ready_capabilities}/{len(state.capabilities)} "
-            + self.tr("capabilities ready.")
         )
 
     def _tip_text(self) -> str:

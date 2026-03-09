@@ -149,9 +149,10 @@ def test_app_setup_view_renders_backend_state():
     view = AppSetupView(service)
 
     assert view.connections_table.rowCount() == 1
-    assert view.capabilities_table.rowCount() == 2
     assert view.profiles_table.rowCount() == 1
-    assert view.profile_routes_table.rowCount() == 2
+    assert view.setup_tabs.count() == 2
+    assert view.setup_tabs.tabText(0) == view.tr("Connections")
+    assert view.setup_tabs.tabText(1) == view.tr("Workflow Profiles")
     assert "connections configured" in view.summary_label.text()
     assert view.run_wizard_button.text() == view.tr("Open Setup Wizard")
 
