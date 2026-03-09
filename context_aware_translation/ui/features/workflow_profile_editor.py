@@ -337,7 +337,6 @@ class WorkflowProfileEditorDialog(QDialog):
             name=self.name_edit.text().strip() or self._original_profile.name,
             kind=self._original_profile.kind,
             target_language=self.target_language_combo.currentText().strip() or self._original_profile.target_language,
-            preset=self._original_profile.preset,
             routes=self._build_routes(),
             is_default=self._original_profile.is_default,
         )

@@ -52,26 +52,6 @@ class CapabilityCode(StrEnum):
     IMAGE_EDITING = "image_editing"
     REASONING_AND_REVIEW = "reasoning_and_review"
 
-
-class CapabilityAvailability(StrEnum):
-    READY = "ready"
-    MISSING = "missing"
-    PARTIAL = "partial"
-    UNSUPPORTED_FOR_WORKFLOW = "unsupported_for_workflow"
-
-
-class BindingSource(StrEnum):
-    APP_DEFAULT = "app_default"
-    PROJECT_OVERRIDE = "project_override"
-    MISSING = "missing"
-
-
-class PresetCode(StrEnum):
-    FAST = "fast"
-    BALANCED = "balanced"
-    BEST = "best"
-
-
 class ProviderKind(StrEnum):
     GEMINI = "gemini"
     OPENAI = "openai"

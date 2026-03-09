@@ -5,7 +5,6 @@ from typing import Protocol
 
 from context_aware_translation.application.contracts.app_setup import (
     AppSetupState,
-    CapabilityCard,
     ConnectionDraft,
     ConnectionTestRequest,
     ConnectionTestResult,
@@ -19,9 +18,7 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowProfileKind,
 )
 from context_aware_translation.application.contracts.common import (
-    CapabilityAvailability,
     CapabilityCode,
-    PresetCode,
     ProviderKind,
     UserMessage,
     UserMessageSeverity,
@@ -122,7 +119,6 @@ class DefaultAppSetupService:
     def preview_setup_wizard(self, request: SetupWizardRequest) -> SetupWizardState:
         current_default = self._runtime.get_default_profile()
         target_language = "English"
-        preset = PresetCode.BALANCED
         if current_default is not None:
             current_detail = self._profile_detail_from_payload(
                 profile_id=current_default.profile_id,
@@ -132,11 +128,9 @@ class DefaultAppSetupService:
                 is_default=current_default.is_default,
             )
             target_language = current_detail.target_language
-            preset = current_detail.preset
         recommendation = recommended_workflow_profile_from_drafts(
             request.connections,
             target_language=target_language,
-            preset=preset,
         )
         return SetupWizardState(
             step=SetupWizardStep.REVIEW_PROFILE,
@@ -309,17 +303,9 @@ class DefaultAppSetupService:
         ]
 
     def _test_connection_result(self, draft: ConnectionDraft) -> ConnectionTestResult:
-        capabilities = [
-            CapabilityCard(
-                capability=capability,
-                availability=CapabilityAvailability.READY,
-                message=f"Supported by {draft.provider.value}",
-            )
-            for capability in infer_capabilities(draft.provider)
-        ]
         return ConnectionTestResult(
             connection_label=draft.display_name,
-            capabilities=capabilities,
+            supported_capabilities=infer_capabilities(draft.provider),
             message=UserMessage(
                 severity=UserMessageSeverity.INFO,
                 text="Connection accepted. Capability testing was inferred from the provider type.",

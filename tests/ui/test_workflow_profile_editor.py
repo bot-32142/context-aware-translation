@@ -8,7 +8,6 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowStepId,
     WorkflowStepRoute,
 )
-from context_aware_translation.application.contracts.common import PresetCode
 from context_aware_translation.ui.features.workflow_profile_editor import ConnectionChoice, WorkflowProfileEditorDialog
 
 try:
@@ -35,7 +34,6 @@ def test_workflow_profile_editor_uses_scrollable_dialog_layout():
         name="Recommended",
         kind=WorkflowProfileKind.SHARED,
         target_language="English",
-        preset=PresetCode.BALANCED,
         routes=[
             WorkflowStepRoute(
                 step_id=WorkflowStepId.TRANSLATOR,

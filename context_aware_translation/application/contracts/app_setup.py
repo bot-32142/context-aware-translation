@@ -5,10 +5,8 @@ from enum import StrEnum
 from pydantic import Field
 
 from context_aware_translation.application.contracts.common import (
-    CapabilityAvailability,
     CapabilityCode,
     ContractModel,
-    PresetCode,
     ProviderKind,
     UserMessage,
 )
@@ -24,9 +22,7 @@ class ConnectionStatus(StrEnum):
 class SetupWizardStep(StrEnum):
     CHOOSE_PROVIDERS = "choose_providers"
     ENTER_KEYS = "enter_keys"
-    TEST_CAPABILITIES = "test_capabilities"
     REVIEW_PROFILE = "review_profile"
-    COMPLETE = "complete"
 
 
 class WorkflowProfileKind(StrEnum):
@@ -90,14 +86,6 @@ class ConnectionDraft(ContractModel):
     custom_parameters_json: str | None = None
 
 
-class CapabilityCard(ContractModel):
-    capability: CapabilityCode
-    availability: CapabilityAvailability
-    message: str | None = None
-    connection_id: str | None = None
-    connection_label: str | None = None
-
-
 class WorkflowStepRoute(ContractModel):
     step_id: WorkflowStepId
     step_label: str
@@ -107,21 +95,11 @@ class WorkflowStepRoute(ContractModel):
     step_config: dict[str, bool | int | float | str | None] = Field(default_factory=dict)
 
 
-class WorkflowProfileSummary(ContractModel):
-    profile_id: str
-    name: str
-    kind: WorkflowProfileKind
-    target_language: str | None = None
-    preset: PresetCode | None = None
-    is_default: bool = False
-
-
 class WorkflowProfileDetail(ContractModel):
     profile_id: str
     name: str
     kind: WorkflowProfileKind
     target_language: str
-    preset: PresetCode
     routes: list[WorkflowStepRoute] = Field(default_factory=list)
     is_default: bool = False
 
@@ -132,7 +110,7 @@ class ConnectionTestRequest(ContractModel):
 
 class ConnectionTestResult(ContractModel):
     connection_label: str
-    capabilities: list[CapabilityCard]
+    supported_capabilities: list[CapabilityCode] = Field(default_factory=list)
     message: UserMessage | None = None
 
 

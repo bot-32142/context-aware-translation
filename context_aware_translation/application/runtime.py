@@ -12,7 +12,6 @@ from context_aware_translation.application.contracts.app_setup import (
     ConnectionSummary,
     WorkflowProfileDetail,
     WorkflowProfileKind,
-    WorkflowProfileSummary,
     WorkflowStepId,
     WorkflowStepRoute,
 )
@@ -26,7 +25,6 @@ from context_aware_translation.application.contracts.common import (
     DocumentTypeCode,
     NavigationTarget,
     NavigationTargetKind,
-    PresetCode,
     ProgressInfo,
     ProjectRef,
     ProviderKind,
@@ -70,7 +68,6 @@ if TYPE_CHECKING:
 
 
 _DEFAULT_PROFILE_NAME = "app-default-profile"
-_UI_PRESET_KEY = "_ui_preset"
 _UI_SOURCE_PROFILE_ID_KEY = "_ui_source_profile_id"
 
 _WORKFLOW_STEP_LAYOUT: tuple[tuple[WorkflowStepId, str, str | None], ...] = (
@@ -320,18 +317,6 @@ def _workflow_step_config_map(config: dict[str, Any]) -> dict[WorkflowStepId, di
     }
 
 
-def _workflow_step_label(step_id: WorkflowStepId) -> str:
-    for current, label, _config_key in _WORKFLOW_STEP_LAYOUT:
-        if current is step_id:
-            return label
-    return step_id.value
-
-
-def read_ui_preset(config: dict[str, Any]) -> str | None:
-    value = config.get(_UI_PRESET_KEY)
-    return str(value) if isinstance(value, str) else None
-
-
 def read_source_profile_id(config: dict[str, Any]) -> str | None:
     value = config.get(_UI_SOURCE_PROFILE_ID_KEY)
     return str(value) if isinstance(value, str) and value.strip() else None
@@ -424,43 +409,15 @@ def build_workflow_profile_detail(
         for step_id, label, _config_key in _WORKFLOW_STEP_LAYOUT
     ]
 
-    preset_value = read_ui_preset(config) or PresetCode.BALANCED.value
-    try:
-        preset = PresetCode(preset_value)
-    except ValueError:
-        preset = PresetCode.BALANCED
-
     target_language = str(config.get("translation_target_language") or "English")
     return WorkflowProfileDetail(
         profile_id=profile_id,
         name=name,
         kind=kind,
         target_language=target_language,
-        preset=preset,
         routes=routes,
         is_default=is_default,
     )
-
-
-def build_workflow_profile_summary(
-    detail: WorkflowProfileDetail,
-) -> WorkflowProfileSummary:
-    return WorkflowProfileSummary(
-        profile_id=detail.profile_id,
-        name=detail.name,
-        kind=detail.kind,
-        target_language=detail.target_language,
-        preset=detail.preset,
-        is_default=detail.is_default,
-    )
-
-
-def apply_preset_to_payload(_payload: dict[str, Any], _preset: str) -> None:
-    """Persist preset metadata only.
-
-    Workflow profiles reuse the existing config payload shape, but preset is now
-    a user-facing profile label rather than a hidden config mutation surface.
-    """
 
 
 def build_workflow_profile_payload(
@@ -471,7 +428,6 @@ def build_workflow_profile_payload(
 ) -> dict[str, Any]:
     payload = dict(base_config or {})
     payload["translation_target_language"] = profile.target_language
-    payload[_UI_PRESET_KEY] = profile.preset.value
     if source_profile_id:
         payload[_UI_SOURCE_PROFILE_ID_KEY] = source_profile_id
     else:
@@ -494,8 +450,6 @@ def build_workflow_profile_payload(
             payload[config_key] = next_step_payload
         else:
             payload.pop(config_key, None)
-
-    apply_preset_to_payload(payload, profile.preset.value)
     return payload
 
 
@@ -511,7 +465,6 @@ def recommended_workflow_profile_from_drafts(
     profile_id: str = "recommended",
     name: str = "Recommended",
     target_language: str = "English",
-    preset: PresetCode = PresetCode.BALANCED,
 ) -> WorkflowProfileDetail:
     routes: list[WorkflowStepRoute] = []
     translation_draft = first_connection_for_capability(drafts, CapabilityCode.TRANSLATION)
@@ -546,7 +499,6 @@ def recommended_workflow_profile_from_drafts(
         name=name,
         kind=WorkflowProfileKind.SHARED,
         target_language=target_language,
-        preset=preset,
         routes=routes,
         is_default=True,
     )

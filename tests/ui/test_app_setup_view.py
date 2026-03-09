@@ -7,7 +7,6 @@ import pytest
 
 from context_aware_translation.application.contracts.app_setup import (
     AppSetupState,
-    CapabilityCard,
     ConnectionDraft,
     ConnectionStatus,
     ConnectionSummary,
@@ -22,9 +21,7 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowStepRoute,
 )
 from context_aware_translation.application.contracts.common import (
-    CapabilityAvailability,
     CapabilityCode,
-    PresetCode,
     ProviderKind,
     UserMessage,
     UserMessageSeverity,
@@ -55,7 +52,6 @@ def _profile(*, profile_id: str = "profile:recommended", name: str = "Recommende
         name=name,
         kind=WorkflowProfileKind.SHARED,
         target_language="English",
-        preset=PresetCode.BALANCED,
         routes=[
             WorkflowStepRoute(
                 step_id=WorkflowStepId.TRANSLATOR,
@@ -159,13 +155,7 @@ def test_app_setup_view_add_delete_test_and_edit_profile_calls_service():
         state=state,
         test_result=ConnectionTestResult(
             connection_label="Gemini",
-            capabilities=[
-                CapabilityCard(
-                    capability=CapabilityCode.TRANSLATION,
-                    availability=CapabilityAvailability.READY,
-                    message="Supported by gemini",
-                )
-            ],
+            supported_capabilities=[CapabilityCode.TRANSLATION],
             message=UserMessage(severity=UserMessageSeverity.INFO, text="Connection accepted."),
         ),
     )
@@ -224,13 +214,7 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
         test_results=[
             ConnectionTestResult(
                 connection_label="Gemini",
-                capabilities=[
-                    CapabilityCard(
-                        capability=CapabilityCode.TRANSLATION,
-                        availability=CapabilityAvailability.READY,
-                        message="Supported by gemini",
-                    )
-                ],
+                supported_capabilities=[CapabilityCode.TRANSLATION],
                 message=UserMessage(severity=UserMessageSeverity.INFO, text="Connection accepted."),
             )
         ],
@@ -408,13 +392,7 @@ def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
         test_results=[
             ConnectionTestResult(
                 connection_label="Gemini",
-                capabilities=[
-                    CapabilityCard(
-                        capability=CapabilityCode.TRANSLATION,
-                        availability=CapabilityAvailability.READY,
-                        message="Supported by gemini",
-                    )
-                ],
+                supported_capabilities=[CapabilityCode.TRANSLATION],
                 message=UserMessage(severity=UserMessageSeverity.INFO, text="Connection accepted."),
             )
         ],

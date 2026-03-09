@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import (
@@ -11,7 +12,6 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
-    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -42,7 +42,6 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowProfileDetail,
 )
 from context_aware_translation.application.contracts.common import (
-    CapabilityAvailability,
     CapabilityCode,
     ProviderKind,
     UserMessageSeverity,
@@ -75,26 +74,48 @@ _CAPABILITY_LABELS: dict[CapabilityCode, str] = {
     CapabilityCode.REASONING_AND_REVIEW: "Reasoning and review",
 }
 
-_AVAILABILITY_LABELS: dict[CapabilityAvailability, str] = {
-    CapabilityAvailability.READY: "Ready",
-    CapabilityAvailability.MISSING: "Missing",
-    CapabilityAvailability.PARTIAL: "Partial",
-    CapabilityAvailability.UNSUPPORTED_FOR_WORKFLOW: "Unsupported",
-}
+
+@dataclass(frozen=True)
+class _SpinFieldSpec:
+    label: str
+    attr_name: str
+    minimum: int
+    maximum: int
+    default: int
+    suffix: str = ""
+
+
+@dataclass(frozen=True)
+class _TokenLimitSpec:
+    label: str
+    checkbox_attr: str
+    spin_attr: str
+    default: int = 1_000_000
 
 
 class ConnectionDraftForm(QWidget):
+    _SPIN_FIELDS = (
+        _SpinFieldSpec("Timeout", "timeout_spin", 1, 600, 60, " s"),
+        _SpinFieldSpec("Max retries", "retries_spin", 0, 10, 3),
+        _SpinFieldSpec("Concurrency", "concurrency_spin", 1, 50, 5),
+    )
+    _TOKEN_LIMIT_FIELDS = (
+        _TokenLimitSpec("Total token limit", "total_limit_checkbox", "total_limit_spin"),
+        _TokenLimitSpec("Input token limit", "input_limit_checkbox", "input_limit_spin"),
+        _TokenLimitSpec("Output token limit", "output_limit_checkbox", "output_limit_spin"),
+    )
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._init_ui()
         self._on_provider_changed(0)
 
-    def _create_token_limit_row(self) -> tuple[QWidget, QCheckBox, QSpinBox]:
+    def _create_token_limit_row(self, default: int) -> tuple[QWidget, QCheckBox, QSpinBox]:
         layout = QHBoxLayout()
         checkbox = QCheckBox(self.tr("Enable"))
         spinner = QSpinBox()
         spinner.setRange(1, 999_999_999)
-        spinner.setValue(1_000_000)
+        spinner.setValue(default)
         spinner.setEnabled(False)
         checkbox.toggled.connect(spinner.setEnabled)
         layout.addWidget(checkbox)
@@ -138,19 +159,6 @@ class ConnectionDraftForm(QWidget):
         self.custom_parameters_edit = QTextEdit()
         self.custom_parameters_edit.setMaximumHeight(90)
         self.custom_parameters_edit.setPlaceholderText('{"reasoning_effort": "none"}')
-        self.timeout_spin = QSpinBox()
-        self.timeout_spin.setRange(1, 600)
-        self.timeout_spin.setValue(60)
-        self.timeout_spin.setSuffix(self.tr(" s"))
-        self.retries_spin = QSpinBox()
-        self.retries_spin.setRange(0, 10)
-        self.retries_spin.setValue(3)
-        self.concurrency_spin = QSpinBox()
-        self.concurrency_spin.setRange(1, 50)
-        self.concurrency_spin.setValue(5)
-        self.total_limit_widget, self.total_limit_checkbox, self.total_limit_spin = self._create_token_limit_row()
-        self.input_limit_widget, self.input_limit_checkbox, self.input_limit_spin = self._create_token_limit_row()
-        self.output_limit_widget, self.output_limit_checkbox, self.output_limit_spin = self._create_token_limit_row()
         self.advanced_note = create_tip_label(
             self.tr(
                 "Advanced matches the old endpoint-profile model: timeout, retries, concurrency, token limits, and custom JSON parameters."
@@ -161,17 +169,30 @@ class ConnectionDraftForm(QWidget):
         advanced_form.addRow(self.tr("Default model"), self.default_model_edit)
         advanced_form.addRow(self.tr("Temperature"), self.temperature_spin)
         advanced_form.addRow(self.tr("Custom parameters"), self.custom_parameters_edit)
-        advanced_form.addRow(self.tr("Timeout"), self.timeout_spin)
-        advanced_form.addRow(self.tr("Max retries"), self.retries_spin)
-        advanced_form.addRow(self.tr("Concurrency"), self.concurrency_spin)
-        advanced_form.addRow(self.tr("Total token limit"), self.total_limit_widget)
-        advanced_form.addRow(self.tr("Input token limit"), self.input_limit_widget)
-        advanced_form.addRow(self.tr("Output token limit"), self.output_limit_widget)
+        self._build_spin_fields(advanced_form)
+        self._build_token_limit_fields(advanced_form)
         advanced_form.addRow(self.advanced_note)
         self.advanced_section.set_content(advanced_widget)
         layout.addWidget(self.advanced_section)
 
         self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+
+    def _build_spin_fields(self, form: QFormLayout) -> None:
+        for spec in self._SPIN_FIELDS:
+            spin = QSpinBox()
+            spin.setRange(spec.minimum, spec.maximum)
+            spin.setValue(spec.default)
+            if spec.suffix:
+                spin.setSuffix(self.tr(spec.suffix))
+            setattr(self, spec.attr_name, spin)
+            form.addRow(self.tr(spec.label), spin)
+
+    def _build_token_limit_fields(self, form: QFormLayout) -> None:
+        for spec in self._TOKEN_LIMIT_FIELDS:
+            widget, checkbox, spin = self._create_token_limit_row(spec.default)
+            setattr(self, spec.checkbox_attr, checkbox)
+            setattr(self, spec.spin_attr, spin)
+            form.addRow(self.tr(spec.label), widget)
 
     def set_draft(self, draft: ConnectionDraft, *, preserve_api_key_placeholder: bool = True) -> None:
         self.display_name_edit.setText(draft.display_name)
@@ -402,12 +423,8 @@ class SetupWizardDialog(QDialog):
                 result_layout = QVBoxLayout(result_group)
                 if result.message is not None:
                     result_layout.addWidget(create_tip_label(result.message.text))
-                grid = QGridLayout()
-                for row, capability in enumerate(result.capabilities):
-                    grid.addWidget(QLabel(_CAPABILITY_LABELS[capability.capability]), row, 0)
-                    grid.addWidget(QLabel(_AVAILABILITY_LABELS[capability.availability]), row, 1)
-                    grid.addWidget(QLabel(capability.message or ""), row, 2)
-                result_layout.addLayout(grid)
+                supported = ", ".join(_CAPABILITY_LABELS[capability] for capability in result.supported_capabilities)
+                result_layout.addWidget(QLabel(supported or self.tr("No supported workflow capabilities detected.")))
                 self.page_layout.addWidget(result_group)
 
             profile_group = QGroupBox(self.tr("Recommended workflow profile"))
@@ -837,10 +854,8 @@ class AppSetupView(QWidget):
 
     def _show_test_result(self, result: ConnectionTestResult) -> None:
         lines = [result.connection_label]
-        for capability in result.capabilities:
-            lines.append(
-                f"- {_CAPABILITY_LABELS[capability.capability]}: {_AVAILABILITY_LABELS[capability.availability]}"
-            )
+        for capability in result.supported_capabilities:
+            lines.append(f"- {_CAPABILITY_LABELS[capability]}")
         if result.message is not None:
             self._show_message(result.message.severity, "\n".join(lines + ["", result.message.text]))
         else:

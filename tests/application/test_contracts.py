@@ -20,7 +20,6 @@ from context_aware_translation.application.contracts.common import (
     DocumentSection,
     NavigationTarget,
     NavigationTargetKind,
-    PresetCode,
     ProjectRef,
     ProviderKind,
     QueueActionKind,
@@ -65,7 +64,6 @@ def _profile(*, profile_id: str, name: str, kind: WorkflowProfileKind) -> Workfl
         name=name,
         kind=kind,
         target_language="English",
-        preset=PresetCode.BALANCED,
         routes=[
             WorkflowStepRoute(
                 step_id=WorkflowStepId.TRANSLATOR,
