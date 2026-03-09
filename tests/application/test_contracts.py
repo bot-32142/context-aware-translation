@@ -58,6 +58,7 @@ from context_aware_translation.application.contracts.work import (
     WorkDocumentRow,
 )
 from context_aware_translation.application.errors import ApplicationError, ApplicationErrorCode, ApplicationErrorPayload
+from context_aware_translation.application.runtime import build_workflow_profile_detail, build_workflow_profile_payload
 
 
 def _profile(*, profile_id: str, name: str, kind: WorkflowProfileKind) -> WorkflowProfileDetail:
@@ -298,3 +299,68 @@ def test_terms_queue_and_errors_expose_ui_safe_contracts() -> None:
     assert queue.model_dump(mode="json")["items"][0]["available_actions"] == ["cancel", "open_related_item"]
     assert receipt.model_dump(mode="json")["message"]["severity"] == "info"
     assert error.payload.code == ApplicationErrorCode.BLOCKED
+
+
+def test_workflow_profile_round_trips_step_advanced_config() -> None:
+    config = {
+        "translation_target_language": "English",
+        "ocr_config": {
+            "endpoint_profile": "conn-gemini",
+            "ocr_dpi": 200,
+            "strip_llm_artifacts": False,
+        },
+        "translator_config": {
+            "endpoint_profile": "conn-openai",
+            "max_tokens_per_llm_call": 6000,
+            "chunk_size": 1200,
+        },
+        "image_reembedding_config": {
+            "endpoint_profile": "conn-gemini",
+            "backend": "openai",
+        },
+        "translator_batch_config": {
+            "provider": "gemini_ai_studio",
+            "api_key": "secret",
+            "model": "gemini-2.5-flash",
+            "batch_size": 50,
+            "thinking_mode": "medium",
+        },
+    }
+
+    detail = build_workflow_profile_detail(
+        profile_id="profile:recommended",
+        name="Recommended",
+        kind=WorkflowProfileKind.SHARED,
+        config=config,
+        connection_name_by_id={
+            "conn-gemini": "Gemini",
+            "conn-openai": "OpenAI",
+        },
+        connection_model_by_id={
+            "conn-gemini": "gemini-3-flash-preview",
+            "conn-openai": "gpt-4.1-mini",
+        },
+    )
+
+    ocr_route = next(route for route in detail.routes if route.step_id is WorkflowStepId.OCR)
+    assert ocr_route.step_config == {
+        "ocr_dpi": 200,
+        "strip_llm_artifacts": False,
+    }
+
+    batch_route = next(route for route in detail.routes if route.step_id is WorkflowStepId.TRANSLATOR_BATCH)
+    assert batch_route.model == "gemini-2.5-flash"
+    assert batch_route.step_config == {
+        "provider": "gemini_ai_studio",
+        "api_key": "secret",
+        "batch_size": 50,
+        "thinking_mode": "medium",
+    }
+
+    payload = build_workflow_profile_payload(base_config=None, profile=detail)
+    assert payload["ocr_config"]["ocr_dpi"] == 200
+    assert payload["ocr_config"]["strip_llm_artifacts"] is False
+    assert payload["translator_config"]["chunk_size"] == 1200
+    assert payload["image_reembedding_config"]["backend"] == "openai"
+    assert payload["translator_batch_config"]["model"] == "gemini-2.5-flash"
+    assert payload["translator_batch_config"]["thinking_mode"] == "medium"

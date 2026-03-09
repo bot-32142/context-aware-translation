@@ -402,6 +402,9 @@ def build_workflow_profile_detail(
                     connection_id=None,
                     connection_label=provider_label,
                     model=model,
+                    step_config={
+                        str(key): value for key, value in batch_cfg.items() if key != "model"
+                    },
                 )
             )
             continue
@@ -417,6 +420,11 @@ def build_workflow_profile_detail(
                 connection_id=connection_id,
                 connection_label=(connection_name_by_id.get(connection_id, connection_id) if connection_id else None),
                 model=model,
+                step_config={
+                    str(key): value
+                    for key, value in step_cfg.items()
+                    if key not in {"endpoint_profile", "model"}
+                },
             )
         )
 
@@ -475,20 +483,37 @@ def build_workflow_profile_payload(
 
     route_map = {route.step_id: route for route in profile.routes}
     for step_id, _label, config_key in _WORKFLOW_STEP_LAYOUT:
-        if step_id is WorkflowStepId.TRANSLATOR_BATCH or config_key is None:
-            continue
-        payload.setdefault(config_key, {})
         route = route_map.get(step_id)
+        if step_id is WorkflowStepId.TRANSLATOR_BATCH:
+            batch_payload = {
+                str(key): value for key, value in (route.step_config.items() if route is not None else []) if value is not None
+            }
+            if route is not None and route.model:
+                batch_payload["model"] = route.model
+            if batch_payload:
+                payload["translator_batch_config"] = batch_payload
+            else:
+                payload.pop("translator_batch_config", None)
+            continue
+        if config_key is None:
+            continue
+        next_step_payload = {
+            str(key): value for key, value in (route.step_config.items() if route is not None else []) if value is not None
+        }
         if route is None:
+            if next_step_payload:
+                payload[config_key] = next_step_payload
+            else:
+                payload.pop(config_key, None)
             continue
         if route.connection_id:
-            payload[config_key]["endpoint_profile"] = route.connection_id
-        else:
-            payload[config_key].pop("endpoint_profile", None)
+            next_step_payload["endpoint_profile"] = route.connection_id
         if route.model:
-            payload[config_key]["model"] = route.model
+            next_step_payload["model"] = route.model
+        if next_step_payload:
+            payload[config_key] = next_step_payload
         else:
-            payload[config_key].pop("model", None)
+            payload.pop(config_key, None)
 
     apply_preset_to_payload(payload, profile.preset.value)
     return payload

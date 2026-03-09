@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QPushButton,
     QTableWidget,
@@ -92,6 +93,11 @@ class ProjectSetupView(QWidget):
         self.routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
         self.routes_table.verticalHeader().setVisible(False)
         self.routes_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.routes_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.routes_table.verticalHeader().setDefaultSectionSize(34)
+        self.routes_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.routes_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.routes_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         current_layout.addWidget(self.routes_table)
         layout.addWidget(self.current_profile_group, 1)
 
@@ -184,10 +190,9 @@ class ProjectSetupView(QWidget):
             return
         scope_label = self.tr("Project-specific profile") if profile.kind is WorkflowProfileKind.PROJECT_SPECIFIC else self.tr("Shared profile")
         self.current_profile_label.setText(
-            self.tr("%1 | Target language: %2 | Preset: %3")
+            self.tr("%1 | Target language: %2")
             .replace("%1", scope_label)
             .replace("%2", profile.target_language)
-            .replace("%3", profile.preset.value)
         )
         for route in profile.routes:
             row = self.routes_table.rowCount()
@@ -195,8 +200,6 @@ class ProjectSetupView(QWidget):
             self.routes_table.setItem(row, 0, QTableWidgetItem(route.step_label))
             self.routes_table.setItem(row, 1, QTableWidgetItem(route.connection_label or ""))
             self.routes_table.setItem(row, 2, QTableWidgetItem(route.model or ""))
-        self.routes_table.resizeColumnsToContents()
-
     def _use_shared_profile(self) -> None:
         self._draft_project_profile = None
         self.edit_project_button.setEnabled(False)
@@ -302,7 +305,7 @@ class ProjectSetupView(QWidget):
 
     def _tip_text(self) -> str:
         return self.tr(
-            "Project Setup chooses a shared workflow profile or creates a project-specific profile. Target language and preset live inside the selected profile."
+            "Project Setup chooses a shared workflow profile or creates a project-specific profile. Target language lives inside the selected profile."
         )
 
     def _connection_choices(self) -> list[ConnectionChoice]:

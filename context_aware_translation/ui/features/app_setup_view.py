@@ -592,22 +592,18 @@ class AppSetupView(QWidget):
 
         self.profiles_group = QGroupBox(self.tr("Shared workflow profiles"))
         profiles_layout = QVBoxLayout(self.profiles_group)
-        self.profiles_table = QTableWidget(0, 4)
+        self.profiles_table = QTableWidget(0, 3)
         self.profiles_table.setHorizontalHeaderLabels(
-            [self.tr("Name"), self.tr("Target language"), self.tr("Preset"), self.tr("Default")]
+            [self.tr("Name"), self.tr("Target language"), self.tr("Default")]
         )
         self.profiles_table.verticalHeader().setVisible(False)
         self.profiles_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.profiles_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.profiles_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.profiles_table.horizontalHeader().setStretchLastSection(True)
         self.profiles_table.itemSelectionChanged.connect(self._update_profile_buttons)
+        self.profiles_table.cellDoubleClicked.connect(self._on_profile_double_clicked)
         profiles_layout.addWidget(self.profiles_table)
-        profile_actions = QHBoxLayout()
-        self.edit_profile_button = QPushButton(self.tr("Edit workflow profile"))
-        self.edit_profile_button.clicked.connect(self._on_edit_profile)
-        profile_actions.addWidget(self.edit_profile_button)
-        profile_actions.addStretch()
-        profiles_layout.addLayout(profile_actions)
 
         self.profiles_tab = QWidget()
         profiles_tab_layout = QVBoxLayout(self.profiles_tab)
@@ -618,7 +614,6 @@ class AppSetupView(QWidget):
         self.setup_tabs.addTab(self.connections_tab, self.tr("Connections"))
         self.setup_tabs.addTab(self.profiles_tab, self.tr("Workflow Profiles"))
         self._update_connection_buttons()
-        self.edit_profile_button.setEnabled(False)
 
     def refresh(self) -> None:
         self._state = self._service.get_state()
@@ -654,9 +649,8 @@ class AppSetupView(QWidget):
         self.delete_connection_button.setText(self.tr("Delete"))
         self.profiles_group.setTitle(self.tr("Shared workflow profiles"))
         self.profiles_table.setHorizontalHeaderLabels(
-            [self.tr("Name"), self.tr("Target language"), self.tr("Preset"), self.tr("Default")]
+            [self.tr("Name"), self.tr("Target language"), self.tr("Default")]
         )
-        self.edit_profile_button.setText(self.tr("Edit workflow profile"))
         if self._state is not None:
             self.summary_label.setText(self._summary_text(self._state))
             self._populate_profiles(self._state)
@@ -683,9 +677,7 @@ class AppSetupView(QWidget):
             self.profiles_table.insertRow(row)
             self._set_table_item(self.profiles_table, row, 0, profile.name, profile.profile_id)
             self._set_table_item(self.profiles_table, row, 1, profile.target_language)
-            self._set_table_item(self.profiles_table, row, 2, profile.preset.value)
-            self._set_table_item(self.profiles_table, row, 3, self.tr("Yes") if profile.is_default else "")
-        self.profiles_table.resizeColumnsToContents()
+            self._set_table_item(self.profiles_table, row, 2, self.tr("Yes") if profile.is_default else "")
 
         selected_id = state.selected_profile.profile_id if state.selected_profile is not None else state.default_profile_id
         if selected_id:
@@ -720,8 +712,7 @@ class AppSetupView(QWidget):
         self.delete_connection_button.setEnabled(selected)
 
     def _update_profile_buttons(self) -> None:
-        profile = self._selected_profile()
-        self.edit_profile_button.setEnabled(profile is not None)
+        return
 
     def _on_run_wizard(self) -> None:
         dialog = SetupWizardDialog(self._service, self._service.get_wizard_state(), self)
@@ -827,6 +818,9 @@ class AppSetupView(QWidget):
                 )
             )
             self.refresh()
+
+    def _on_profile_double_clicked(self, _row: int, _column: int) -> None:
+        self._on_edit_profile()
 
     def _show_test_result(self, result: ConnectionTestResult) -> None:
         lines = [result.connection_label]

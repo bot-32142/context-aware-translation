@@ -60,3 +60,26 @@ def test_workflow_profile_editor_uses_scrollable_dialog_layout():
 
     assert dialog.findChildren(QScrollArea)
     assert dialog.width() <= 750
+
+
+def test_step_advanced_config_dialog_updates_route_config():
+    from context_aware_translation.ui.features.workflow_profile_editor import StepAdvancedConfigDialog
+
+    route = WorkflowStepRoute(
+        step_id=WorkflowStepId.OCR,
+        step_label="OCR",
+        connection_id="conn-gemini",
+        connection_label="Gemini",
+        model="gemini-3-flash-preview",
+        step_config={"ocr_dpi": 150, "strip_llm_artifacts": True},
+    )
+
+    dialog = StepAdvancedConfigDialog(route)
+    dialog.ocr_dpi_spin.setValue(200)
+    dialog.strip_artifacts_check.setChecked(False)
+
+    updated = dialog.route()
+    assert updated.step_config == {
+        "ocr_dpi": 200,
+        "strip_llm_artifacts": False,
+    }
