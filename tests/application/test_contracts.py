@@ -16,6 +16,7 @@ from context_aware_translation.application.contracts.common import (
     CapabilityCode,
     DocumentRef,
     DocumentRowActionKind,
+    DocumentSection,
     NavigationTarget,
     NavigationTargetKind,
     PresetCode,
@@ -29,8 +30,11 @@ from context_aware_translation.application.contracts.common import (
 )
 from context_aware_translation.application.contracts.document import (
     DocumentExportState,
+    DocumentImagesState,
+    DocumentImagesToolbarState,
     DocumentTranslationState,
     DocumentWorkspaceState,
+    ImageAssetState,
     TranslationUnitActionState,
     TranslationUnitKind,
     TranslationUnitState,
@@ -187,12 +191,28 @@ def test_setup_and_document_contracts_are_json_serializable() -> None:
         available_formats=[],
         default_output_path="/tmp/out.epub",
     )
+    images_state = DocumentImagesState(
+        workspace=translation.workspace.model_copy(update={"active_tab": DocumentSection.IMAGES}),
+        assets=[
+            ImageAssetState(
+                asset_id="source-1",
+                label="Image 1",
+                status=SurfaceStatus.READY,
+                source_id=10,
+                translated_text="Everyone, get down now!!!",
+                can_run=True,
+            )
+        ],
+        toolbar=DocumentImagesToolbarState(can_run_pending=True),
+        active_task_id=None,
+    )
 
     assert app_setup.model_dump(mode="json")["connections"][0]["provider"] == "gemini"
     assert project_setup.model_dump(mode="json")["preset"] == "balanced"
     assert translation.model_dump(mode="json")["workspace"]["active_tab"] == "translation"
     assert translation.model_dump(mode="json")["units"][0]["actions"]["can_retranslate"] is True
     assert export_state.model_dump(mode="json")["can_export"] is True
+    assert images_state.model_dump(mode="json")["assets"][0]["translated_text"] == "Everyone, get down now!!!"
 
 
 def test_setup_wizard_state_serializes_for_provider_first_flow() -> None:

@@ -248,6 +248,8 @@ class WorkView(QWidget):
                 parent=self,
             )
             self._document_view.back_requested.connect(self._show_home)
+            self._document_view.open_app_setup_requested.connect(self.open_app_setup_requested.emit)
+            self._document_view.open_project_setup_requested.connect(self.open_project_setup_requested.emit)
             self.stack.addWidget(self._document_view)
         self._document_view.show_section(section)
         self.stack.setCurrentWidget(self._document_view)

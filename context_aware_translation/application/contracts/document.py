@@ -138,13 +138,26 @@ class ImageAssetState(ContractModel):
     label: str
     status: SurfaceStatus
     source_id: int | None = None
+    translated_text: str | None = None
     output_path: str | None = None
     blocker: BlockerInfo | None = None
+    can_run: bool = False
+    run_blocker: BlockerInfo | None = None
+
+
+class DocumentImagesToolbarState(ContractModel):
+    can_run_pending: bool = False
+    can_force_all: bool = False
+    can_cancel: bool = False
+    run_pending_blocker: BlockerInfo | None = None
+    force_all_blocker: BlockerInfo | None = None
+    cancel_blocker: BlockerInfo | None = None
 
 
 class DocumentImagesState(ContractModel):
     workspace: DocumentWorkspaceState
     assets: list[ImageAssetState] = Field(default_factory=list)
+    toolbar: DocumentImagesToolbarState = Field(default_factory=DocumentImagesToolbarState)
     progress: ProgressInfo | None = None
     active_task_id: str | None = None
 

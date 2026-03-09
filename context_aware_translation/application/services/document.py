@@ -1,24 +1,29 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import replace
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from context_aware_translation.application.contracts.common import (
     AcceptedCommand,
     ActionState,
     BlockerCode,
     BlockerInfo,
+    CapabilityCode,
     DocumentSection,
     ExportOption,
     NavigationTargetKind,
     ProgressInfo,
     SurfaceStatus,
+    UserMessage,
+    UserMessageSeverity,
 )
 from context_aware_translation.application.contracts.document import (
     DocumentExportResult,
     DocumentExportState,
     DocumentImagesState,
+    DocumentImagesToolbarState,
     DocumentOCRActions,
     DocumentOCRState,
     DocumentOverviewState,
@@ -47,14 +52,17 @@ from context_aware_translation.application.errors import (
 from context_aware_translation.application.runtime import (
     ApplicationRuntime,
     blocker_code_for_decision_code,
+    build_default_routes_from_config,
     make_blocker,
     make_document_ref,
     progress_from_task,
     raise_application_error,
 )
-from context_aware_translation.documents.base import get_supported_formats_for_type
+from context_aware_translation.documents.base import Document, get_supported_formats_for_type
 from context_aware_translation.documents.content.ocr_content import SinglePageOCRContent
+from context_aware_translation.documents.content.ocr_items import ImageItem
 from context_aware_translation.documents.manga_alignment import align_sources_to_chunks, extract_ocr_text
+from context_aware_translation.storage.document_repository import DocumentRepository
 from context_aware_translation.storage.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, TaskAction
@@ -84,6 +92,8 @@ class DocumentService(Protocol):
     def get_images(self, project_id: str, document_id: int) -> DocumentImagesState: ...
 
     def run_image_reinsertion(self, request: RunImageReinsertionRequest) -> AcceptedCommand: ...
+
+    def cancel_image_reinsertion(self, project_id: str, task_id: str) -> AcceptedCommand: ...
 
     def get_export(self, project_id: str, document_id: int) -> DocumentExportState: ...
 
@@ -383,26 +393,78 @@ class DefaultDocumentService:
 
     def get_images(self, project_id: str, document_id: int) -> DocumentImagesState:
         workspace = self.get_workspace(project_id, document_id).model_copy(update={"active_tab": DocumentSection.IMAGES})
+        active_task = self._find_active_image_reembedding_task(project_id, document_id)
         with self._runtime.open_book_db(project_id) as dbx:
-            sources = dbx.document_repo.get_document_sources_metadata(document_id)
-            existing = dbx.document_repo.load_reembedded_images(document_id)
-            assets = [
-                ImageAssetState(
-                    asset_id=str(source["source_id"]),
-                    label=f"Image {source['sequence_number']}",
-                    status=SurfaceStatus.DONE if int(source["source_id"]) in existing else SurfaceStatus.READY,
-                    source_id=int(source["source_id"]),
-                )
-                for source in sources
-                if source.get("source_type") == "image"
-            ]
-        return DocumentImagesState(workspace=workspace, assets=assets)
+            doc_row = dbx.document_repo.get_document_by_id(document_id)
+            if doc_row is None:
+                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Document not found: {document_id}")
+            document_type = str(doc_row.get("document_type") or "")
+            assets = self._build_image_assets(
+                project_id,
+                dbx.document_repo,
+                document_id=document_id,
+                document_type=document_type,
+                active_task=active_task,
+            )
+            assets = self._apply_source_asset_actions(
+                project_id,
+                document_id=document_id,
+                document_type=document_type,
+                assets=assets,
+                active_task=active_task,
+            )
+
+        toolbar = self._build_images_toolbar_state(
+            project_id,
+            document_id=document_id,
+            document_type=document_type,
+            assets=assets,
+            active_task=active_task,
+        )
+        return DocumentImagesState(
+            workspace=workspace,
+            assets=assets,
+            toolbar=toolbar,
+            progress=progress_from_task(active_task) if active_task is not None else None,
+            active_task_id=active_task.task_id if active_task is not None else None,
+        )
 
     def run_image_reinsertion(self, request: RunImageReinsertionRequest) -> AcceptedCommand:
         params: dict[str, object] = {"document_ids": [request.document_id], "force": request.force_all}
         if request.source_id is not None:
             params["source_ids"] = [request.source_id]
         return self._runtime.submit_task("image_reembedding", request.project_id, **params)
+
+    def cancel_image_reinsertion(self, project_id: str, task_id: str) -> AcceptedCommand:
+        record = self._runtime.task_store.get(task_id)
+        if record is None or record.book_id != project_id or record.task_type != "image_reembedding":
+            raise_application_error(
+                ApplicationErrorCode.NOT_FOUND,
+                f"Image reinsertion task not found: {task_id}",
+                project_id=project_id,
+                task_id=task_id,
+            )
+        decision = self._runtime.task_engine.preflight_task(task_id, TaskAction.CANCEL)
+        if not decision.allowed:
+            document_ids = self._task_document_ids(record)
+            raise_application_error(
+                ApplicationErrorCode.BLOCKED,
+                decision.reason or "Image reinsertion cannot be cancelled.",
+                project_id=project_id,
+                task_id=task_id,
+                document_id=document_ids[0] if document_ids is not None and len(document_ids) == 1 else None,
+            )
+        self._runtime.task_engine.cancel(task_id)
+        self._runtime.invalidate_task_activity(project_id)
+        return AcceptedCommand(
+            command_name="cancel_image_reinsertion",
+            command_id=task_id,
+            queue_item_id=task_id,
+            message=UserMessage(
+                severity=UserMessageSeverity.INFO,
+                text="Image reinsertion cancellation requested.",
+            ),
+        )
 
     def get_export(self, project_id: str, document_id: int) -> DocumentExportState:
         workspace = self.get_workspace(project_id, document_id).model_copy(update={"active_tab": DocumentSection.EXPORT})
@@ -479,6 +541,16 @@ class DefaultDocumentService:
             except (TypeError, ValueError):
                 return None
         return values
+
+    def _find_active_image_reembedding_task(self, project_id: str, document_id: int) -> TaskRecord | None:
+        records = self._runtime.task_store.list_tasks(book_id=project_id, task_type="image_reembedding")
+        for record in records:
+            if record.status in TERMINAL_TASK_STATUSES:
+                continue
+            document_ids = self._task_document_ids(record)
+            if document_ids is not None and document_id in document_ids:
+                return record
+        return None
 
     def _build_ocr_actions(
         self,
@@ -735,6 +807,382 @@ class DefaultDocumentService:
                 )
             )
         return units
+
+    def _build_image_assets(
+        self,
+        project_id: str,
+        document_repo: DocumentRepository,
+        *,
+        document_id: int,
+        document_type: str,
+        active_task: TaskRecord | None,
+    ) -> list[ImageAssetState]:
+        config = self._runtime.get_effective_config(project_id)
+        document = Document.load_by_id(document_repo, document_id, config.ocr_config)
+        if document is None:
+            return []
+        translated_lines = self._get_translated_lines_with_fallback(project_id, document_id, document_type)
+        if not translated_lines:
+            return []
+        try:
+            asyncio.run(document.set_text(translated_lines))
+        except Exception:
+            return []
+
+        if document_type == "manga":
+            return self._collect_manga_assets(project_id, document_repo, document, active_task=active_task)
+        if document_type == "epub":
+            return self._collect_epub_assets(project_id, document_repo, document, active_task=active_task)
+        return self._collect_structured_assets(project_id, document, active_task=active_task)
+
+    def _get_translated_lines_with_fallback(self, project_id: str, document_id: int, document_type: str) -> list[str]:
+        with self._runtime.open_book_db(project_id) as dbx:
+            chunks = dbx.db.list_chunks(document_id=document_id)
+        if not chunks:
+            return []
+        sorted_chunks = sorted(chunks, key=lambda chunk: chunk.chunk_id)
+        if document_type == "manga":
+            return [chunk.translation if chunk.is_translated and chunk.translation is not None else "" for chunk in sorted_chunks]
+        if not any(chunk.is_translated and chunk.translation is not None for chunk in sorted_chunks):
+            return []
+        translated_text = "".join(
+            chunk.translation if chunk.is_translated and chunk.translation is not None else chunk.text
+            for chunk in sorted_chunks
+        )
+        return translated_text.split("\n")
+
+    def _collect_manga_assets(
+        self,
+        project_id: str,
+        document_repo: DocumentRepository,
+        document: object,
+        *,
+        active_task: TaskRecord | None,
+    ) -> list[ImageAssetState]:
+        from context_aware_translation.documents.manga import MangaDocument
+        from context_aware_translation.documents.manga_alignment import get_sources_with_nonempty_ocr_text
+
+        if not isinstance(document, MangaDocument):
+            return []
+        persisted = document_repo.load_reembedded_images(document.document_id)
+        active_source_ids = self._task_source_ids(active_task) if active_task is not None else None
+        items: list[ImageAssetState] = []
+        for source_idx, source, _ocr_text in get_sources_with_nonempty_ocr_text(document_repo.get_document_sources(document.document_id)):
+            source_id = int(source["source_id"])
+            translated = document._page_translations.get(source_id, "")
+            if not translated.strip():
+                continue
+            is_running = active_task is not None and (active_source_ids is None or source_id in active_source_ids)
+            is_done = source_idx in persisted
+            items.append(
+                ImageAssetState(
+                    asset_id=str(source_idx),
+                    label=self._image_label(source),
+                    status=SurfaceStatus.RUNNING if is_running else SurfaceStatus.DONE if is_done else SurfaceStatus.READY,
+                    source_id=source_id,
+                    translated_text=translated,
+                    can_run=active_task is None,
+                    run_blocker=None if active_task is None else self._active_task_blocker(project_id=project_id, document_id=document.document_id),
+                )
+            )
+        return items
+
+    def _collect_epub_assets(
+        self,
+        project_id: str,
+        document_repo: DocumentRepository,
+        document: object,
+        *,
+        active_task: TaskRecord | None,
+    ) -> list[ImageAssetState]:
+        from context_aware_translation.documents.epub import EPUBDocument
+
+        if not isinstance(document, EPUBDocument):
+            return []
+        persisted = document_repo.load_reembedded_images(document.document_id)
+        active_source_ids = self._task_source_ids(active_task) if active_task is not None else None
+        items: list[ImageAssetState] = []
+        sources = sorted(document_repo.get_document_sources(document.document_id), key=lambda source: int(source.get("sequence_number", 0) or 0))
+        for source in sources:
+            if source.get("source_type") != "image" or not source.get("binary_content"):
+                continue
+            source_id = int(source["source_id"])
+            translated = document._translated_image_texts.get(source_id, "")
+            if not translated.strip():
+                continue
+            is_running = active_task is not None and (active_source_ids is None or source_id in active_source_ids)
+            is_done = source_id in persisted
+            items.append(
+                ImageAssetState(
+                    asset_id=str(source_id),
+                    label=self._image_label(source),
+                    status=SurfaceStatus.RUNNING if is_running else SurfaceStatus.DONE if is_done else SurfaceStatus.READY,
+                    source_id=source_id,
+                    translated_text=translated,
+                    can_run=active_task is None,
+                    run_blocker=None if active_task is None else self._active_task_blocker(project_id=project_id, document_id=document.document_id),
+                )
+            )
+        return items
+
+    def _collect_structured_assets(
+        self,
+        project_id: str,
+        document: object,
+        *,
+        active_task: TaskRecord | None,
+    ) -> list[ImageAssetState]:
+        merged = getattr(document, "_merged_content", None)
+        if merged is None:
+            return []
+        typed_document = cast(Any, document)
+        document_id = int(typed_document.document_id)
+        items: list[ImageAssetState] = []
+        for index, element in enumerate(merged.elements):
+            if not isinstance(element, ImageItem) or not element.needs_reembedding():
+                continue
+            translated = element.get_embedded_translation() or ""
+            if not translated.strip():
+                continue
+            is_done = element.reembedded_image_bytes is not None
+            items.append(
+                ImageAssetState(
+                    asset_id=str(index),
+                    label=f"Image {len(items) + 1}",
+                    status=SurfaceStatus.RUNNING if active_task is not None and not is_done else SurfaceStatus.DONE if is_done else SurfaceStatus.READY,
+                    translated_text=translated,
+                    can_run=False,
+                    run_blocker=make_blocker(
+                        BlockerCode.NOTHING_TO_DO,
+                        "Reinsert Selected is available only for manga and EPUB documents.",
+                        target_kind=NavigationTargetKind.DOCUMENT_IMAGES,
+                        project_id=project_id,
+                        document_id=document_id,
+                    ),
+                )
+            )
+        return items
+
+    def _build_images_toolbar_state(
+        self,
+        project_id: str,
+        *,
+        document_id: int,
+        document_type: str,
+        assets: list[ImageAssetState],
+        active_task: TaskRecord | None,
+    ) -> DocumentImagesToolbarState:
+        del document_type
+        if active_task is not None:
+            cancel_decision = self._runtime.task_engine.preflight_task(active_task.task_id, TaskAction.CANCEL)
+            return DocumentImagesToolbarState(
+                can_cancel=cancel_decision.allowed,
+                cancel_blocker=None if cancel_decision.allowed else self._image_decision_to_blocker(
+                    project_id,
+                    document_id=document_id,
+                    decision_code=cancel_decision.code or "",
+                    reason=cancel_decision.reason or "",
+                    default_target=NavigationTargetKind.DOCUMENT_IMAGES,
+                ),
+                run_pending_blocker=self._active_task_blocker(project_id=project_id, document_id=document_id),
+                force_all_blocker=self._active_task_blocker(project_id=project_id, document_id=document_id),
+            )
+
+        if not assets:
+            decision = self._runtime.task_engine.preflight(
+                "image_reembedding",
+                project_id,
+                {"document_ids": [document_id], "force": False},
+                TaskAction.RUN,
+            )
+            blocker = (
+                self._image_decision_to_blocker(
+                    project_id,
+                    document_id=document_id,
+                    decision_code=decision.code or "",
+                    reason=decision.reason or "",
+                    default_target=NavigationTargetKind.DOCUMENT_IMAGES,
+                )
+                if not decision.allowed
+                else make_blocker(
+                    BlockerCode.NOTHING_TO_DO,
+                    "No translated images are ready for reinsertion.",
+                    target_kind=NavigationTargetKind.DOCUMENT_IMAGES,
+                    project_id=project_id,
+                    document_id=document_id,
+                )
+            )
+            return DocumentImagesToolbarState(run_pending_blocker=blocker, force_all_blocker=blocker)
+
+        pending_assets = [asset for asset in assets if asset.status is not SurfaceStatus.DONE]
+        pending_allowed, pending_blocker = self._run_image_action_state(
+            project_id,
+            document_id=document_id,
+            source_id=None,
+            force_all=False,
+            empty_blocker=make_blocker(
+                BlockerCode.NOTHING_TO_DO,
+                "No pending images need reinsertion.",
+                target_kind=NavigationTargetKind.DOCUMENT_IMAGES,
+                project_id=project_id,
+                document_id=document_id,
+            ),
+            has_work=bool(pending_assets),
+        )
+        force_allowed, force_blocker = self._run_image_action_state(
+            project_id,
+            document_id=document_id,
+            source_id=None,
+            force_all=True,
+            empty_blocker=None,
+            has_work=bool(assets),
+        )
+        return DocumentImagesToolbarState(
+            can_run_pending=pending_allowed,
+            can_force_all=force_allowed,
+            run_pending_blocker=pending_blocker,
+            force_all_blocker=force_blocker,
+        )
+
+    def _apply_source_asset_actions(
+        self,
+        project_id: str,
+        *,
+        document_id: int,
+        document_type: str,
+        assets: list[ImageAssetState],
+        active_task: TaskRecord | None,
+    ) -> list[ImageAssetState]:
+        if document_type not in {"manga", "epub"}:
+            return assets
+        updated: list[ImageAssetState] = []
+        for asset in assets:
+            if asset.source_id is None:
+                updated.append(asset)
+                continue
+            if active_task is not None:
+                updated.append(
+                    asset.model_copy(
+                        update={
+                            "can_run": False,
+                            "run_blocker": self._active_task_blocker(project_id=project_id, document_id=document_id),
+                        }
+                    )
+                )
+                continue
+            allowed, blocker = self._run_image_action_state(
+                project_id,
+                document_id=document_id,
+                source_id=asset.source_id,
+                force_all=True,
+                empty_blocker=None,
+                has_work=True,
+            )
+            updated.append(asset.model_copy(update={"can_run": allowed, "run_blocker": blocker}))
+        return updated
+
+    def _run_image_action_state(
+        self,
+        project_id: str,
+        *,
+        document_id: int,
+        source_id: int | None,
+        force_all: bool,
+        empty_blocker: BlockerInfo | None,
+        has_work: bool,
+    ) -> tuple[bool, BlockerInfo | None]:
+        if not has_work:
+            return False, empty_blocker
+        params: dict[str, object] = {"document_ids": [document_id], "force": force_all}
+        if source_id is not None:
+            params["source_ids"] = [source_id]
+        decision = self._runtime.task_engine.preflight("image_reembedding", project_id, params, TaskAction.RUN)
+        if decision.allowed:
+            return True, None
+        return False, self._image_decision_to_blocker(
+            project_id,
+            document_id=document_id,
+            decision_code=decision.code or "",
+            reason=decision.reason or "",
+            default_target=NavigationTargetKind.DOCUMENT_IMAGES,
+            source_id=source_id,
+        )
+
+    def _image_decision_to_blocker(
+        self,
+        project_id: str,
+        *,
+        document_id: int,
+        decision_code: str,
+        reason: str,
+        default_target: NavigationTargetKind,
+        source_id: int | None = None,
+    ) -> BlockerInfo:
+        setup_blocker = self._resolve_image_setup_blocker(project_id)
+        if setup_blocker is not None:
+            return setup_blocker
+        lowered = reason.lower()
+        if decision_code == "blocked_claim_conflict":
+            return self._active_task_blocker(project_id=project_id, document_id=document_id)
+        if "translate documents before running image reembedding" in lowered or "no translated chunks found" in lowered:
+            return make_blocker(
+                BlockerCode.NEEDS_REVIEW,
+                "Translate this document before putting text back into images.",
+                target_kind=NavigationTargetKind.DOCUMENT_TRANSLATION,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        if "source_ids not found" in lowered or source_id is not None:
+            return make_blocker(
+                BlockerCode.NOTHING_TO_DO,
+                reason or "The selected image is no longer available.",
+                target_kind=default_target,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        return make_blocker(
+            blocker_code_for_decision_code(decision_code),
+            reason or "Image reinsertion is blocked.",
+            target_kind=default_target,
+            project_id=project_id,
+            document_id=document_id,
+        )
+
+    def _resolve_image_setup_blocker(self, project_id: str) -> BlockerInfo | None:
+        config = self._runtime.get_effective_config_payload(project_id)
+        target_language = config.get("translation_target_language")
+        if not isinstance(target_language, str) or not target_language.strip():
+            return make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                "Target language is not configured for this project.",
+                target_kind=NavigationTargetKind.PROJECT_SETUP,
+                project_id=project_id,
+            )
+        configured_connection_ids = {connection_id for connection_id, _label in self._runtime.list_connection_options()}
+        route_map = {route.capability: route.connection_id for route in build_default_routes_from_config(config)}
+        image_edit_route = route_map.get(CapabilityCode.IMAGE_EDITING)
+        if image_edit_route is None or image_edit_route not in configured_connection_ids:
+            return make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                "Image editing needs a shared connection in App Setup.",
+                target_kind=NavigationTargetKind.APP_SETUP,
+                project_id=project_id,
+            )
+        return None
+
+    def _active_task_blocker(self, *, project_id: str | None, document_id: int) -> BlockerInfo:
+        return make_blocker(
+            BlockerCode.ALREADY_RUNNING_ELSEWHERE,
+            "Image reinsertion is already running for this document.",
+            target_kind=NavigationTargetKind.DOCUMENT_IMAGES,
+            project_id=project_id,
+            document_id=document_id,
+        )
+
+    @staticmethod
+    def _image_label(source: dict[str, Any]) -> str:
+        sequence = int(source.get("sequence_number", 0) or 0) + 1
+        return f"Image {sequence}"
 
     def _build_manga_translation_units(
         self,

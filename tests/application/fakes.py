@@ -18,10 +18,10 @@ from context_aware_translation.application.contracts.document import (
     DocumentExportResult,
     DocumentExportState,
     DocumentImagesState,
+    DocumentImagesToolbarState,
     DocumentOCRActions,
     DocumentOCRState,
     DocumentOverviewState,
-    DocumentSection,
     DocumentTranslationState,
     DocumentWorkspaceState,
     RetranslateRequest,
@@ -289,11 +289,20 @@ class FakeDocumentService:
 
     def get_images(self, project_id: str, document_id: int) -> DocumentImagesState:
         self.calls.append(("get_images", (project_id, document_id)))
-        return self.images  # type: ignore[return-value]
+        if self.images is not None:
+            return self.images
+        return DocumentImagesState(
+            workspace=self.workspace.model_copy(update={"active_tab": DocumentSection.IMAGES}),
+            toolbar=DocumentImagesToolbarState(),
+        )
 
     def run_image_reinsertion(self, request: RunImageReinsertionRequest) -> AcceptedCommand:
         self.calls.append(("run_image_reinsertion", request))
         return self.command_result or AcceptedCommand(command_name="run_image_reinsertion")
+
+    def cancel_image_reinsertion(self, project_id: str, task_id: str) -> AcceptedCommand:
+        self.calls.append(("cancel_image_reinsertion", (project_id, task_id)))
+        return self.command_result or AcceptedCommand(command_name="cancel_image_reinsertion")
 
     def get_export(self, project_id: str, document_id: int) -> DocumentExportState:
         self.calls.append(("get_export", (project_id, document_id)))
