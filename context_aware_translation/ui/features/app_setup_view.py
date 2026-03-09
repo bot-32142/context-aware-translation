@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 
 from PySide6.QtCore import QEvent, Qt
@@ -8,6 +9,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFormLayout,
     QGridLayout,
     QGroupBox,
@@ -17,9 +19,11 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -85,6 +89,21 @@ class ConnectionDraftForm(QWidget):
         self._init_ui()
         self._on_provider_changed(0)
 
+    def _create_token_limit_row(self) -> tuple[QWidget, QCheckBox, QSpinBox]:
+        layout = QHBoxLayout()
+        checkbox = QCheckBox(self.tr("Enable"))
+        spinner = QSpinBox()
+        spinner.setRange(1, 999_999_999)
+        spinner.setValue(1_000_000)
+        spinner.setEnabled(False)
+        checkbox.toggled.connect(spinner.setEnabled)
+        layout.addWidget(checkbox)
+        layout.addWidget(spinner)
+        layout.addStretch()
+        widget = QWidget()
+        widget.setLayout(layout)
+        return widget, checkbox, spinner
+
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -106,15 +125,48 @@ class ConnectionDraftForm(QWidget):
         self.advanced_section = CollapsibleSection(self.tr("Advanced"))
         advanced_widget = QWidget()
         advanced_form = QFormLayout(advanced_widget)
+        self.description_edit = QTextEdit()
+        self.description_edit.setMaximumHeight(60)
         self.base_url_edit = QLineEdit()
         self.base_url_edit.setPlaceholderText(self.tr("Base URL"))
         self.default_model_edit = QLineEdit()
         self.default_model_edit.setPlaceholderText(self.tr("Default model"))
+        self.temperature_spin = QDoubleSpinBox()
+        self.temperature_spin.setRange(0.0, 2.0)
+        self.temperature_spin.setSingleStep(0.1)
+        self.temperature_spin.setValue(0.0)
+        self.custom_parameters_edit = QTextEdit()
+        self.custom_parameters_edit.setMaximumHeight(90)
+        self.custom_parameters_edit.setPlaceholderText('{"reasoning_effort": "none"}')
+        self.timeout_spin = QSpinBox()
+        self.timeout_spin.setRange(1, 600)
+        self.timeout_spin.setValue(60)
+        self.timeout_spin.setSuffix(self.tr(" s"))
+        self.retries_spin = QSpinBox()
+        self.retries_spin.setRange(0, 10)
+        self.retries_spin.setValue(3)
+        self.concurrency_spin = QSpinBox()
+        self.concurrency_spin.setRange(1, 50)
+        self.concurrency_spin.setValue(5)
+        self.total_limit_widget, self.total_limit_checkbox, self.total_limit_spin = self._create_token_limit_row()
+        self.input_limit_widget, self.input_limit_checkbox, self.input_limit_spin = self._create_token_limit_row()
+        self.output_limit_widget, self.output_limit_checkbox, self.output_limit_spin = self._create_token_limit_row()
         self.advanced_note = create_tip_label(
-            self.tr("Known providers are prefilled. Change these only if you need custom endpoint or model settings.")
+            self.tr(
+                "Advanced matches the old endpoint-profile model: timeout, retries, concurrency, token limits, and custom JSON parameters."
+            )
         )
+        advanced_form.addRow(self.tr("Description"), self.description_edit)
         advanced_form.addRow(self.tr("Base URL"), self.base_url_edit)
         advanced_form.addRow(self.tr("Default model"), self.default_model_edit)
+        advanced_form.addRow(self.tr("Temperature"), self.temperature_spin)
+        advanced_form.addRow(self.tr("Custom parameters"), self.custom_parameters_edit)
+        advanced_form.addRow(self.tr("Timeout"), self.timeout_spin)
+        advanced_form.addRow(self.tr("Max retries"), self.retries_spin)
+        advanced_form.addRow(self.tr("Concurrency"), self.concurrency_spin)
+        advanced_form.addRow(self.tr("Total token limit"), self.total_limit_widget)
+        advanced_form.addRow(self.tr("Input token limit"), self.input_limit_widget)
+        advanced_form.addRow(self.tr("Output token limit"), self.output_limit_widget)
         advanced_form.addRow(self.advanced_note)
         self.advanced_section.set_content(advanced_widget)
         layout.addWidget(self.advanced_section)
@@ -129,8 +181,23 @@ class ConnectionDraftForm(QWidget):
         self.api_key_edit.setText(draft.api_key or "")
         if preserve_api_key_placeholder and draft.api_key is None:
             self.api_key_edit.setPlaceholderText(self.tr("Leave blank to keep the current key"))
+        self.description_edit.setPlainText(draft.description or "")
         self.base_url_edit.setText(draft.base_url or "")
         self.default_model_edit.setText(draft.default_model or "")
+        self.temperature_spin.setValue(draft.temperature)
+        self.custom_parameters_edit.setPlainText(draft.custom_parameters_json or "")
+        self.timeout_spin.setValue(draft.timeout)
+        self.retries_spin.setValue(draft.max_retries)
+        self.concurrency_spin.setValue(draft.concurrency)
+        self.total_limit_checkbox.setChecked(draft.token_limit is not None)
+        if draft.token_limit is not None:
+            self.total_limit_spin.setValue(draft.token_limit)
+        self.input_limit_checkbox.setChecked(draft.input_token_limit is not None)
+        if draft.input_token_limit is not None:
+            self.input_limit_spin.setValue(draft.input_token_limit)
+        self.output_limit_checkbox.setChecked(draft.output_token_limit is not None)
+        if draft.output_token_limit is not None:
+            self.output_limit_spin.setValue(draft.output_token_limit)
         self._sync_advanced_visibility(draft.provider)
 
     def to_draft(self, *, allow_empty_api_key: bool = True) -> ConnectionDraft:
@@ -138,9 +205,18 @@ class ConnectionDraftForm(QWidget):
         return ConnectionDraft(
             display_name=self.display_name_edit.text().strip(),
             provider=self.current_provider(),
+            description=self.description_edit.toPlainText().strip() or None,
             api_key=(api_key if api_key else (None if allow_empty_api_key else "")),
             base_url=self.base_url_edit.text().strip() or None,
             default_model=self.default_model_edit.text().strip() or None,
+            temperature=float(self.temperature_spin.value()),
+            timeout=int(self.timeout_spin.value()),
+            max_retries=int(self.retries_spin.value()),
+            concurrency=int(self.concurrency_spin.value()),
+            token_limit=(int(self.total_limit_spin.value()) if self.total_limit_checkbox.isChecked() else None),
+            input_token_limit=(int(self.input_limit_spin.value()) if self.input_limit_checkbox.isChecked() else None),
+            output_token_limit=(int(self.output_limit_spin.value()) if self.output_limit_checkbox.isChecked() else None),
+            custom_parameters_json=self.custom_parameters_edit.toPlainText().strip() or None,
         )
 
     def current_provider(self) -> ProviderKind:
@@ -160,6 +236,13 @@ class ConnectionDraftForm(QWidget):
             return False, self.tr("Connection name is required.")
         if require_api_key and not draft.api_key:
             return False, self.tr("API key is required.")
+        if draft.custom_parameters_json:
+            try:
+                parsed = json.loads(draft.custom_parameters_json)
+            except json.JSONDecodeError:
+                return False, self.tr("Custom parameters must be valid JSON.")
+            if not isinstance(parsed, dict):
+                return False, self.tr("Custom parameters must be a JSON object.")
         if draft.provider is ProviderKind.OPENAI_COMPATIBLE and (not draft.base_url or not draft.default_model):
             return False, self.tr("Custom connections require base URL and default model.")
         return True, None
@@ -191,7 +274,7 @@ class ConnectionEditorDialog(QDialog):
         super().__init__(parent)
         self._connection_id = connection_id
         self.setWindowTitle(self.tr("Connection"))
-        self.resize(520, 320)
+        self.resize(620, 720)
         self.form = ConnectionDraftForm(self)
         if draft is not None:
             self.form.set_draft(draft)
@@ -361,6 +444,10 @@ class SetupWizardDialog(QDialog):
             provider=provider,
             base_url=default_base_url or None,
             default_model=default_model or None,
+            temperature=0.0,
+            timeout=60,
+            max_retries=3,
+            concurrency=5,
         )
 
     def _persist_drafts(self) -> None:
@@ -650,8 +737,17 @@ class AppSetupView(QWidget):
             draft=ConnectionDraft(
                 display_name=connection.display_name,
                 provider=connection.provider,
+                description=connection.description,
                 base_url=connection.base_url,
                 default_model=connection.default_model,
+                temperature=connection.temperature,
+                timeout=connection.timeout,
+                max_retries=connection.max_retries,
+                concurrency=connection.concurrency,
+                token_limit=connection.token_limit,
+                input_token_limit=connection.input_token_limit,
+                output_token_limit=connection.output_token_limit,
+                custom_parameters_json=connection.custom_parameters_json,
             ),
             connection_id=connection.connection_id,
             parent=self,
@@ -669,8 +765,17 @@ class AppSetupView(QWidget):
                 connection=ConnectionDraft(
                     display_name=connection.display_name,
                     provider=connection.provider,
+                    description=connection.description,
                     base_url=connection.base_url,
                     default_model=connection.default_model,
+                    temperature=connection.temperature,
+                    timeout=connection.timeout,
+                    max_retries=connection.max_retries,
+                    concurrency=connection.concurrency,
+                    token_limit=connection.token_limit,
+                    input_token_limit=connection.input_token_limit,
+                    output_token_limit=connection.output_token_limit,
+                    custom_parameters_json=connection.custom_parameters_json,
                 )
             )
         )

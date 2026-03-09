@@ -8,7 +8,6 @@ from context_aware_translation.application.contracts.common import (
     CapabilityAvailability,
     CapabilityCode,
     ContractModel,
-    MetadataValue,
     PresetCode,
     ProviderKind,
     UserMessage,
@@ -59,8 +58,17 @@ class ConnectionSummary(ContractModel):
     connection_id: str
     display_name: str
     provider: ProviderKind
+    description: str | None = None
     base_url: str | None = None
     default_model: str | None = None
+    temperature: float = 0.0
+    timeout: int = 60
+    max_retries: int = 3
+    concurrency: int = 5
+    token_limit: int | None = None
+    input_token_limit: int | None = None
+    output_token_limit: int | None = None
+    custom_parameters_json: str | None = None
     status: ConnectionStatus = ConnectionStatus.UNTESTED
     capabilities: list[CapabilityCode] = Field(default_factory=list)
 
@@ -68,10 +76,18 @@ class ConnectionSummary(ContractModel):
 class ConnectionDraft(ContractModel):
     display_name: str
     provider: ProviderKind
+    description: str | None = None
     api_key: str | None = None
     base_url: str | None = None
     default_model: str | None = None
-    metadata: list[MetadataValue] = Field(default_factory=list)
+    temperature: float = 0.0
+    timeout: int = 60
+    max_retries: int = 3
+    concurrency: int = 5
+    token_limit: int | None = None
+    input_token_limit: int | None = None
+    output_token_limit: int | None = None
+    custom_parameters_json: str | None = None
 
 
 class CapabilityCard(ContractModel):

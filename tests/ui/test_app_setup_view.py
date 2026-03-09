@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
 
 import pytest
@@ -465,3 +466,60 @@ def test_app_setup_view_refreshes_wizard_prompt_state():
 
     assert view.run_wizard_button.text() == view.tr("Run Setup Wizard")
     assert "Run the setup wizard" in view.summary_label.text()
+
+
+def test_connection_draft_form_round_trips_advanced_fields():
+    from context_aware_translation.ui.features.app_setup_view import ConnectionDraftForm
+
+    form = ConnectionDraftForm()
+    form.set_draft(
+        ConnectionDraft(
+            display_name="Gemini Advanced",
+            provider=ProviderKind.GEMINI,
+            description="Image-heavy manga setup",
+            api_key="secret",
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            default_model="gemini-3.1-flash-image-preview",
+            temperature=0.2,
+            timeout=180,
+            max_retries=5,
+            concurrency=3,
+            token_limit=120000,
+            input_token_limit=80000,
+            output_token_limit=40000,
+            custom_parameters_json=json.dumps({"reasoning_effort": "medium"}, ensure_ascii=False),
+        )
+    )
+
+    round_tripped = form.to_draft()
+
+    assert round_tripped.description == "Image-heavy manga setup"
+    assert round_tripped.temperature == pytest.approx(0.2)
+    assert round_tripped.timeout == 180
+    assert round_tripped.max_retries == 5
+    assert round_tripped.concurrency == 3
+    assert round_tripped.token_limit == 120000
+    assert round_tripped.input_token_limit == 80000
+    assert round_tripped.output_token_limit == 40000
+    assert json.loads(round_tripped.custom_parameters_json or "{}") == {"reasoning_effort": "medium"}
+
+
+def test_connection_draft_form_rejects_invalid_custom_json():
+    from context_aware_translation.ui.features.app_setup_view import ConnectionDraftForm
+
+    form = ConnectionDraftForm()
+    form.set_draft(
+        ConnectionDraft(
+            display_name="Gemini",
+            provider=ProviderKind.GEMINI,
+            api_key="secret",
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            default_model="gemini-3-flash-preview",
+        )
+    )
+    form.custom_parameters_edit.setPlainText("{invalid")
+
+    assert form.validate(require_api_key=True) == (
+        False,
+        form.tr("Custom parameters must be valid JSON."),
+    )

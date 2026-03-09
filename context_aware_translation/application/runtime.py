@@ -277,12 +277,22 @@ def infer_connection_status(profile: EndpointProfile) -> ConnectionStatus:
 
 def build_connection_summary(profile: EndpointProfile) -> ConnectionSummary:
     provider = infer_provider_kind(profile.base_url, profile.model)
+    kwargs_payload = {str(key): value for key, value in (profile.kwargs or {}).items() if key != "provider"}
     return ConnectionSummary(
         connection_id=profile.profile_id,
         display_name=profile.name,
         provider=provider,
+        description=profile.description,
         base_url=profile.base_url or None,
         default_model=profile.model or None,
+        temperature=profile.temperature,
+        timeout=profile.timeout,
+        max_retries=profile.max_retries,
+        concurrency=profile.concurrency,
+        token_limit=profile.token_limit,
+        input_token_limit=profile.input_token_limit,
+        output_token_limit=profile.output_token_limit,
+        custom_parameters_json=(json.dumps(kwargs_payload, indent=2, ensure_ascii=False) if kwargs_payload else None),
         status=infer_connection_status(profile),
         capabilities=infer_capabilities(provider),
     )

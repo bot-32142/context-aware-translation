@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
@@ -7,6 +8,7 @@ from PySide6.QtWidgets import QApplication
 from context_aware_translation.application.composition import build_application_context
 from context_aware_translation.application.contracts.app_setup import (
     ConnectionDraft,
+    SaveConnectionRequest,
     SetupWizardRequest,
     WorkflowProfileKind,
 )
@@ -136,5 +138,63 @@ def test_project_specific_profile_remains_usable_without_shared_profiles(tmp_pat
 
         assert state.project_profile is not None
         assert state.blocker is None
+    finally:
+        context.close()
+
+
+def test_app_setup_service_persists_advanced_connection_fields(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    try:
+        state = context.services.app_setup.save_connection(
+            SaveConnectionRequest(
+                connection=ConnectionDraft(
+                    display_name="DeepSeek Advanced",
+                    provider=ProviderKind.DEEPSEEK,
+                    api_key="secret",
+                    base_url="https://api.deepseek.com",
+                    default_model="deepseek-chat",
+                    description="Detailed legacy endpoint-profile settings",
+                    temperature=0.15,
+                    timeout=90,
+                    max_retries=4,
+                    concurrency=2,
+                    token_limit=200000,
+                    input_token_limit=120000,
+                    output_token_limit=80000,
+                    custom_parameters_json=json.dumps(
+                        {"reasoning_effort": "none", "extra_body": {"foo": "bar"}},
+                        ensure_ascii=False,
+                    ),
+                )
+            )
+        )
+
+        connection = next(item for item in state.connections if item.display_name == "DeepSeek Advanced")
+        assert connection.description == "Detailed legacy endpoint-profile settings"
+        assert connection.temperature == 0.15
+        assert connection.timeout == 90
+        assert connection.max_retries == 4
+        assert connection.concurrency == 2
+        assert connection.token_limit == 200000
+        assert connection.input_token_limit == 120000
+        assert connection.output_token_limit == 80000
+        assert json.loads(connection.custom_parameters_json or "{}") == {
+            "reasoning_effort": "none",
+            "extra_body": {"foo": "bar"},
+        }
+
+        endpoint = next(profile for profile in context.runtime.book_manager.list_endpoint_profiles() if profile.name == "DeepSeek Advanced")
+        assert endpoint.description == "Detailed legacy endpoint-profile settings"
+        assert endpoint.temperature == 0.15
+        assert endpoint.timeout == 90
+        assert endpoint.max_retries == 4
+        assert endpoint.concurrency == 2
+        assert endpoint.token_limit == 200000
+        assert endpoint.input_token_limit == 120000
+        assert endpoint.output_token_limit == 80000
+        assert endpoint.kwargs["provider"] == ProviderKind.DEEPSEEK.value
+        assert endpoint.kwargs["reasoning_effort"] == "none"
+        assert endpoint.kwargs["extra_body"] == {"foo": "bar"}
     finally:
         context.close()

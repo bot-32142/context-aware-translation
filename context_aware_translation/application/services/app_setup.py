@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Protocol
 
 from context_aware_translation.application.contracts.app_setup import (
@@ -156,6 +157,7 @@ class DefaultAppSetupService:
 
     def save_connection(self, request: SaveConnectionRequest) -> AppSetupState:
         draft = request.connection
+        kwargs_payload = self._parse_connection_kwargs(draft)
         if request.connection_id:
             existing = self._runtime.book_manager.get_endpoint_profile(request.connection_id)
             if existing is None:
@@ -165,14 +167,18 @@ class DefaultAppSetupService:
             updated = self._runtime.book_manager.update_endpoint_profile(
                 request.connection_id,
                 name=draft.display_name,
+                description=draft.description,
                 api_key=existing.api_key if draft.api_key is None else draft.api_key,
                 base_url=existing.base_url if draft.base_url is None else draft.base_url,
                 model=existing.model if draft.default_model is None else draft.default_model,
-                kwargs=(
-                    {**existing.kwargs, "provider": draft.provider.value}
-                    if not draft.metadata
-                    else {**{item.key: item.value for item in draft.metadata}, "provider": draft.provider.value}
-                ),
+                temperature=draft.temperature,
+                kwargs=kwargs_payload,
+                timeout=draft.timeout,
+                max_retries=draft.max_retries,
+                concurrency=draft.concurrency,
+                token_limit=draft.token_limit,
+                input_token_limit=draft.input_token_limit,
+                output_token_limit=draft.output_token_limit,
             )
             if updated is None:
                 raise_application_error(
@@ -184,7 +190,15 @@ class DefaultAppSetupService:
                 api_key=draft.api_key or "",
                 base_url=draft.base_url or "",
                 model=draft.default_model or "",
-                kwargs={**{item.key: item.value for item in draft.metadata}, "provider": draft.provider.value},
+                temperature=draft.temperature,
+                kwargs=kwargs_payload,
+                timeout=draft.timeout,
+                max_retries=draft.max_retries,
+                concurrency=draft.concurrency,
+                description=draft.description,
+                token_limit=draft.token_limit,
+                input_token_limit=draft.input_token_limit,
+                output_token_limit=draft.output_token_limit,
             )
         self._runtime.invalidate_setup()
         return self.get_state()
@@ -327,3 +341,23 @@ class DefaultAppSetupService:
                 text="Connection accepted. Capability testing was inferred from the provider type.",
             ),
         )
+
+    def _parse_connection_kwargs(self, draft: ConnectionDraft) -> dict[str, object]:
+        payload: dict[str, object] = {"provider": draft.provider.value}
+        raw_json = (draft.custom_parameters_json or "").strip()
+        if not raw_json:
+            return payload
+        try:
+            parsed = json.loads(raw_json)
+        except json.JSONDecodeError:
+            raise_application_error(
+                ApplicationErrorCode.PRECONDITION,
+                "Custom parameters must be valid JSON.",
+            )
+        if not isinstance(parsed, dict):
+            raise_application_error(
+                ApplicationErrorCode.PRECONDITION,
+                "Custom parameters must be a JSON object.",
+            )
+        payload.update({str(key): value for key, value in parsed.items()})
+        return payload
