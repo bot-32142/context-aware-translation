@@ -274,7 +274,8 @@ class ConnectionEditorDialog(QDialog):
         super().__init__(parent)
         self._connection_id = connection_id
         self.setWindowTitle(self.tr("Connection"))
-        self.resize(620, 720)
+        self.setMinimumWidth(460)
+        self.resize(520, 640)
         self.form = ConnectionDraftForm(self)
         if draft is not None:
             self.form.set_draft(draft)
@@ -282,7 +283,11 @@ class ConnectionEditorDialog(QDialog):
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.addWidget(self.form)
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll_area.setWidget(self.form)
+        layout.addWidget(scroll_area, 1)
         self.button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )

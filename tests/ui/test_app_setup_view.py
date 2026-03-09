@@ -523,3 +523,15 @@ def test_connection_draft_form_rejects_invalid_custom_json():
         False,
         form.tr("Custom parameters must be valid JSON."),
     )
+
+
+def test_connection_editor_dialog_uses_scrollable_form_layout():
+    from PySide6.QtWidgets import QScrollArea
+
+    from context_aware_translation.ui.features.app_setup_view import ConnectionEditorDialog
+
+    dialog = ConnectionEditorDialog()
+
+    scroll_areas = dialog.findChildren(QScrollArea)
+    assert scroll_areas
+    assert dialog.width() <= 520
