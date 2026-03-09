@@ -15,10 +15,10 @@ from context_aware_translation.application.contracts.common import (
     UserMessageSeverity,
 )
 from context_aware_translation.application.contracts.document import (
-    DocumentOCRActions,
-    DocumentOCRState,
     DocumentExportResult,
     DocumentExportState,
+    DocumentOCRActions,
+    DocumentOCRState,
     DocumentOverviewState,
     DocumentSectionCard,
     DocumentTranslationState,

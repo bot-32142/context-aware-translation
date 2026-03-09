@@ -12,7 +12,6 @@ from context_aware_translation.application.contracts.common import (
     BlockerInfo,
     CapabilityCode,
     DocumentSection,
-    ExportOption,
     NavigationTargetKind,
     ProgressInfo,
     SurfaceStatus,
@@ -59,7 +58,7 @@ from context_aware_translation.application.runtime import (
     raise_application_error,
 )
 from context_aware_translation.application.services._export_support import prepare_export, run_export
-from context_aware_translation.documents.base import Document, get_supported_formats_for_type
+from context_aware_translation.documents.base import Document
 from context_aware_translation.documents.content.ocr_content import SinglePageOCRContent
 from context_aware_translation.documents.content.ocr_items import ImageItem
 from context_aware_translation.documents.manga_alignment import align_sources_to_chunks, extract_ocr_text
