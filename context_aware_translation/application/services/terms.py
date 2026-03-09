@@ -69,6 +69,10 @@ class DefaultTermsService:
                 if request.reviewed is not None:
                     record.is_reviewed = request.reviewed
                 dbx.term_repo.upsert_terms([record])
+        self._runtime.invalidate_terms(
+            request.scope.project.project_id,
+            request.scope.document.document_id if request.scope.document is not None else None,
+        )
         if request.scope.kind is TermsScopeKind.DOCUMENT and request.scope.document is not None:
             return self.get_document_terms(request.scope.project.project_id, request.scope.document.document_id)
         return self.get_project_terms(request.scope.project.project_id)
@@ -104,6 +108,7 @@ class DefaultTermsService:
                 import_glossary(dbx.db, context_tree_db, Path(request.input_path))
             finally:
                 context_tree_db.close()
+        self._runtime.invalidate_terms(request.project_id)
         return self.get_project_terms(request.project_id)
 
     def export_terms(self, request: ExportTermsRequest) -> AcceptedCommand:

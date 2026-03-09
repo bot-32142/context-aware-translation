@@ -113,4 +113,7 @@ class DefaultProjectSetupService:
             self._runtime.book_manager.update_book(request.project_id, profile_id=None)
         except ValueError as exc:
             raise_application_error(ApplicationErrorCode.PRECONDITION, str(exc), project_id=request.project_id)
+        self._runtime.invalidate_setup(request.project_id)
+        self._runtime.invalidate_workboard(request.project_id)
+        self._runtime.invalidate_projects()
         return self.get_state(request.project_id)

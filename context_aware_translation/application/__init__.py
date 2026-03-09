@@ -4,4 +4,4 @@ This package defines the stable boundary between UI adapters and backend
 implementation modules.
 """
 
-__all__ = ["contracts", "errors", "services"]
+__all__ = ["contracts", "errors", "events", "services"]

@@ -143,12 +143,14 @@ class DefaultAppSetupService:
                 model=draft.default_model or "",
                 kwargs={**{item.key: item.value for item in draft.metadata}, "provider": draft.provider.value},
             )
+        self._runtime.invalidate_setup()
         return self.get_state()
 
     def delete_connection(self, connection_id: str) -> AppSetupState:
         deleted = self._runtime.book_manager.delete_endpoint_profile(connection_id)
         if not deleted:
             raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
+        self._runtime.invalidate_setup()
         return self.get_state()
 
     def test_connection(self, request: ConnectionTestRequest) -> ConnectionTestResult:
@@ -238,10 +240,14 @@ class DefaultAppSetupService:
                 is_default=True,
             )
             self._runtime.book_manager.set_default_profile(profile.profile_id)
+        self._runtime.invalidate_setup()
+        self._runtime.invalidate_projects()
+        self._runtime.invalidate_workboard()
         return self.get_state()
 
     def seed_defaults(self) -> AcceptedCommand:
         self._runtime.book_manager.seed_system_defaults()
+        self._runtime.invalidate_setup()
         return AcceptedCommand(
             command_name="seed_defaults",
             message=UserMessage(severity=UserMessageSeverity.SUCCESS, text="Default setup profiles created."),

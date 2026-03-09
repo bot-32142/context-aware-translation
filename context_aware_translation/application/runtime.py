@@ -19,6 +19,7 @@ from context_aware_translation.application.contracts.common import (
     CapabilityAvailability,
     CapabilityCode,
     DocumentRef,
+    DocumentSection,
     DocumentTypeCode,
     NavigationTarget,
     NavigationTargetKind,
@@ -37,6 +38,15 @@ from context_aware_translation.application.errors import (
     ApplicationErrorCode,
     ApplicationErrorPayload,
     BlockedOperationError,
+)
+from context_aware_translation.application.events import (
+    ApplicationEventPublisher,
+    DocumentInvalidatedEvent,
+    ProjectsInvalidatedEvent,
+    QueueChangedEvent,
+    SetupInvalidatedEvent,
+    TermsInvalidatedEvent,
+    WorkboardInvalidatedEvent,
 )
 from context_aware_translation.config import Config
 from context_aware_translation.storage.book import Book
@@ -72,6 +82,7 @@ class ApplicationRuntime:
     task_store: TaskStore
     task_engine: TaskEngine
     worker_deps: WorkerDeps
+    events: ApplicationEventPublisher
 
     @contextmanager
     def open_book_db(self, project_id: str) -> Iterator[BookDBContext]:
@@ -117,6 +128,7 @@ class ApplicationRuntime:
         if not decision.allowed:
             raise_blocked_decision(decision, project_id=project_id, task_type=task_type)
         record = self.task_engine.submit_and_start(task_type, project_id, **params)
+        self.invalidate_task_activity(project_id)
         return AcceptedCommand(
             command_name=task_type,
             command_id=record.task_id,
@@ -125,6 +137,47 @@ class ApplicationRuntime:
                 severity=UserMessageSeverity.INFO,
                 text=f"{task_type} queued.",
             ),
+        )
+
+    def invalidate_projects(self) -> None:
+        self.events.publish(ProjectsInvalidatedEvent())
+
+    def invalidate_setup(self, project_id: str | None = None) -> None:
+        self.events.publish(SetupInvalidatedEvent(project_id=project_id))
+
+    def invalidate_queue(self, project_id: str | None = None) -> None:
+        self.events.publish(QueueChangedEvent(project_id=project_id))
+
+    def invalidate_workboard(self, project_id: str | None = None) -> None:
+        self.events.publish(WorkboardInvalidatedEvent(project_id=project_id))
+
+    def invalidate_document(
+        self,
+        project_id: str | None,
+        document_id: int | None = None,
+        *,
+        sections: list[DocumentSection] | None = None,
+    ) -> None:
+        self.events.publish(
+            DocumentInvalidatedEvent(
+                project_id=project_id,
+                document_id=document_id,
+                sections=list(sections or []),
+            )
+        )
+
+    def invalidate_terms(self, project_id: str | None = None, document_id: int | None = None) -> None:
+        self.events.publish(TermsInvalidatedEvent(project_id=project_id, document_id=document_id))
+
+    def invalidate_task_activity(self, project_id: str | None = None) -> None:
+        self.events.publish_many(
+            [
+                QueueChangedEvent(project_id=project_id),
+                WorkboardInvalidatedEvent(project_id=project_id),
+                DocumentInvalidatedEvent(project_id=project_id),
+                TermsInvalidatedEvent(project_id=project_id),
+                ProjectsInvalidatedEvent(),
+            ]
         )
 
 

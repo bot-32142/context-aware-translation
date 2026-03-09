@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from context_aware_translation.application.events import ApplicationEventPayload, InMemoryApplicationEventBus
 from context_aware_translation.application.runtime import ApplicationRuntime
 from context_aware_translation.application.services.app_setup import AppSetupService, DefaultAppSetupService
 from context_aware_translation.application.services.document import DefaultDocumentService, DocumentService
@@ -33,6 +34,7 @@ class ApplicationServices:
 class ApplicationContext:
     runtime: ApplicationRuntime
     services: ApplicationServices
+    events: InMemoryApplicationEventBus
 
     def close(self) -> None:
         self.runtime.task_engine.stop_autorun()
@@ -51,6 +53,7 @@ def build_application_context(
     service instances from.
     """
 
+    event_bus = InMemoryApplicationEventBus()
     book_manager = BookManager(library_root)
     book_manager.seed_system_defaults()
     TokenTracker.initialize(book_manager.registry)
@@ -60,13 +63,16 @@ def build_application_context(
         book_manager=book_manager,
         task_store=task_store,
         parent=task_parent,
+        on_task_changed=lambda project_id: event_bus.publish_many(runtime_task_events(project_id)),
     )
+    task_engine.tasks_changed.connect(lambda project_id: event_bus.publish_many(runtime_task_events(project_id)))
 
     runtime = ApplicationRuntime(
         book_manager=book_manager,
         task_store=task_store,
         task_engine=task_engine,
         worker_deps=worker_deps,
+        events=event_bus,
     )
     services = ApplicationServices(
         projects=DefaultProjectsService(runtime),
@@ -77,4 +83,22 @@ def build_application_context(
         document=DefaultDocumentService(runtime),
         queue=DefaultQueueService(runtime),
     )
-    return ApplicationContext(runtime=runtime, services=services)
+    return ApplicationContext(runtime=runtime, services=services, events=event_bus)
+
+
+def runtime_task_events(project_id: str) -> list[ApplicationEventPayload]:
+    from context_aware_translation.application.events import (
+        DocumentInvalidatedEvent,
+        ProjectsInvalidatedEvent,
+        QueueChangedEvent,
+        TermsInvalidatedEvent,
+        WorkboardInvalidatedEvent,
+    )
+
+    return [
+        QueueChangedEvent(project_id=project_id),
+        WorkboardInvalidatedEvent(project_id=project_id),
+        DocumentInvalidatedEvent(project_id=project_id),
+        TermsInvalidatedEvent(project_id=project_id),
+        ProjectsInvalidatedEvent(),
+    ]

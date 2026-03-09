@@ -49,6 +49,9 @@ class DefaultProjectsService:
         if request.target_language:
             self.update_project(UpdateProjectRequest(project_id=book.book_id, target_language=request.target_language))
             book = self._runtime.get_book(book.book_id)
+        self._runtime.invalidate_projects()
+        self._runtime.invalidate_setup(book.book_id)
+        self._runtime.invalidate_workboard(book.book_id)
         return build_project_summary(self._runtime.book_manager, book)
 
     def update_project(self, request: UpdateProjectRequest) -> ProjectSummary:
@@ -60,9 +63,13 @@ class DefaultProjectsService:
             config = self._runtime.get_effective_config_payload(request.project_id)
             config["translation_target_language"] = request.target_language
             self._runtime.book_manager.set_book_custom_config(request.project_id, config)
+        self._runtime.invalidate_projects()
+        self._runtime.invalidate_setup(request.project_id)
+        self._runtime.invalidate_workboard(request.project_id)
         return self.get_project(request.project_id)
 
     def delete_project(self, project_id: str, *, permanent: bool = True) -> None:
         deleted = self._runtime.book_manager.delete_book(project_id, permanent=permanent)
         if not deleted:
             raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Project not found: {project_id}")
+        self._runtime.invalidate_projects()

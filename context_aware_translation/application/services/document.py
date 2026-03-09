@@ -118,6 +118,12 @@ class DefaultDocumentService:
         with self._runtime.open_book_db(request.project_id) as dbx:
             dbx.document_repo.update_source_ocr(request.source_id, json.dumps(payload, ensure_ascii=False))
             dbx.document_repo.update_source_ocr_completed(request.source_id)
+        self._runtime.invalidate_document(
+            request.project_id,
+            request.document_id,
+            sections=[DocumentSection.OCR, DocumentSection.OVERVIEW, DocumentSection.TERMS],
+        )
+        self._runtime.invalidate_workboard(request.project_id)
         return self.get_ocr(request.project_id, request.document_id)
 
     def run_ocr(self, request: RunOCRRequest) -> AcceptedCommand:
@@ -162,6 +168,12 @@ class DefaultDocumentService:
             chunk.translation = request.translated_text
             chunk.is_translated = True
             dbx.db.upsert_chunks([chunk])
+        self._runtime.invalidate_document(
+            request.project_id,
+            request.document_id,
+            sections=[DocumentSection.TRANSLATION, DocumentSection.OVERVIEW, DocumentSection.IMAGES, DocumentSection.EXPORT],
+        )
+        self._runtime.invalidate_workboard(request.project_id)
         return self.get_translation(request.project_id, request.document_id)
 
     def retranslate(self, request: RetranslateRequest) -> AcceptedCommand:

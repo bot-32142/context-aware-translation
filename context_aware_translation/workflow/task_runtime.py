@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from context_aware_translation.ui.tasks.qt_task_engine import TaskEngine
@@ -40,6 +41,7 @@ def build_task_engine(
     book_manager: BookManager,
     task_store: TaskStore,
     parent: Any | None = None,
+    on_task_changed: Callable[[str], None] | None = None,
 ) -> tuple[TaskEngine, WorkerDeps]:
     """Build the current task runtime without exposing MainWindow bootstrap details."""
 
@@ -49,6 +51,8 @@ def build_task_engine(
         engine = engine_ref.get("engine")
         if engine is not None:
             engine.enqueue_task_changed.emit(book_id)
+        if on_task_changed is not None:
+            on_task_changed(book_id)
 
     bootstrap_deps = WorkerDeps(
         book_manager=book_manager,
