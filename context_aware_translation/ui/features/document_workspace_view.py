@@ -293,7 +293,9 @@ class WorkExportDialog(QDialog):
 
 
 class _DocumentOverviewTab(QWidget):
-    def __init__(self, service: DocumentService, project_id: str, document_id: int, *, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, service: DocumentService, project_id: str, document_id: int, *, parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         self._service = service
         self._project_id = project_id
@@ -380,7 +382,9 @@ class _DocumentTermsTab(QWidget):
     def _apply_state(self, state: TermsTableState) -> None:
         self._state = state
         self.build_button.setEnabled(state.toolbar.can_build)
-        self.build_button.setToolTip(state.toolbar.build_blocker.message if state.toolbar.build_blocker is not None else "")
+        self.build_button.setToolTip(
+            state.toolbar.build_blocker.message if state.toolbar.build_blocker is not None else ""
+        )
         self.table_panel.set_state(state)
 
     def _on_build_terms(self) -> None:
@@ -405,7 +409,7 @@ class _DocumentTermsTab(QWidget):
         self._apply_state(state)
 
 
-class _PlaceholderDocumentTab(QWidget):
+class _UnavailableDocumentTab(QWidget):
     def __init__(self, title: str, description: str, *, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
@@ -435,7 +439,9 @@ class _DocumentExportTab(QWidget):
         self._state: DocumentExportState | None = None
         layout = QVBoxLayout(self)
         self.tip_label = create_tip_label(
-            self.tr("Export applies only to the current document. You can also start export directly from the Work list when that row is exportable."),
+            self.tr(
+                "Export applies only to the current document. You can also start export directly from the Work list when that row is exportable."
+            ),
         )
         layout.addWidget(self.tip_label)
         self.controls = _ExportControls(parent=self)
@@ -600,9 +606,9 @@ class DocumentWorkspaceView(QWidget):
             return DocumentTranslationView(self._document_service, self._project_id, self._document_id, parent=self)
         if section is DocumentSection.EXPORT:
             return _DocumentExportTab(self._project_id, self._document_id, self._document_service, parent=self)
-        return _PlaceholderDocumentTab(
+        return _UnavailableDocumentTab(
             self.tr(_SECTION_LABELS[section]),
-            self.tr("This document-scoped surface will be attached in a later migration task."),
+            self.tr("This section is not available for the current document."),
             parent=self,
         )
 

@@ -105,7 +105,9 @@ class _Subscription:
 class InMemoryApplicationEventBus(ApplicationEventPublisher, ApplicationEventSubscriber):
     def __init__(self) -> None:
         self._lock = threading.RLock()
-        self._subscriptions: dict[str, tuple[ApplicationEventHandler, set[ApplicationEventKind] | None, ApplicationEventFilter | None]] = {}
+        self._subscriptions: dict[
+            str, tuple[ApplicationEventHandler, set[ApplicationEventKind] | None, ApplicationEventFilter | None]
+        ] = {}
 
     def publish(self, event: ApplicationEventPayload) -> None:
         with self._lock:

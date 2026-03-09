@@ -63,12 +63,16 @@ class DefaultAppSetupService:
         self._runtime = runtime
 
     def get_state(self) -> AppSetupState:
-        connections = [build_connection_summary(profile) for profile in self._runtime.book_manager.list_endpoint_profiles()]
+        connections = [
+            build_connection_summary(profile) for profile in self._runtime.book_manager.list_endpoint_profiles()
+        ]
         default_profile = self._runtime.get_default_profile()
         routes = build_default_routes_from_config(default_profile.config) if default_profile is not None else []
         connection_name_by_id = {profile.connection_id: profile.display_name for profile in connections}
         routes = [
-            route.model_copy(update={"connection_label": connection_name_by_id.get(route.connection_id, route.connection_id)})
+            route.model_copy(
+                update={"connection_label": connection_name_by_id.get(route.connection_id, route.connection_id)}
+            )
             for route in routes
         ]
         return AppSetupState(
@@ -140,7 +144,9 @@ class DefaultAppSetupService:
         if request.connection_id:
             existing = self._runtime.book_manager.get_endpoint_profile(request.connection_id)
             if existing is None:
-                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {request.connection_id}")
+                raise_application_error(
+                    ApplicationErrorCode.NOT_FOUND, f"Connection not found: {request.connection_id}"
+                )
             updated = self._runtime.book_manager.update_endpoint_profile(
                 request.connection_id,
                 name=draft.display_name,
@@ -154,7 +160,9 @@ class DefaultAppSetupService:
                 ),
             )
             if updated is None:
-                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {request.connection_id}")
+                raise_application_error(
+                    ApplicationErrorCode.NOT_FOUND, f"Connection not found: {request.connection_id}"
+                )
         else:
             self._runtime.book_manager.create_endpoint_profile(
                 name=draft.display_name,
@@ -192,9 +200,7 @@ class DefaultAppSetupService:
                 if existing is not None:
                     saved_ids[draft.display_name] = existing.profile_id
         actual_routes = [
-            route.model_copy(
-                update={"connection_id": saved_ids.get(route.connection_label, route.connection_id)}
-            )
+            route.model_copy(update={"connection_id": saved_ids.get(route.connection_label, route.connection_id)})
             for route in (preview.recommendation.routes if preview.recommendation is not None else [])
             if saved_ids.get(route.connection_label, route.connection_id)
         ]

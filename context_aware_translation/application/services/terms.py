@@ -170,7 +170,11 @@ class DefaultTermsService:
     def _build_terms_table(self, project_id: str, document_id: int | None) -> TermsTableState:
         project = self._runtime.get_project_ref(project_id)
         with self._runtime.open_book_db(project_id) as dbx:
-            chunk_ids = {chunk.chunk_id for chunk in dbx.term_repo.list_chunks(document_id=document_id)} if document_id is not None else None
+            chunk_ids = (
+                {chunk.chunk_id for chunk in dbx.term_repo.list_chunks(document_id=document_id)}
+                if document_id is not None
+                else None
+            )
             rows = []
             filtered_records = []
             for record in dbx.term_repo.list_term_records():
@@ -267,7 +271,10 @@ class DefaultTermsService:
             self._runtime.task_engine.preflight(
                 "glossary_export",
                 project_id,
-                {"output_path": "__terms_export__.json", **({"document_ids": [document_id]} if document_id is not None else {})},
+                {
+                    "output_path": "__terms_export__.json",
+                    **({"document_ids": [document_id]} if document_id is not None else {}),
+                },
                 TaskAction.RUN,
             ),
         )
@@ -309,7 +316,9 @@ class DefaultTermsService:
                     make_blocker(
                         BlockerCode.NOTHING_TO_DO,
                         "No terms found in glossary. Cannot export empty glossary.",
-                        target_kind=NavigationTargetKind.TERMS if document_id is None else NavigationTargetKind.DOCUMENT_TERMS,
+                        target_kind=NavigationTargetKind.TERMS
+                        if document_id is None
+                        else NavigationTargetKind.DOCUMENT_TERMS,
                         project_id=project_id,
                         document_id=document_id,
                     )

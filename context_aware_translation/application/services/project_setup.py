@@ -43,9 +43,14 @@ class DefaultProjectSetupService:
         config = self._runtime.get_effective_config_payload(project_id)
         default_profile = self._runtime.get_default_profile()
         default_config = default_profile.config if default_profile is not None else {}
-        default_routes = {route.capability: route.connection_id for route in build_default_routes_from_config(default_config)}
+        default_routes = {
+            route.capability: route.connection_id for route in build_default_routes_from_config(default_config)
+        }
         current_routes = {route.capability: route.connection_id for route in build_default_routes_from_config(config)}
-        options = [ProjectConnectionOption(connection_id=conn_id, connection_label=label) for conn_id, label in self._runtime.list_connection_options()]
+        options = [
+            ProjectConnectionOption(connection_id=conn_id, connection_label=label)
+            for conn_id, label in self._runtime.list_connection_options()
+        ]
         option_ids = {option.connection_id for option in options}
 
         bindings: list[ProjectCapabilityBinding] = []
@@ -108,13 +113,18 @@ class DefaultProjectSetupService:
 
     def save(self, request: SaveProjectSetupRequest) -> ProjectSetupState:
         default_profile = self._runtime.get_default_profile()
-        base_config = default_profile.config if default_profile is not None else self._runtime.get_effective_config_payload(request.project_id)
+        base_config = (
+            default_profile.config
+            if default_profile is not None
+            else self._runtime.get_effective_config_payload(request.project_id)
+        )
         routes = [
             route
             for route in build_default_routes_from_config(base_config)
             if route.capability not in {override.capability for override in request.overrides}
         ]
         from context_aware_translation.application.contracts.app_setup import DefaultRoute
+
         routes.extend(
             DefaultRoute(
                 capability=override.capability,

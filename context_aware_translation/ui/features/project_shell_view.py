@@ -14,27 +14,8 @@ from context_aware_translation.ui.i18n import qarg
 from context_aware_translation.ui.utils import create_tip_label
 
 
-class _PlaceholderTab(QWidget):
-    def __init__(self, title: str, description: str, *, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 24, 24, 24)
-        heading = QLabel(f"<h3>{title}</h3>")
-        heading.setTextFormat(heading.textFormat())
-        body = QLabel(description)
-        body.setWordWrap(True)
-        body.setStyleSheet("color: #666666;")
-        layout.addWidget(heading)
-        layout.addWidget(body)
-        layout.addStretch()
-
-
 class ProjectShellView(QWidget):
-    """Top-level project shell for Work, Terms, and Setup.
-
-    Task 10 only establishes the shell and navigation targets. Individual tabs
-    can host placeholders until later feature tasks attach real content.
-    """
+    """Top-level project shell for Work, Terms, and Setup."""
 
     close_requested = Signal()
     queue_requested = Signal()
@@ -44,9 +25,9 @@ class ProjectShellView(QWidget):
         project_id: str,
         project_name: str,
         *,
-        work_widget: QWidget | None = None,
-        terms_widget: QWidget | None = None,
-        setup_widget: QWidget | None = None,
+        work_widget: QWidget,
+        terms_widget: QWidget,
+        setup_widget: QWidget,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -92,18 +73,9 @@ class ProjectShellView(QWidget):
         layout.addWidget(self.tip_label)
 
         self.tab_widget = QTabWidget()
-        self.work_tab = self._work_widget or _PlaceholderTab(
-            self.tr("Work"),
-            self.tr("The new Work home will replace the legacy workspace in a later migration task."),
-        )
-        self.terms_tab = self._terms_widget or _PlaceholderTab(
-            self.tr("Terms"),
-            self.tr("The shared Terms surface will be attached here by the Terms migration task."),
-        )
-        self.setup_tab = self._setup_widget or _PlaceholderTab(
-            self.tr("Setup"),
-            self.tr("Project-specific setup will be attached here by the Setup migration task."),
-        )
+        self.work_tab = self._work_widget
+        self.terms_tab = self._terms_widget
+        self.setup_tab = self._setup_widget
         self.tab_widget.addTab(self.work_tab, self.tr("Work"))
         self.tab_widget.addTab(self.terms_tab, self.tr("Terms"))
         self.tab_widget.addTab(self.setup_tab, self.tr("Setup"))
@@ -151,21 +123,4 @@ class ProjectShellView(QWidget):
         self.tab_widget.setTabText(2, self.tr("Setup"))
 
     def _tip_text(self) -> str:
-        terms_attached = self._terms_widget is not None
-        setup_attached = self._setup_widget is not None
-        if terms_attached and setup_attached:
-            return qarg(self.tr("Project shell for %1."), self.project_name)
-        if setup_attached:
-            return qarg(
-                self.tr("Project shell for %1. Work and Setup are available now; Terms will attach in a later migration task."),
-                self.project_name,
-            )
-        if terms_attached:
-            return qarg(
-                self.tr("Project shell for %1. Work and Terms are available now; Setup will attach in a later migration task."),
-                self.project_name,
-            )
-        return qarg(
-            self.tr("Project shell for %1. Work is available now; Terms and Setup will attach in later migration tasks."),
-            self.project_name,
-        )
+        return qarg(self.tr("Project shell for %1."), self.project_name)

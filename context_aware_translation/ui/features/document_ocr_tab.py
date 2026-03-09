@@ -46,7 +46,9 @@ class DocumentOCRTab(QWidget):
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
 
-        self.tip_label = create_tip_label(self.tr("OCR applies only to the current document. Saving OCR does not rerun later steps."))
+        self.tip_label = create_tip_label(
+            self.tr("OCR applies only to the current document. Saving OCR does not rerun later steps.")
+        )
         layout.addWidget(self.tip_label)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -194,16 +196,22 @@ class DocumentOCRTab(QWidget):
             return
 
         self.save_button.setEnabled(self._state.actions.save.enabled)
-        self.save_button.setToolTip(self._state.actions.save.blocker.message if self._state.actions.save.blocker is not None else "")
+        self.save_button.setToolTip(
+            self._state.actions.save.blocker.message if self._state.actions.save.blocker is not None else ""
+        )
 
         self.run_current_button.setEnabled(self._state.actions.run_current.enabled)
         self.run_current_button.setToolTip(
-            self._state.actions.run_current.blocker.message if self._state.actions.run_current.blocker is not None else ""
+            self._state.actions.run_current.blocker.message
+            if self._state.actions.run_current.blocker is not None
+            else ""
         )
 
         self.run_pending_button.setEnabled(self._state.actions.run_pending.enabled)
         self.run_pending_button.setToolTip(
-            self._state.actions.run_pending.blocker.message if self._state.actions.run_pending.blocker is not None else ""
+            self._state.actions.run_pending.blocker.message
+            if self._state.actions.run_pending.blocker is not None
+            else ""
         )
 
     def _apply_progress(self) -> None:
@@ -217,7 +225,9 @@ class DocumentOCRTab(QWidget):
         progress = self._state.progress
         if progress is not None and progress.current is not None and progress.total is not None and progress.total > 0:
             self.progress_widget.progress_bar.setRange(0, 100)
-            self.progress_widget.set_progress(progress.current, progress.total, progress.label or self.tr("OCR running..."))
+            self.progress_widget.set_progress(
+                progress.current, progress.total, progress.label or self.tr("OCR running...")
+            )
             return
 
         self.progress_widget.progress_bar.setRange(0, 0)

@@ -60,13 +60,17 @@ class DocumentImagesView(QWidget):
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
         self.tip_label = create_tip_label(
-            self.tr("Image actions are explicit. Review one image, reinsert pending images, or rerun everything for this document."),
+            self.tr(
+                "Image actions are explicit. Review one image, reinsert pending images, or rerun everything for this document."
+            ),
         )
         layout.addWidget(self.tip_label)
 
         self.blocker_strip = QFrame()
         self.blocker_strip.setFrameShape(QFrame.Shape.StyledPanel)
-        self.blocker_strip.setStyleSheet("QFrame { border: 1px solid #fed7aa; background-color: #fff7ed; border-radius: 6px; }")
+        self.blocker_strip.setStyleSheet(
+            "QFrame { border: 1px solid #fed7aa; background-color: #fff7ed; border-radius: 6px; }"
+        )
         blocker_layout = QHBoxLayout(self.blocker_strip)
         self.blocker_label = QLabel()
         self.blocker_label.setWordWrap(True)
@@ -171,7 +175,9 @@ class DocumentImagesView(QWidget):
             label = state.progress.label or self.tr("Processing")
             self.progress_label.setText(f"{label}: {state.progress.current}/{state.progress.total}")
         else:
-            self.progress_label.setText(state.progress.label or self.tr("Image reinsertion is running for this document."))
+            self.progress_label.setText(
+                state.progress.label or self.tr("Image reinsertion is running for this document.")
+            )
         self.progress_label.show()
 
     def _selected_asset(self) -> ImageAssetState | None:
@@ -204,13 +210,19 @@ class DocumentImagesView(QWidget):
             return
 
         self.run_selected_button.setEnabled(asset.can_run if asset is not None else False)
-        self.run_selected_button.setToolTip(asset.run_blocker.message if asset is not None and asset.run_blocker is not None else "")
+        self.run_selected_button.setToolTip(
+            asset.run_blocker.message if asset is not None and asset.run_blocker is not None else ""
+        )
 
         toolbar = state.toolbar
         self.run_pending_button.setEnabled(toolbar.can_run_pending)
-        self.run_pending_button.setToolTip(toolbar.run_pending_blocker.message if toolbar.run_pending_blocker is not None else "")
+        self.run_pending_button.setToolTip(
+            toolbar.run_pending_blocker.message if toolbar.run_pending_blocker is not None else ""
+        )
         self.force_all_button.setEnabled(toolbar.can_force_all)
-        self.force_all_button.setToolTip(toolbar.force_all_blocker.message if toolbar.force_all_blocker is not None else "")
+        self.force_all_button.setToolTip(
+            toolbar.force_all_blocker.message if toolbar.force_all_blocker is not None else ""
+        )
         self.cancel_button.setEnabled(toolbar.can_cancel)
         self.cancel_button.setToolTip(toolbar.cancel_blocker.message if toolbar.cancel_blocker is not None else "")
 
@@ -246,7 +258,11 @@ class DocumentImagesView(QWidget):
         if asset is not None and asset.run_blocker is not None:
             blocker = asset.run_blocker
         if blocker is None and self._state is not None:
-            blocker = self._state.toolbar.run_pending_blocker or self._state.toolbar.force_all_blocker or self._state.toolbar.cancel_blocker
+            blocker = (
+                self._state.toolbar.run_pending_blocker
+                or self._state.toolbar.force_all_blocker
+                or self._state.toolbar.cancel_blocker
+            )
         if blocker is None or blocker.target is None:
             return
         if blocker.target.kind is NavigationTargetKind.APP_SETUP:
@@ -293,7 +309,9 @@ class DocumentImagesView(QWidget):
             self._set_message(exc.payload.message)
             self.refresh()
             return
-        self._set_message(result.message.text if result.message is not None else self.tr("Pending image reinsertion queued."))
+        self._set_message(
+            result.message.text if result.message is not None else self.tr("Pending image reinsertion queued.")
+        )
         self.refresh()
 
     def _force_all(self) -> None:
@@ -310,7 +328,9 @@ class DocumentImagesView(QWidget):
             self._set_message(exc.payload.message)
             self.refresh()
             return
-        self._set_message(result.message.text if result.message is not None else self.tr("Full image reinsertion queued."))
+        self._set_message(
+            result.message.text if result.message is not None else self.tr("Full image reinsertion queued.")
+        )
         self.refresh()
 
     def _cancel(self) -> None:

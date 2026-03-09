@@ -75,7 +75,9 @@ def _make_workspace_state(active_tab: DocumentSection = DocumentSection.OVERVIEW
     )
 
 
-def _make_workboard(*, action: DocumentRowAction, setup_blocker: BlockerInfo | None = None, summary: str = "Open Translation") -> WorkboardState:
+def _make_workboard(
+    *, action: DocumentRowAction, setup_blocker: BlockerInfo | None = None, summary: str = "Open Translation"
+) -> WorkboardState:
     return WorkboardState(
         project=ProjectRef(project_id="proj-1", name="One Piece"),
         context_frontier=ContextFrontierState(summary="Context ready through 03"),
@@ -199,9 +201,19 @@ def test_work_view_opens_document_workspace_for_row_target():
 
 
 def test_work_view_refreshes_on_invalidation():
-    first_action = DocumentRowAction(kind=DocumentRowActionKind.OPEN, label="Open", target=NavigationTarget(kind=NavigationTargetKind.DOCUMENT_OVERVIEW, project_id="proj-1", document_id=4))
-    second_action = DocumentRowAction(kind=DocumentRowActionKind.OPEN_TERMS, label="Open Terms", target=NavigationTarget(kind=NavigationTargetKind.DOCUMENT_TERMS, project_id="proj-1", document_id=4))
-    view, bus, work_service, _document_service, _terms_service = _make_view(work_state=_make_workboard(action=first_action, summary="Open"))
+    first_action = DocumentRowAction(
+        kind=DocumentRowActionKind.OPEN,
+        label="Open",
+        target=NavigationTarget(kind=NavigationTargetKind.DOCUMENT_OVERVIEW, project_id="proj-1", document_id=4),
+    )
+    second_action = DocumentRowAction(
+        kind=DocumentRowActionKind.OPEN_TERMS,
+        label="Open Terms",
+        target=NavigationTarget(kind=NavigationTargetKind.DOCUMENT_TERMS, project_id="proj-1", document_id=4),
+    )
+    view, bus, work_service, _document_service, _terms_service = _make_view(
+        work_state=_make_workboard(action=first_action, summary="Open")
+    )
     try:
         work_service.state_by_project["proj-1"] = _make_workboard(action=second_action, summary="Open Terms")
         bus.publish(WorkboardInvalidatedEvent(project_id="proj-1"))
@@ -215,7 +227,9 @@ def test_work_view_refreshes_on_invalidation():
 
 def test_work_view_export_action_prepares_dialog():
     action = DocumentRowAction(kind=DocumentRowActionKind.EXPORT, label="Export")
-    view, _bus, work_service, _document_service, _terms_service = _make_view(work_state=_make_workboard(action=action, summary="Ready to export"))
+    view, _bus, work_service, _document_service, _terms_service = _make_view(
+        work_state=_make_workboard(action=action, summary="Ready to export")
+    )
     work_service.export_state = ExportDialogState(
         project_id="proj-1",
         document_ids=[4],

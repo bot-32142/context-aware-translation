@@ -61,7 +61,9 @@ def _make_state(*, can_review: bool = False, can_export: bool = False) -> TermsT
                 None if can_review else BlockerInfo(code=BlockerCode.NEEDS_SETUP, message="Review config missing.")
             ),
             export_blocker=(
-                None if can_export else BlockerInfo(code=BlockerCode.NOTHING_TO_DO, message="No terms ready for export.")
+                None
+                if can_export
+                else BlockerInfo(code=BlockerCode.NOTHING_TO_DO, message="No terms ready for export.")
             ),
         ),
         rows=[

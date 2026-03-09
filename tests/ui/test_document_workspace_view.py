@@ -102,6 +102,7 @@ def _make_terms_state() -> TermsTableState:
         ],
     )
 
+
 def _make_ocr_state() -> DocumentOCRState:
     return DocumentOCRState(
         workspace=_make_workspace_state().model_copy(update={"active_tab": DocumentSection.OCR}),
@@ -217,6 +218,7 @@ def test_document_workspace_terms_tab_uses_shared_terms_component():
         assert "update_term" in call_names
     finally:
         view.cleanup()
+
 
 def test_document_workspace_ocr_tab_routes_save_and_run_actions():
     view, _bus, document_service, _terms_service = _make_view()

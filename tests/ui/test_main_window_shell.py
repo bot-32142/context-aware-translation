@@ -214,9 +214,7 @@ def _make_window():
     patch_stack.enter_context(patch("context_aware_translation.ui.main_window.LibraryView", _FakeProjectsView))
     patch_stack.enter_context(patch("context_aware_translation.ui.main_window.AppSetupView", _FakeAppSetupView))
     patch_stack.enter_context(patch("context_aware_translation.ui.main_window.WorkView", _FakeWorkView))
-    patch_stack.enter_context(
-        patch("context_aware_translation.ui.main_window.ProjectSetupView", _FakeProjectSetupView)
-    )
+    patch_stack.enter_context(patch("context_aware_translation.ui.main_window.ProjectSetupView", _FakeProjectSetupView))
     patch_stack.enter_context(patch("context_aware_translation.ui.main_window.TermsView", _FakeTermsView))
     try:
         window = MainWindow()
@@ -230,11 +228,19 @@ def test_project_shell_view_delegates_to_work_widget():
     from context_aware_translation.ui.features.project_shell_view import ProjectShellView
 
     work_widget = _FakeWorkView("project-1", None, None, None, None)
+    terms_widget = _FakeTermsView("project-1", None, None)
+    setup_widget = _FakeProjectSetupView("project-1", None, None)
     work_widget.running_operations = ["Translation"]
 
     queue_calls: list[bool] = []
     close_calls: list[bool] = []
-    shell = ProjectShellView("project-1", "One Piece", work_widget=work_widget)
+    shell = ProjectShellView(
+        "project-1",
+        "One Piece",
+        work_widget=work_widget,
+        terms_widget=terms_widget,
+        setup_widget=setup_widget,
+    )
     shell.queue_requested.connect(lambda: queue_calls.append(True))
     shell.close_requested.connect(lambda: close_calls.append(True))
 
@@ -252,6 +258,8 @@ def test_project_shell_view_delegates_to_work_widget():
     assert close_calls == [True]
     assert work_widget.cancel_requests == [True]
     assert work_widget.cleanup_calls == 1
+    assert terms_widget.cleanup_calls == 1
+    assert setup_widget.cleanup_calls == 1
 
 
 def test_main_window_routes_projects_into_project_shell():

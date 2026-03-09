@@ -133,7 +133,9 @@ def test_get_translation_builds_text_units_and_progress(tmp_path) -> None:
     _ensure_qt_app()
     context = build_application_context(library_root=tmp_path)
     try:
-        created = context.services.projects.create_project(CreateProjectRequest(name="Text Doc", target_language="English"))
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Text Doc", target_language="English")
+        )
         project_id = created.project.project_id
         document_id = _create_text_document(context, project_id)
 
@@ -160,7 +162,9 @@ def test_save_translation_rejects_line_count_mismatch_for_chunk(tmp_path) -> Non
     _ensure_qt_app()
     context = build_application_context(library_root=tmp_path)
     try:
-        created = context.services.projects.create_project(CreateProjectRequest(name="Text Doc", target_language="English"))
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Text Doc", target_language="English")
+        )
         project_id = created.project.project_id
         document_id = _create_text_document(context, project_id)
 
@@ -189,7 +193,9 @@ def test_get_translation_builds_manga_page_units_and_art_only_blockers(tmp_path)
     _ensure_qt_app()
     context = build_application_context(library_root=tmp_path)
     try:
-        created = context.services.projects.create_project(CreateProjectRequest(name="Manga Doc", target_language="English"))
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Manga Doc", target_language="English")
+        )
         project_id = created.project.project_id
         document_id, source_1, source_2, source_3 = _create_manga_document(context, project_id)
 
@@ -217,7 +223,9 @@ def test_retranslate_manga_page_submits_scoped_translation_task(tmp_path) -> Non
     _ensure_qt_app()
     context = build_application_context(library_root=tmp_path)
     try:
-        created = context.services.projects.create_project(CreateProjectRequest(name="Manga Doc", target_language="English"))
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Manga Doc", target_language="English")
+        )
         project_id = created.project.project_id
         document_id, _source_1, _source_2, source_3 = _create_manga_document(context, project_id)
 

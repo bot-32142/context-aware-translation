@@ -135,7 +135,9 @@ class DocumentTranslationView(QWidget):
 
     def refresh(self) -> None:
         previous_unit_id = self._selected_unit_id()
-        self._apply_state(self._service.get_translation(self._project_id, self._document_id), previous_unit_id=previous_unit_id)
+        self._apply_state(
+            self._service.get_translation(self._project_id, self._document_id), previous_unit_id=previous_unit_id
+        )
 
     def get_running_operations(self) -> list[str]:
         if self._state is None or self._state.active_task_id is None:
@@ -197,9 +199,7 @@ class DocumentTranslationView(QWidget):
         self.blocker_label.setVisible(bool(blocker_text))
 
         if unit.unit_kind is TranslationUnitKind.CHUNK and unit.line_count and unit.line_count > 0:
-            self.line_hint.setText(
-                self.tr("Line count must stay at %1.").replace("%1", str(unit.line_count))
-            )
+            self.line_hint.setText(self.tr("Line count must stay at %1.").replace("%1", str(unit.line_count)))
             self.line_hint.show()
         else:
             self.line_hint.hide()
@@ -291,7 +291,9 @@ class DocumentTranslationView(QWidget):
         parts: list[str] = []
         if state.progress is not None and state.progress.total is not None and state.progress.current is not None:
             parts.append(
-                self.tr("Progress: %1/%2").replace("%1", str(state.progress.current)).replace("%2", str(state.progress.total))
+                self.tr("Progress: %1/%2")
+                .replace("%1", str(state.progress.current))
+                .replace("%2", str(state.progress.total))
             )
         elif state.progress is not None and state.progress.label:
             parts.append(state.progress.label)

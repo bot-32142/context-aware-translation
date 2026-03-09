@@ -404,7 +404,7 @@ def test_update_sleep_inhibitor_acquires_when_workspace_has_running_ops():
     workspace = SimpleNamespace(get_running_operations=MagicMock(return_value=["Translation"]))
     fake_window = SimpleNamespace(
         _task_engine=_make_fake_task_engine(has_running_work=False),
-        _view_registry={"book_abc": workspace},
+        _view_registry={"project_abc": workspace},
         _sleep_inhibitor=mock_inhibitor,
     )
 
@@ -420,7 +420,7 @@ def test_update_sleep_inhibitor_releases_when_nothing_running():
     workspace = SimpleNamespace(get_running_operations=MagicMock(return_value=[]))
     fake_window = SimpleNamespace(
         _task_engine=_make_fake_task_engine(has_running_work=False),
-        _view_registry={"book_abc": workspace, "library": SimpleNamespace()},
+        _view_registry={"project_abc": workspace, "projects": SimpleNamespace()},
         _sleep_inhibitor=mock_inhibitor,
     )
 

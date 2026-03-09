@@ -83,8 +83,7 @@ def prepare_export(runtime: ApplicationRuntime, *, project_id: str, document_ids
             break
 
     document_labels = [
-        _document_label(int(doc["document_id"]), sources_by_doc.get(int(doc["document_id"]), []))
-        for doc in docs
+        _document_label(int(doc["document_id"]), sources_by_doc.get(int(doc["document_id"]), [])) for doc in docs
     ]
     default_format = next(
         (option.format_id for option in available_formats if option.is_default),

@@ -137,7 +137,9 @@ class _CapabilityCardWidget(QFrame):
         self.status_value.setText(self._availability_label(self._card.availability) if self._card is not None else "")
         self.source_value.setText(self._source_label(self._card.source) if self._card is not None else "")
         self.connection_value.setText(
-            self._card.connection_label if self._card is not None and self._card.connection_label else self.tr("Use app defaults")
+            self._card.connection_label
+            if self._card is not None and self._card.connection_label
+            else self.tr("Use app defaults")
         )
         self.override_checkbox.setText(self.tr("Override for this project"))
         self.open_app_setup_button.setText(self.tr("Open App Setup"))
@@ -408,8 +410,12 @@ class ProjectSetupView(QWidget):
 
     def _summary_text(self, bindings: Iterable[object]) -> str:
         bindings_list = list(bindings)
-        missing = sum(1 for binding in bindings_list if getattr(binding, "availability", None) is CapabilityAvailability.MISSING)
-        overrides = sum(1 for binding in bindings_list if getattr(binding, "source", None) is BindingSource.PROJECT_OVERRIDE)
+        missing = sum(
+            1 for binding in bindings_list if getattr(binding, "availability", None) is CapabilityAvailability.MISSING
+        )
+        overrides = sum(
+            1 for binding in bindings_list if getattr(binding, "source", None) is BindingSource.PROJECT_OVERRIDE
+        )
         if missing:
             return qarg(
                 self.tr("%1 capabilities need app-level setup. Open App Setup to add shared connections."),

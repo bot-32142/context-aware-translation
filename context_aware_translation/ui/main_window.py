@@ -42,7 +42,7 @@ from context_aware_translation.ui.features import (
 )
 from context_aware_translation.ui.i18n import qarg
 from context_aware_translation.ui.sleep_inhibitor import SleepInhibitor
-from context_aware_translation.ui.views import LibraryView
+from context_aware_translation.ui.views.library_view import LibraryView
 
 
 class MainWindow(QMainWindow):
@@ -57,7 +57,7 @@ class MainWindow(QMainWindow):
         # View registry: name -> widget reference
         self._view_registry: dict[str, QWidget] = {}
 
-        # Current project state (legacy internal naming retained for compatibility)
+        # Current project state
         self._current_book_id: str | None = None
         self._current_book_name: str | None = None
         self._book_nav_item: QListWidgetItem | None = None
@@ -228,7 +228,7 @@ class MainWindow(QMainWindow):
             return
 
         for view_name, widget in self._view_registry.items():
-            if not view_name.startswith(("project_", "book_")):
+            if not view_name.startswith("project_"):
                 continue
 
             if hasattr(widget, "get_running_operations"):
@@ -242,12 +242,7 @@ class MainWindow(QMainWindow):
         if self._current_book_id is None:
             return None
         project_view_name = f"project_{self._current_book_id}"
-        if project_view_name in self._view_registry:
-            return project_view_name
-        legacy_view_name = f"book_{self._current_book_id}"
-        if legacy_view_name in self._view_registry:
-            return legacy_view_name
-        return None
+        return project_view_name if project_view_name in self._view_registry else None
 
     def _get_book_running_operations(self) -> list[str]:
         """Return running operations in the current project shell."""
@@ -414,10 +409,6 @@ class MainWindow(QMainWindow):
 
         self._nav_list.setCurrentItem(project_item)
         self.show_status(qarg(self.tr("Opened project: %1"), book_name))
-
-    def open_book(self, book_id: str, book_name: str) -> None:
-        """Compatibility wrapper during the shell migration."""
-        self.open_project(book_id, book_name)
 
     def close_book(self) -> None:
         """Close the current project shell and remove it from navigation."""

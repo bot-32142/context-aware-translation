@@ -132,11 +132,34 @@ class DefaultDocumentService:
             if status is None:
                 raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Document not found: {document_id}")
             sections = [
-                DocumentSectionCard(section=DocumentSection.OCR, status=SurfaceStatus.READY if int(status.get("ocr_pending", 0) or 0) > 0 else SurfaceStatus.DONE, summary="OCR"),
-                DocumentSectionCard(section=DocumentSection.TERMS, status=SurfaceStatus.READY if int(status.get("chunks_extracted", 0) or 0) < int(status.get("total_chunks", 0) or 0) else SurfaceStatus.DONE, summary="Terms"),
-                DocumentSectionCard(section=DocumentSection.TRANSLATION, status=SurfaceStatus.READY if int(status.get("chunks_translated", 0) or 0) < int(status.get("total_chunks", 0) or 0) else SurfaceStatus.DONE, summary="Translation"),
+                DocumentSectionCard(
+                    section=DocumentSection.OCR,
+                    status=SurfaceStatus.READY if int(status.get("ocr_pending", 0) or 0) > 0 else SurfaceStatus.DONE,
+                    summary="OCR",
+                ),
+                DocumentSectionCard(
+                    section=DocumentSection.TERMS,
+                    status=SurfaceStatus.READY
+                    if int(status.get("chunks_extracted", 0) or 0) < int(status.get("total_chunks", 0) or 0)
+                    else SurfaceStatus.DONE,
+                    summary="Terms",
+                ),
+                DocumentSectionCard(
+                    section=DocumentSection.TRANSLATION,
+                    status=SurfaceStatus.READY
+                    if int(status.get("chunks_translated", 0) or 0) < int(status.get("total_chunks", 0) or 0)
+                    else SurfaceStatus.DONE,
+                    summary="Translation",
+                ),
                 DocumentSectionCard(section=DocumentSection.IMAGES, status=SurfaceStatus.READY, summary="Images"),
-                DocumentSectionCard(section=DocumentSection.EXPORT, status=SurfaceStatus.READY if int(status.get("chunks_translated", 0) or 0) >= int(status.get("total_chunks", 0) or 0) and int(status.get("total_chunks", 0) or 0) > 0 else SurfaceStatus.BLOCKED, summary="Export"),
+                DocumentSectionCard(
+                    section=DocumentSection.EXPORT,
+                    status=SurfaceStatus.READY
+                    if int(status.get("chunks_translated", 0) or 0) >= int(status.get("total_chunks", 0) or 0)
+                    and int(status.get("total_chunks", 0) or 0) > 0
+                    else SurfaceStatus.BLOCKED,
+                    summary="Export",
+                ),
             ]
         return DocumentOverviewState(workspace=workspace, sections=sections)
 
@@ -154,19 +177,13 @@ class DefaultDocumentService:
                     document_repo=dbx.document_repo,
                     running=(
                         active_task is not None
-                        and (
-                            active_source_ids is None
-                            or int(source["source_id"]) in active_source_ids
-                        )
+                        and (active_source_ids is None or int(source["source_id"]) in active_source_ids)
                     ),
                 )
                 for source in image_sources
             ]
             total_pages = len(pages)
-            pages = [
-                page.model_copy(update={"total_pages": total_pages})
-                for page in pages
-            ]
+            pages = [page.model_copy(update={"total_pages": total_pages}) for page in pages]
             chunk_count = dbx.document_repo.get_chunk_count(document_id)
         return DocumentOCRState(
             workspace=workspace,
@@ -214,7 +231,11 @@ class DefaultDocumentService:
 
     def save_ocr(self, request: SaveOCRPageRequest) -> DocumentOCRState:
         with self._runtime.open_book_db(request.project_id) as dbx:
-            blocker = self._ocr_mutation_blocker(request.project_id, request.document_id, chunk_count=dbx.document_repo.get_chunk_count(request.document_id))
+            blocker = self._ocr_mutation_blocker(
+                request.project_id,
+                request.document_id,
+                chunk_count=dbx.document_repo.get_chunk_count(request.document_id),
+            )
             if blocker is not None:
                 raise_application_error(
                     ApplicationErrorCode.BLOCKED,
@@ -225,7 +246,11 @@ class DefaultDocumentService:
                     decision_code=blocker.code.value,
                 )
             sources = dbx.document_repo.get_document_sources_metadata(request.document_id)
-            if not any(int(source["source_id"]) == int(request.source_id) for source in sources if source.get("source_type") == "image"):
+            if not any(
+                int(source["source_id"]) == int(request.source_id)
+                for source in sources
+                if source.get("source_type") == "image"
+            ):
                 raise_application_error(
                     ApplicationErrorCode.NOT_FOUND,
                     f"OCR page not found: source_id={request.source_id}",
@@ -257,7 +282,9 @@ class DefaultDocumentService:
         return DefaultTermsService(self._runtime).get_document_terms(project_id, document_id)
 
     def get_translation(self, project_id: str, document_id: int) -> DocumentTranslationState:
-        workspace = self.get_workspace(project_id, document_id).model_copy(update={"active_tab": DocumentSection.TRANSLATION})
+        workspace = self.get_workspace(project_id, document_id).model_copy(
+            update={"active_tab": DocumentSection.TRANSLATION}
+        )
         with self._runtime.open_book_db(project_id) as dbx:
             doc = dbx.document_repo.get_document_by_id(document_id)
             if doc is None:
@@ -343,7 +370,12 @@ class DefaultDocumentService:
         self._runtime.invalidate_document(
             request.project_id,
             request.document_id,
-            sections=[DocumentSection.TRANSLATION, DocumentSection.OVERVIEW, DocumentSection.IMAGES, DocumentSection.EXPORT],
+            sections=[
+                DocumentSection.TRANSLATION,
+                DocumentSection.OVERVIEW,
+                DocumentSection.IMAGES,
+                DocumentSection.EXPORT,
+            ],
         )
         self._runtime.invalidate_workboard(request.project_id)
         return self.get_translation(request.project_id, request.document_id)
@@ -392,7 +424,9 @@ class DefaultDocumentService:
         )
 
     def get_images(self, project_id: str, document_id: int) -> DocumentImagesState:
-        workspace = self.get_workspace(project_id, document_id).model_copy(update={"active_tab": DocumentSection.IMAGES})
+        workspace = self.get_workspace(project_id, document_id).model_copy(
+            update={"active_tab": DocumentSection.IMAGES}
+        )
         active_task = self._find_active_image_reembedding_task(project_id, document_id)
         with self._runtime.open_book_db(project_id) as dbx:
             doc_row = dbx.document_repo.get_document_by_id(document_id)
@@ -467,7 +501,9 @@ class DefaultDocumentService:
         )
 
     def get_export(self, project_id: str, document_id: int) -> DocumentExportState:
-        workspace = self.get_workspace(project_id, document_id).model_copy(update={"active_tab": DocumentSection.EXPORT})
+        workspace = self.get_workspace(project_id, document_id).model_copy(
+            update={"active_tab": DocumentSection.EXPORT}
+        )
         prepared = prepare_export(self._runtime, project_id=project_id, document_ids=[document_id])
         return DocumentExportState(
             workspace=workspace,
@@ -674,7 +710,11 @@ class DefaultDocumentService:
 
         if isinstance(payload, list):
             content = SinglePageOCRContent.from_ocr_json(payload)
-            replacement_lines = [element.text for element in request.elements] if request.elements else (request.extracted_text or "").split("\n")
+            replacement_lines = (
+                [element.text for element in request.elements]
+                if request.elements
+                else (request.extracted_text or "").split("\n")
+            )
             content.set_texts(replacement_lines)
             return json.dumps(content.to_json(), ensure_ascii=False)
 
@@ -684,12 +724,13 @@ class DefaultDocumentService:
                 boxes = list(updated["boxes"])
                 if len(boxes) == len(request.elements) and all(isinstance(box, dict) for box in boxes):
                     updated["boxes"] = [
-                        {**box, "text": element.text}
-                        for box, element in zip(boxes, request.elements, strict=True)
+                        {**box, "text": element.text} for box, element in zip(boxes, request.elements, strict=True)
                     ]
                     if "text" in updated:
-                        updated["text"] = request.extracted_text if request.extracted_text is not None else "\n".join(
-                            element.text for element in request.elements
+                        updated["text"] = (
+                            request.extracted_text
+                            if request.extracted_text is not None
+                            else "\n".join(element.text for element in request.elements)
                         )
                     return json.dumps(updated, ensure_ascii=False)
             if "embedded_text" in updated:
@@ -701,7 +742,9 @@ class DefaultDocumentService:
         if request.elements:
             return json.dumps(
                 {
-                    "text": request.extracted_text if request.extracted_text is not None else "\n".join(element.text for element in request.elements),
+                    "text": request.extracted_text
+                    if request.extracted_text is not None
+                    else "\n".join(element.text for element in request.elements),
                     "boxes": [{"text": element.text} for element in request.elements],
                 },
                 ensure_ascii=False,
@@ -727,8 +770,7 @@ class DefaultDocumentService:
             if isinstance(payload, list):
                 content = SinglePageOCRContent.from_ocr_json(payload)
                 elements = [
-                    OCRTextElement(element_id=index, text=text)
-                    for index, text in enumerate(content.get_texts())
+                    OCRTextElement(element_id=index, text=text) for index, text in enumerate(content.get_texts())
                 ]
                 extracted_text = "\n".join(element.text for element in elements)
             elif isinstance(payload, dict):
@@ -843,7 +885,10 @@ class DefaultDocumentService:
             return []
         sorted_chunks = sorted(chunks, key=lambda chunk: chunk.chunk_id)
         if document_type == "manga":
-            return [chunk.translation if chunk.is_translated and chunk.translation is not None else "" for chunk in sorted_chunks]
+            return [
+                chunk.translation if chunk.is_translated and chunk.translation is not None else ""
+                for chunk in sorted_chunks
+            ]
         if not any(chunk.is_translated and chunk.translation is not None for chunk in sorted_chunks):
             return []
         translated_text = "".join(
@@ -868,7 +913,9 @@ class DefaultDocumentService:
         persisted = document_repo.load_reembedded_images(document.document_id)
         active_source_ids = self._task_source_ids(active_task) if active_task is not None else None
         items: list[ImageAssetState] = []
-        for source_idx, source, _ocr_text in get_sources_with_nonempty_ocr_text(document_repo.get_document_sources(document.document_id)):
+        for source_idx, source, _ocr_text in get_sources_with_nonempty_ocr_text(
+            document_repo.get_document_sources(document.document_id)
+        ):
             source_id = int(source["source_id"])
             translated = document._page_translations.get(source_id, "")
             if not translated.strip():
@@ -879,11 +926,17 @@ class DefaultDocumentService:
                 ImageAssetState(
                     asset_id=str(source_idx),
                     label=self._image_label(source),
-                    status=SurfaceStatus.RUNNING if is_running else SurfaceStatus.DONE if is_done else SurfaceStatus.READY,
+                    status=SurfaceStatus.RUNNING
+                    if is_running
+                    else SurfaceStatus.DONE
+                    if is_done
+                    else SurfaceStatus.READY,
                     source_id=source_id,
                     translated_text=translated,
                     can_run=active_task is None,
-                    run_blocker=None if active_task is None else self._active_task_blocker(project_id=project_id, document_id=document.document_id),
+                    run_blocker=None
+                    if active_task is None
+                    else self._active_task_blocker(project_id=project_id, document_id=document.document_id),
                 )
             )
         return items
@@ -903,7 +956,10 @@ class DefaultDocumentService:
         persisted = document_repo.load_reembedded_images(document.document_id)
         active_source_ids = self._task_source_ids(active_task) if active_task is not None else None
         items: list[ImageAssetState] = []
-        sources = sorted(document_repo.get_document_sources(document.document_id), key=lambda source: int(source.get("sequence_number", 0) or 0))
+        sources = sorted(
+            document_repo.get_document_sources(document.document_id),
+            key=lambda source: int(source.get("sequence_number", 0) or 0),
+        )
         for source in sources:
             if source.get("source_type") != "image" or not source.get("binary_content"):
                 continue
@@ -917,11 +973,17 @@ class DefaultDocumentService:
                 ImageAssetState(
                     asset_id=str(source_id),
                     label=self._image_label(source),
-                    status=SurfaceStatus.RUNNING if is_running else SurfaceStatus.DONE if is_done else SurfaceStatus.READY,
+                    status=SurfaceStatus.RUNNING
+                    if is_running
+                    else SurfaceStatus.DONE
+                    if is_done
+                    else SurfaceStatus.READY,
                     source_id=source_id,
                     translated_text=translated,
                     can_run=active_task is None,
-                    run_blocker=None if active_task is None else self._active_task_blocker(project_id=project_id, document_id=document.document_id),
+                    run_blocker=None
+                    if active_task is None
+                    else self._active_task_blocker(project_id=project_id, document_id=document.document_id),
                 )
             )
         return items
@@ -950,7 +1012,11 @@ class DefaultDocumentService:
                 ImageAssetState(
                     asset_id=str(index),
                     label=f"Image {len(items) + 1}",
-                    status=SurfaceStatus.RUNNING if active_task is not None and not is_done else SurfaceStatus.DONE if is_done else SurfaceStatus.READY,
+                    status=SurfaceStatus.RUNNING
+                    if active_task is not None and not is_done
+                    else SurfaceStatus.DONE
+                    if is_done
+                    else SurfaceStatus.READY,
                     translated_text=translated,
                     can_run=False,
                     run_blocker=make_blocker(
@@ -978,7 +1044,9 @@ class DefaultDocumentService:
             cancel_decision = self._runtime.task_engine.preflight_task(active_task.task_id, TaskAction.CANCEL)
             return DocumentImagesToolbarState(
                 can_cancel=cancel_decision.allowed,
-                cancel_blocker=None if cancel_decision.allowed else self._image_decision_to_blocker(
+                cancel_blocker=None
+                if cancel_decision.allowed
+                else self._image_decision_to_blocker(
                     project_id,
                     document_id=document_id,
                     decision_code=cancel_decision.code or "",
@@ -1359,7 +1427,12 @@ class DefaultDocumentService:
         return sorted(relevant, key=self._translation_task_sort_key, reverse=True)[0]
 
     def _record_targets_translation_document(self, record: TaskRecord, document_id: int) -> bool:
-        if record.task_type not in {"translation_text", "translation_manga", "chunk_retranslation", "batch_translation"}:
+        if record.task_type not in {
+            "translation_text",
+            "translation_manga",
+            "chunk_retranslation",
+            "batch_translation",
+        }:
             return False
         if record.document_ids_json is None:
             return record.task_type != "chunk_retranslation"

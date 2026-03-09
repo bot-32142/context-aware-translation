@@ -165,7 +165,10 @@ class ConnectionDraftForm(QWidget):
         default_base_url, default_model = _PROVIDER_DEFAULTS[provider]
         self.base_url_edit.setText(default_base_url)
         self.default_model_edit.setText(default_model)
-        if not self.display_name_edit.text().strip() or self.display_name_edit.text().strip() in _PROVIDER_LABELS.values():
+        if (
+            not self.display_name_edit.text().strip()
+            or self.display_name_edit.text().strip() in _PROVIDER_LABELS.values()
+        ):
             self.display_name_edit.setText(_PROVIDER_LABELS[provider])
         self._sync_advanced_visibility(provider)
 
@@ -213,7 +216,9 @@ class ConnectionEditorDialog(QDialog):
 
 
 class SetupWizardDialog(QDialog):
-    def __init__(self, service: AppSetupService, initial_state: SetupWizardState, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, service: AppSetupService, initial_state: SetupWizardState, parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         self._service = service
         self._wizard_state = initial_state
@@ -227,7 +232,9 @@ class SetupWizardDialog(QDialog):
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
         self.tip_label = create_tip_label(
-            self.tr("Tell the app which providers you already have. The wizard will test capabilities and generate a recommended default routing."),
+            self.tr(
+                "Tell the app which providers you already have. The wizard will test capabilities and generate a recommended default routing."
+            ),
         )
         layout.addWidget(self.tip_label)
 
@@ -311,7 +318,9 @@ class SetupWizardDialog(QDialog):
                 for row, capability in enumerate(result.capabilities):
                     grid.addWidget(QLabel(_CAPABILITY_LABELS[capability.capability]), row, 0)
                     status = QLabel(_AVAILABILITY_LABELS[capability.availability])
-                    status.setStyleSheet(f"color: {_STATUS_COLORS.get(capability.availability, '#111827')}; font-weight: 600;")
+                    status.setStyleSheet(
+                        f"color: {_STATUS_COLORS.get(capability.availability, '#111827')}; font-weight: 600;"
+                    )
                     grid.addWidget(status, row, 1)
                     grid.addWidget(QLabel(capability.message or ""), row, 2)
                 result_layout.addLayout(grid)
@@ -364,13 +373,17 @@ class SetupWizardDialog(QDialog):
     def _go_next(self) -> None:
         if self._page_index == 0:
             if not self.selected_providers():
-                QMessageBox.warning(self, self.tr("No Providers Selected"), self.tr("Select at least one provider to continue."))
+                QMessageBox.warning(
+                    self, self.tr("No Providers Selected"), self.tr("Select at least one provider to continue.")
+                )
                 return
         elif self._page_index == 1:
             for form in self._draft_forms:
                 valid, message = form.validate(require_api_key=True)
                 if not valid:
-                    QMessageBox.warning(self, self.tr("Missing Information"), message or self.tr("Please complete the form."))
+                    QMessageBox.warning(
+                        self, self.tr("Missing Information"), message or self.tr("Please complete the form.")
+                    )
                     return
             self._preview_state = None
         self._page_index = min(self._page_index + 1, 2)
@@ -379,7 +392,9 @@ class SetupWizardDialog(QDialog):
     def _finish(self) -> None:
         request = self.final_request()
         if request is None:
-            QMessageBox.warning(self, self.tr("Wizard Incomplete"), self.tr("Review the recommended routing before saving setup."))
+            QMessageBox.warning(
+                self, self.tr("Wizard Incomplete"), self.tr("Review the recommended routing before saving setup.")
+            )
             return
         self._service.run_setup_wizard(request)
         self.accept()
@@ -479,7 +494,9 @@ class AppSetupView(QWidget):
         advanced_content = QWidget()
         advanced_layout = QVBoxLayout(advanced_content)
         self.advanced_label = create_tip_label(
-            self.tr("Advanced endpoint and model settings are edited per connection. Use Add or Edit, then expand Advanced inside the connection dialog.")
+            self.tr(
+                "Advanced endpoint and model settings are edited per connection. Use Add or Edit, then expand Advanced inside the connection dialog."
+            )
         )
         self.seed_defaults_button = QPushButton(self.tr("Seed System Defaults"))
         self.seed_defaults_button.clicked.connect(self._on_seed_defaults)
@@ -498,7 +515,9 @@ class AppSetupView(QWidget):
         self._populate_capabilities(self._state)
         self._populate_routes(self._state)
         self.summary_label.setText(self._summary_text(self._state))
-        self.run_wizard_button.setText(self.tr("Run Setup Wizard") if self._state.requires_wizard else self.tr("Open Setup Wizard"))
+        self.run_wizard_button.setText(
+            self.tr("Run Setup Wizard") if self._state.requires_wizard else self.tr("Open Setup Wizard")
+        )
         self._update_connection_buttons()
 
     def changeEvent(self, event: QEvent) -> None:
@@ -508,7 +527,9 @@ class AppSetupView(QWidget):
 
     def retranslateUi(self) -> None:
         self.tip_label.setText(self._tip_text())
-        self.run_wizard_button.setText(self.tr("Run Setup Wizard") if self._state and self._state.requires_wizard else self.tr("Open Setup Wizard"))
+        self.run_wizard_button.setText(
+            self.tr("Run Setup Wizard") if self._state and self._state.requires_wizard else self.tr("Open Setup Wizard")
+        )
         self.add_connection_button.setText(self.tr("Add Connection"))
         self.refresh_button.setText(self.tr("Refresh"))
         self.connections_group.setTitle(self.tr("Connections"))
@@ -526,7 +547,9 @@ class AppSetupView(QWidget):
         self.routes_table.setHorizontalHeaderLabels([self.tr("Capability"), self.tr("Connection")])
         self.advanced_section.toggle_button.setText(self.tr("Advanced"))
         self.advanced_label.setText(
-            self.tr("Advanced endpoint and model settings are edited per connection. Use Add or Edit, then expand Advanced inside the connection dialog.")
+            self.tr(
+                "Advanced endpoint and model settings are edited per connection. Use Add or Edit, then expand Advanced inside the connection dialog."
+            )
         )
         self.seed_defaults_button.setText(self.tr("Seed System Defaults"))
         if self._state is not None:
@@ -540,7 +563,9 @@ class AppSetupView(QWidget):
             row = self.connections_table.rowCount()
             self.connections_table.insertRow(row)
             self._set_table_item(self.connections_table, row, 0, connection.display_name, connection.connection_id)
-            self._set_table_item(self.connections_table, row, 1, _PROVIDER_LABELS.get(connection.provider, connection.provider.value))
+            self._set_table_item(
+                self.connections_table, row, 1, _PROVIDER_LABELS.get(connection.provider, connection.provider.value)
+            )
             self._set_table_item(self.connections_table, row, 2, connection.status.value.replace("_", " ").title())
             self._set_table_item(self.connections_table, row, 3, connection.default_model or "")
             self._set_table_item(self.connections_table, row, 4, connection.base_url or "")
@@ -674,14 +699,18 @@ class AppSetupView(QWidget):
         else:
             QMessageBox.information(self, self.tr("App Setup"), text)
 
-    def _set_table_item(self, table: QTableWidget, row: int, column: int, text: str, user_data: str | None = None) -> None:
+    def _set_table_item(
+        self, table: QTableWidget, row: int, column: int, text: str, user_data: str | None = None
+    ) -> None:
         item = QTableWidgetItem(text)
         if user_data is not None:
             item.setData(Qt.ItemDataRole.UserRole, user_data)
         table.setItem(row, column, item)
 
     def _summary_text(self, state: AppSetupState) -> str:
-        ready_capabilities = sum(1 for capability in state.capabilities if capability.availability is CapabilityAvailability.READY)
+        ready_capabilities = sum(
+            1 for capability in state.capabilities if capability.availability is CapabilityAvailability.READY
+        )
         if state.requires_wizard:
             return self.tr("No connections are configured yet. Run the setup wizard to create app-wide defaults.")
         return (

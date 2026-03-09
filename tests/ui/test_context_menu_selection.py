@@ -8,7 +8,7 @@ import pytest
 
 try:
     from PySide6.QtGui import QStandardItem, QStandardItemModel
-    from PySide6.QtWidgets import QApplication, QMenu, QTableView, QWidget
+    from PySide6.QtWidgets import QApplication, QTableView, QWidget
 
     HAS_PYSIDE6 = True
 except ImportError:
@@ -74,59 +74,3 @@ def test_library_context_menu_selects_clicked_row():
         view._show_context_menu(_row_position(view.table_view, 2))
 
     assert _selected_row(view.table_view) == 2
-
-
-def test_config_profile_context_menu_selects_clicked_row():
-    from context_aware_translation.ui.views.config_profile_view import ConfigProfileView
-
-    with patch.object(ConfigProfileView, "__init__", _noop_init):
-        view = ConfigProfileView(None)
-
-    view.table_view = _make_table()
-    view.table_view.selectRow(0)
-
-    with patch("context_aware_translation.ui.views.config_profile_view.QMenu.exec", return_value=None):
-        view._show_context_menu(_row_position(view.table_view, 1))
-
-    assert _selected_row(view.table_view) == 1
-
-
-def test_endpoint_profile_context_menu_selects_clicked_row():
-    from context_aware_translation.ui.views.endpoint_profile_view import EndpointProfileView
-
-    with patch.object(EndpointProfileView, "__init__", _noop_init):
-        view = EndpointProfileView(None)
-
-    view.table = _make_table()
-    view.table.selectRow(0)
-
-    with patch("context_aware_translation.ui.views.endpoint_profile_view.QMenu.exec", return_value=None):
-        view._show_context_menu(_row_position(view.table, 2))
-
-    assert _selected_row(view.table) == 2
-
-
-def test_glossary_context_menu_selects_clicked_row():
-    from unittest.mock import MagicMock
-
-    from PySide6.QtGui import QAction
-
-    from context_aware_translation.ui.views.glossary_view import GlossaryView
-
-    with patch.object(GlossaryView, "__init__", _noop_init):
-        view = GlossaryView(None, "")
-
-    view.table_view = _make_table()
-    view.table_model = MagicMock()
-    view.table_model.get_term.return_value = None
-    view.bulk_mark_reviewed_action = QAction("reviewed")
-    view.bulk_unmark_reviewed_action = QAction("unmark reviewed")
-    view.bulk_mark_ignored_action = QAction("ignored")
-    view.bulk_unmark_ignored_action = QAction("unmark ignored")
-    view.bulk_delete_action = QAction("delete")
-    view.table_view.selectRow(0)
-
-    with patch.object(QMenu, "exec", return_value=None):
-        view._on_context_menu(_row_position(view.table_view, 1))
-
-    assert _selected_row(view.table_view) == 1

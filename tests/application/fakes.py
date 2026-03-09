@@ -73,7 +73,9 @@ class FakeProjectsService:
 
     def get_project(self, project_id: str) -> ProjectSummary:
         self.calls.append(("get_project", project_id))
-        return self.project_summary or self.create_result or self.update_result  # pragma: no cover - setup error if absent
+        return (
+            self.project_summary or self.create_result or self.update_result
+        )  # pragma: no cover - setup error if absent
 
     def create_project(self, request: CreateProjectRequest) -> ProjectSummary:
         self.calls.append(("create_project", request))
@@ -306,7 +308,12 @@ class FakeDocumentService:
 
     def get_export(self, project_id: str, document_id: int) -> DocumentExportState:
         self.calls.append(("get_export", (project_id, document_id)))
-        return self.export  # type: ignore[return-value]
+        if self.export is not None:
+            return self.export
+        return DocumentExportState(
+            workspace=self.workspace.model_copy(update={"active_tab": DocumentSection.EXPORT}),
+            can_export=False,
+        )
 
     def export_document(self, request: RunDocumentExportRequest) -> DocumentExportResult:
         self.calls.append(("export_document", request))

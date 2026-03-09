@@ -52,7 +52,10 @@ def test_migrated_ui_modules_do_not_call_raw_taskengine_preflight_helpers() -> N
     for path in _iter_migrated_python_files():
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in FORBIDDEN_CALL_ATTRIBUTES:
-                violations.append(
-                    f"{path.relative_to(REPO_ROOT)}:{node.lineno} calls .{node.func.attr}(...)")
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in FORBIDDEN_CALL_ATTRIBUTES
+            ):
+                violations.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno} calls .{node.func.attr}(...)")
     assert not violations, "\n".join(violations)

@@ -39,7 +39,9 @@ def _qapp():
     yield app
 
 
-def _make_state(*, translation_source: BindingSource = BindingSource.APP_DEFAULT, missing_image_editing: bool = False) -> ProjectSetupState:
+def _make_state(
+    *, translation_source: BindingSource = BindingSource.APP_DEFAULT, missing_image_editing: bool = False
+) -> ProjectSetupState:
     shared_option = ProjectConnectionOption(connection_id="conn-gemini", connection_label="Gemini Shared")
     override_option = ProjectConnectionOption(connection_id="conn-openai", connection_label="OpenAI Shared")
 
@@ -57,8 +59,12 @@ def _make_state(*, translation_source: BindingSource = BindingSource.APP_DEFAULT
             target=NavigationTarget(kind=NavigationTargetKind.APP_SETUP),
         )
 
-    translation_connection_id = "conn-gemini" if translation_source is not BindingSource.PROJECT_OVERRIDE else "conn-openai"
-    translation_connection_label = "Gemini Shared" if translation_source is not BindingSource.PROJECT_OVERRIDE else "OpenAI Shared"
+    translation_connection_id = (
+        "conn-gemini" if translation_source is not BindingSource.PROJECT_OVERRIDE else "conn-openai"
+    )
+    translation_connection_label = (
+        "Gemini Shared" if translation_source is not BindingSource.PROJECT_OVERRIDE else "OpenAI Shared"
+    )
 
     return ProjectSetupState(
         project=ProjectRef(project_id="proj-1", name="One Piece"),

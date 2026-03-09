@@ -124,10 +124,16 @@ class TermsTableWidget(QWidget):
         self.table_view.horizontalHeader().setSectionResizeMode(_COLUMN_TERM, QHeaderView.ResizeMode.Stretch)
         self.table_view.horizontalHeader().setSectionResizeMode(_COLUMN_TRANSLATION, QHeaderView.ResizeMode.Stretch)
         self.table_view.horizontalHeader().setSectionResizeMode(_COLUMN_DESCRIPTION, QHeaderView.ResizeMode.Stretch)
-        self.table_view.horizontalHeader().setSectionResizeMode(_COLUMN_OCCURRENCES, QHeaderView.ResizeMode.ResizeToContents)
+        self.table_view.horizontalHeader().setSectionResizeMode(
+            _COLUMN_OCCURRENCES, QHeaderView.ResizeMode.ResizeToContents
+        )
         self.table_view.horizontalHeader().setSectionResizeMode(_COLUMN_VOTES, QHeaderView.ResizeMode.ResizeToContents)
-        self.table_view.horizontalHeader().setSectionResizeMode(_COLUMN_IGNORED, QHeaderView.ResizeMode.ResizeToContents)
-        self.table_view.horizontalHeader().setSectionResizeMode(_COLUMN_REVIEWED, QHeaderView.ResizeMode.ResizeToContents)
+        self.table_view.horizontalHeader().setSectionResizeMode(
+            _COLUMN_IGNORED, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self.table_view.horizontalHeader().setSectionResizeMode(
+            _COLUMN_REVIEWED, QHeaderView.ResizeMode.ResizeToContents
+        )
         layout.addWidget(self.table_view, 1)
 
         self.retranslateUi()
@@ -270,9 +276,13 @@ class TermsTableWidget(QWidget):
         translated = sum(1 for row in rows_list if (row.translation or "").strip())
         reviewed = sum(1 for row in rows_list if row.reviewed)
         ignored = sum(1 for row in rows_list if row.ignored)
-        return self.tr("Showing %1 terms | Reviewed: %2 | Translated: %3 | Ignored: %4").replace(
-            "%1", str(len(rows_list))
-        ).replace("%2", str(reviewed)).replace("%3", str(translated)).replace("%4", str(ignored))
+        return (
+            self.tr("Showing %1 terms | Reviewed: %2 | Translated: %3 | Ignored: %4")
+            .replace("%1", str(len(rows_list)))
+            .replace("%2", str(reviewed))
+            .replace("%3", str(translated))
+            .replace("%4", str(ignored))
+        )
 
 
 __all__ = ["TermsTableWidget"]

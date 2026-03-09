@@ -90,7 +90,9 @@ class WorkView(QWidget):
         self.home_page = QWidget()
         home_layout = QVBoxLayout(self.home_page)
         self.tip_label = create_tip_label(
-            self.tr("Work shows the ordered document stack, the current context frontier, and the next action for each document."),
+            self.tr(
+                "Work shows the ordered document stack, the current context frontier, and the next action for each document."
+            ),
         )
         home_layout.addWidget(self.tip_label)
 
@@ -109,7 +111,9 @@ class WorkView(QWidget):
 
         self.setup_strip = QFrame()
         self.setup_strip.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setup_strip.setStyleSheet("QFrame { border: 1px solid #fed7aa; background-color: #fff7ed; border-radius: 6px; }")
+        self.setup_strip.setStyleSheet(
+            "QFrame { border: 1px solid #fed7aa; background-color: #fff7ed; border-radius: 6px; }"
+        )
         setup_layout = QHBoxLayout(self.setup_strip)
         self.setup_label = QLabel()
         self.setup_label.setWordWrap(True)
@@ -128,7 +132,7 @@ class WorkView(QWidget):
         self.rows_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         home_layout.addWidget(self.rows_table, 1)
 
-        self.empty_label = create_tip_label(self.tr("No documents imported yet. Import will attach to Work in a later migration task."))
+        self.empty_label = create_tip_label(self.tr("No documents imported yet."))
         self.empty_label.hide()
         home_layout.addWidget(self.empty_label)
 
@@ -159,12 +163,14 @@ class WorkView(QWidget):
 
     def retranslateUi(self) -> None:
         self.tip_label.setText(
-            self.tr("Work shows the ordered document stack, the current context frontier, and the next action for each document."),
+            self.tr(
+                "Work shows the ordered document stack, the current context frontier, and the next action for each document."
+            ),
         )
         self.rows_table.setHorizontalHeaderLabels(
             [self.tr("#"), self.tr("Document"), self.tr("Status"), self.tr("State"), self.tr("Action")]
         )
-        self.empty_label.setText(self.tr("No documents imported yet. Import will attach to Work in a later migration task."))
+        self.empty_label.setText(self.tr("No documents imported yet."))
         if self._document_view is not None:
             self._document_view.back_button.setText("\u2190 " + self.tr("Back to Work"))
 

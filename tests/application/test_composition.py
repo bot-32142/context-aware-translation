@@ -137,7 +137,9 @@ def test_project_setup_marks_deleted_shared_connections_as_missing(tmp_path: Pat
         context.runtime.book_manager.delete_endpoint_profile(endpoint.profile_id)
 
         state = context.services.project_setup.get_state(project_id)
-        translation_card = next(card for card in state.capability_cards if card.capability is CapabilityCode.TRANSLATION)
+        translation_card = next(
+            card for card in state.capability_cards if card.capability is CapabilityCode.TRANSLATION
+        )
 
         assert translation_card.availability is CapabilityAvailability.MISSING
         assert translation_card.blocker is not None

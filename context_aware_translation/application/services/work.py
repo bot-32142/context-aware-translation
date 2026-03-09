@@ -67,8 +67,12 @@ class DefaultWorkService:
                 int(doc["document_id"]): dbx.document_repo.get_document_sources_metadata(int(doc["document_id"]))
                 for doc in docs
             }
-            pending_glossary_ids = {int(doc["document_id"]) for doc in dbx.document_repo.list_documents_pending_glossary()}
-            pending_translation_ids = {int(doc["document_id"]) for doc in dbx.document_repo.list_documents_pending_translation()}
+            pending_glossary_ids = {
+                int(doc["document_id"]) for doc in dbx.document_repo.list_documents_pending_glossary()
+            }
+            pending_translation_ids = {
+                int(doc["document_id"]) for doc in dbx.document_repo.list_documents_pending_translation()
+            }
         setup_blocker = self._resolve_setup_blocker(project_id, config, docs)
 
         rows: list[WorkDocumentRow] = []
@@ -223,7 +227,9 @@ class DefaultWorkService:
                 else None
             ),
         )
-        return WorkboardState(project=project, context_frontier=context_frontier, rows=rows, setup_blocker=setup_blocker)
+        return WorkboardState(
+            project=project, context_frontier=context_frontier, rows=rows, setup_blocker=setup_blocker
+        )
 
     def _resolve_setup_blocker(
         self,

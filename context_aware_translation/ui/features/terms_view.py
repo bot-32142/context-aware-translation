@@ -141,11 +141,31 @@ class TermsView(QWidget):
         self.import_button.setEnabled(toolbar.can_import)
         self.export_button.setEnabled(toolbar.can_export)
 
-        self.translate_button.setToolTip(toolbar.translate_pending_blocker.message if toolbar.translate_pending_blocker else self.tr("Translate all currently untranslated glossary terms."))
-        self.review_button.setToolTip(toolbar.review_blocker.message if toolbar.review_blocker else self.tr("Run an LLM review pass on unreviewed glossary terms."))
-        self.filter_noise_button.setToolTip(toolbar.filter_noise_blocker.message if toolbar.filter_noise_blocker else self.tr("Automatically ignore terms that occurred only once or were recognized by the LLM in only one chunk."))
-        self.import_button.setToolTip(toolbar.import_blocker.message if toolbar.import_blocker else self.tr("Import terms from a JSON file and replace current project terms."))
-        self.export_button.setToolTip(toolbar.export_blocker.message if toolbar.export_blocker else self.tr("Export terms to a JSON file."))
+        self.translate_button.setToolTip(
+            toolbar.translate_pending_blocker.message
+            if toolbar.translate_pending_blocker
+            else self.tr("Translate all currently untranslated glossary terms.")
+        )
+        self.review_button.setToolTip(
+            toolbar.review_blocker.message
+            if toolbar.review_blocker
+            else self.tr("Run an LLM review pass on unreviewed glossary terms.")
+        )
+        self.filter_noise_button.setToolTip(
+            toolbar.filter_noise_blocker.message
+            if toolbar.filter_noise_blocker
+            else self.tr(
+                "Automatically ignore terms that occurred only once or were recognized by the LLM in only one chunk."
+            )
+        )
+        self.import_button.setToolTip(
+            toolbar.import_blocker.message
+            if toolbar.import_blocker
+            else self.tr("Import terms from a JSON file and replace current project terms.")
+        )
+        self.export_button.setToolTip(
+            toolbar.export_blocker.message if toolbar.export_blocker else self.tr("Export terms to a JSON file.")
+        )
 
     def _on_translate_pending(self) -> None:
         self._run_command(
@@ -160,15 +180,18 @@ class TermsView(QWidget):
         )
 
     def _on_filter_noise(self) -> None:
-        if QMessageBox.question(
-            self,
-            self.tr("Filter Rare Terms"),
-            self.tr(
-                "This will mark terms as ignored when they occurred only once or were recognized in only one chunk. Continue?"
-            ),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        ) != QMessageBox.StandardButton.Yes:
+        if (
+            QMessageBox.question(
+                self,
+                self.tr("Filter Rare Terms"),
+                self.tr(
+                    "This will mark terms as ignored when they occurred only once or were recognized in only one chunk. Continue?"
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            != QMessageBox.StandardButton.Yes
+        ):
             return
         try:
             state = self._service.filter_noise(FilterNoiseRequest(project_id=self.project_id))

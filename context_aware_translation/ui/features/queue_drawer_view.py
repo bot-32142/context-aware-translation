@@ -290,7 +290,9 @@ class QueueDrawerView(QWidget):
                 continue
             message: UserMessage | None = None
             if item.status is QueueStatus.DONE:
-                message = UserMessage(severity=UserMessageSeverity.SUCCESS, text=self.tr("{0} finished.").format(item.title))
+                message = UserMessage(
+                    severity=UserMessageSeverity.SUCCESS, text=self.tr("{0} finished.").format(item.title)
+                )
             elif item.status is QueueStatus.FAILED:
                 text = item.error_message or self.tr("{0} failed.").format(item.title)
                 message = UserMessage(severity=UserMessageSeverity.ERROR, text=text)
