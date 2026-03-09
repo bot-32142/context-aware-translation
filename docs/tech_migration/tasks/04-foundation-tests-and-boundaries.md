@@ -19,6 +19,7 @@ invalidation-driven refresh coverage should wait until Task 03 lands.
 ## Must Read
 
 - [Technical migration overview](../README.md)
+- [UI feature testing pattern](../ui-feature-testing-pattern.md)
 
 ## Scope
 
