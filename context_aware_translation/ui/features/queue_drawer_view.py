@@ -165,6 +165,7 @@ class QueueDrawerView(QWidget):
         self._scope_label: str | None = None
         self._rows: dict[str, _QueueItemCard] = {}
         self._last_status: dict[str, QueueStatus] = {}
+        self._suppressed_transition_notifications: set[str] = set()
         self._loaded_once = False
         self._event_bridge = QtApplicationEventBridge(events, parent=self)
         self._event_bridge.queue_changed.connect(self._on_queue_changed)
@@ -254,6 +255,7 @@ class QueueDrawerView(QWidget):
             row.action_requested.connect(self._on_action_requested)
             self._rows[item.queue_item_id] = row
             self.rows_layout.insertWidget(self.rows_layout.count() - 1, row)
+        self._suppressed_transition_notifications.intersection_update(self._last_status)
 
         if self._loaded_once:
             self._emit_transition_notifications(previous_status, state.items)
@@ -280,6 +282,9 @@ class QueueDrawerView(QWidget):
 
     def _emit_transition_notifications(self, previous: dict[str, QueueStatus], items: list[QueueItem]) -> None:
         for item in items:
+            if item.queue_item_id in self._suppressed_transition_notifications:
+                self._suppressed_transition_notifications.discard(item.queue_item_id)
+                continue
             old_status = previous.get(item.queue_item_id)
             if old_status is None or old_status is item.status:
                 continue
@@ -315,6 +320,7 @@ class QueueDrawerView(QWidget):
             )
             self.refresh()
             return
+        self._suppressed_transition_notifications.add(item.queue_item_id)
         if result.message is not None:
             self.notification_requested.emit(result.message)
         else:

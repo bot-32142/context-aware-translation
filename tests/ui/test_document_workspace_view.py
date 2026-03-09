@@ -1,0 +1,164 @@
+from __future__ import annotations
+
+import pytest
+
+from context_aware_translation.application.contracts.common import (
+    DocumentRef,
+    DocumentSection,
+    ProjectRef,
+    SurfaceStatus,
+)
+from context_aware_translation.application.contracts.document import (
+    DocumentOverviewState,
+    DocumentSectionCard,
+    DocumentWorkspaceState,
+)
+from context_aware_translation.application.contracts.terms import (
+    TermsScope,
+    TermsScopeKind,
+    TermsTableState,
+    TermStatus,
+    TermsToolbarState,
+    TermTableRow,
+)
+from context_aware_translation.application.events import (
+    DocumentInvalidatedEvent,
+    InMemoryApplicationEventBus,
+    SetupInvalidatedEvent,
+    TermsInvalidatedEvent,
+)
+from tests.application.fakes import FakeDocumentService, FakeTermsService, FakeWorkService
+
+try:
+    from PySide6.QtWidgets import QApplication
+
+    HAS_PYSIDE6 = True
+except ImportError:  # pragma: no cover - environment dependent
+    HAS_PYSIDE6 = False
+
+pytestmark = pytest.mark.skipif(not HAS_PYSIDE6, reason="PySide6 not available")
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _qapp():
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    yield app
+
+
+def _make_workspace_state() -> DocumentWorkspaceState:
+    return DocumentWorkspaceState(
+        project=ProjectRef(project_id="proj-1", name="One Piece"),
+        document=DocumentRef(document_id=4, order_index=4, label="04.png"),
+        active_tab=DocumentSection.OVERVIEW,
+        available_tabs=[
+            DocumentSection.OVERVIEW,
+            DocumentSection.OCR,
+            DocumentSection.TERMS,
+            DocumentSection.TRANSLATION,
+            DocumentSection.IMAGES,
+            DocumentSection.EXPORT,
+        ],
+    )
+
+
+def _make_terms_state() -> TermsTableState:
+    return TermsTableState(
+        scope=TermsScope(
+            kind=TermsScopeKind.DOCUMENT,
+            project=ProjectRef(project_id="proj-1", name="One Piece"),
+            document=DocumentRef(document_id=4, order_index=4, label="04.png"),
+        ),
+        toolbar=TermsToolbarState(can_build=True),
+        rows=[
+            TermTableRow(
+                term_id=1,
+                term_key="ルフィ",
+                term="ルフィ",
+                translation="Luffy",
+                description="Main character",
+                occurrences=4,
+                votes=2,
+                reviewed=False,
+                ignored=False,
+                status=TermStatus.NEEDS_REVIEW,
+            )
+        ],
+    )
+
+
+def _make_view():
+    from context_aware_translation.ui.features.document_workspace_view import DocumentWorkspaceView
+
+    bus = InMemoryApplicationEventBus()
+    document_service = FakeDocumentService(
+        workspace=_make_workspace_state(),
+        overview=DocumentOverviewState(
+            workspace=_make_workspace_state(),
+            sections=[
+                DocumentSectionCard(
+                    section=DocumentSection.TERMS,
+                    status=SurfaceStatus.READY,
+                    summary="Open Terms",
+                )
+            ],
+        ),
+    )
+    terms_service = FakeTermsService(project_state=_make_terms_state(), document_state=_make_terms_state())
+    work_service = FakeWorkService(state_by_project={"proj-1": object()})
+    view = DocumentWorkspaceView("proj-1", 4, document_service, terms_service, work_service, bus)
+    return view, bus, document_service, terms_service
+
+
+def test_document_workspace_view_renders_shell_tabs():
+    view, _bus, _document_service, _terms_service = _make_view()
+    try:
+        assert view.title_label.text() == "04.png"
+        assert "current document" in view.tip_label.text().lower()
+        assert [view.tab_widget.tabText(index) for index in range(view.tab_widget.count())] == [
+            "Overview",
+            "OCR",
+            "Terms",
+            "Translation",
+            "Images",
+            "Export",
+        ]
+    finally:
+        view.cleanup()
+
+
+def test_document_workspace_terms_tab_uses_shared_terms_component():
+    view, _bus, _document_service, terms_service = _make_view()
+    try:
+        view.show_section(DocumentSection.TERMS)
+        terms_tab = view.tab_widget.currentWidget()
+        assert terms_tab is not None
+        assert hasattr(terms_tab, "table_panel")
+        assert terms_tab.table_panel.proxy_model.rowCount() == 1
+
+        terms_tab.build_button.click()
+        translation_item = terms_tab.table_panel.table_model.item(0, 1)
+        translation_item.setText("Monkey D. Luffy")
+
+        call_names = [name for name, _payload in terms_service.calls]
+        assert "build_terms" in call_names
+        assert "update_term" in call_names
+    finally:
+        view.cleanup()
+
+
+def test_document_workspace_refreshes_on_invalidations():
+    view, bus, document_service, terms_service = _make_view()
+    try:
+        bus.publish(DocumentInvalidatedEvent(project_id="proj-1", document_id=4))
+        bus.publish(TermsInvalidatedEvent(project_id="proj-1", document_id=4))
+        bus.publish(SetupInvalidatedEvent(project_id="proj-1"))
+        QApplication.processEvents()
+
+        workspace_calls = [name for name, _payload in document_service.calls if name == "get_workspace"]
+        terms_calls = [name for name, _payload in terms_service.calls if name == "get_document_terms"]
+        assert len(workspace_calls) == 4
+        assert len(terms_calls) == 4
+    finally:
+        view.cleanup()

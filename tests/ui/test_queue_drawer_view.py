@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from context_aware_translation.application.contracts.common import (
+    AcceptedCommand,
     NavigationTarget,
     NavigationTargetKind,
     QueueActionKind,
@@ -166,5 +167,49 @@ def test_queue_drawer_view_emits_completion_notification_after_refresh():
 
         assert notices[-1].severity is UserMessageSeverity.SUCCESS
         assert notices[-1].text == "Read text from images finished."
+    finally:
+        view.cleanup()
+
+
+def test_queue_drawer_view_deduplicates_local_action_and_transition_notifications():
+    from context_aware_translation.ui.features.queue_drawer_view import QueueDrawerView
+
+    service = FakeQueueService(state=_make_state(status=QueueStatus.FAILED))
+
+    def _apply_action(request):  # noqa: ANN001
+        service.calls.append(("apply_action", request))
+        service.state = QueueState(
+            items=[
+                QueueItem(
+                    queue_item_id="task-1",
+                    title="Read text from images",
+                    project_id="proj-1",
+                    document_id=4,
+                    status=QueueStatus.DONE,
+                    related_target=NavigationTarget(
+                        kind=NavigationTargetKind.DOCUMENT_OCR,
+                        project_id="proj-1",
+                        document_id=4,
+                    ),
+                    available_actions=[QueueActionKind.OPEN_RELATED_ITEM],
+                )
+            ]
+        )
+        return AcceptedCommand(
+            command_name="retry",
+            message=UserMessage(severity=UserMessageSeverity.INFO, text="Retry queued."),
+        )
+
+    service.apply_action = _apply_action  # type: ignore[method-assign]
+    bus = InMemoryApplicationEventBus()
+    view = QueueDrawerView(service, bus)
+    notices: list[UserMessage] = []
+    view.notification_requested.connect(notices.append)
+    try:
+        row = view._rows["task-1"]
+        row._buttons[QueueActionKind.RETRY].click()
+
+        assert len(notices) == 1
+        assert notices[0].text == "Retry queued."
     finally:
         view.cleanup()
