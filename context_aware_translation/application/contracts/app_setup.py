@@ -9,6 +9,7 @@ from context_aware_translation.application.contracts.common import (
     CapabilityCode,
     ContractModel,
     MetadataValue,
+    PresetCode,
     ProviderKind,
     UserMessage,
 )
@@ -25,8 +26,25 @@ class SetupWizardStep(StrEnum):
     CHOOSE_PROVIDERS = "choose_providers"
     ENTER_KEYS = "enter_keys"
     TEST_CAPABILITIES = "test_capabilities"
-    REVIEW_ROUTING = "review_routing"
+    REVIEW_PROFILE = "review_profile"
     COMPLETE = "complete"
+
+
+class WorkflowProfileKind(StrEnum):
+    SHARED = "shared"
+    PROJECT_SPECIFIC = "project_specific"
+
+
+class WorkflowStepId(StrEnum):
+    EXTRACTOR = "extractor"
+    SUMMARIZER = "summarizer"
+    GLOSSARY_TRANSLATOR = "glossary_translator"
+    TRANSLATOR = "translator"
+    REVIEWER = "reviewer"
+    OCR = "ocr"
+    IMAGE_REEMBEDDING = "image_reembedding"
+    MANGA_TRANSLATOR = "manga_translator"
+    TRANSLATOR_BATCH = "translator_batch"
 
 
 class ProviderCard(ContractModel):
@@ -64,15 +82,31 @@ class CapabilityCard(ContractModel):
     connection_label: str | None = None
 
 
-class DefaultRoute(ContractModel):
-    capability: CapabilityCode
-    connection_id: str
-    connection_label: str
+class WorkflowStepRoute(ContractModel):
+    step_id: WorkflowStepId
+    step_label: str
+    connection_id: str | None = None
+    connection_label: str | None = None
+    model: str | None = None
 
 
-class RoutingRecommendation(ContractModel):
-    routes: list[DefaultRoute]
-    notes: list[str] = Field(default_factory=list)
+class WorkflowProfileSummary(ContractModel):
+    profile_id: str
+    name: str
+    kind: WorkflowProfileKind
+    target_language: str | None = None
+    preset: PresetCode | None = None
+    is_default: bool = False
+
+
+class WorkflowProfileDetail(ContractModel):
+    profile_id: str
+    name: str
+    kind: WorkflowProfileKind
+    target_language: str
+    preset: PresetCode
+    routes: list[WorkflowStepRoute] = Field(default_factory=list)
+    is_default: bool = False
 
 
 class ConnectionTestRequest(ContractModel):
@@ -82,7 +116,6 @@ class ConnectionTestRequest(ContractModel):
 class ConnectionTestResult(ContractModel):
     connection_label: str
     capabilities: list[CapabilityCard]
-    recommendation: RoutingRecommendation | None = None
     message: UserMessage | None = None
 
 
@@ -91,8 +124,9 @@ class SaveConnectionRequest(ContractModel):
     connection_id: str | None = None
 
 
-class SaveDefaultRoutesRequest(ContractModel):
-    routes: list[DefaultRoute]
+class SaveWorkflowProfileRequest(ContractModel):
+    profile: WorkflowProfileDetail
+    set_as_default: bool = False
 
 
 class SetupWizardRequest(ContractModel):
@@ -106,12 +140,14 @@ class SetupWizardState(ContractModel):
     selected_providers: list[ProviderKind] = Field(default_factory=list)
     drafts: list[ConnectionDraft] = Field(default_factory=list)
     test_results: list[ConnectionTestResult] = Field(default_factory=list)
-    recommendation: RoutingRecommendation | None = None
+    recommendation: WorkflowProfileDetail | None = None
 
 
 class AppSetupState(ContractModel):
     connections: list[ConnectionSummary]
     capabilities: list[CapabilityCard]
-    default_routes: list[DefaultRoute]
+    shared_profiles: list[WorkflowProfileDetail] = Field(default_factory=list)
+    default_profile_id: str | None = None
+    selected_profile: WorkflowProfileDetail | None = None
     requires_wizard: bool = False
     wizard: SetupWizardState | None = None

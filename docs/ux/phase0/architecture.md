@@ -6,7 +6,7 @@ Redesign the app from a tool-tab UI into a guided translation workspace without
 changing the underlying ordered-document, context-tree, or task-engine model.
 
 The app must present the workflow users actually have:
-- an app owns reusable service connections and default routing
+- an app owns reusable service connections and workflow profiles
 - a `Project` contains an ordered stack of `Documents`
 - earlier documents shape later context
 - users move the stack forward through explicit actions
@@ -20,8 +20,8 @@ User-facing nouns:
 - `Context Frontier`: the furthest document whose OCR/context state is valid for
   downstream work
 - `Terms`: the shared glossary for the current project
-- `App Setup`: global service connections, defaults, and provider wizard
-- `Project Setup`: project-specific language, preset, and routing selection
+- `App Setup`: global service connections, workflow profiles, and provider wizard
+- `Project Setup`: project-specific language, preset, and workflow profile selection
 - `Action`: a user-triggered operation such as reading text, building terms,
   translating, reinserting text, or exporting
 - `Issue`: something that needs attention, such as a blocker or failed action
@@ -30,7 +30,7 @@ Not user-facing on default surfaces:
 - task types
 - handler names
 - resource claims
-- endpoint/profile terminology
+- endpoint terminology
 - context-tree implementation details
 - model-level configuration
 
@@ -87,8 +87,10 @@ This is outside the project shell.
 Purpose:
 - create and edit reusable service connections
 - run a provider-first setup wizard
-- generate default capability routing from available providers
-- expose advanced endpoint and model controls only when needed
+- generate a recommended workflow profile from available providers
+- let users edit shared workflow profiles when needed
+- treat workflow profiles as user-facing wrappers over the existing step-based config payload
+- expose raw endpoint controls only for custom providers or explicit advanced edits
 
 ### Work
 
@@ -143,8 +145,8 @@ This is the `Setup` destination inside a project.
 
 Purpose:
 - choose target language and project preset
-- show which app-level defaults this project will use
-- allow project-specific routing overrides when needed
+- choose which workflow profile the project uses
+- optionally customize a project-specific workflow profile when needed
 - deep-link to `App Setup` when global connections are missing or insufficient
 
 ### Queue Drawer
@@ -174,6 +176,24 @@ Advanced controls are allowed when they add real control, especially in:
 - `Queue` details
 - document-level rerun and diagnostics panels
 
+
+## Setup Implementation Principle
+
+Setup is a UX reframing over the existing step-based config/profile backend.
+
+The backend model stays the same in substance:
+- saved provider connections
+- saved step-based config payloads
+- shared profiles and project-specific config
+
+The UX renames and organizes that model as:
+- `Connections`
+- `Workflow Profiles`
+- `Project Setup` choosing a shared profile or a project-specific profile
+
+The setup wizard generates a concrete saved workflow profile. It does not create
+a separate routing abstraction.
+
 ## Setup Model
 
 ### App Setup owns
@@ -181,20 +201,20 @@ Advanced controls are allowed when they add real control, especially in:
 - API keys and secrets
 - known-provider defaults
 - custom base URLs
-- recommended model defaults
-- default capability routing
+- shared workflow profiles
+- step-level connection and model routing inside workflow profiles
 
 ### Project Setup owns
 - target language
 - project quality preset
-- whether the project uses app defaults or overrides them
-- project-specific routing overrides when necessary
+- selected workflow profile
+- optional project-specific workflow profile when necessary
 
 ### Precedence rule
 
-For each capability:
-1. project override
-2. app default
+For each workflow step:
+1. project-specific workflow profile
+2. shared workflow profile
 3. missing
 
 ## Core Interaction Rules
@@ -236,10 +256,12 @@ Shared Terms actions:
 
 Setup actions:
 - `Open App Setup`
-- `Use app defaults`
-- `Override for this project`
+- `Use recommended profile`
+- `Use shared profile`
+- `Edit workflow profile`
+- `Customize for this project`
+- `Edit project profile`
 - `Test connection`
-- `Use recommended setup`
 - `Advanced`
 
 Direct-execution rule:

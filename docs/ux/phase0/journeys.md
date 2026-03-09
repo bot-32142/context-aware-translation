@@ -16,13 +16,12 @@ Flow:
 4. User picks the services they already have, such as Gemini, OpenAI,
    DeepSeek, Anthropic, or a custom OpenAI-compatible endpoint.
 5. User pastes API keys.
-6. App tests capability coverage.
-7. App proposes a recommended default routing map.
-8. User accepts the recommended app setup.
-9. App returns the user to project `Setup`.
+6. App tests capability coverage and shows a readiness summary.
+7. App proposes a recommended workflow profile.
+8. User accepts the recommended profile or edits it.
+9. App saves reusable connections and the workflow profile, then returns the user to project `Setup`.
 10. User selects target language and project preset.
-11. User either keeps `Use app defaults` or overrides a capability for this
-    project.
+11. User chooses a shared workflow profile or creates a project-specific profile.
 12. App sends the user to `Work`.
 13. Work shows imported documents or prompts for import.
 14. User imports documents.
@@ -68,42 +67,38 @@ Flow:
 3. Known providers ask for API key only.
 4. Custom providers ask for base URL, API key, and model defaults.
 5. User runs connection tests.
-6. App reports capability coverage:
+6. App reports capability coverage as feedback:
    - translation
    - image text reading
    - image editing
-7. App proposes default routing.
+7. App proposes a recommended workflow profile.
 8. User either:
-   - accepts `Use recommended setup`
-   - adjusts routing
+   - accepts `Use recommended profile`
+   - edits the workflow profile
    - opens `Advanced`
-9. App saves reusable defaults and returns the user to the previous destination.
+9. App saves reusable connections and workflow profiles, then returns the user to the previous destination.
 
 Success condition:
-- the user can set up services without manually designing a routing profile
+- the user can set up services without manually designing a workflow profile from scratch
 
 ## Journey 4: Project Setup
 
 Goal:
-- let a project adopt app defaults quickly while still supporting project-level
-  overrides
+- let a project adopt a shared workflow profile quickly while still supporting
+  project-specific customization
 
 Flow:
 1. User opens project `Setup`.
 2. User sets target language.
 3. User sets project preset.
-4. Each capability card shows the current source:
-   - app default
-   - project override
-   - missing
-5. User keeps `Use app defaults` or overrides a capability for this project.
-6. If the needed connection does not exist, user opens `App Setup` from the
-   project card.
+4. Project Setup shows the selected workflow profile and a short summary of the
+   workflow steps it covers.
+5. User keeps the shared workflow profile, chooses `Use shared profile`, or chooses `Customize for this project`.
+6. If the needed connection or profile does not exist, user opens `App Setup`.
 7. User saves and returns to `Work`.
 
 Success condition:
-- users understand what is global, what is per-project, and what will actually
-  be used
+- users understand what is global, what is per-project, and which workflow profile will actually be used
 
 ## Journey 5: OCR Correction
 

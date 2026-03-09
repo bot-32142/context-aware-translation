@@ -3,18 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CAT Studio Setup v4</title>
+    <title>CAT Studio Setup v5</title>
     <link rel="stylesheet" href="./minimal_v3.css" />
     <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
   </head>
   <body>
     <main class="page">
       <header class="intro">
-        <p class="eyebrow">Setup v4</p>
-        <h1>App Setup and Project Setup</h1>
+        <p class="eyebrow">Setup v5</p>
+        <h1>Connections and Workflow Profiles</h1>
         <p>
-          Connections live at the app level. Projects mostly inherit those
-          defaults and only override when necessary.
+          App Setup manages reusable connections and shared workflow profiles.
+          Project Setup chooses a shared profile or creates a project-specific
+          profile when needed.
         </p>
       </header>
 
@@ -37,84 +38,93 @@
             <section class="list-card wizard-card">
               <div class="list-header">
                 <div>
-                  <p class="eyebrow">Step 1 of 4</p>
-                  <h2>What services do you already use?</h2>
+                  <p class="eyebrow">Provider-first wizard</p>
+                  <h2>Turn available services into a reusable workflow profile</h2>
                 </div>
-                <button class="pill secondary">Advanced</button>
+                <button class="pill secondary">Run setup wizard</button>
               </div>
 
               <div class="provider-grid">
                 <article class="provider-card selected">
                   <strong>Gemini</strong>
-                  <p>Image text reading and image editing</p>
+                  <p>Saved as a reusable connection</p>
                   <div class="field masked">AIza********************************</div>
                 </article>
                 <article class="provider-card selected">
                   <strong>DeepSeek</strong>
-                  <p>Translation</p>
+                  <p>Saved as a reusable connection</p>
                   <div class="field masked">sk-********************************</div>
                 </article>
                 <article class="provider-card">
                   <strong>OpenAI</strong>
-                  <p>Optional backup translation or image work</p>
+                  <p>Available to add later</p>
                   <div class="field ghost">Add key</div>
                 </article>
                 <article class="provider-card custom">
                   <strong>OpenAI-compatible / Custom</strong>
-                  <p>Use for custom endpoints</p>
-                  <div class="field">Base URL</div>
+                  <p>Use when base URL and exact model must be entered manually</p>
+                  <div class="field ghost">Custom connection</div>
                 </article>
               </div>
 
-              <div class="test-matrix">
-                <div class="matrix-row">
-                  <span>Translation</span>
-                  <span class="status good">DeepSeek ready</span>
+              <div class="profile-table compact-profile-table">
+                <div class="profile-header-row">
+                  <span>Step</span>
+                  <span>Connection</span>
+                  <span>Model</span>
                 </div>
-                <div class="matrix-row">
-                  <span>Image text reading</span>
-                  <span class="status good">Gemini ready</span>
+                <div class="profile-row">
+                  <span>OCR</span>
+                  <strong>Gemini</strong>
+                  <span>gemini-3-flash-preview</span>
                 </div>
-                <div class="matrix-row">
-                  <span>Image editing</span>
-                  <span class="status good">Gemini ready</span>
+                <div class="profile-row">
+                  <span>Translator</span>
+                  <strong>DeepSeek</strong>
+                  <span>deepseek-chat</span>
+                </div>
+                <div class="profile-row">
+                  <span>Image reembedding</span>
+                  <strong>Gemini</strong>
+                  <span>gemini-3.1-flash-image-preview</span>
                 </div>
               </div>
 
               <div class="setup-actions">
-                <button class="pill secondary">Adjust routing</button>
-                <button class="pill primary">Use recommended setup</button>
+                <button class="pill secondary">Edit workflow profile</button>
+                <button class="pill primary">Use recommended profile</button>
               </div>
             </section>
 
             <aside class="side-pane route-pane">
               <div class="panel-header">
                 <div>
-                  <p class="eyebrow">Default routing</p>
-                  <h2>Recommended setup</h2>
+                  <p class="eyebrow">Shared setup</p>
+                  <h2>Connections and shared profiles</h2>
                 </div>
               </div>
 
-              <div class="route-list">
-                <div class="route-row">
-                  <span>Translation</span>
-                  <strong>DeepSeek</strong>
+              <div class="summary-stack">
+                <div class="summary-card">
+                  <strong>Connections</strong>
+                  <p>Gemini, DeepSeek</p>
                 </div>
-                <div class="route-row">
-                  <span>Image text reading</span>
-                  <strong>Gemini</strong>
+                <div class="summary-card">
+                  <strong>Shared workflow profiles</strong>
+                  <p>Recommended, Low Cost, Manga Quality</p>
                 </div>
-                <div class="route-row">
-                  <span>Image editing</span>
-                  <strong>Gemini</strong>
+                <div class="summary-card light">
+                  <strong>Capability summary</strong>
+                  <p>Translation, image text reading, and image editing are ready.</p>
                 </div>
               </div>
 
               <div class="note-card soft-note">
-                <strong>Advanced stays optional.</strong>
+                <strong>This is the same backend model, reframed.</strong>
                 <p>
-                  Known providers hide endpoint and model details by default.
-                  Custom endpoints and exact models live under Advanced.
+                  Connections stay separate from workflow profiles. The wizard
+                  simply creates a concrete shared workflow profile using the
+                  existing step-based config system.
                 </p>
               </div>
             </aside>
@@ -144,8 +154,8 @@
             <section class="list-card project-setup-card">
               <div class="list-header">
                 <div>
-                  <p class="eyebrow">Project defaults</p>
-                  <h2>Use app setup unless this project needs something different</h2>
+                  <p class="eyebrow">Project setup</p>
+                  <h2>Choose a shared profile or create one just for this project</h2>
                 </div>
               </div>
 
@@ -164,49 +174,40 @@
                 </div>
               </div>
 
-              <div class="capability-block">
-                <div class="capability-head">
-                  <div>
-                    <strong>Translation</strong>
-                    <p>Using app default</p>
-                  </div>
-                  <span class="status good">DeepSeek</span>
+              <div class="selection-card">
+                <div>
+                  <strong>Selected shared workflow profile</strong>
+                  <p>Recommended</p>
                 </div>
-                <div class="capability-actions">
-                  <button class="pill secondary small">Use app defaults</button>
-                  <button class="pill secondary small">Override for this project</button>
-                </div>
+                <button class="pill secondary small">Use shared profile</button>
               </div>
 
-              <div class="capability-block">
-                <div class="capability-head">
-                  <div>
-                    <strong>Image text reading</strong>
-                    <p>Using app default</p>
-                  </div>
-                  <span class="status good">Gemini</span>
+              <div class="profile-table">
+                <div class="profile-header-row">
+                  <span>Step</span>
+                  <span>Connection</span>
+                  <span>Model</span>
                 </div>
-                <div class="capability-actions">
-                  <button class="pill secondary small">Use app defaults</button>
-                  <button class="pill secondary small">Override for this project</button>
+                <div class="profile-row">
+                  <span>Extractor</span>
+                  <strong>DeepSeek</strong>
+                  <span>deepseek-chat</span>
                 </div>
-              </div>
-
-              <div class="capability-block warn-block">
-                <div class="capability-head">
-                  <div>
-                    <strong>Image editing</strong>
-                    <p>Missing in app setup</p>
-                  </div>
-                  <span class="status warn">Needs setup</span>
+                <div class="profile-row">
+                  <span>OCR</span>
+                  <strong>Gemini</strong>
+                  <span>gemini-3-flash-preview</span>
                 </div>
-                <div class="capability-actions">
-                  <button class="pill secondary small">Open App Setup</button>
+                <div class="profile-row">
+                  <span>Manga translator</span>
+                  <strong>Gemini</strong>
+                  <span>gemini-3-flash-preview</span>
                 </div>
               </div>
 
               <div class="setup-actions">
-                <button class="pill secondary">Advanced</button>
+                <button class="pill secondary">Customize for this project</button>
+                <button class="pill secondary">Edit project profile</button>
                 <button class="pill primary">Save project setup</button>
               </div>
             </section>
@@ -214,31 +215,31 @@
             <aside class="side-pane route-pane">
               <div class="panel-header">
                 <div>
-                  <p class="eyebrow">What this project will use</p>
-                  <h2>Current routing</h2>
+                  <p class="eyebrow">Scope</p>
+                  <h2>What this project is using</h2>
                 </div>
               </div>
 
-              <div class="route-list compact">
-                <div class="route-row">
-                  <span>Translation</span>
-                  <strong>App default: DeepSeek</strong>
+              <div class="summary-stack">
+                <div class="summary-card">
+                  <strong>Shared profile</strong>
+                  <p>Recommended</p>
                 </div>
-                <div class="route-row">
-                  <span>Image text reading</span>
-                  <strong>App default: Gemini</strong>
+                <div class="summary-card light">
+                  <strong>Project-specific profile</strong>
+                  <p>Not created yet</p>
                 </div>
-                <div class="route-row">
-                  <span>Image editing</span>
-                  <strong>Missing</strong>
+                <div class="summary-card light">
+                  <strong>Missing something?</strong>
+                  <p>Open App Setup if a required shared connection or profile is missing.</p>
                 </div>
               </div>
 
               <div class="note-card warm-note">
-                <strong>Global vs project scope</strong>
+                <strong>No inherit/override cards.</strong>
                 <p>
-                  App Setup stores reusable connections. Project Setup decides
-                  whether this project inherits them or overrides them.
+                  Project Setup selects a shared workflow profile or creates a
+                  project-specific profile. Capability status stays summary-only.
                 </p>
               </div>
             </aside>

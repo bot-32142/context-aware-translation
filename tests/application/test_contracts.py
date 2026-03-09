@@ -3,10 +3,13 @@ from context_aware_translation.application.contracts.app_setup import (
     CapabilityCard,
     ConnectionStatus,
     ConnectionSummary,
-    DefaultRoute,
     ProviderCard,
     SetupWizardState,
     SetupWizardStep,
+    WorkflowProfileDetail,
+    WorkflowProfileKind,
+    WorkflowStepId,
+    WorkflowStepRoute,
 )
 from context_aware_translation.application.contracts.common import (
     AcceptedCommand,
@@ -39,12 +42,7 @@ from context_aware_translation.application.contracts.document import (
     TranslationUnitKind,
     TranslationUnitState,
 )
-from context_aware_translation.application.contracts.project_setup import (
-    ProjectCapabilityBinding,
-    ProjectCapabilityCard,
-    ProjectConnectionOption,
-    ProjectSetupState,
-)
+from context_aware_translation.application.contracts.project_setup import ProjectSetupState
 from context_aware_translation.application.contracts.queue import QueueItem, QueueState
 from context_aware_translation.application.contracts.terms import (
     TermsScope,
@@ -60,6 +58,33 @@ from context_aware_translation.application.contracts.work import (
     WorkDocumentRow,
 )
 from context_aware_translation.application.errors import ApplicationError, ApplicationErrorCode, ApplicationErrorPayload
+
+
+def _profile(*, profile_id: str, name: str, kind: WorkflowProfileKind) -> WorkflowProfileDetail:
+    return WorkflowProfileDetail(
+        profile_id=profile_id,
+        name=name,
+        kind=kind,
+        target_language="English",
+        preset=PresetCode.BALANCED,
+        routes=[
+            WorkflowStepRoute(
+                step_id=WorkflowStepId.TRANSLATOR,
+                step_label="Translator",
+                connection_id="conn-gemini",
+                connection_label="Gemini",
+                model="gemini-3-flash-preview",
+            ),
+            WorkflowStepRoute(
+                step_id=WorkflowStepId.OCR,
+                step_label="OCR",
+                connection_id="conn-gemini",
+                connection_label="Gemini",
+                model="gemini-3-flash-preview",
+            ),
+        ],
+        is_default=(kind is WorkflowProfileKind.SHARED),
+    )
 
 
 def test_workboard_state_serializes_cleanly() -> None:
@@ -105,6 +130,8 @@ def test_workboard_state_serializes_cleanly() -> None:
 
 
 def test_setup_and_document_contracts_are_json_serializable() -> None:
+    shared_profile = _profile(profile_id="profile:shared", name="Recommended", kind=WorkflowProfileKind.SHARED)
+    project_profile = _profile(profile_id="project:proj-1", name="One Piece profile", kind=WorkflowProfileKind.PROJECT_SPECIFIC)
     app_setup = AppSetupState(
         connections=[
             ConnectionSummary(
@@ -126,43 +153,18 @@ def test_setup_and_document_contracts_are_json_serializable() -> None:
                 connection_label="Gemini",
             )
         ],
-        default_routes=[
-            DefaultRoute(
-                capability=CapabilityCode.IMAGE_TEXT_READING,
-                connection_id="conn-gemini",
-                connection_label="Gemini",
-            )
-        ],
+        shared_profiles=[shared_profile],
+        default_profile_id=shared_profile.profile_id,
+        selected_profile=shared_profile,
         requires_wizard=False,
     )
     project_setup = ProjectSetupState(
         project=ProjectRef(project_id="proj-1", name="One Piece"),
-        target_language="English",
-        preset=PresetCode.BALANCED,
-        bindings=[
-            ProjectCapabilityBinding(
-                capability=CapabilityCode.IMAGE_TEXT_READING,
-                availability=CapabilityAvailability.READY,
-                source="app_default",
-                connection_id="conn-gemini",
-                connection_label="Gemini",
-            )
-        ],
-        capability_cards=[
-            ProjectCapabilityCard(
-                capability=CapabilityCode.IMAGE_TEXT_READING,
-                availability=CapabilityAvailability.READY,
-                source="app_default",
-                connection_id="conn-gemini",
-                connection_label="Gemini",
-                options=[
-                    ProjectConnectionOption(
-                        connection_id="conn-gemini",
-                        connection_label="Gemini",
-                    )
-                ],
-            )
-        ],
+        available_connections=app_setup.connections,
+        shared_profiles=[shared_profile],
+        selected_shared_profile_id=shared_profile.profile_id,
+        selected_shared_profile=shared_profile,
+        project_profile=project_profile,
     )
     translation = DocumentTranslationState(
         workspace=DocumentWorkspaceState(
@@ -208,7 +210,7 @@ def test_setup_and_document_contracts_are_json_serializable() -> None:
     )
 
     assert app_setup.model_dump(mode="json")["connections"][0]["provider"] == "gemini"
-    assert project_setup.model_dump(mode="json")["preset"] == "balanced"
+    assert project_setup.model_dump(mode="json")["project_profile"]["kind"] == "project_specific"
     assert translation.model_dump(mode="json")["workspace"]["active_tab"] == "translation"
     assert translation.model_dump(mode="json")["units"][0]["actions"]["can_retranslate"] is True
     assert export_state.model_dump(mode="json")["can_export"] is True
@@ -230,12 +232,14 @@ def test_setup_wizard_state_serializes_for_provider_first_flow() -> None:
             )
         ],
         selected_providers=[ProviderKind.GEMINI],
+        recommendation=_profile(profile_id="recommended", name="Recommended", kind=WorkflowProfileKind.SHARED),
     )
 
     payload = wizard.to_payload()
 
     assert payload["step"] == "enter_keys"
     assert payload["available_providers"][0]["provider"] == "gemini"
+    assert payload["recommendation"]["routes"][0]["step_id"] == "translator"
 
 
 def test_terms_queue_and_errors_expose_ui_safe_contracts() -> None:

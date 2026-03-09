@@ -642,3 +642,63 @@ label {
 .pill.small {
   padding: 9px 14px;
 }
+
+
+.summary-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.summary-card,
+.selection-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: #f8f2e8;
+}
+
+.summary-card.light {
+  background: #f4ece0;
+}
+
+.profile-table {
+  margin: 18px 24px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  overflow: hidden;
+  background: #fffaf2;
+}
+
+.compact-profile-table {
+  margin-top: 22px;
+}
+
+.profile-header-row,
+.profile-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1.4fr;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 18px;
+}
+
+.profile-header-row {
+  background: #efe5d7;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.profile-row {
+  border-top: 1px solid #efe4d6;
+}
+
+.selection-card {
+  margin: 18px 24px 0;
+}

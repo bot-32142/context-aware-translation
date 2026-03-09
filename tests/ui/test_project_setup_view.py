@@ -1,28 +1,33 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
+from context_aware_translation.application.contracts.app_setup import (
+    ConnectionStatus,
+    ConnectionSummary,
+    WorkflowProfileDetail,
+    WorkflowProfileKind,
+    WorkflowStepId,
+    WorkflowStepRoute,
+)
 from context_aware_translation.application.contracts.common import (
-    BindingSource,
     BlockerCode,
-    CapabilityAvailability,
+    BlockerInfo,
     CapabilityCode,
     NavigationTarget,
     NavigationTargetKind,
     PresetCode,
     ProjectRef,
+    ProviderKind,
 )
-from context_aware_translation.application.contracts.project_setup import (
-    ProjectCapabilityBinding,
-    ProjectCapabilityCard,
-    ProjectConnectionOption,
-    ProjectSetupState,
-)
+from context_aware_translation.application.contracts.project_setup import ProjectSetupState
 from context_aware_translation.application.events import InMemoryApplicationEventBus, SetupInvalidatedEvent
 from tests.application.fakes import FakeProjectSetupService
 
 try:
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication, QDialog
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -39,74 +44,101 @@ def _qapp():
     yield app
 
 
-def _make_state(
-    *, translation_source: BindingSource = BindingSource.APP_DEFAULT, missing_image_editing: bool = False
-) -> ProjectSetupState:
-    shared_option = ProjectConnectionOption(connection_id="conn-gemini", connection_label="Gemini Shared")
-    override_option = ProjectConnectionOption(connection_id="conn-openai", connection_label="OpenAI Shared")
-
-    image_blocker = None
-    image_options: list[ProjectConnectionOption] = [shared_option] if not missing_image_editing else []
-    image_connection_id = "conn-gemini" if not missing_image_editing else None
-    image_source = BindingSource.APP_DEFAULT if not missing_image_editing else BindingSource.MISSING
-    image_availability = CapabilityAvailability.READY if not missing_image_editing else CapabilityAvailability.MISSING
-    if missing_image_editing:
-        from context_aware_translation.application.contracts.common import BlockerInfo
-
-        image_blocker = BlockerInfo(
-            code=BlockerCode.NEEDS_SETUP,
-            message="Image editing needs a shared connection in App Setup.",
-            target=NavigationTarget(kind=NavigationTargetKind.APP_SETUP),
-        )
-
-    translation_connection_id = (
-        "conn-gemini" if translation_source is not BindingSource.PROJECT_OVERRIDE else "conn-openai"
-    )
-    translation_connection_label = (
-        "Gemini Shared" if translation_source is not BindingSource.PROJECT_OVERRIDE else "OpenAI Shared"
-    )
-
-    return ProjectSetupState(
-        project=ProjectRef(project_id="proj-1", name="One Piece"),
+def _profile(*, profile_id: str, name: str, kind: WorkflowProfileKind) -> WorkflowProfileDetail:
+    return WorkflowProfileDetail(
+        profile_id=profile_id,
+        name=name,
+        kind=kind,
         target_language="English",
         preset=PresetCode.BALANCED,
-        bindings=[
-            ProjectCapabilityBinding(
-                capability=CapabilityCode.TRANSLATION,
-                availability=CapabilityAvailability.READY,
-                source=translation_source,
-                connection_id=translation_connection_id,
-                connection_label=translation_connection_label,
+        routes=[
+            WorkflowStepRoute(
+                step_id=WorkflowStepId.TRANSLATOR,
+                step_label="Translator",
+                connection_id="conn-gemini",
+                connection_label="Gemini Shared",
+                model="gemini-3-flash-preview",
             ),
-            ProjectCapabilityBinding(
-                capability=CapabilityCode.IMAGE_EDITING,
-                availability=image_availability,
-                source=image_source,
-                connection_id=image_connection_id,
-                connection_label="Gemini Shared" if image_connection_id else None,
-                blocker=image_blocker,
-            ),
-        ],
-        capability_cards=[
-            ProjectCapabilityCard(
-                capability=CapabilityCode.TRANSLATION,
-                availability=CapabilityAvailability.READY,
-                source=translation_source,
-                connection_id=translation_connection_id,
-                connection_label=translation_connection_label,
-                options=[shared_option, override_option],
-            ),
-            ProjectCapabilityCard(
-                capability=CapabilityCode.IMAGE_EDITING,
-                availability=image_availability,
-                source=image_source,
-                connection_id=image_connection_id,
-                connection_label="Gemini Shared" if image_connection_id else None,
-                options=image_options,
-                blocker=image_blocker,
+            WorkflowStepRoute(
+                step_id=WorkflowStepId.OCR,
+                step_label="OCR",
+                connection_id="conn-gemini",
+                connection_label="Gemini Shared",
+                model="gemini-3-flash-preview",
             ),
         ],
+        is_default=(kind is WorkflowProfileKind.SHARED),
     )
+
+
+def _make_state(*, blocker: str | None = None, project_specific: bool = False) -> ProjectSetupState:
+    shared = _profile(profile_id="profile:shared", name="Recommended", kind=WorkflowProfileKind.SHARED)
+    project_profile = (
+        _profile(profile_id="project:proj-1", name="Project profile", kind=WorkflowProfileKind.PROJECT_SPECIFIC)
+        if project_specific
+        else None
+    )
+    return ProjectSetupState(
+        project=ProjectRef(project_id="proj-1", name="One Piece"),
+        available_connections=[
+            ConnectionSummary(
+                connection_id="conn-gemini",
+                display_name="Gemini Shared",
+                provider=ProviderKind.GEMINI,
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                default_model="gemini-3-flash-preview",
+                status=ConnectionStatus.READY,
+                capabilities=[CapabilityCode.TRANSLATION],
+            ),
+            ConnectionSummary(
+                connection_id="conn-openai",
+                display_name="OpenAI Shared",
+                provider=ProviderKind.OPENAI,
+                base_url="https://api.openai.com/v1",
+                default_model="gpt-4.1-mini",
+                status=ConnectionStatus.READY,
+                capabilities=[CapabilityCode.TRANSLATION],
+            ),
+        ],
+        shared_profiles=[shared],
+        selected_shared_profile_id=shared.profile_id,
+        selected_shared_profile=shared,
+        project_profile=project_profile,
+        blocker=(
+            None
+            if blocker is None
+            else BlockerInfo(
+                code=BlockerCode.NEEDS_SETUP,
+                message=blocker,
+                target=NavigationTarget(kind=NavigationTargetKind.APP_SETUP),
+            )
+        ),
+    )
+
+
+class _FakeProfileEditorDialog:
+    def __init__(self, *args, profile: WorkflowProfileDetail, **kwargs):
+        self._profile = profile.model_copy(
+            update={
+                "target_language": "Chinese",
+                "routes": [
+                    route.model_copy(
+                        update={
+                            "connection_id": "conn-openai" if route.step_id is WorkflowStepId.TRANSLATOR else route.connection_id,
+                            "connection_label": "OpenAI Shared" if route.step_id is WorkflowStepId.TRANSLATOR else route.connection_label,
+                            "model": "gpt-4.1-mini" if route.step_id is WorkflowStepId.TRANSLATOR else route.model,
+                        }
+                    )
+                    for route in profile.routes
+                ],
+            }
+        )
+
+    def exec(self):
+        return QDialog.DialogCode.Accepted
+
+    def profile(self):
+        return self._profile
 
 
 def test_project_setup_view_renders_backend_state():
@@ -117,15 +149,14 @@ def test_project_setup_view_renders_backend_state():
     view = ProjectSetupView("proj-1", service, bus)
     try:
         assert view.title_label.text() == view.tr("Setup for One Piece")
-        assert view.target_language_combo.currentText() == "English"
-        assert view.preset_combo.currentData() == PresetCode.BALANCED.value
-        assert "Using app defaults" in view.summary_label.text()
+        assert "shared workflow profile" in view.summary_label.text().lower()
+        assert view.routes_table.rowCount() == 2
         assert service.calls == [("get_state", "proj-1")]
     finally:
         view.cleanup()
 
 
-def test_project_setup_view_saves_overrides_and_emits_completion():
+def test_project_setup_view_saves_selected_shared_profile():
     from context_aware_translation.ui.features.project_setup_view import ProjectSetupView
 
     service = FakeProjectSetupService(state=_make_state())
@@ -134,40 +165,57 @@ def test_project_setup_view_saves_overrides_and_emits_completion():
     saved: list[str] = []
     view.save_completed.connect(saved.append)
     try:
-        translation_card = view._card_widgets[CapabilityCode.TRANSLATION]
-        translation_card.override_checkbox.setChecked(True)
-        option_index = translation_card.connection_combo.findData("conn-openai")
-        translation_card.connection_combo.setCurrentIndex(option_index)
-
         view.save_button.click()
 
         assert saved == ["proj-1"]
         call_name, request = service.calls[-1]
         assert call_name == "save"
         assert request.project_id == "proj-1"
-        assert request.target_language == "English"
-        assert request.preset is PresetCode.BALANCED
-        assert len(request.overrides) == 1
-        assert request.overrides[0].capability is CapabilityCode.TRANSLATION
-        assert request.overrides[0].connection_id == "conn-openai"
+        assert request.shared_profile_id == "profile:shared"
+        assert request.project_profile is None
     finally:
         view.cleanup()
 
 
-def test_project_setup_view_opens_app_setup_for_missing_capability():
+def test_project_setup_view_can_customize_project_profile():
     from context_aware_translation.ui.features.project_setup_view import ProjectSetupView
 
-    service = FakeProjectSetupService(state=_make_state(missing_image_editing=True))
+    service = FakeProjectSetupService(state=_make_state())
+    bus = InMemoryApplicationEventBus()
+    view = ProjectSetupView("proj-1", service, bus)
+    try:
+        with patch(
+            "context_aware_translation.ui.features.project_setup_view.WorkflowProfileEditorDialog",
+            _FakeProfileEditorDialog,
+        ):
+            view.customize_button.click()
+            view.save_button.click()
+
+        call_name, request = service.calls[-1]
+        assert call_name == "save"
+        assert request.shared_profile_id == "profile:shared"
+        assert request.project_profile is not None
+        assert request.project_profile.kind is WorkflowProfileKind.PROJECT_SPECIFIC
+        assert request.project_profile.target_language == "Chinese"
+        translator_route = next(
+            route for route in request.project_profile.routes if route.step_id is WorkflowStepId.TRANSLATOR
+        )
+        assert translator_route.connection_id == "conn-openai"
+    finally:
+        view.cleanup()
+
+
+def test_project_setup_view_opens_app_setup_for_blocker():
+    from context_aware_translation.ui.features.project_setup_view import ProjectSetupView
+
+    service = FakeProjectSetupService(state=_make_state(blocker="Open App Setup."))
     bus = InMemoryApplicationEventBus()
     view = ProjectSetupView("proj-1", service, bus)
     requested: list[bool] = []
     view.open_app_setup_requested.connect(lambda: requested.append(True))
     try:
-        image_card = view._card_widgets[CapabilityCode.IMAGE_EDITING]
-        assert not image_card.open_app_setup_button.isHidden()
-
-        image_card.open_app_setup_button.clicked.emit()
-
+        assert not view.open_app_setup_button.isHidden()
+        view.open_app_setup_button.clicked.emit()
         assert requested == [True]
     finally:
         view.cleanup()
@@ -180,12 +228,11 @@ def test_project_setup_view_refreshes_on_setup_invalidation():
     bus = InMemoryApplicationEventBus()
     view = ProjectSetupView("proj-1", service, bus)
     try:
-        service.state = _make_state(translation_source=BindingSource.PROJECT_OVERRIDE)
+        service.state = _make_state(project_specific=True)
         bus.publish(SetupInvalidatedEvent(project_id="proj-1"))
         QApplication.processEvents()
 
-        translation_card = view._card_widgets[CapabilityCode.TRANSLATION]
-        assert translation_card.override_checkbox.isChecked()
+        assert "project-specific workflow profile" in view.summary_label.text().lower()
         assert service.calls == [("get_state", "proj-1"), ("get_state", "proj-1")]
     finally:
         view.cleanup()

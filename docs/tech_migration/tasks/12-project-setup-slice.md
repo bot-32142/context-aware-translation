@@ -2,7 +2,7 @@
 
 ## Goal
 
-Implement project-level setup that selects target language, preset, and inherit/override behavior against app defaults.
+Implement project-level setup that selects target language, preset, and either a shared workflow profile or a project-specific workflow profile.
 
 ## Execute
 
@@ -31,23 +31,23 @@ Start after Task 10. Can run in parallel with Task 11.
 Implement `Project Setup`:
 - target language
 - project preset
-- capability cards showing effective source
-- inherit app defaults
-- override for this project
-- deep-link to App Setup when the global connection is missing
-- advanced override section
+- shared workflow profile selection
+- project-specific workflow profile creation/editing
+- deep-link to App Setup when the required shared connection or profile is missing
+- advanced section for profile details only
 
 Implementation note:
 - In the first migrated version, the `Advanced` area may be informational only.
 - Raw endpoint/model editing should remain in App Setup. Project Setup should
-  focus on inherit-vs-override and capability selection.
+  focus on profile selection and project-specific profile editing.
 
 ## Acceptance Criteria
 
-- project setup clearly distinguishes app defaults from project overrides
+- project setup clearly distinguishes shared workflow profiles from project-specific workflow profiles
 - UI uses application contracts, not config/profile storage directly
 - saving project setup returns cleanly to the project shell
-- capability cards and setup actions come from backend query state
+- setup actions come from backend query state
 - project setup refreshes via application invalidation + requery
+- capability status is summary-only, not the main editing surface
 - any project-level `Advanced` section must not reintroduce raw endpoint/model
   editing that belongs in App Setup

@@ -2,29 +2,18 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from context_aware_translation.application.contracts.common import (
-    BindingSource,
-    BlockerCode,
-    CapabilityAvailability,
-    CapabilityCode,
-    NavigationTargetKind,
-    PresetCode,
-)
-from context_aware_translation.application.contracts.project_setup import (
-    ProjectCapabilityBinding,
-    ProjectCapabilityCard,
-    ProjectConnectionOption,
-    ProjectSetupState,
-    SaveProjectSetupRequest,
-)
+from context_aware_translation.application.contracts.app_setup import WorkflowProfileDetail, WorkflowProfileKind
+from context_aware_translation.application.contracts.common import BlockerCode, NavigationTargetKind
+from context_aware_translation.application.contracts.project_setup import ProjectSetupState, SaveProjectSetupRequest
 from context_aware_translation.application.errors import ApplicationErrorCode
 from context_aware_translation.application.runtime import (
     ApplicationRuntime,
-    build_default_routes_from_config,
+    build_connection_summary,
+    build_workflow_profile_detail,
     build_workflow_profile_payload,
     make_blocker,
     raise_application_error,
-    read_ui_preset,
+    read_source_profile_id,
 )
 
 
@@ -40,112 +29,135 @@ class DefaultProjectSetupService:
 
     def get_state(self, project_id: str) -> ProjectSetupState:
         project = self._runtime.get_project_ref(project_id)
-        config = self._runtime.get_effective_config_payload(project_id)
-        default_profile = self._runtime.get_default_profile()
-        default_config = default_profile.config if default_profile is not None else {}
-        default_routes = {
-            route.capability: route.connection_id for route in build_default_routes_from_config(default_config)
-        }
-        current_routes = {route.capability: route.connection_id for route in build_default_routes_from_config(config)}
-        options = [
-            ProjectConnectionOption(connection_id=conn_id, connection_label=label)
-            for conn_id, label in self._runtime.list_connection_options()
+        book = self._runtime.get_book(project_id)
+        available_connections = [
+            build_connection_summary(profile) for profile in self._runtime.book_manager.list_endpoint_profiles()
         ]
-        option_ids = {option.connection_id for option in options}
+        shared_profiles = self._shared_profile_details()
+        shared_by_id = {profile.profile_id: profile for profile in shared_profiles}
 
-        bindings: list[ProjectCapabilityBinding] = []
-        cards: list[ProjectCapabilityCard] = []
-        for capability in CapabilityCode:
-            current_id = current_routes.get(capability)
-            default_id = default_routes.get(capability)
-            if current_id is not None:
-                source = BindingSource.APP_DEFAULT if current_id == default_id else BindingSource.PROJECT_OVERRIDE
-            else:
-                source = BindingSource.MISSING
+        selected_shared_profile_id: str | None = None
+        selected_shared_profile: WorkflowProfileDetail | None = None
+        project_profile: WorkflowProfileDetail | None = None
+        blocker = None
 
-            blocker = None
-            if current_id is None:
-                availability = CapabilityAvailability.MISSING
+        if book.profile_id is not None:
+            selected_shared_profile_id = book.profile_id
+            selected_shared_profile = shared_by_id.get(book.profile_id)
+            if selected_shared_profile is None:
                 blocker = make_blocker(
                     BlockerCode.NEEDS_SETUP,
-                    f"{capability.value.replace('_', ' ').title()} needs a shared connection in App Setup.",
+                    "The selected shared workflow profile no longer exists. Open App Setup.",
                     target_kind=NavigationTargetKind.APP_SETUP,
                 )
-            elif current_id not in option_ids:
-                availability = CapabilityAvailability.MISSING
-                blocker = make_blocker(
-                    code=BlockerCode.NEEDS_SETUP,
-                    message=f"{capability.value.replace('_', ' ').title()} needs a shared connection in App Setup.",
-                    target_kind=NavigationTargetKind.APP_SETUP,
-                )
-            else:
-                availability = CapabilityAvailability.READY
-            label = next((opt.connection_label for opt in options if opt.connection_id == current_id), current_id)
-            bindings.append(
-                ProjectCapabilityBinding(
-                    capability=capability,
-                    availability=availability,
-                    source=source,
-                    connection_id=current_id,
-                    connection_label=label,
-                    blocker=blocker,
-                )
+        else:
+            config = self._runtime.get_effective_config_payload(project_id)
+            source_profile_id = read_source_profile_id(config)
+            if source_profile_id is not None:
+                selected_shared_profile = shared_by_id.get(source_profile_id)
+                selected_shared_profile_id = source_profile_id if selected_shared_profile is not None else None
+            project_profile = self._profile_detail_from_payload(
+                profile_id=f"project:{project_id}",
+                name=f"{project.name} project profile",
+                config=config,
+                kind=WorkflowProfileKind.PROJECT_SPECIFIC,
+                is_default=False,
             )
-            cards.append(
-                ProjectCapabilityCard(
-                    capability=capability,
-                    availability=availability,
-                    source=source,
-                    connection_id=current_id,
-                    connection_label=label,
-                    options=options,
-                    blocker=blocker,
-                )
+
+        if not shared_profiles and project_profile is None:
+            blocker = make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                "No shared workflow profiles are available. Open App Setup.",
+                target_kind=NavigationTargetKind.APP_SETUP,
             )
-        preset_value = read_ui_preset(config) or "balanced"
+
         return ProjectSetupState(
             project=project,
-            target_language=str(config.get("translation_target_language") or ""),
-            preset=PresetCode(preset_value),
-            bindings=bindings,
-            capability_cards=cards,
+            available_connections=available_connections,
+            shared_profiles=shared_profiles,
+            selected_shared_profile_id=selected_shared_profile_id,
+            selected_shared_profile=selected_shared_profile,
+            project_profile=project_profile,
+            blocker=blocker,
         )
 
     def save(self, request: SaveProjectSetupRequest) -> ProjectSetupState:
-        default_profile = self._runtime.get_default_profile()
-        base_config = (
-            default_profile.config
-            if default_profile is not None
-            else self._runtime.get_effective_config_payload(request.project_id)
-        )
-        routes = [
-            route
-            for route in build_default_routes_from_config(base_config)
-            if route.capability not in {override.capability for override in request.overrides}
-        ]
-        from context_aware_translation.application.contracts.app_setup import DefaultRoute
-
-        routes.extend(
-            DefaultRoute(
-                capability=override.capability,
-                connection_id=override.connection_id,
-                connection_label=override.connection_id,
+        if request.project_profile is not None:
+            base_config = self._base_config_for_project_profile(request)
+            payload = build_workflow_profile_payload(
+                base_config=base_config,
+                profile=request.project_profile,
+                source_profile_id=request.shared_profile_id,
             )
-            for override in request.overrides
-            if override.connection_id is not None
-        )
-        payload = build_workflow_profile_payload(
-            base_config=base_config,
-            routes=routes,
-            target_language=request.target_language,
-            preset_code=request.preset.value,
-        )
-        try:
-            self._runtime.book_manager.set_book_custom_config(request.project_id, payload)
-            self._runtime.book_manager.update_book(request.project_id, profile_id=None)
-        except ValueError as exc:
-            raise_application_error(ApplicationErrorCode.PRECONDITION, str(exc), project_id=request.project_id)
+            try:
+                self._runtime.book_manager.set_book_custom_config(request.project_id, payload)
+            except ValueError as exc:
+                raise_application_error(ApplicationErrorCode.PRECONDITION, str(exc), project_id=request.project_id)
+        elif request.shared_profile_id is not None:
+            shared_profile = self._runtime.book_manager.get_profile(request.shared_profile_id)
+            if shared_profile is None:
+                raise_application_error(
+                    ApplicationErrorCode.NOT_FOUND,
+                    f"Workflow profile not found: {request.shared_profile_id}",
+                    project_id=request.project_id,
+                )
+            updated = self._runtime.book_manager.update_book(request.project_id, profile_id=request.shared_profile_id)
+            if updated is None:
+                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Project not found: {request.project_id}")
+        else:
+            raise_application_error(
+                ApplicationErrorCode.PRECONDITION,
+                "Select a shared workflow profile or save a project-specific workflow profile.",
+                project_id=request.project_id,
+            )
+
         self._runtime.invalidate_setup(request.project_id)
         self._runtime.invalidate_workboard(request.project_id)
         self._runtime.invalidate_projects()
         return self.get_state(request.project_id)
+
+    def _base_config_for_project_profile(self, request: SaveProjectSetupRequest) -> dict:
+        if request.shared_profile_id is not None:
+            shared_profile = self._runtime.book_manager.get_profile(request.shared_profile_id)
+            if shared_profile is None:
+                raise_application_error(
+                    ApplicationErrorCode.NOT_FOUND,
+                    f"Workflow profile not found: {request.shared_profile_id}",
+                    project_id=request.project_id,
+                )
+            return dict(shared_profile.config)
+        return self._runtime.get_effective_config_payload(request.project_id)
+
+    def _shared_profile_details(self) -> list[WorkflowProfileDetail]:
+        return [
+            self._profile_detail_from_payload(
+                profile_id=profile.profile_id,
+                name=profile.name,
+                config=profile.config,
+                kind=WorkflowProfileKind.SHARED,
+                is_default=profile.is_default,
+            )
+            for profile in self._runtime.book_manager.list_profiles()
+        ]
+
+    def _profile_detail_from_payload(
+        self,
+        *,
+        profile_id: str,
+        name: str,
+        config: dict,
+        kind: WorkflowProfileKind,
+        is_default: bool,
+    ) -> WorkflowProfileDetail:
+        endpoint_profiles = self._runtime.book_manager.list_endpoint_profiles()
+        connection_name_by_id = {profile.profile_id: profile.name for profile in endpoint_profiles}
+        connection_model_by_id = {profile.profile_id: (profile.model or None) for profile in endpoint_profiles}
+        return build_workflow_profile_detail(
+            profile_id=profile_id,
+            name=name,
+            kind=kind,
+            config=config,
+            connection_name_by_id=connection_name_by_id,
+            connection_model_by_id=connection_model_by_id,
+            is_default=is_default,
+        )

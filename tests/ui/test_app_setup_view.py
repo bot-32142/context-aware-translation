@@ -11,16 +11,19 @@ from context_aware_translation.application.contracts.app_setup import (
     ConnectionStatus,
     ConnectionSummary,
     ConnectionTestResult,
-    DefaultRoute,
     ProviderCard,
-    RoutingRecommendation,
     SaveConnectionRequest,
     SetupWizardState,
     SetupWizardStep,
+    WorkflowProfileDetail,
+    WorkflowProfileKind,
+    WorkflowStepId,
+    WorkflowStepRoute,
 )
 from context_aware_translation.application.contracts.common import (
     CapabilityAvailability,
     CapabilityCode,
+    PresetCode,
     ProviderKind,
     UserMessage,
     UserMessageSeverity,
@@ -45,7 +48,35 @@ def _qapp():
     yield app
 
 
+def _profile(*, profile_id: str = "profile:recommended", name: str = "Recommended") -> WorkflowProfileDetail:
+    return WorkflowProfileDetail(
+        profile_id=profile_id,
+        name=name,
+        kind=WorkflowProfileKind.SHARED,
+        target_language="English",
+        preset=PresetCode.BALANCED,
+        routes=[
+            WorkflowStepRoute(
+                step_id=WorkflowStepId.TRANSLATOR,
+                step_label="Translator",
+                connection_id="conn-gemini",
+                connection_label="Gemini",
+                model="gemini-3-flash-preview",
+            ),
+            WorkflowStepRoute(
+                step_id=WorkflowStepId.OCR,
+                step_label="OCR",
+                connection_id="conn-gemini",
+                connection_label="Gemini",
+                model="gemini-3-flash-preview",
+            ),
+        ],
+        is_default=True,
+    )
+
+
 def _make_state(*, requires_wizard: bool = False) -> AppSetupState:
+    profile = _profile()
     return AppSetupState(
         connections=[
             ConnectionSummary(
@@ -74,28 +105,11 @@ def _make_state(*, requires_wizard: bool = False) -> AppSetupState:
                 message="No configured provider supports this capability.",
             ),
         ],
-        default_routes=[
-            DefaultRoute(
-                capability=CapabilityCode.TRANSLATION,
-                connection_id="conn-gemini",
-                connection_label="Gemini",
-            )
-        ],
+        shared_profiles=[profile] if not requires_wizard else [],
+        default_profile_id=(profile.profile_id if not requires_wizard else None),
+        selected_profile=(profile if not requires_wizard else None),
         requires_wizard=requires_wizard,
     )
-
-
-def test_app_setup_view_renders_backend_state():
-    from context_aware_translation.ui.features.app_setup_view import AppSetupView
-
-    service = FakeAppSetupService(state=_make_state())
-    view = AppSetupView(service)
-
-    assert view.connections_table.rowCount() == 1
-    assert view.capabilities_table.rowCount() == 2
-    assert view.routes_table.rowCount() == 1
-    assert "connections configured" in view.summary_label.text()
-    assert view.run_wizard_button.text() == view.tr("Open Setup Wizard")
 
 
 class _FakeConnectionDialog:
@@ -117,6 +131,31 @@ class _FakeConnectionDialog:
         return self._request
 
 
+class _FakeProfileEditorDialog:
+    def __init__(self, *args, profile: WorkflowProfileDetail, **kwargs):
+        self._profile = profile.model_copy(update={"name": "Edited profile"})
+
+    def exec(self):
+        return QDialog.DialogCode.Accepted
+
+    def profile(self):
+        return self._profile
+
+
+def test_app_setup_view_renders_backend_state():
+    from context_aware_translation.ui.features.app_setup_view import AppSetupView
+
+    service = FakeAppSetupService(state=_make_state())
+    view = AppSetupView(service)
+
+    assert view.connections_table.rowCount() == 1
+    assert view.capabilities_table.rowCount() == 2
+    assert view.profiles_table.rowCount() == 1
+    assert view.profile_routes_table.rowCount() == 2
+    assert "connections configured" in view.summary_label.text()
+    assert view.run_wizard_button.text() == view.tr("Open Setup Wizard")
+
+
 class _FakeWizardDialog:
     def __init__(self, *args, **kwargs):
         pass
@@ -125,7 +164,7 @@ class _FakeWizardDialog:
         return QDialog.DialogCode.Accepted
 
 
-def test_app_setup_view_add_delete_and_test_connection_calls_service():
+def test_app_setup_view_add_delete_test_and_edit_profile_calls_service():
     from context_aware_translation.ui.features.app_setup_view import AppSetupView
 
     state = _make_state()
@@ -140,23 +179,16 @@ def test_app_setup_view_add_delete_and_test_connection_calls_service():
                     message="Supported by gemini",
                 )
             ],
-            recommendation=RoutingRecommendation(
-                routes=[
-                    DefaultRoute(
-                        capability=CapabilityCode.TRANSLATION,
-                        connection_id="conn-gemini",
-                        connection_label="Gemini",
-                    )
-                ]
-            ),
             message=UserMessage(severity=UserMessageSeverity.INFO, text="Connection accepted."),
         ),
     )
     view = AppSetupView(service)
     view.connections_table.selectRow(0)
+    view.profiles_table.selectRow(0)
 
     with (
         patch("context_aware_translation.ui.features.app_setup_view.ConnectionEditorDialog", _FakeConnectionDialog),
+        patch("context_aware_translation.ui.features.app_setup_view.WorkflowProfileEditorDialog", _FakeProfileEditorDialog),
         patch.object(QMessageBox, "information") as info_mock,
         patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes),
     ):
@@ -165,10 +197,13 @@ def test_app_setup_view_add_delete_and_test_connection_calls_service():
         view._on_test_connection()
         view.connections_table.selectRow(0)
         view._on_delete_connection()
+        view.profiles_table.selectRow(0)
+        view._on_edit_profile()
 
-    assert service.calls[1][0] == "save_connection"
+    assert any(call[0] == "save_connection" for call in service.calls)
     assert any(call[0] == "test_connection" for call in service.calls)
     assert any(call[0] == "delete_connection" for call in service.calls)
+    assert any(call[0] == "save_workflow_profile" for call in service.calls)
     assert info_mock.called
 
 
@@ -187,7 +222,7 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
         ],
     )
     preview_state = SetupWizardState(
-        step=SetupWizardStep.REVIEW_ROUTING,
+        step=SetupWizardStep.REVIEW_PROFILE,
         available_providers=wizard_state.available_providers,
         selected_providers=[ProviderKind.GEMINI],
         drafts=[
@@ -209,28 +244,10 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
                         message="Supported by gemini",
                     )
                 ],
-                recommendation=RoutingRecommendation(
-                    routes=[
-                        DefaultRoute(
-                            capability=CapabilityCode.TRANSLATION,
-                            connection_id="Gemini",
-                            connection_label="Gemini",
-                        )
-                    ]
-                ),
                 message=UserMessage(severity=UserMessageSeverity.INFO, text="Connection accepted."),
             )
         ],
-        recommendation=RoutingRecommendation(
-            routes=[
-                DefaultRoute(
-                    capability=CapabilityCode.TRANSLATION,
-                    connection_id="Gemini",
-                    connection_label="Gemini",
-                )
-            ],
-            notes=["Recommended routing prefers the first selected provider that supports each capability."],
-        ),
+        recommendation=_profile(profile_id="recommended", name="Recommended"),
     )
     service = FakeAppSetupService(state=_make_state(), wizard_state=wizard_state, preview_state=preview_state)
     dialog = SetupWizardDialog(service, wizard_state)
@@ -389,7 +406,7 @@ def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
         ],
     )
     preview_state = SetupWizardState(
-        step=SetupWizardStep.REVIEW_ROUTING,
+        step=SetupWizardStep.REVIEW_PROFILE,
         available_providers=wizard_state.available_providers,
         selected_providers=[ProviderKind.GEMINI],
         drafts=[
@@ -411,27 +428,10 @@ def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
                         message="Supported by gemini",
                     )
                 ],
-                recommendation=RoutingRecommendation(
-                    routes=[
-                        DefaultRoute(
-                            capability=CapabilityCode.TRANSLATION,
-                            connection_id="Gemini",
-                            connection_label="Gemini",
-                        )
-                    ]
-                ),
                 message=UserMessage(severity=UserMessageSeverity.INFO, text="Connection accepted."),
             )
         ],
-        recommendation=RoutingRecommendation(
-            routes=[
-                DefaultRoute(
-                    capability=CapabilityCode.TRANSLATION,
-                    connection_id="Gemini",
-                    connection_label="Gemini",
-                )
-            ]
-        ),
+        recommendation=_profile(profile_id="recommended", name="Recommended"),
     )
     service = FakeAppSetupService(state=_make_state(), wizard_state=wizard_state, preview_state=preview_state)
     dialog = SetupWizardDialog(service, wizard_state)

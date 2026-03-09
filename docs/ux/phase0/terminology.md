@@ -24,14 +24,15 @@
 | Manga Translation | Translate manga pages | Manga translation | Use page language on default surfaces |
 | Image Reembedding | Put text back into images | Image reembedding | Avoid `reembedding` on default surfaces |
 | Batch Translation | Async cloud batch | Batch translation | Only expose in advanced details where useful |
-| Profile | Service setup | Profile | Prefer `service setup` in setup UI |
+| Profile | Workflow profile | Profile | `Workflow profile` is the canonical setup term |
+| Endpoint Profile / Connection | Connection | Endpoint profile / Endpoint | `Connection` is the default setup term |
 | Endpoint | Service connection | Endpoint | `Endpoint` belongs in advanced sections |
-| Model | Recommended model | Model | Hide model choice by default |
+| Model | Model | Model | Auto-filled for known providers, editable when needed |
 | Context Tree | Context memory | Context tree | Hide on default surfaces |
 | Claim Conflict | Blocked by another running action | Claim conflict | Hide on default surfaces |
 | Task | Background action | Task | `Task` should not be a primary noun |
-| Global Setup | App Setup | App Setup | Reusable connections and defaults |
-| Project Config | Project Setup | Project Setup | Project-specific routing and language |
+| Global Setup | App Setup | App Setup | Reusable connections and workflow profiles |
+| Project Config | Project Setup | Project Setup | Project-specific language, preset, and workflow profile |
 
 ## Screen Names
 
@@ -81,6 +82,7 @@ Secondary qualifiers:
 Preferred blocker phrasing:
 - `Finish App Setup to continue.`
 - `Finish Project Setup to continue.`
+- `Choose a workflow profile to continue.`
 - `Set up image text reading to continue.`
 - `Finish reading text in earlier documents first.`
 - `Another action is already changing this document.`
@@ -101,9 +103,11 @@ These can appear in diagnostics or advanced details.
 Use these exact high-level CTA labels as defaults:
 - `Fix setup`
 - `Open App Setup`
-- `Use app defaults`
-- `Override for this project`
-- `Use recommended setup`
+- `Use recommended profile`
+- `Use shared profile`
+- `Edit workflow profile`
+- `Customize for this project`
+- `Edit project profile`
 - `Advanced`
 
 Use these operation CTAs:
@@ -129,7 +133,6 @@ Document CTAs:
 
 These terms should not appear as primary UI labels on default surfaces:
 - `endpoint`
-- `profile`
 - `claim`
 - `context tree`
 - `reembedding`
@@ -138,6 +141,8 @@ These terms should not appear as primary UI labels on default surfaces:
 - `queued task`
 - `payload`
 - `glossary`
+
+`Workflow profile` and `Connection` are allowed on setup surfaces because they are now primary user-facing concepts.
 
 They may appear only in:
 - advanced settings

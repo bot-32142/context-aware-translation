@@ -31,8 +31,10 @@ from context_aware_translation.application.contracts.app_setup import (
     ConnectionTestResult,
     ProviderCard,
     SaveConnectionRequest,
+    SaveWorkflowProfileRequest,
     SetupWizardRequest,
     SetupWizardState,
+    WorkflowProfileDetail,
 )
 from context_aware_translation.application.contracts.common import (
     CapabilityAvailability,
@@ -41,6 +43,7 @@ from context_aware_translation.application.contracts.common import (
     UserMessageSeverity,
 )
 from context_aware_translation.application.services.app_setup import AppSetupService
+from context_aware_translation.ui.features.workflow_profile_editor import ConnectionChoice, WorkflowProfileEditorDialog
 from context_aware_translation.ui.utils import create_tip_label
 from context_aware_translation.ui.widgets.collapsible_section import CollapsibleSection
 
@@ -72,13 +75,6 @@ _AVAILABILITY_LABELS: dict[CapabilityAvailability, str] = {
     CapabilityAvailability.MISSING: "Missing",
     CapabilityAvailability.PARTIAL: "Partial",
     CapabilityAvailability.UNSUPPORTED_FOR_WORKFLOW: "Unsupported",
-}
-
-_STATUS_COLORS = {
-    CapabilityAvailability.READY: "#15803d",
-    CapabilityAvailability.PARTIAL: "#b45309",
-    CapabilityAvailability.MISSING: "#b91c1c",
-    CapabilityAvailability.UNSUPPORTED_FOR_WORKFLOW: "#6b7280",
 }
 
 
@@ -180,8 +176,7 @@ class ConnectionDraftForm(QWidget):
         self._sync_advanced_visibility(provider)
 
     def _sync_advanced_visibility(self, provider: ProviderKind) -> None:
-        custom = provider is ProviderKind.OPENAI_COMPATIBLE
-        self.advanced_section.set_expanded(custom)
+        self.advanced_section.set_expanded(provider is ProviderKind.OPENAI_COMPATIBLE)
 
 
 class ConnectionEditorDialog(QDialog):
@@ -223,15 +218,13 @@ class ConnectionEditorDialog(QDialog):
 
 
 class SetupWizardDialog(QDialog):
-    def __init__(
-        self, service: AppSetupService, initial_state: SetupWizardState, parent: QWidget | None = None
-    ) -> None:
+    def __init__(self, service: AppSetupService, initial_state: SetupWizardState, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._service = service
         self._wizard_state = initial_state
         self._preview_state: SetupWizardState | None = None
         self.setWindowTitle(self.tr("Setup Wizard"))
-        self.resize(760, 620)
+        self.resize(780, 680)
         self._init_ui()
         self._populate_provider_cards(initial_state.available_providers)
         self._build_page()
@@ -241,8 +234,8 @@ class SetupWizardDialog(QDialog):
         layout = QVBoxLayout(self)
         self.tip_label = create_tip_label(
             self.tr(
-                "Tell the app which providers you already have. The wizard will test capabilities and generate a recommended default routing."
-            ),
+                "Tell the app which providers you already have. The wizard will test capabilities and create a concrete shared workflow profile."
+            )
         )
         layout.addWidget(self.tip_label)
 
@@ -272,7 +265,6 @@ class SetupWizardDialog(QDialog):
         self._available_providers: list[ProviderCard] = []
         self._provider_checks: dict[ProviderKind, QCheckBox] = {}
         self._draft_forms: list[ConnectionDraftForm] = []
-        self._page_widgets: list[QWidget] = []
 
     def _build_page(self) -> None:
         while self.page_layout.count():
@@ -280,13 +272,13 @@ class SetupWizardDialog(QDialog):
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
-        self._page_widgets.clear()
+
         if self._page_index == 0:
             self.step_title.setText(self.tr("Choose providers"))
             self._provider_checks = {}
-            card_host = QWidget()
-            card_layout = QVBoxLayout(card_host)
-            card_layout.setSpacing(12)
+            host = QWidget()
+            host_layout = QVBoxLayout(host)
+            host_layout.setSpacing(12)
             for provider in self._available_providers:
                 checkbox = QCheckBox(provider.label)
                 checkbox.setToolTip(provider.helper_text or "")
@@ -295,9 +287,9 @@ class SetupWizardDialog(QDialog):
                 if provider.helper_text:
                     checkbox.setText(f"{provider.label} — {provider.helper_text}")
                 self._provider_checks[provider.provider] = checkbox
-                card_layout.addWidget(checkbox)
-            card_layout.addStretch()
-            self.page_layout.addWidget(card_host)
+                host_layout.addWidget(checkbox)
+            host_layout.addStretch()
+            self.page_layout.addWidget(host)
         elif self._page_index == 1:
             self.step_title.setText(self.tr("Enter connection details"))
             self._draft_forms.clear()
@@ -312,7 +304,7 @@ class SetupWizardDialog(QDialog):
             self.page_layout.addStretch()
         else:
             self._ensure_preview_state()
-            self.step_title.setText(self.tr("Review capabilities and routing"))
+            self.step_title.setText(self.tr("Review workflow profile"))
             preview = self._preview_state
             if preview is None:
                 return
@@ -324,29 +316,33 @@ class SetupWizardDialog(QDialog):
                 grid = QGridLayout()
                 for row, capability in enumerate(result.capabilities):
                     grid.addWidget(QLabel(_CAPABILITY_LABELS[capability.capability]), row, 0)
-                    status = QLabel(_AVAILABILITY_LABELS[capability.availability])
-                    status.setStyleSheet(
-                        f"color: {_STATUS_COLORS.get(capability.availability, '#111827')}; font-weight: 600;"
-                    )
-                    grid.addWidget(status, row, 1)
+                    grid.addWidget(QLabel(_AVAILABILITY_LABELS[capability.availability]), row, 1)
                     grid.addWidget(QLabel(capability.message or ""), row, 2)
                 result_layout.addLayout(grid)
                 self.page_layout.addWidget(result_group)
-            routes_group = QGroupBox(self.tr("Recommended routing"))
-            routes_layout = QVBoxLayout(routes_group)
-            routes_table = QTableWidget(0, 2)
-            routes_table.setHorizontalHeaderLabels([self.tr("Capability"), self.tr("Connection")])
-            routes_table.verticalHeader().setVisible(False)
-            routes_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-            for route in preview.recommendation.routes if preview.recommendation is not None else []:
-                row = routes_table.rowCount()
-                routes_table.insertRow(row)
-                routes_table.setItem(row, 0, QTableWidgetItem(_CAPABILITY_LABELS[route.capability]))
-                routes_table.setItem(row, 1, QTableWidgetItem(route.connection_label))
-            routes_layout.addWidget(routes_table)
-            for note in preview.recommendation.notes if preview.recommendation is not None else []:
-                routes_layout.addWidget(create_tip_label(note))
-            self.page_layout.addWidget(routes_group)
+
+            profile_group = QGroupBox(self.tr("Recommended workflow profile"))
+            profile_layout = QVBoxLayout(profile_group)
+            recommendation = preview.recommendation
+            if recommendation is not None:
+                profile_layout.addWidget(
+                    create_tip_label(
+                        self.tr("This will be saved as a shared workflow profile and can be reused across projects.")
+                    )
+                )
+                table = QTableWidget(0, 3)
+                table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
+                table.verticalHeader().setVisible(False)
+                table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+                for route in recommendation.routes:
+                    row = table.rowCount()
+                    table.insertRow(row)
+                    table.setItem(row, 0, QTableWidgetItem(route.step_label))
+                    table.setItem(row, 1, QTableWidgetItem(route.connection_label or ""))
+                    table.setItem(row, 2, QTableWidgetItem(route.model or ""))
+                table.resizeColumnsToContents()
+                profile_layout.addWidget(table)
+            self.page_layout.addWidget(profile_group)
             self.page_layout.addStretch()
         self._update_buttons()
 
@@ -418,7 +414,7 @@ class SetupWizardDialog(QDialog):
         request = self.final_request()
         if request is None:
             QMessageBox.warning(
-                self, self.tr("Wizard Incomplete"), self.tr("Review the recommended routing before saving setup.")
+                self, self.tr("Wizard Incomplete"), self.tr("Review the recommended workflow profile before saving setup.")
             )
             return
         self._service.run_setup_wizard(request)
@@ -496,7 +492,7 @@ class AppSetupView(QWidget):
         connections_layout.addLayout(connection_actions)
         layout.addWidget(self.connections_group)
 
-        self.capabilities_group = QGroupBox(self.tr("Capability coverage"))
+        self.capabilities_group = QGroupBox(self.tr("Capability summary"))
         capabilities_layout = QVBoxLayout(self.capabilities_group)
         self.capabilities_table = QTableWidget(0, 4)
         self.capabilities_table.setHorizontalHeaderLabels(
@@ -507,21 +503,43 @@ class AppSetupView(QWidget):
         capabilities_layout.addWidget(self.capabilities_table)
         layout.addWidget(self.capabilities_group)
 
-        self.routes_group = QGroupBox(self.tr("Default routing"))
-        routes_layout = QVBoxLayout(self.routes_group)
-        self.routes_table = QTableWidget(0, 2)
-        self.routes_table.setHorizontalHeaderLabels([self.tr("Capability"), self.tr("Connection")])
-        self.routes_table.verticalHeader().setVisible(False)
-        self.routes_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        routes_layout.addWidget(self.routes_table)
-        layout.addWidget(self.routes_group)
+        self.profiles_group = QGroupBox(self.tr("Shared workflow profiles"))
+        profiles_layout = QVBoxLayout(self.profiles_group)
+        self.profiles_table = QTableWidget(0, 4)
+        self.profiles_table.setHorizontalHeaderLabels(
+            [self.tr("Name"), self.tr("Target language"), self.tr("Preset"), self.tr("Default")]
+        )
+        self.profiles_table.verticalHeader().setVisible(False)
+        self.profiles_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.profiles_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.profiles_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.profiles_table.itemSelectionChanged.connect(self._update_profile_details)
+        profiles_layout.addWidget(self.profiles_table)
+        profile_actions = QHBoxLayout()
+        self.edit_profile_button = QPushButton(self.tr("Edit workflow profile"))
+        self.edit_profile_button.clicked.connect(self._on_edit_profile)
+        profile_actions.addWidget(self.edit_profile_button)
+        profile_actions.addStretch()
+        profiles_layout.addLayout(profile_actions)
+        layout.addWidget(self.profiles_group)
+
+        self.profile_detail_group = QGroupBox(self.tr("Selected workflow profile"))
+        profile_detail_layout = QVBoxLayout(self.profile_detail_group)
+        self.profile_detail_label = create_tip_label("")
+        profile_detail_layout.addWidget(self.profile_detail_label)
+        self.profile_routes_table = QTableWidget(0, 3)
+        self.profile_routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
+        self.profile_routes_table.verticalHeader().setVisible(False)
+        self.profile_routes_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        profile_detail_layout.addWidget(self.profile_routes_table)
+        layout.addWidget(self.profile_detail_group)
 
         self.advanced_section = CollapsibleSection(self.tr("Advanced"))
         advanced_content = QWidget()
         advanced_layout = QVBoxLayout(advanced_content)
         self.advanced_label = create_tip_label(
             self.tr(
-                "Advanced endpoint and model settings are edited per connection. Use Add or Edit, then expand Advanced inside the connection dialog."
+                "Custom provider endpoint and model settings are edited per connection. Shared workflow profiles only choose which connection and model each workflow step uses."
             )
         )
         self.seed_defaults_button = QPushButton(self.tr("Seed System Defaults"))
@@ -534,17 +552,19 @@ class AppSetupView(QWidget):
 
         layout.addStretch()
         self._update_connection_buttons()
+        self.edit_profile_button.setEnabled(False)
 
     def refresh(self) -> None:
         self._state = self._service.get_state()
         self._populate_connections(self._state.connections)
         self._populate_capabilities(self._state)
-        self._populate_routes(self._state)
+        self._populate_profiles(self._state)
         self.summary_label.setText(self._summary_text(self._state))
         self.run_wizard_button.setText(
             self.tr("Run Setup Wizard") if self._state.requires_wizard else self.tr("Open Setup Wizard")
         )
         self._update_connection_buttons()
+        self._update_profile_details()
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:
@@ -565,23 +585,29 @@ class AppSetupView(QWidget):
         self.edit_connection_button.setText(self.tr("Edit"))
         self.test_connection_button.setText(self.tr("Test"))
         self.delete_connection_button.setText(self.tr("Delete"))
-        self.capabilities_group.setTitle(self.tr("Capability coverage"))
+        self.capabilities_group.setTitle(self.tr("Capability summary"))
         self.capabilities_table.setHorizontalHeaderLabels(
             [self.tr("Capability"), self.tr("Status"), self.tr("Connection"), self.tr("Message")]
         )
-        self.routes_group.setTitle(self.tr("Default routing"))
-        self.routes_table.setHorizontalHeaderLabels([self.tr("Capability"), self.tr("Connection")])
+        self.profiles_group.setTitle(self.tr("Shared workflow profiles"))
+        self.profiles_table.setHorizontalHeaderLabels(
+            [self.tr("Name"), self.tr("Target language"), self.tr("Preset"), self.tr("Default")]
+        )
+        self.edit_profile_button.setText(self.tr("Edit workflow profile"))
+        self.profile_detail_group.setTitle(self.tr("Selected workflow profile"))
+        self.profile_routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
         self.advanced_section.toggle_button.setText(self.tr("Advanced"))
         self.advanced_label.setText(
             self.tr(
-                "Advanced endpoint and model settings are edited per connection. Use Add or Edit, then expand Advanced inside the connection dialog."
+                "Custom provider endpoint and model settings are edited per connection. Shared workflow profiles only choose which connection and model each workflow step uses."
             )
         )
         self.seed_defaults_button.setText(self.tr("Seed System Defaults"))
         if self._state is not None:
             self.summary_label.setText(self._summary_text(self._state))
             self._populate_capabilities(self._state)
-            self._populate_routes(self._state)
+            self._populate_profiles(self._state)
+            self._update_profile_details()
 
     def _populate_connections(self, connections: Sequence[ConnectionSummary]) -> None:
         self.connections_table.setRowCount(0)
@@ -610,14 +636,24 @@ class AppSetupView(QWidget):
             self._set_table_item(self.capabilities_table, row, 3, capability.message or "")
         self.capabilities_table.resizeColumnsToContents()
 
-    def _populate_routes(self, state: AppSetupState) -> None:
-        self.routes_table.setRowCount(0)
-        for route in state.default_routes:
-            row = self.routes_table.rowCount()
-            self.routes_table.insertRow(row)
-            self._set_table_item(self.routes_table, row, 0, _CAPABILITY_LABELS[route.capability])
-            self._set_table_item(self.routes_table, row, 1, route.connection_label)
-        self.routes_table.resizeColumnsToContents()
+    def _populate_profiles(self, state: AppSetupState) -> None:
+        self.profiles_table.setRowCount(0)
+        for profile in state.shared_profiles:
+            row = self.profiles_table.rowCount()
+            self.profiles_table.insertRow(row)
+            self._set_table_item(self.profiles_table, row, 0, profile.name, profile.profile_id)
+            self._set_table_item(self.profiles_table, row, 1, profile.target_language)
+            self._set_table_item(self.profiles_table, row, 2, profile.preset.value)
+            self._set_table_item(self.profiles_table, row, 3, self.tr("Yes") if profile.is_default else "")
+        self.profiles_table.resizeColumnsToContents()
+
+        selected_id = state.selected_profile.profile_id if state.selected_profile is not None else state.default_profile_id
+        if selected_id:
+            for row in range(self.profiles_table.rowCount()):
+                item = self.profiles_table.item(row, 0)
+                if item is not None and item.data(Qt.ItemDataRole.UserRole) == selected_id:
+                    self.profiles_table.selectRow(row)
+                    break
 
     def _selected_connection(self) -> ConnectionSummary | None:
         rows = self.connections_table.selectionModel().selectedRows()
@@ -628,11 +664,38 @@ class AppSetupView(QWidget):
             return None
         return self._state.connections[row]
 
+    def _selected_profile(self) -> WorkflowProfileDetail | None:
+        rows = self.profiles_table.selectionModel().selectedRows()
+        if not rows or self._state is None:
+            return self._state.selected_profile if self._state is not None else None
+        row = rows[0].row()
+        if row < 0 or row >= len(self._state.shared_profiles):
+            return None
+        return self._state.shared_profiles[row]
+
     def _update_connection_buttons(self) -> None:
         selected = self._selected_connection() is not None
         self.edit_connection_button.setEnabled(selected)
         self.test_connection_button.setEnabled(selected)
         self.delete_connection_button.setEnabled(selected)
+
+    def _update_profile_details(self) -> None:
+        profile = self._selected_profile()
+        self.edit_profile_button.setEnabled(profile is not None)
+        self.profile_routes_table.setRowCount(0)
+        if profile is None:
+            self.profile_detail_label.setText("")
+            return
+        self.profile_detail_label.setText(
+            self.tr("Target language: %1 | Preset: %2").replace("%1", profile.target_language).replace("%2", profile.preset.value)
+        )
+        for route in profile.routes:
+            row = self.profile_routes_table.rowCount()
+            self.profile_routes_table.insertRow(row)
+            self._set_table_item(self.profile_routes_table, row, 0, route.step_label)
+            self._set_table_item(self.profile_routes_table, row, 1, route.connection_label or "")
+            self._set_table_item(self.profile_routes_table, row, 2, route.model or "")
+        self.profile_routes_table.resizeColumnsToContents()
 
     def _on_run_wizard(self) -> None:
         dialog = SetupWizardDialog(self._service, self._service.get_wizard_state(), self)
@@ -686,7 +749,7 @@ class AppSetupView(QWidget):
         result = QMessageBox.question(
             self,
             self.tr("Delete Connection"),
-            self.tr("Delete the selected connection? Existing projects may stop working until setup is fixed."),
+            self.tr("Delete the selected connection? Existing profiles or projects may stop working until setup is fixed."),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -694,6 +757,32 @@ class AppSetupView(QWidget):
             return
         self._service.delete_connection(connection.connection_id)
         self.refresh()
+
+    def _on_edit_profile(self) -> None:
+        profile = self._selected_profile()
+        if profile is None or self._state is None:
+            return
+        dialog = WorkflowProfileEditorDialog(
+            profile=profile,
+            connection_choices=[
+                ConnectionChoice(
+                    connection_id=connection.connection_id,
+                    label=connection.display_name,
+                    default_model=connection.default_model,
+                )
+                for connection in self._state.connections
+            ],
+            allow_name_edit=True,
+            parent=self,
+        )
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self._service.save_workflow_profile(
+                SaveWorkflowProfileRequest(
+                    profile=dialog.profile(),
+                    set_as_default=(profile.profile_id == self._state.default_profile_id),
+                )
+            )
+            self.refresh()
 
     def _on_seed_defaults(self) -> None:
         command = self._service.seed_defaults()
@@ -707,11 +796,6 @@ class AppSetupView(QWidget):
             lines.append(
                 f"- {_CAPABILITY_LABELS[capability.capability]}: {_AVAILABILITY_LABELS[capability.availability]}"
             )
-        if result.recommendation is not None and result.recommendation.routes:
-            lines.append("")
-            lines.append(self.tr("Recommended routing:"))
-            for route in result.recommendation.routes:
-                lines.append(f"- {_CAPABILITY_LABELS[route.capability]} -> {route.connection_label}")
         if result.message is not None:
             self._show_message(result.message.severity, "\n".join(lines + ["", result.message.text]))
         else:
@@ -738,15 +822,17 @@ class AppSetupView(QWidget):
             1 for capability in state.capabilities if capability.availability is CapabilityAvailability.READY
         )
         if state.requires_wizard:
-            return self.tr("No connections are configured yet. Run the setup wizard to create app-wide defaults.")
+            return self.tr("No connections are configured yet. Run the setup wizard to create reusable connections and a shared workflow profile.")
         return (
             f"{len(state.connections)} "
             + self.tr("connections configured.")
+            + f" {len(state.shared_profiles)} "
+            + self.tr("shared workflow profiles available.")
             + f" {ready_capabilities}/{len(state.capabilities)} "
             + self.tr("capabilities ready.")
         )
 
     def _tip_text(self) -> str:
         return self.tr(
-            "App Setup manages reusable provider connections and default routing. Set this up once, then reuse it across projects."
+            "App Setup manages reusable connections and shared workflow profiles. The wizard creates a concrete shared workflow profile using the existing step-based config system."
         )

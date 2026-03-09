@@ -1,183 +1,30 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-
 from PySide6.QtCore import QEvent, Signal
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
-    QFormLayout,
-    QFrame,
+    QDialog,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QScrollArea,
-    QSizePolicy,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from context_aware_translation.application.contracts.common import (
-    BindingSource,
-    CapabilityAvailability,
-    CapabilityCode,
-    NavigationTargetKind,
-    PresetCode,
+from context_aware_translation.application.contracts.app_setup import (
+    WorkflowProfileDetail,
+    WorkflowProfileKind,
 )
-from context_aware_translation.application.contracts.project_setup import (
-    ProjectCapabilityCard,
-    ProjectCapabilityOverride,
-    ProjectSetupState,
-    SaveProjectSetupRequest,
-)
+from context_aware_translation.application.contracts.project_setup import ProjectSetupState, SaveProjectSetupRequest
 from context_aware_translation.application.errors import ApplicationError, BlockedOperationError
 from context_aware_translation.application.events import ApplicationEventSubscriber, SetupInvalidatedEvent
 from context_aware_translation.application.services.project_setup import ProjectSetupService
 from context_aware_translation.ui.adapters import QtApplicationEventBridge
-from context_aware_translation.ui.constants import LANGUAGES
-from context_aware_translation.ui.i18n import qarg
+from context_aware_translation.ui.features.workflow_profile_editor import ConnectionChoice, WorkflowProfileEditorDialog
 from context_aware_translation.ui.utils import create_tip_label
-
-
-class _CapabilityCardWidget(QFrame):
-    open_app_setup_requested = Signal()
-
-    def __init__(self, capability: CapabilityCode, *, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.capability = capability
-        self._card: ProjectCapabilityCard | None = None
-        self._init_ui()
-
-    def _init_ui(self) -> None:
-        self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setStyleSheet("QFrame { border: 1px solid #d8dee9; border-radius: 6px; }")
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-
-        self.title_label = QLabel()
-        self.title_label.setStyleSheet("font-weight: 600;")
-        layout.addWidget(self.title_label)
-
-        meta_layout = QFormLayout()
-        meta_layout.setContentsMargins(0, 0, 0, 0)
-        self.status_value = QLabel()
-        self.source_value = QLabel()
-        self.connection_value = QLabel()
-        meta_layout.addRow(self.tr("Status"), self.status_value)
-        meta_layout.addRow(self.tr("Source"), self.source_value)
-        meta_layout.addRow(self.tr("Connection"), self.connection_value)
-        layout.addLayout(meta_layout)
-
-        self.blocker_label = create_tip_label("")
-        self.blocker_label.setStyleSheet("QLabel { color: #b42318; font-size: 12px; }")
-        self.blocker_label.hide()
-        layout.addWidget(self.blocker_label)
-
-        self.override_checkbox = QCheckBox(self.tr("Override for this project"))
-        self.override_checkbox.toggled.connect(self._sync_override_state)
-        layout.addWidget(self.override_checkbox)
-
-        self.override_row = QHBoxLayout()
-        self.connection_combo = QComboBox()
-        self.connection_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.open_app_setup_button = QPushButton(self.tr("Open App Setup"))
-        self.open_app_setup_button.clicked.connect(self.open_app_setup_requested.emit)
-        self.override_row.addWidget(self.connection_combo, 1)
-        self.override_row.addWidget(self.open_app_setup_button)
-        layout.addLayout(self.override_row)
-
-    def set_card(self, card: ProjectCapabilityCard) -> None:
-        self._card = card
-        self.title_label.setText(self._capability_label(card.capability))
-        self.status_value.setText(self._availability_label(card.availability))
-        self.source_value.setText(self._source_label(card.source))
-        self.connection_value.setText(card.connection_label or self.tr("Use app defaults"))
-
-        self.connection_combo.blockSignals(True)
-        self.connection_combo.clear()
-        for option in card.options:
-            self.connection_combo.addItem(option.connection_label, option.connection_id)
-        if card.connection_id is not None:
-            index = self.connection_combo.findData(card.connection_id)
-            if index >= 0:
-                self.connection_combo.setCurrentIndex(index)
-        self.connection_combo.blockSignals(False)
-
-        is_override = card.source is BindingSource.PROJECT_OVERRIDE and card.connection_id is not None
-        self.override_checkbox.blockSignals(True)
-        self.override_checkbox.setChecked(is_override)
-        self.override_checkbox.blockSignals(False)
-
-        blocker_text = card.blocker.message if card.blocker is not None else ""
-        self.blocker_label.setText(blocker_text)
-        self.blocker_label.setVisible(bool(blocker_text))
-
-        needs_app_setup = (
-            card.blocker is not None
-            and card.blocker.target is not None
-            and card.blocker.target.kind is NavigationTargetKind.APP_SETUP
-        ) or (card.availability is CapabilityAvailability.MISSING and not card.options)
-        self.open_app_setup_button.setVisible(needs_app_setup)
-        self._sync_override_state(self.override_checkbox.isChecked())
-
-    def build_override(self) -> ProjectCapabilityOverride | None:
-        if not self.override_checkbox.isChecked():
-            return None
-        connection_id = self.connection_combo.currentData()
-        if isinstance(connection_id, str) and connection_id:
-            return ProjectCapabilityOverride(capability=self.capability, connection_id=connection_id)
-        return None
-
-    def has_invalid_override(self) -> bool:
-        return self.override_checkbox.isChecked() and self.connection_combo.currentData() in {None, ""}
-
-    def retranslateUi(self) -> None:
-        self.status_value.setText(self._availability_label(self._card.availability) if self._card is not None else "")
-        self.source_value.setText(self._source_label(self._card.source) if self._card is not None else "")
-        self.connection_value.setText(
-            self._card.connection_label
-            if self._card is not None and self._card.connection_label
-            else self.tr("Use app defaults")
-        )
-        self.override_checkbox.setText(self.tr("Override for this project"))
-        self.open_app_setup_button.setText(self.tr("Open App Setup"))
-        if self._card is not None:
-            self.title_label.setText(self._capability_label(self._card.capability))
-            self.blocker_label.setText(self._card.blocker.message if self._card.blocker is not None else "")
-
-    def _sync_override_state(self, checked: bool) -> None:
-        has_options = self.connection_combo.count() > 0
-        self.connection_combo.setVisible(checked and has_options)
-        self.connection_combo.setEnabled(checked and has_options)
-        self.open_app_setup_button.setEnabled(self.open_app_setup_button.isVisible())
-
-    def _capability_label(self, capability: CapabilityCode) -> str:
-        labels = {
-            CapabilityCode.TRANSLATION: self.tr("Translation"),
-            CapabilityCode.IMAGE_TEXT_READING: self.tr("Image text reading"),
-            CapabilityCode.IMAGE_EDITING: self.tr("Image editing"),
-            CapabilityCode.REASONING_AND_REVIEW: self.tr("Reasoning and review"),
-        }
-        return labels[capability]
-
-    def _availability_label(self, availability: CapabilityAvailability) -> str:
-        labels = {
-            CapabilityAvailability.READY: self.tr("Ready"),
-            CapabilityAvailability.MISSING: self.tr("Missing"),
-            CapabilityAvailability.PARTIAL: self.tr("Partial"),
-            CapabilityAvailability.UNSUPPORTED_FOR_WORKFLOW: self.tr("Unsupported for this workflow"),
-        }
-        return labels[availability]
-
-    def _source_label(self, source: BindingSource) -> str:
-        labels = {
-            BindingSource.APP_DEFAULT: self.tr("App default"),
-            BindingSource.PROJECT_OVERRIDE: self.tr("Project override"),
-            BindingSource.MISSING: self.tr("Missing"),
-        }
-        return labels[source]
 
 
 class ProjectSetupView(QWidget):
@@ -198,7 +45,7 @@ class ProjectSetupView(QWidget):
         self.project_id = project_id
         self._service = service
         self._state: ProjectSetupState | None = None
-        self._card_widgets: dict[CapabilityCode, _CapabilityCardWidget] = {}
+        self._draft_project_profile: WorkflowProfileDetail | None = None
         self._event_bridge = QtApplicationEventBridge(events, parent=self)
         self._event_bridge.setup_invalidated.connect(self._on_setup_invalidated)
         self._init_ui()
@@ -206,8 +53,6 @@ class ProjectSetupView(QWidget):
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-
         self.title_label = QLabel()
         self.title_label.setStyleSheet("font-size: 20px; font-weight: 600;")
         layout.addWidget(self.title_label)
@@ -222,58 +67,47 @@ class ProjectSetupView(QWidget):
         self.summary_label = create_tip_label("")
         layout.addWidget(self.summary_label)
 
-        form_group = QGroupBox(self.tr("Project defaults"))
-        form_layout = QFormLayout(form_group)
+        self.blocker_label = create_tip_label("")
+        self.blocker_label.setStyleSheet("QLabel { color: #b42318; }")
+        self.blocker_label.hide()
+        layout.addWidget(self.blocker_label)
 
-        self.target_language_combo = QComboBox()
-        self.target_language_combo.setEditable(True)
-        seen_languages: set[str] = set()
-        for display_name, _code in LANGUAGES:
-            if display_name in seen_languages:
-                continue
-            seen_languages.add(display_name)
-            self.target_language_combo.addItem(display_name)
-        form_layout.addRow(self.tr("Target language"), self.target_language_combo)
+        selector_group = QGroupBox(self.tr("Workflow profile"))
+        selector_layout = QVBoxLayout(selector_group)
+        row = QHBoxLayout()
+        self.shared_profile_combo = QComboBox()
+        self.shared_profile_combo.currentIndexChanged.connect(self._on_shared_profile_changed)
+        row.addWidget(self.shared_profile_combo, 1)
+        self.use_shared_button = QPushButton(self.tr("Use shared profile"))
+        self.use_shared_button.clicked.connect(self._use_shared_profile)
+        row.addWidget(self.use_shared_button)
+        selector_layout.addLayout(row)
+        layout.addWidget(selector_group)
 
-        self.preset_combo = QComboBox()
-        self.preset_combo.addItem(self.tr("Fast"), PresetCode.FAST.value)
-        self.preset_combo.addItem(self.tr("Balanced"), PresetCode.BALANCED.value)
-        self.preset_combo.addItem(self.tr("Best quality"), PresetCode.BEST.value)
-        form_layout.addRow(self.tr("Preset"), self.preset_combo)
-        layout.addWidget(form_group)
-
-        self.cards_group = QGroupBox(self.tr("Capability cards"))
-        cards_layout = QVBoxLayout(self.cards_group)
-        cards_layout.setContentsMargins(12, 12, 12, 12)
-
-        cards_container = QWidget()
-        self.cards_container_layout = QVBoxLayout(cards_container)
-        self.cards_container_layout.setContentsMargins(0, 0, 0, 0)
-        self.cards_container_layout.setSpacing(12)
-        self.cards_container_layout.addStretch(1)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setWidget(cards_container)
-        cards_layout.addWidget(scroll)
-        layout.addWidget(self.cards_group, 1)
-
-        self.advanced_group = QGroupBox(self.tr("Advanced override notes"))
-        self.advanced_group.setCheckable(True)
-        self.advanced_group.setChecked(False)
-        advanced_layout = QVBoxLayout(self.advanced_group)
-        self.advanced_note = create_tip_label(self._advanced_note_text())
-        advanced_layout.addWidget(self.advanced_note)
-        layout.addWidget(self.advanced_group)
+        self.current_profile_group = QGroupBox(self.tr("Current profile"))
+        current_layout = QVBoxLayout(self.current_profile_group)
+        self.current_profile_label = create_tip_label("")
+        current_layout.addWidget(self.current_profile_label)
+        self.routes_table = QTableWidget(0, 3)
+        self.routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
+        self.routes_table.verticalHeader().setVisible(False)
+        self.routes_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        current_layout.addWidget(self.routes_table)
+        layout.addWidget(self.current_profile_group, 1)
 
         actions_layout = QHBoxLayout()
+        self.customize_button = QPushButton(self.tr("Customize for this project"))
+        self.customize_button.clicked.connect(self._customize_for_project)
+        self.edit_project_button = QPushButton(self.tr("Edit project profile"))
+        self.edit_project_button.clicked.connect(self._edit_project_profile)
         self.open_app_setup_button = QPushButton(self.tr("Open App Setup"))
         self.open_app_setup_button.clicked.connect(self.open_app_setup_requested.emit)
-        actions_layout.addWidget(self.open_app_setup_button)
-        actions_layout.addStretch()
         self.save_button = QPushButton(self.tr("Save"))
         self.save_button.clicked.connect(self._save)
+        actions_layout.addWidget(self.customize_button)
+        actions_layout.addWidget(self.edit_project_button)
+        actions_layout.addWidget(self.open_app_setup_button)
+        actions_layout.addStretch()
         actions_layout.addWidget(self.save_button)
         layout.addLayout(actions_layout)
 
@@ -290,91 +124,136 @@ class ProjectSetupView(QWidget):
 
     def retranslateUi(self) -> None:
         self.tip_label.setText(self._tip_text())
-        self.cards_group.setTitle(self.tr("Capability cards"))
-        self.advanced_group.setTitle(self.tr("Advanced override notes"))
-        self.advanced_note.setText(self._advanced_note_text())
+        self.current_profile_group.setTitle(self.tr("Current profile"))
+        self.routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
+        self.use_shared_button.setText(self.tr("Use shared profile"))
+        self.customize_button.setText(self.tr("Customize for this project"))
+        self.edit_project_button.setText(self.tr("Edit project profile"))
         self.open_app_setup_button.setText(self.tr("Open App Setup"))
         self.save_button.setText(self.tr("Save"))
-        self.summary_label.setText(self._summary_text(self._state.bindings if self._state is not None else []))
         self.title_label.setText(self._title_text())
-        self.message_label.setText(self.message_label.text())
-        for index, (label, preset) in enumerate(
-            [
-                (self.tr("Fast"), PresetCode.FAST),
-                (self.tr("Balanced"), PresetCode.BALANCED),
-                (self.tr("Best quality"), PresetCode.BEST),
-            ]
-        ):
-            self.preset_combo.setItemText(index, label)
-            self.preset_combo.setItemData(index, preset.value)
-        for card_widget in self._card_widgets.values():
-            card_widget.retranslateUi()
+        if self._state is not None:
+            self.summary_label.setText(self._summary_text())
+            self._render_effective_profile()
 
     def _apply_state(self, state: ProjectSetupState) -> None:
         self._state = state
+        self._draft_project_profile = state.project_profile
         self.title_label.setText(self._title_text())
-        self.summary_label.setText(self._summary_text(state.bindings))
+        self.summary_label.setText(self._summary_text())
+        self.blocker_label.setVisible(state.blocker is not None)
+        self.blocker_label.setText(state.blocker.message if state.blocker is not None else "")
 
-        self.target_language_combo.blockSignals(True)
-        target_language = state.target_language or ""
-        index = self.target_language_combo.findText(target_language)
-        if index >= 0:
-            self.target_language_combo.setCurrentIndex(index)
-        else:
-            self.target_language_combo.setEditText(target_language)
-        self.target_language_combo.blockSignals(False)
+        self.shared_profile_combo.blockSignals(True)
+        self.shared_profile_combo.clear()
+        for profile in state.shared_profiles:
+            self.shared_profile_combo.addItem(profile.name, profile.profile_id)
+        if state.selected_shared_profile_id is not None:
+            index = self.shared_profile_combo.findData(state.selected_shared_profile_id)
+            if index >= 0:
+                self.shared_profile_combo.setCurrentIndex(index)
+        self.shared_profile_combo.blockSignals(False)
 
-        preset_index = self.preset_combo.findData(state.preset.value)
-        self.preset_combo.setCurrentIndex(max(preset_index, 0))
-
-        for capability in CapabilityCode:
-            card = next((item for item in state.capability_cards if item.capability is capability), None)
-            if card is None:
-                continue
-            widget = self._card_widgets.get(capability)
-            if widget is None:
-                widget = _CapabilityCardWidget(capability, parent=self.cards_group)
-                widget.open_app_setup_requested.connect(self.open_app_setup_requested.emit)
-                self._card_widgets[capability] = widget
-                self.cards_container_layout.insertWidget(self.cards_container_layout.count() - 1, widget)
-            widget.set_card(card)
+        self.use_shared_button.setEnabled(state.selected_shared_profile is not None)
+        self.customize_button.setEnabled(state.selected_shared_profile is not None)
+        self.edit_project_button.setEnabled(self._draft_project_profile is not None)
+        self.open_app_setup_button.setVisible(state.blocker is not None)
+        self._render_effective_profile()
         self._show_message("", is_error=False)
 
+    def _current_shared_profile_id(self) -> str | None:
+        current = self.shared_profile_combo.currentData()
+        return str(current) if isinstance(current, str) and current else None
+
+    def _current_shared_profile(self) -> WorkflowProfileDetail | None:
+        if self._state is None:
+            return None
+        profile_id = self._current_shared_profile_id()
+        if profile_id is None:
+            return None
+        return next((profile for profile in self._state.shared_profiles if profile.profile_id == profile_id), None)
+
+    def _effective_profile(self) -> WorkflowProfileDetail | None:
+        return self._draft_project_profile or (self._state.project_profile if self._state is not None else None) or (self._state.selected_shared_profile if self._state is not None else None)
+
+    def _render_effective_profile(self) -> None:
+        profile = self._effective_profile()
+        self.routes_table.setRowCount(0)
+        if profile is None:
+            self.current_profile_label.setText(self.tr("No workflow profile selected yet."))
+            return
+        scope_label = self.tr("Project-specific profile") if profile.kind is WorkflowProfileKind.PROJECT_SPECIFIC else self.tr("Shared profile")
+        self.current_profile_label.setText(
+            self.tr("%1 | Target language: %2 | Preset: %3")
+            .replace("%1", scope_label)
+            .replace("%2", profile.target_language)
+            .replace("%3", profile.preset.value)
+        )
+        for route in profile.routes:
+            row = self.routes_table.rowCount()
+            self.routes_table.insertRow(row)
+            self.routes_table.setItem(row, 0, QTableWidgetItem(route.step_label))
+            self.routes_table.setItem(row, 1, QTableWidgetItem(route.connection_label or ""))
+            self.routes_table.setItem(row, 2, QTableWidgetItem(route.model or ""))
+        self.routes_table.resizeColumnsToContents()
+
+    def _use_shared_profile(self) -> None:
+        self._draft_project_profile = None
+        self.edit_project_button.setEnabled(False)
+        self._render_effective_profile()
+
+    def _customize_for_project(self) -> None:
+        shared_profile = self._current_shared_profile()
+        if shared_profile is None:
+            self._show_message(self.tr("Select a shared workflow profile first."), is_error=True)
+            return
+        project_profile = shared_profile.model_copy(
+            update={
+                "profile_id": f"project:{self.project_id}",
+                "name": f"{self._state.project.name} project profile" if self._state is not None else shared_profile.name,
+                "kind": WorkflowProfileKind.PROJECT_SPECIFIC,
+                "is_default": False,
+            }
+        )
+        dialog = WorkflowProfileEditorDialog(
+            profile=project_profile,
+            connection_choices=self._connection_choices(),
+            allow_name_edit=False,
+            parent=self,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self._draft_project_profile = dialog.profile().model_copy(update={"kind": WorkflowProfileKind.PROJECT_SPECIFIC})
+        self.edit_project_button.setEnabled(True)
+        self._render_effective_profile()
+
+    def _edit_project_profile(self) -> None:
+        profile = self._draft_project_profile or (self._state.project_profile if self._state is not None else None)
+        if profile is None:
+            self._show_message(self.tr("No project-specific profile is available to edit."), is_error=True)
+            return
+        dialog = WorkflowProfileEditorDialog(
+            profile=profile,
+            connection_choices=self._connection_choices(),
+            allow_name_edit=False,
+            parent=self,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self._draft_project_profile = dialog.profile().model_copy(update={"kind": WorkflowProfileKind.PROJECT_SPECIFIC})
+        self._render_effective_profile()
+
     def _save(self) -> None:
-        target_language = self.target_language_combo.currentText().strip()
-        if not target_language:
-            self._show_message(self.tr("Target language is required."), is_error=True)
+        shared_profile_id = self._current_shared_profile_id()
+        if shared_profile_id is None and self._draft_project_profile is None:
+            self._show_message(self.tr("Select a shared workflow profile before saving."), is_error=True)
             return
-
-        overrides: list[ProjectCapabilityOverride] = []
-        invalid_labels: list[str] = []
-        for widget in self._card_widgets.values():
-            override = widget.build_override()
-            if widget.has_invalid_override():
-                invalid_labels.append(widget.title_label.text())
-            elif override is not None:
-                overrides.append(override)
-
-        if invalid_labels:
-            self._show_message(
-                qarg(self.tr("Select a connection for %1 before saving."), ", ".join(invalid_labels)),
-                is_error=True,
-            )
-            return
-
-        raw_preset = self.preset_combo.currentData()
-        try:
-            preset = PresetCode(str(raw_preset))
-        except ValueError:
-            preset = PresetCode.BALANCED
-
         try:
             state = self._service.save(
                 SaveProjectSetupRequest(
                     project_id=self.project_id,
-                    target_language=target_language,
-                    preset=preset,
-                    overrides=overrides,
+                    shared_profile_id=shared_profile_id,
+                    project_profile=self._draft_project_profile,
                 )
             )
         except BlockedOperationError as exc:
@@ -393,6 +272,10 @@ class ProjectSetupView(QWidget):
             return
         self.refresh()
 
+    def _on_shared_profile_changed(self, _index: int) -> None:
+        if self._draft_project_profile is None:
+            self._render_effective_profile()
+
     def _show_message(self, text: str, *, is_error: bool) -> None:
         if not text:
             self.message_label.hide()
@@ -406,31 +289,30 @@ class ProjectSetupView(QWidget):
     def _title_text(self) -> str:
         if self._state is None:
             return self.tr("Project Setup")
-        return qarg(self.tr("Setup for %1"), self._state.project.name)
+        return self.tr("Setup for %1").replace("%1", self._state.project.name)
 
-    def _summary_text(self, bindings: Iterable[object]) -> str:
-        bindings_list = list(bindings)
-        missing = sum(
-            1 for binding in bindings_list if getattr(binding, "availability", None) is CapabilityAvailability.MISSING
-        )
-        overrides = sum(
-            1 for binding in bindings_list if getattr(binding, "source", None) is BindingSource.PROJECT_OVERRIDE
-        )
-        if missing:
-            return qarg(
-                self.tr("%1 capabilities need app-level setup. Open App Setup to add shared connections."),
-                missing,
-            )
-        if overrides:
-            return qarg(self.tr("Using app defaults with %1 project overrides."), overrides)
-        return self.tr("Using app defaults for all available capabilities.")
+    def _summary_text(self) -> str:
+        if self._state is None:
+            return ""
+        if self._draft_project_profile is not None or self._state.project_profile is not None:
+            return self.tr("This project is using a project-specific workflow profile.")
+        if self._state.selected_shared_profile is not None:
+            return self.tr("This project is using a shared workflow profile.")
+        return self.tr("Choose a shared workflow profile to continue.")
 
     def _tip_text(self) -> str:
         return self.tr(
-            "Project Setup controls target language, preset, and whether each capability inherits the shared app defaults or uses a project-specific override."
+            "Project Setup chooses a shared workflow profile or creates a project-specific profile. Target language and preset live inside the selected profile."
         )
 
-    def _advanced_note_text(self) -> str:
-        return self.tr(
-            "Overrides are opt-in. Leave a capability on app defaults unless this project needs a different shared connection. Raw endpoint editing stays in App Setup."
-        )
+    def _connection_choices(self) -> list[ConnectionChoice]:
+        if self._state is None:
+            return []
+        return [
+            ConnectionChoice(
+                connection_id=connection.connection_id,
+                label=connection.display_name,
+                default_model=connection.default_model,
+            )
+            for connection in self._state.available_connections
+        ]

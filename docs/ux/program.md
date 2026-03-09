@@ -67,7 +67,7 @@ Recommended ownership:
 Questions to answer:
 - can a new user understand app setup from one screen?
 - can the app explain missing capabilities without jargon?
-- can a project clearly inherit app defaults without confusion?
+- can a project clearly choose a shared workflow profile or create a project-specific profile without confusion?
 
 ### Gate B: Post-Phase 2
 
@@ -92,8 +92,8 @@ Questions to answer:
 
 ## Deliverables by Phase
 
-- Phase 1: app setup landing, setup wizard, project setup, capability cards,
-  routing model
+- Phase 1: app setup landing, setup wizard, workflow profile editor, project
+  setup, profile-selection model
 - Phase 2: Work shell, pipeline table/board, action hierarchy, blocker system
 - Phase 3: queue drawer, status language, background-action feedback
 - Phase 4: document shell, document tabs, document-scoped OCR/Terms/translation/image/export
@@ -104,7 +104,8 @@ Questions to answer:
 
 The program is complete when:
 - a new user can reach first successful translation without opening advanced setup
-- app-level connections and project-level setup are clearly distinct
+- app-level connections and shared workflow profiles are clearly distinct from
+  project-level setup and project-specific profiles
 - the ordered document model is obvious on the home screen
 - document-scoped tools are clearly nested under Work
 - shared Terms feels distinct from document tools but uses the same data model

@@ -2,7 +2,7 @@
 
 ## Objective
 
-Expose endpoint, model, routing, and diagnostic power without turning the app
+Expose workflow-profile, model, and diagnostic power without turning the app
 back into an implementation-shaped tool console.
 
 ## User Problem
@@ -14,10 +14,11 @@ old subsystem-first UI when advanced options are introduced.
 
 Phase 6 covers:
 - advanced sections inside `App Setup` and `Project Setup`
+- workflow profile editing depth
 - queue detail expansion
 - advanced document rerun and diagnostic affordances
 - advanced Terms import/export controls
-- power-user visibility into routing and capability choices
+- power-user visibility into routing and profile details
 
 Phase 6 does not redesign the shell itself. It layers onto the shell defined in
 Phases 1 through 5.
@@ -32,19 +33,22 @@ and not a global mode toggle.
 ### App Setup
 
 Reveal:
-- exact endpoint/base URL
-- model-level defaults
-- per-capability routing edits
+- workflow profile editor with step-level routing
+- model-level defaults per workflow step
 - custom provider definitions
+- custom endpoint/base URL fields
 - connection metadata and test details
+
+Known providers should still hide raw endpoint fields unless the user is editing a custom provider or explicitly opening an advanced connection editor.
 
 ### Project Setup
 
 Reveal:
-- project-specific routing overrides
-- project-level model overrides where needed
-- detailed capability source inspection
-- more explicit override precedence explanation
+- project-specific workflow profile customization
+- project-level model edits where needed
+- detailed workflow-profile summary
+- more explicit shared-profile vs project-profile explanation
+- project profile editing without reintroducing capability override cards
 
 ### Work
 
@@ -93,7 +97,7 @@ Advanced sections:
 Components that need dedicated design:
 - advanced section pattern
 - connection details panel
-- routing override panel
+- workflow profile editor panel
 - expanded queue detail view
 - advanced action menus
 - diagnostic drawers for document and Terms screens
@@ -103,8 +107,8 @@ Components that need dedicated design:
 The design system must define:
 - what is hidden by default
 - what expands inline versus opens in a drawer
-- what summary is still shown after an advanced override is applied
-- what persists across projects vs app defaults
+- what summary is still shown after an advanced workflow edit is applied
+- what persists across projects vs shared profiles
 
 ## Design Tasks
 

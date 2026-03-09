@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtWidgets import QApplication
 
 from context_aware_translation.application.composition import build_application_context
-from context_aware_translation.application.contracts.app_setup import SaveDefaultRoutesRequest
+from context_aware_translation.application.contracts.app_setup import SaveWorkflowProfileRequest
 from context_aware_translation.application.contracts.projects import CreateProjectRequest
 from context_aware_translation.application.events import (
     ApplicationEventKind,
@@ -16,10 +16,10 @@ from context_aware_translation.application.events import (
 from context_aware_translation.ui.adapters import QtApplicationEventBridge
 
 
-def _ensure_qt_app() -> QCoreApplication:
-    app = QCoreApplication.instance()
+def _ensure_qt_app() -> QApplication:
+    app = QApplication.instance()
     if app is None:
-        app = QCoreApplication([])
+        app = QApplication([])
     return app
 
 
@@ -64,7 +64,8 @@ def test_services_publish_invalidation_events(tmp_path: Path) -> None:
 
         seen.clear()
         state = context.services.app_setup.get_state()
-        context.services.app_setup.save_default_routes(SaveDefaultRoutesRequest(routes=state.default_routes))
+        profile = state.selected_profile or state.shared_profiles[0]
+        context.services.app_setup.save_workflow_profile(SaveWorkflowProfileRequest(profile=profile))
         assert ApplicationEventKind.SETUP_INVALIDATED in seen
     finally:
         subscription.close()

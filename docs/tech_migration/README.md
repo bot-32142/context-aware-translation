@@ -166,8 +166,9 @@ Current implementation notes for Wave 1:
   `BookWorkspace` until the dedicated Work slice lands.
 - Task 11 currently performs provider-inferred capability testing in its first
   migrated version. Real provider probing can be added later without changing
-  the application contract.
-- Task 12 intentionally keeps project-level `Advanced` as informational only.
+  the application contract. Capability output is summary-only, not the main
+  setup editing model.
+- Task 12 uses workflow-profile selection instead of inherit/override cards.
   Raw endpoint/model editing belongs in App Setup, not Project Setup.
 
 ### Wave 2: Project-Level Surfaces

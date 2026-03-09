@@ -8,9 +8,14 @@ from typing import TYPE_CHECKING, Any, NoReturn
 
 from context_aware_translation.application.contracts.app_setup import (
     CapabilityCard,
+    ConnectionDraft,
     ConnectionStatus,
     ConnectionSummary,
-    DefaultRoute,
+    WorkflowProfileDetail,
+    WorkflowProfileKind,
+    WorkflowProfileSummary,
+    WorkflowStepId,
+    WorkflowStepRoute,
 )
 from context_aware_translation.application.contracts.common import (
     AcceptedCommand,
@@ -23,6 +28,7 @@ from context_aware_translation.application.contracts.common import (
     DocumentTypeCode,
     NavigationTarget,
     NavigationTargetKind,
+    PresetCode,
     ProgressInfo,
     ProjectRef,
     ProviderKind,
@@ -67,6 +73,25 @@ if TYPE_CHECKING:
 
 _DEFAULT_PROFILE_NAME = "app-default-profile"
 _UI_PRESET_KEY = "_ui_preset"
+_UI_SOURCE_PROFILE_ID_KEY = "_ui_source_profile_id"
+
+_WORKFLOW_STEP_LAYOUT: tuple[tuple[WorkflowStepId, str, str | None], ...] = (
+    (WorkflowStepId.EXTRACTOR, "Extractor", "extractor_config"),
+    (WorkflowStepId.SUMMARIZER, "Summarizer", "summarizor_config"),
+    (WorkflowStepId.GLOSSARY_TRANSLATOR, "Glossary translator", "glossary_config"),
+    (WorkflowStepId.TRANSLATOR, "Translator", "translator_config"),
+    (WorkflowStepId.REVIEWER, "Reviewer", "review_config"),
+    (WorkflowStepId.OCR, "OCR", "ocr_config"),
+    (WorkflowStepId.IMAGE_REEMBEDDING, "Image reembedding", "image_reembedding_config"),
+    (WorkflowStepId.MANGA_TRANSLATOR, "Manga translator", "manga_translator_config"),
+    (WorkflowStepId.TRANSLATOR_BATCH, "Translator batch", None),
+)
+
+
+@dataclass(frozen=True)
+class DefaultRouteInfo:
+    capability: CapabilityCode
+    connection_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -263,34 +288,30 @@ def build_connection_summary(profile: EndpointProfile) -> ConnectionSummary:
     )
 
 
-def build_capability_cards(
-    connections: list,
-    default_routes: list[DefaultRoute],
-) -> list[CapabilityCard]:
-    route_by_capability = {route.capability: route for route in default_routes}
+def build_capability_cards(connections: list[ConnectionSummary]) -> list[CapabilityCard]:
     cards: list[CapabilityCard] = []
     for capability in CapabilityCode:
-        route = route_by_capability.get(capability)
-        if route is not None:
+        supporting = [conn for conn in connections if capability in conn.capabilities]
+        ready = next((conn for conn in supporting if conn.status is ConnectionStatus.READY), None)
+        partial = next((conn for conn in supporting if conn.status is ConnectionStatus.PARTIAL), None)
+        if ready is not None:
             cards.append(
                 CapabilityCard(
                     capability=capability,
                     availability=CapabilityAvailability.READY,
-                    message=f"Using {route.connection_label}",
-                    connection_id=route.connection_id,
-                    connection_label=route.connection_label,
+                    message=f"{ready.display_name} ready",
+                    connection_id=ready.connection_id,
+                    connection_label=ready.display_name,
                 )
             )
-            continue
-        supporting = [conn for conn in connections if capability in conn.capabilities]
-        if supporting:
+        elif partial is not None:
             cards.append(
                 CapabilityCard(
                     capability=capability,
                     availability=CapabilityAvailability.PARTIAL,
-                    message="Configured provider available but not routed by default.",
-                    connection_id=supporting[0].connection_id,
-                    connection_label=supporting[0].display_name,
+                    message=f"{partial.display_name} needs more details",
+                    connection_id=partial.connection_id,
+                    connection_label=partial.display_name,
                 )
             )
         else:
@@ -298,85 +319,42 @@ def build_capability_cards(
                 CapabilityCard(
                     capability=capability,
                     availability=CapabilityAvailability.MISSING,
-                    message="No configured provider supports this capability.",
+                    message="No configured connection supports this capability.",
                 )
             )
     return cards
 
 
-def build_default_routes_from_config(config: dict[str, Any]) -> list[DefaultRoute]:
-    routes: list[DefaultRoute] = []
-    pairs = {
-        CapabilityCode.TRANSLATION: config.get("translator_config", {}).get("endpoint_profile"),
-        CapabilityCode.IMAGE_TEXT_READING: config.get("ocr_config", {}).get("endpoint_profile"),
-        CapabilityCode.IMAGE_EDITING: config.get("image_reembedding_config", {}).get("endpoint_profile"),
-        CapabilityCode.REASONING_AND_REVIEW: config.get("review_config", {}).get("endpoint_profile"),
-    }
-    for capability, connection_id in pairs.items():
-        if isinstance(connection_id, str) and connection_id.strip():
-            routes.append(
-                DefaultRoute(
-                    capability=capability,
-                    connection_id=connection_id,
-                    connection_label=connection_id,
-                )
-            )
+def build_default_routes_from_config(config: dict[str, Any]) -> list[DefaultRouteInfo]:
+    capability_step_map: tuple[tuple[CapabilityCode, WorkflowStepId], ...] = (
+        (CapabilityCode.TRANSLATION, WorkflowStepId.TRANSLATOR),
+        (CapabilityCode.IMAGE_TEXT_READING, WorkflowStepId.OCR),
+        (CapabilityCode.IMAGE_EDITING, WorkflowStepId.IMAGE_REEMBEDDING),
+        (CapabilityCode.REASONING_AND_REVIEW, WorkflowStepId.REVIEWER),
+    )
+    routes: list[DefaultRouteInfo] = []
+    step_config_map = _workflow_step_config_map(config)
+    for capability, step_id in capability_step_map:
+        step_config = step_config_map.get(step_id, {})
+        connection_id = (
+            step_config.get("endpoint_profile") if isinstance(step_config.get("endpoint_profile"), str) else None
+        )
+        routes.append(DefaultRouteInfo(capability=capability, connection_id=connection_id))
     return routes
 
 
-def build_workflow_profile_payload(
-    *,
-    base_config: dict[str, Any] | None,
-    routes: list[DefaultRoute],
-    target_language: str,
-    preset_code: str | None,
-) -> dict[str, Any]:
-    payload = dict(base_config or {})
-    payload["translation_target_language"] = target_language
-    if preset_code is not None:
-        payload[_UI_PRESET_KEY] = preset_code
-
-    route_map = {route.capability: route.connection_id for route in routes}
-    translation_ref = route_map.get(CapabilityCode.TRANSLATION) or _first_route_id(routes)
-    ocr_ref = route_map.get(CapabilityCode.IMAGE_TEXT_READING) or translation_ref
-    image_edit_ref = route_map.get(CapabilityCode.IMAGE_EDITING) or translation_ref or ocr_ref
-    review_ref = route_map.get(CapabilityCode.REASONING_AND_REVIEW) or translation_ref
-
-    payload.setdefault("extractor_config", {})
-    payload.setdefault("summarizor_config", {})
-    payload.setdefault("glossary_config", {})
-    payload.setdefault("translator_config", {})
-    payload.setdefault("review_config", {})
-    payload.setdefault("ocr_config", {})
-    payload.setdefault("image_reembedding_config", {})
-    payload.setdefault("manga_translator_config", {})
-
-    for key in ("extractor_config", "summarizor_config", "glossary_config", "translator_config"):
-        if translation_ref is not None:
-            payload[key]["endpoint_profile"] = translation_ref
-    if review_ref is not None:
-        payload["review_config"]["endpoint_profile"] = review_ref
-    if ocr_ref is not None:
-        payload["ocr_config"]["endpoint_profile"] = ocr_ref
-        payload["manga_translator_config"]["endpoint_profile"] = ocr_ref
-    if image_edit_ref is not None:
-        payload["image_reembedding_config"]["endpoint_profile"] = image_edit_ref
-
-    apply_preset_to_payload(payload, preset_code)
-    return payload
+def _workflow_step_config_map(config: dict[str, Any]) -> dict[WorkflowStepId, dict[str, Any]]:
+    return {
+        step_id: (config.get(config_key) if config_key is not None else None) or {}
+        for step_id, _label, config_key in _WORKFLOW_STEP_LAYOUT
+    }
 
 
-def apply_preset_to_payload(payload: dict[str, Any], preset_code: str | None) -> None:
-    translator_config = payload.setdefault("translator_config", {})
-    if preset_code == "fast":
-        translator_config["enable_polish"] = False
-        translator_config["num_of_chunks_per_llm_call"] = 2
-    elif preset_code == "best":
-        translator_config["enable_polish"] = True
-        translator_config["num_of_chunks_per_llm_call"] = 3
-    else:
-        translator_config.setdefault("enable_polish", True)
-        translator_config.setdefault("num_of_chunks_per_llm_call", 3)
+def _workflow_step_label(step_id: WorkflowStepId) -> str:
+    for current, label, _config_key in _WORKFLOW_STEP_LAYOUT:
+        if current is step_id:
+            return label
+    return step_id.value
 
 
 def read_ui_preset(config: dict[str, Any]) -> str | None:
@@ -384,10 +362,179 @@ def read_ui_preset(config: dict[str, Any]) -> str | None:
     return str(value) if isinstance(value, str) else None
 
 
-def _first_route_id(routes: list[DefaultRoute]) -> str | None:
-    if not routes:
-        return None
-    return routes[0].connection_id
+def read_source_profile_id(config: dict[str, Any]) -> str | None:
+    value = config.get(_UI_SOURCE_PROFILE_ID_KEY)
+    return str(value) if isinstance(value, str) and value.strip() else None
+
+
+def build_workflow_profile_detail(
+    *,
+    profile_id: str,
+    name: str,
+    kind: WorkflowProfileKind,
+    config: dict[str, Any],
+    connection_name_by_id: dict[str, str],
+    connection_model_by_id: dict[str, str | None],
+    is_default: bool = False,
+) -> WorkflowProfileDetail:
+    routes: list[WorkflowStepRoute] = []
+    step_config_map = _workflow_step_config_map(config)
+    for step_id, label, _config_key in _WORKFLOW_STEP_LAYOUT:
+        if step_id is WorkflowStepId.TRANSLATOR_BATCH:
+            raw_batch_cfg = config.get("translator_batch_config")
+            batch_cfg: dict[str, Any] = raw_batch_cfg if isinstance(raw_batch_cfg, dict) else {}
+            provider_label = str(batch_cfg.get("provider") or "Direct batch config") if batch_cfg else None
+            model = str(batch_cfg.get("model") or "") or None
+            routes.append(
+                WorkflowStepRoute(
+                    step_id=step_id,
+                    step_label=label,
+                    connection_id=None,
+                    connection_label=provider_label,
+                    model=model,
+                )
+            )
+            continue
+        step_cfg = step_config_map.get(step_id, {})
+        connection_id = step_cfg.get("endpoint_profile") if isinstance(step_cfg.get("endpoint_profile"), str) else None
+        model = step_cfg.get("model") if isinstance(step_cfg.get("model"), str) and step_cfg.get("model") else None
+        if model is None and connection_id is not None:
+            model = connection_model_by_id.get(connection_id)
+        routes.append(
+            WorkflowStepRoute(
+                step_id=step_id,
+                step_label=label,
+                connection_id=connection_id,
+                connection_label=(connection_name_by_id.get(connection_id, connection_id) if connection_id else None),
+                model=model,
+            )
+        )
+
+    preset_value = read_ui_preset(config) or PresetCode.BALANCED.value
+    try:
+        preset = PresetCode(preset_value)
+    except ValueError:
+        preset = PresetCode.BALANCED
+
+    target_language = str(config.get("translation_target_language") or "English")
+    return WorkflowProfileDetail(
+        profile_id=profile_id,
+        name=name,
+        kind=kind,
+        target_language=target_language,
+        preset=preset,
+        routes=routes,
+        is_default=is_default,
+    )
+
+
+def build_workflow_profile_summary(
+    detail: WorkflowProfileDetail,
+) -> WorkflowProfileSummary:
+    return WorkflowProfileSummary(
+        profile_id=detail.profile_id,
+        name=detail.name,
+        kind=detail.kind,
+        target_language=detail.target_language,
+        preset=detail.preset,
+        is_default=detail.is_default,
+    )
+
+
+def apply_preset_to_payload(_payload: dict[str, Any], _preset: str) -> None:
+    """Persist preset metadata only.
+
+    Workflow profiles reuse the existing config payload shape, but preset is now
+    a user-facing profile label rather than a hidden config mutation surface.
+    """
+
+
+def build_workflow_profile_payload(
+    *,
+    base_config: dict[str, Any] | None,
+    profile: WorkflowProfileDetail,
+    source_profile_id: str | None = None,
+) -> dict[str, Any]:
+    payload = dict(base_config or {})
+    payload["translation_target_language"] = profile.target_language
+    payload[_UI_PRESET_KEY] = profile.preset.value
+    if source_profile_id:
+        payload[_UI_SOURCE_PROFILE_ID_KEY] = source_profile_id
+    else:
+        payload.pop(_UI_SOURCE_PROFILE_ID_KEY, None)
+
+    route_map = {route.step_id: route for route in profile.routes}
+    for step_id, _label, config_key in _WORKFLOW_STEP_LAYOUT:
+        if step_id is WorkflowStepId.TRANSLATOR_BATCH or config_key is None:
+            continue
+        payload.setdefault(config_key, {})
+        route = route_map.get(step_id)
+        if route is None:
+            continue
+        if route.connection_id:
+            payload[config_key]["endpoint_profile"] = route.connection_id
+        else:
+            payload[config_key].pop("endpoint_profile", None)
+        if route.model:
+            payload[config_key]["model"] = route.model
+        else:
+            payload[config_key].pop("model", None)
+
+    apply_preset_to_payload(payload, profile.preset.value)
+    return payload
+
+
+def first_connection_for_capability(
+    drafts: list[ConnectionDraft], capability: CapabilityCode
+) -> ConnectionDraft | None:
+    return next((draft for draft in drafts if capability in infer_capabilities(draft.provider)), None)
+
+
+def recommended_workflow_profile_from_drafts(
+    drafts: list[ConnectionDraft],
+    *,
+    profile_id: str = "recommended",
+    name: str = "Recommended",
+    target_language: str = "English",
+    preset: PresetCode = PresetCode.BALANCED,
+) -> WorkflowProfileDetail:
+    routes: list[WorkflowStepRoute] = []
+    translation_draft = first_connection_for_capability(drafts, CapabilityCode.TRANSLATION)
+    ocr_draft = first_connection_for_capability(drafts, CapabilityCode.IMAGE_TEXT_READING) or translation_draft
+    image_draft = first_connection_for_capability(drafts, CapabilityCode.IMAGE_EDITING) or ocr_draft or translation_draft
+    review_draft = first_connection_for_capability(drafts, CapabilityCode.REASONING_AND_REVIEW) or translation_draft
+
+    step_draft_map = {
+        WorkflowStepId.EXTRACTOR: translation_draft,
+        WorkflowStepId.SUMMARIZER: translation_draft,
+        WorkflowStepId.GLOSSARY_TRANSLATOR: translation_draft,
+        WorkflowStepId.TRANSLATOR: translation_draft,
+        WorkflowStepId.REVIEWER: review_draft,
+        WorkflowStepId.OCR: ocr_draft,
+        WorkflowStepId.IMAGE_REEMBEDDING: image_draft,
+        WorkflowStepId.MANGA_TRANSLATOR: ocr_draft or translation_draft,
+        WorkflowStepId.TRANSLATOR_BATCH: None,
+    }
+    for step_id, label, _config_key in _WORKFLOW_STEP_LAYOUT:
+        draft = step_draft_map.get(step_id)
+        routes.append(
+            WorkflowStepRoute(
+                step_id=step_id,
+                step_label=label,
+                connection_id=draft.display_name if draft is not None else None,
+                connection_label=draft.display_name if draft is not None else None,
+                model=draft.default_model if draft is not None else None,
+            )
+        )
+    return WorkflowProfileDetail(
+        profile_id=profile_id,
+        name=name,
+        kind=WorkflowProfileKind.SHARED,
+        target_language=target_language,
+        preset=preset,
+        routes=routes,
+        is_default=True,
+    )
 
 
 def build_project_summary(book_manager: BookManager, book: Book) -> ProjectSummary:

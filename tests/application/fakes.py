@@ -8,7 +8,7 @@ from context_aware_translation.application.contracts.app_setup import (
     ConnectionTestRequest,
     ConnectionTestResult,
     SaveConnectionRequest,
-    SaveDefaultRoutesRequest,
+    SaveWorkflowProfileRequest,
     SetupWizardRequest,
     SetupWizardState,
     SetupWizardStep,
@@ -18,7 +18,6 @@ from context_aware_translation.application.contracts.document import (
     DocumentExportResult,
     DocumentExportState,
     DocumentImagesState,
-    DocumentImagesToolbarState,
     DocumentOCRActions,
     DocumentOCRState,
     DocumentOverviewState,
@@ -73,17 +72,15 @@ class FakeProjectsService:
 
     def get_project(self, project_id: str) -> ProjectSummary:
         self.calls.append(("get_project", project_id))
-        return (
-            self.project_summary or self.create_result or self.update_result
-        )  # pragma: no cover - setup error if absent
+        return self.project_summary or self.create_result or self.update_result
 
     def create_project(self, request: CreateProjectRequest) -> ProjectSummary:
         self.calls.append(("create_project", request))
-        return self.create_result or self.project_summary  # pragma: no cover - setup error if absent
+        return self.create_result or self.project_summary
 
     def update_project(self, request: UpdateProjectRequest) -> ProjectSummary:
         self.calls.append(("update_project", request))
-        return self.update_result or self.project_summary  # pragma: no cover - setup error if absent
+        return self.update_result or self.project_summary
 
     def delete_project(self, project_id: str, *, permanent: bool = True) -> None:
         self.calls.append(("delete_project", (project_id, permanent)))
@@ -104,11 +101,7 @@ class FakeAppSetupService:
 
     def get_wizard_state(self) -> SetupWizardState:
         self.calls.append(("get_wizard_state", None))
-        return (
-            self.wizard_state
-            if self.wizard_state is not None
-            else SetupWizardState(step=SetupWizardStep.CHOOSE_PROVIDERS)
-        )
+        return self.wizard_state if self.wizard_state is not None else SetupWizardState(step=SetupWizardStep.CHOOSE_PROVIDERS)
 
     def preview_setup_wizard(self, request: SetupWizardRequest) -> SetupWizardState:
         self.calls.append(("preview_setup_wizard", request))
@@ -132,9 +125,13 @@ class FakeAppSetupService:
         self.calls.append(("run_setup_wizard", request))
         return self.state
 
-    def save_default_routes(self, request: SaveDefaultRoutesRequest) -> AppSetupState:
-        self.calls.append(("save_default_routes", request))
+    def save_workflow_profile(self, request: SaveWorkflowProfileRequest) -> AppSetupState:
+        self.calls.append(("save_workflow_profile", request))
         return self.state
+
+    def seed_defaults(self) -> AcceptedCommand:
+        self.calls.append(("seed_defaults", None))
+        return self.seed_result or AcceptedCommand(command_name="seed_defaults")
 
 
 @dataclass
@@ -263,27 +260,26 @@ class FakeDocumentService:
 
     def save_ocr(self, request: SaveOCRPageRequest) -> DocumentOCRState:
         self.calls.append(("save_ocr", request))
-        return self.ocr  # type: ignore[return-value]
+        return self.get_ocr(request.project_id, request.document_id)
 
     def run_ocr(self, request: RunOCRRequest) -> AcceptedCommand:
         self.calls.append(("run_ocr", request))
         return self.command_result or AcceptedCommand(command_name="run_ocr")
 
     def get_terms(self, project_id: str, document_id: int) -> TermsTableState:
-        self.calls.append(("get_terms", (project_id, document_id)))
         raise NotImplementedError
 
     def get_translation(self, project_id: str, document_id: int) -> DocumentTranslationState:
         self.calls.append(("get_translation", (project_id, document_id)))
-        if self.translation is not None:
-            return self.translation
-        return DocumentTranslationState(
-            workspace=self.workspace.model_copy(update={"active_tab": DocumentSection.TRANSLATION}),
-        )
+        if self.translation is None:
+            raise NotImplementedError
+        return self.translation
 
     def save_translation(self, request: SaveTranslationRequest) -> DocumentTranslationState:
         self.calls.append(("save_translation", request))
-        return self.get_translation(request.project_id, request.document_id)
+        if self.translation is None:
+            raise NotImplementedError
+        return self.translation
 
     def retranslate(self, request: RetranslateRequest) -> AcceptedCommand:
         self.calls.append(("retranslate", request))
@@ -291,33 +287,25 @@ class FakeDocumentService:
 
     def get_images(self, project_id: str, document_id: int) -> DocumentImagesState:
         self.calls.append(("get_images", (project_id, document_id)))
-        if self.images is not None:
-            return self.images
-        return DocumentImagesState(
-            workspace=self.workspace.model_copy(update={"active_tab": DocumentSection.IMAGES}),
-            toolbar=DocumentImagesToolbarState(),
-        )
+        if self.images is None:
+            raise NotImplementedError
+        return self.images
 
     def run_image_reinsertion(self, request: RunImageReinsertionRequest) -> AcceptedCommand:
         self.calls.append(("run_image_reinsertion", request))
         return self.command_result or AcceptedCommand(command_name="run_image_reinsertion")
 
-    def cancel_image_reinsertion(self, project_id: str, task_id: str) -> AcceptedCommand:
-        self.calls.append(("cancel_image_reinsertion", (project_id, task_id)))
-        return self.command_result or AcceptedCommand(command_name="cancel_image_reinsertion")
-
     def get_export(self, project_id: str, document_id: int) -> DocumentExportState:
         self.calls.append(("get_export", (project_id, document_id)))
-        if self.export is not None:
-            return self.export
-        return DocumentExportState(
-            workspace=self.workspace.model_copy(update={"active_tab": DocumentSection.EXPORT}),
-            can_export=False,
-        )
+        if self.export is None:
+            raise NotImplementedError
+        return self.export
 
-    def export_document(self, request: RunDocumentExportRequest) -> DocumentExportResult:
-        self.calls.append(("export_document", request))
-        return self.export_result  # type: ignore[return-value]
+    def run_export(self, request: RunDocumentExportRequest) -> DocumentExportResult:
+        self.calls.append(("run_export", request))
+        if self.export_result is None:
+            raise NotImplementedError
+        return self.export_result
 
 
 @dataclass
@@ -326,27 +314,14 @@ class FakeQueueService:
     command_result: AcceptedCommand | None = None
     calls: list[tuple[str, Any]] = field(default_factory=list)
 
-    def get_queue(self, *, project_id: str | None = None) -> QueueState:
-        self.calls.append(("get_queue", project_id))
+    def get_state(self, project_id: str | None = None) -> QueueState:
+        self.calls.append(("get_state", project_id))
         return self.state
 
-    def apply_action(self, request: QueueActionRequest) -> AcceptedCommand:
-        self.calls.append(("apply_action", request))
+    def run_action(self, request: QueueActionRequest) -> AcceptedCommand:
+        self.calls.append(("run_action", request))
         return self.command_result or AcceptedCommand(command_name="queue_action")
 
 
-@dataclass
-class FakeApplicationServices:
-    projects: FakeProjectsService | None = None
-    app_setup: FakeAppSetupService | None = None
-    project_setup: FakeProjectSetupService | None = None
-    work: FakeWorkService | None = None
-    terms: FakeTermsService | None = None
-    document: FakeDocumentService | None = None
-    queue: FakeQueueService | None = None
-
-
-@dataclass
-class FakeApplicationContext:
-    services: FakeApplicationServices
-    events: InMemoryApplicationEventBus = field(default_factory=InMemoryApplicationEventBus)
+def make_fake_event_bus() -> InMemoryApplicationEventBus:
+    return InMemoryApplicationEventBus()
