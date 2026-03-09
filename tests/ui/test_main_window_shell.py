@@ -144,6 +144,18 @@ class _FakeProjectSetupView(QWidget):
         self.cleanup_calls += 1
 
 
+class _FakeTermsView(QWidget):
+    def __init__(self, project_id, service, events, parent: QWidget | None = None):  # noqa: ANN001
+        super().__init__(parent)
+        self.project_id = project_id
+        self.service = service
+        self.events = events
+        self.cleanup_calls = 0
+
+    def cleanup(self) -> None:
+        self.cleanup_calls += 1
+
+
 def _make_context():
     book_manager = MagicMock()
     book_manager.library_root = Path("/tmp/context-aware-translation-tests")
@@ -205,6 +217,7 @@ def _make_window():
     patch_stack.enter_context(
         patch("context_aware_translation.ui.main_window.ProjectSetupView", _FakeProjectSetupView)
     )
+    patch_stack.enter_context(patch("context_aware_translation.ui.main_window.TermsView", _FakeTermsView))
     try:
         window = MainWindow()
     except Exception:
@@ -256,6 +269,7 @@ def test_main_window_routes_projects_into_project_shell():
         assert shell.tab_widget.tabText(1) == shell.tr("Terms")
         assert shell.tab_widget.tabText(2) == shell.tr("Setup")
         assert isinstance(shell.work_tab, _FakeWorkView)
+        assert isinstance(shell.terms_tab, _FakeTermsView)
         assert isinstance(shell.setup_tab, _FakeProjectSetupView)
         assert window._book_nav_item.text() == window.tr("Project: One Piece")
 
@@ -317,6 +331,14 @@ def test_main_window_routes_queue_targets_into_current_shell():
             )
         )
         assert shell.tab_widget.currentWidget() is shell.setup_tab
+
+        window._open_navigation_target(
+            NavigationTarget(
+                kind=NavigationTargetKind.TERMS,
+                project_id="project-1",
+            )
+        )
+        assert shell.tab_widget.currentWidget() is shell.terms_tab
     finally:
         window.close()
         QApplication.processEvents()

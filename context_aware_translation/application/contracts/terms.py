@@ -53,6 +53,11 @@ class TermsToolbarState(ContractModel):
     can_import: bool = True
     can_export: bool = True
     build_blocker: BlockerInfo | None = None
+    translate_pending_blocker: BlockerInfo | None = None
+    review_blocker: BlockerInfo | None = None
+    filter_noise_blocker: BlockerInfo | None = None
+    import_blocker: BlockerInfo | None = None
+    export_blocker: BlockerInfo | None = None
 
 
 class TermsTableState(ContractModel):

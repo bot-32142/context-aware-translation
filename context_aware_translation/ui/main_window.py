@@ -37,6 +37,7 @@ from context_aware_translation.ui.features import (
     ProjectSetupView,
     ProjectShellView,
     QueueDrawerView,
+    TermsView,
     WorkView,
 )
 from context_aware_translation.ui.i18n import qarg
@@ -386,6 +387,11 @@ class MainWindow(QMainWindow):
             self._app_context.services.terms,
             self._app_context.events,
         )
+        terms_view = TermsView(
+            book_id,
+            self._app_context.services.terms,
+            self._app_context.events,
+        )
         setup_view = ProjectSetupView(
             book_id,
             self._app_context.services.project_setup,
@@ -395,6 +401,7 @@ class MainWindow(QMainWindow):
             project_id=book_id,
             project_name=book_name,
             work_widget=work_view,
+            terms_widget=terms_view,
             setup_widget=setup_view,
         )
         project_shell.close_requested.connect(self.close_book)
