@@ -269,6 +269,7 @@ class SetupWizardDialog(QDialog):
         layout.addWidget(self.button_box)
 
         self._page_index = 0
+        self._available_providers: list[ProviderCard] = []
         self._provider_checks: dict[ProviderKind, QCheckBox] = {}
         self._draft_forms: list[ConnectionDraftForm] = []
         self._page_widgets: list[QWidget] = []
@@ -282,10 +283,18 @@ class SetupWizardDialog(QDialog):
         self._page_widgets.clear()
         if self._page_index == 0:
             self.step_title.setText(self.tr("Choose providers"))
+            self._provider_checks = {}
             card_host = QWidget()
             card_layout = QVBoxLayout(card_host)
             card_layout.setSpacing(12)
-            for checkbox in self._provider_checks.values():
+            for provider in self._available_providers:
+                checkbox = QCheckBox(provider.label)
+                checkbox.setToolTip(provider.helper_text or "")
+                checkbox.setProperty("provider", provider.provider.value)
+                checkbox.setChecked(provider.provider in self._wizard_state.selected_providers)
+                if provider.helper_text:
+                    checkbox.setText(f"{provider.label} — {provider.helper_text}")
+                self._provider_checks[provider.provider] = checkbox
                 card_layout.addWidget(checkbox)
             card_layout.addStretch()
             self.page_layout.addWidget(card_host)
@@ -373,15 +382,7 @@ class SetupWizardDialog(QDialog):
         )
 
     def _populate_provider_cards(self, providers: Sequence[ProviderCard]) -> None:
-        self._provider_checks.clear()
-        for provider in providers:
-            checkbox = QCheckBox(provider.label)
-            checkbox.setToolTip(provider.helper_text or "")
-            checkbox.setProperty("provider", provider.provider.value)
-            checkbox.setChecked(provider.provider in self._wizard_state.selected_providers)
-            if provider.helper_text:
-                checkbox.setText(f"{provider.label} — {provider.helper_text}")
-            self._provider_checks[provider.provider] = checkbox
+        self._available_providers = list(providers)
 
     def _go_back(self) -> None:
         if self._page_index == 0:

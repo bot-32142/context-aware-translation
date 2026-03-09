@@ -374,6 +374,88 @@ def test_setup_wizard_dialog_custom_provider_requires_endpoint_and_model():
     assert form.validate(require_api_key=True) == (True, None)
 
 
+def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
+    from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
+
+    wizard_state = SetupWizardState(
+        step=SetupWizardStep.CHOOSE_PROVIDERS,
+        available_providers=[
+            ProviderCard(
+                provider=ProviderKind.GEMINI,
+                label="Gemini",
+                helper_text="Good for image text reading and image editing.",
+                recommended_for=[CapabilityCode.TRANSLATION, CapabilityCode.IMAGE_TEXT_READING],
+            )
+        ],
+    )
+    preview_state = SetupWizardState(
+        step=SetupWizardStep.REVIEW_ROUTING,
+        available_providers=wizard_state.available_providers,
+        selected_providers=[ProviderKind.GEMINI],
+        drafts=[
+            ConnectionDraft(
+                display_name="Gemini",
+                provider=ProviderKind.GEMINI,
+                api_key="secret",
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                default_model="gemini-3-flash-preview",
+            )
+        ],
+        test_results=[
+            ConnectionTestResult(
+                connection_label="Gemini",
+                capabilities=[
+                    CapabilityCard(
+                        capability=CapabilityCode.TRANSLATION,
+                        availability=CapabilityAvailability.READY,
+                        message="Supported by gemini",
+                    )
+                ],
+                recommendation=RoutingRecommendation(
+                    routes=[
+                        DefaultRoute(
+                            capability=CapabilityCode.TRANSLATION,
+                            connection_id="Gemini",
+                            connection_label="Gemini",
+                        )
+                    ]
+                ),
+                message=UserMessage(severity=UserMessageSeverity.INFO, text="Connection accepted."),
+            )
+        ],
+        recommendation=RoutingRecommendation(
+            routes=[
+                DefaultRoute(
+                    capability=CapabilityCode.TRANSLATION,
+                    connection_id="Gemini",
+                    connection_label="Gemini",
+                )
+            ]
+        ),
+    )
+    service = FakeAppSetupService(state=_make_state(), wizard_state=wizard_state, preview_state=preview_state)
+    dialog = SetupWizardDialog(service, wizard_state)
+
+    dialog._provider_checks[ProviderKind.GEMINI].setChecked(True)
+    dialog._go_next()
+    dialog._draft_forms[0].api_key_edit.setText("secret")
+    dialog._go_next()
+    assert dialog._page_index == 2
+
+    dialog._go_back()
+    assert dialog._page_index == 1
+    dialog._go_back()
+    assert dialog._page_index == 0
+
+    card_host = dialog.page_layout.itemAt(0).widget()
+    assert card_host is not None
+    assert card_host.layout() is not None
+    assert card_host.layout().count() >= 1
+    first_item_widget = card_host.layout().itemAt(0).widget()
+    assert first_item_widget is dialog._provider_checks[ProviderKind.GEMINI]
+    assert dialog._provider_checks[ProviderKind.GEMINI].isChecked() is True
+
+
 def test_app_setup_view_refreshes_wizard_prompt_state():
     from context_aware_translation.ui.features.app_setup_view import AppSetupView
 
