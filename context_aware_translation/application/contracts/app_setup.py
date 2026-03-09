@@ -162,9 +162,7 @@ class SetupWizardState(ContractModel):
 
 class AppSetupState(ContractModel):
     connections: list[ConnectionSummary]
-    capabilities: list[CapabilityCard]
     shared_profiles: list[WorkflowProfileDetail] = Field(default_factory=list)
     default_profile_id: str | None = None
-    selected_profile: WorkflowProfileDetail | None = None
     requires_wizard: bool = False
     wizard: SetupWizardState | None = None

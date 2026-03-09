@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from PySide6.QtWidgets import (
@@ -37,11 +38,87 @@ class ConnectionChoice:
     default_model: str | None = None
 
 
+@dataclass
+class RouteRow:
+    route: WorkflowStepRoute
+    connection_combo: QComboBox | None
+    model_edit: QLineEdit
+
+
+@dataclass(frozen=True)
+class _SpinFieldSpec:
+    attr_name: str
+    label: str
+    key: str
+    minimum: int
+    maximum: int
+    default: int
+
+
+@dataclass(frozen=True)
+class _CheckFieldSpec:
+    attr_name: str
+    label: str
+    key: str
+    default: bool
+
+
+@dataclass(frozen=True)
+class _ChoiceFieldSpec:
+    attr_name: str
+    label: str
+    key: str
+    default: str
+    options: tuple[tuple[str, str], ...]
+
+
 class StepAdvancedConfigDialog(QDialog):
+    _TIP_TEXTS = {
+        WorkflowStepId.EXTRACTOR: "Extraction settings control how aggressively terms are discovered.",
+        WorkflowStepId.TRANSLATOR: "Translator settings tune chunk sizing and request budget.",
+        WorkflowStepId.OCR: "OCR settings control image compression and artifact cleanup.",
+        WorkflowStepId.IMAGE_REEMBEDDING: "Image reembedding settings choose the image-edit backend for this workflow step.",
+        WorkflowStepId.TRANSLATOR_BATCH: "Batch settings configure optional async translation jobs.",
+    }
+    _SIMPLE_STEP_SPECS: dict[WorkflowStepId, tuple[_SpinFieldSpec | _CheckFieldSpec | _ChoiceFieldSpec, ...]] = {
+        WorkflowStepId.EXTRACTOR: (
+            _SpinFieldSpec("max_gleaning_spin", "Max gleaning", "max_gleaning", 0, 10, 3),
+            _SpinFieldSpec("max_term_name_spin", "Max term name length", "max_term_name_length", 10, 500, 200),
+        ),
+        WorkflowStepId.TRANSLATOR: (
+            _SpinFieldSpec("max_tokens_spin", "Max tokens per call", "max_tokens_per_llm_call", 100, 100000, 4000),
+            _SpinFieldSpec("chunk_size_spin", "Chunk size", "chunk_size", 100, 5000, 1000),
+        ),
+        WorkflowStepId.OCR: (
+            _SpinFieldSpec("ocr_dpi_spin", "OCR DPI", "ocr_dpi", 72, 600, 150),
+            _CheckFieldSpec("strip_artifacts_check", "Strip artifacts", "strip_llm_artifacts", True),
+        ),
+        WorkflowStepId.IMAGE_REEMBEDDING: (
+            _ChoiceFieldSpec(
+                "backend_combo",
+                "Backend",
+                "backend",
+                ImageBackend.GEMINI.value,
+                (
+                    ("Gemini", ImageBackend.GEMINI.value),
+                    ("OpenAI", ImageBackend.OPENAI.value),
+                    ("Qwen", ImageBackend.QWEN.value),
+                ),
+            ),
+        ),
+    }
+    _BATCH_THINKING_OPTIONS = (
+        ("Auto", "auto"),
+        ("Off", "off"),
+        ("Low", "low"),
+        ("Medium", "medium"),
+        ("High", "high"),
+    )
+
     def __init__(self, route: WorkflowStepRoute, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._route = route
-        self._empty = False
+        self._serialize: Callable[[], WorkflowStepRoute] = lambda: self._route
         self.setWindowTitle(self.tr("Step Settings"))
         self.setMinimumWidth(420)
         self.resize(460, 360)
@@ -58,77 +135,11 @@ class StepAdvancedConfigDialog(QDialog):
         self._form_layout.setHorizontalSpacing(12)
 
         config = dict(self._route.step_config)
-        if self._route.step_id is WorkflowStepId.EXTRACTOR:
-            self.max_gleaning_spin = QSpinBox()
-            self.max_gleaning_spin.setRange(0, 10)
-            self.max_gleaning_spin.setValue(int(config.get("max_gleaning", 3) or 3))
-            self.max_term_name_spin = QSpinBox()
-            self.max_term_name_spin.setRange(10, 500)
-            self.max_term_name_spin.setValue(int(config.get("max_term_name_length", 200) or 200))
-            self._form_layout.addRow(self.tr("Max gleaning"), self.max_gleaning_spin)
-            self._form_layout.addRow(self.tr("Max term name length"), self.max_term_name_spin)
-        elif self._route.step_id is WorkflowStepId.TRANSLATOR:
-            self.max_tokens_spin = QSpinBox()
-            self.max_tokens_spin.setRange(100, 100000)
-            self.max_tokens_spin.setValue(int(config.get("max_tokens_per_llm_call", 4000) or 4000))
-            self.chunk_size_spin = QSpinBox()
-            self.chunk_size_spin.setRange(100, 5000)
-            self.chunk_size_spin.setValue(int(config.get("chunk_size", 1000) or 1000))
-            self._form_layout.addRow(self.tr("Max tokens per call"), self.max_tokens_spin)
-            self._form_layout.addRow(self.tr("Chunk size"), self.chunk_size_spin)
-        elif self._route.step_id is WorkflowStepId.OCR:
-            self.ocr_dpi_spin = QSpinBox()
-            self.ocr_dpi_spin.setRange(72, 600)
-            self.ocr_dpi_spin.setValue(int(config.get("ocr_dpi", 150) or 150))
-            self.strip_artifacts_check = QCheckBox()
-            self.strip_artifacts_check.setChecked(bool(config.get("strip_llm_artifacts", True)))
-            self._form_layout.addRow(self.tr("OCR DPI"), self.ocr_dpi_spin)
-            self._form_layout.addRow(self.tr("Strip artifacts"), self.strip_artifacts_check)
-        elif self._route.step_id is WorkflowStepId.IMAGE_REEMBEDDING:
-            self.backend_combo = QComboBox()
-            self.backend_combo.addItem("Gemini", ImageBackend.GEMINI.value)
-            self.backend_combo.addItem("OpenAI", ImageBackend.OPENAI.value)
-            self.backend_combo.addItem("Qwen", ImageBackend.QWEN.value)
-            backend_value = str(config.get("backend") or ImageBackend.GEMINI.value)
-            for i in range(self.backend_combo.count()):
-                if str(self.backend_combo.itemData(i)) == backend_value:
-                    self.backend_combo.setCurrentIndex(i)
-                    break
-            self._form_layout.addRow(self.tr("Backend"), self.backend_combo)
+        if simple_specs := self._SIMPLE_STEP_SPECS.get(self._route.step_id):
+            self._serialize = self._build_simple_step(config, simple_specs)
         elif self._route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
-            self.batch_provider_combo = QComboBox()
-            self.batch_provider_combo.addItem(self.tr("Disabled"), "")
-            self.batch_provider_combo.addItem(self.tr("Gemini AI Studio"), "gemini_ai_studio")
-            provider_value = str(config.get("provider") or "")
-            for i in range(self.batch_provider_combo.count()):
-                if str(self.batch_provider_combo.itemData(i) or "") == provider_value:
-                    self.batch_provider_combo.setCurrentIndex(i)
-                    break
-
-            self.batch_api_key_edit = QLineEdit(str(config.get("api_key") or ""))
-            self.batch_model_edit = QLineEdit(self._route.model or "")
-            self.batch_size_spin = QSpinBox()
-            self.batch_size_spin.setRange(1, 5000)
-            self.batch_size_spin.setValue(int(config.get("batch_size", 100) or 100))
-            self.batch_thinking_combo = QComboBox()
-            self.batch_thinking_combo.addItem(self.tr("Auto"), "auto")
-            self.batch_thinking_combo.addItem(self.tr("Off"), "off")
-            self.batch_thinking_combo.addItem(self.tr("Low"), "low")
-            self.batch_thinking_combo.addItem(self.tr("Medium"), "medium")
-            self.batch_thinking_combo.addItem(self.tr("High"), "high")
-            thinking_value = str(config.get("thinking_mode") or "auto")
-            for i in range(self.batch_thinking_combo.count()):
-                if str(self.batch_thinking_combo.itemData(i) or "") == thinking_value:
-                    self.batch_thinking_combo.setCurrentIndex(i)
-                    break
-
-            self._form_layout.addRow(self.tr("Provider"), self.batch_provider_combo)
-            self._form_layout.addRow(self.tr("API key"), self.batch_api_key_edit)
-            self._form_layout.addRow(self.tr("Model"), self.batch_model_edit)
-            self._form_layout.addRow(self.tr("Batch size"), self.batch_size_spin)
-            self._form_layout.addRow(self.tr("Thinking mode"), self.batch_thinking_combo)
+            self._serialize = self._build_translator_batch(config)
         else:
-            self._empty = True
             self._form_layout.addRow(
                 create_tip_label(self.tr("This step has no additional settings beyond connection and model."))
             )
@@ -145,72 +156,84 @@ class StepAdvancedConfigDialog(QDialog):
         layout.addWidget(buttons)
 
     def route(self) -> WorkflowStepRoute:
-        if self._empty:
-            return self._route
-        if self._route.step_id is WorkflowStepId.EXTRACTOR:
-            return self._route.model_copy(
-                update={
-                    "step_config": {
-                        "max_gleaning": int(self.max_gleaning_spin.value()),
-                        "max_term_name_length": int(self.max_term_name_spin.value()),
-                    }
-                }
-            )
-        if self._route.step_id is WorkflowStepId.TRANSLATOR:
-            return self._route.model_copy(
-                update={
-                    "step_config": {
-                        "max_tokens_per_llm_call": int(self.max_tokens_spin.value()),
-                        "chunk_size": int(self.chunk_size_spin.value()),
-                    }
-                }
-            )
-        if self._route.step_id is WorkflowStepId.OCR:
-            return self._route.model_copy(
-                update={
-                    "step_config": {
-                        "ocr_dpi": int(self.ocr_dpi_spin.value()),
-                        "strip_llm_artifacts": bool(self.strip_artifacts_check.isChecked()),
-                    }
-                }
-            )
-        if self._route.step_id is WorkflowStepId.IMAGE_REEMBEDDING:
-            return self._route.model_copy(
-                update={
-                    "step_config": {
-                        "backend": str(self.backend_combo.currentData() or ImageBackend.GEMINI.value),
-                    }
-                }
-            )
-        if self._route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
-            provider = str(self.batch_provider_combo.currentData() or "")
+        return self._serialize()
+
+    def _tip_text(self) -> str:
+        return self.tr(self._TIP_TEXTS.get(self._route.step_id, "Edit advanced settings for this workflow step."))
+
+    def _spin(self, minimum: int, maximum: int, value: int) -> QSpinBox:
+        spin = QSpinBox()
+        spin.setRange(minimum, maximum)
+        spin.setValue(value)
+        return spin
+
+    def _select_combo_value(self, combo: QComboBox, value: str) -> None:
+        for index in range(combo.count()):
+            if str(combo.itemData(index) or "") == value:
+                combo.setCurrentIndex(index)
+                return
+
+    def _build_simple_step(
+        self,
+        config: dict[str, object],
+        specs: tuple[_SpinFieldSpec | _CheckFieldSpec | _ChoiceFieldSpec, ...],
+    ) -> Callable[[], WorkflowStepRoute]:
+        readers: dict[str, Callable[[], bool | int | float | str | None]] = {}
+        for spec in specs:
+            if isinstance(spec, _SpinFieldSpec):
+                widget = self._spin(spec.minimum, spec.maximum, int(config.get(spec.key, spec.default) or spec.default))
+                readers[spec.key] = lambda w=widget: int(w.value())
+            elif isinstance(spec, _CheckFieldSpec):
+                widget = QCheckBox()
+                widget.setChecked(bool(config.get(spec.key, spec.default)))
+                readers[spec.key] = lambda w=widget: bool(w.isChecked())
+            else:
+                widget = QComboBox()
+                for label, value in spec.options:
+                    widget.addItem(label, value)
+                self._select_combo_value(widget, str(config.get(spec.key) or spec.default))
+                readers[spec.key] = lambda w=widget, d=spec.default: str(w.currentData() or d)
+            setattr(self, spec.attr_name, widget)
+            self._form_layout.addRow(self.tr(spec.label), widget)
+        return lambda: self._route.model_copy(update={"step_config": {key: read() for key, read in readers.items()}})
+
+    def _build_translator_batch(self, config: dict[str, object]) -> Callable[[], WorkflowStepRoute]:
+        provider_combo = QComboBox()
+        provider_combo.addItem(self.tr("Disabled"), "")
+        provider_combo.addItem(self.tr("Gemini AI Studio"), "gemini_ai_studio")
+        self._select_combo_value(provider_combo, str(config.get("provider") or ""))
+
+        api_key_edit = QLineEdit(str(config.get("api_key") or ""))
+        model_edit = QLineEdit(self._route.model or "")
+        batch_size_spin = self._spin(1, 5000, int(config.get("batch_size", 100) or 100))
+        thinking_combo = QComboBox()
+        for label, value in self._BATCH_THINKING_OPTIONS:
+            thinking_combo.addItem(label, value)
+        self._select_combo_value(thinking_combo, str(config.get("thinking_mode") or "auto"))
+
+        self._form_layout.addRow(self.tr("Provider"), provider_combo)
+        self._form_layout.addRow(self.tr("API key"), api_key_edit)
+        self._form_layout.addRow(self.tr("Model"), model_edit)
+        self._form_layout.addRow(self.tr("Batch size"), batch_size_spin)
+        self._form_layout.addRow(self.tr("Thinking mode"), thinking_combo)
+
+        def _serialize_batch() -> WorkflowStepRoute:
+            provider = str(provider_combo.currentData() or "")
             if not provider:
                 return self._route.model_copy(update={"model": None, "step_config": {}})
             return self._route.model_copy(
                 update={
-                    "model": self.batch_model_edit.text().strip() or None,
+                    "model": model_edit.text().strip() or None,
                     "step_config": {
                         "provider": provider,
-                        "api_key": self.batch_api_key_edit.text().strip(),
-                        "batch_size": int(self.batch_size_spin.value()),
-                        "thinking_mode": str(self.batch_thinking_combo.currentData() or "auto"),
+                        "api_key": api_key_edit.text().strip(),
+                        "batch_size": int(batch_size_spin.value()),
+                        "thinking_mode": str(thinking_combo.currentData() or "auto"),
                     },
                 }
             )
-        return self._route
 
-    def _tip_text(self) -> str:
-        if self._route.step_id is WorkflowStepId.EXTRACTOR:
-            return self.tr("Extraction settings control how aggressively terms are discovered.")
-        if self._route.step_id is WorkflowStepId.TRANSLATOR:
-            return self.tr("Translator settings tune chunk sizing and request budget.")
-        if self._route.step_id is WorkflowStepId.OCR:
-            return self.tr("OCR settings control image compression and artifact cleanup.")
-        if self._route.step_id is WorkflowStepId.IMAGE_REEMBEDDING:
-            return self.tr("Image reembedding settings choose the image-edit backend for this workflow step.")
-        if self._route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
-            return self.tr("Batch settings configure optional async translation jobs.")
-        return self.tr("Edit advanced settings for this workflow step.")
+        return _serialize_batch
 
 
 class WorkflowProfileEditorDialog(QDialog):
@@ -226,7 +249,7 @@ class WorkflowProfileEditorDialog(QDialog):
         self._original_profile = profile
         self._connection_choices = connection_choices
         self._allow_name_edit = allow_name_edit
-        self._row_widgets: list[tuple[WorkflowStepRoute, QComboBox | None, QLineEdit]] = []
+        self._rows: list[RouteRow] = []
         self.setWindowTitle(self.tr("Workflow Profile"))
         self.setMinimumSize(650, 600)
         self.resize(750, 750)
@@ -321,19 +344,18 @@ class WorkflowProfileEditorDialog(QDialog):
 
     def _populate_routes(self) -> None:
         self.routes_table.setRowCount(0)
-        self._row_widgets.clear()
+        self._rows.clear()
         for route in self._original_profile.routes:
             row = self.routes_table.rowCount()
             self.routes_table.insertRow(row)
             self.routes_table.setItem(row, 0, self._item(route.step_label))
 
             if route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
-                combo: QComboBox | None = None
                 self.routes_table.setItem(row, 1, self._item(route.connection_label or self.tr("Direct batch config")))
                 model_edit = QLineEdit(route.model or "")
                 model_edit.setReadOnly(True)
                 self.routes_table.setCellWidget(row, 2, model_edit)
-                self._row_widgets.append((route, combo, model_edit))
+                self._rows.append(RouteRow(route=route, connection_combo=None, model_edit=model_edit))
                 continue
 
             combo = QComboBox()
@@ -348,25 +370,25 @@ class WorkflowProfileEditorDialog(QDialog):
             combo.currentIndexChanged.connect(lambda _i, c=combo, e=model_edit: self._sync_model_from_connection(c, e))
             self.routes_table.setCellWidget(row, 1, combo)
             self.routes_table.setCellWidget(row, 2, model_edit)
-            self._row_widgets.append((route, combo, model_edit))
+            self._rows.append(RouteRow(route=route, connection_combo=combo, model_edit=model_edit))
 
     def _build_routes(self) -> list[WorkflowStepRoute]:
         routes: list[WorkflowStepRoute] = []
-        for original_route, combo, model_edit in self._row_widgets:
-            if original_route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
-                routes.append(original_route)
+        for row in self._rows:
+            if row.route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
+                routes.append(row.route)
                 continue
-            connection_id = combo.currentData() if combo is not None else None
+            connection_id = row.connection_combo.currentData() if row.connection_combo is not None else None
             connection_id_str = str(connection_id) if isinstance(connection_id, str) and connection_id else None
             connection_label = None
-            if combo is not None and connection_id_str is not None:
-                connection_label = combo.currentText().strip() or None
+            if row.connection_combo is not None and connection_id_str is not None:
+                connection_label = row.connection_combo.currentText().strip() or None
             routes.append(
-                original_route.model_copy(
+                row.route.model_copy(
                     update={
                         "connection_id": connection_id_str,
                         "connection_label": connection_label,
-                        "model": model_edit.text().strip() or None,
+                        "model": row.model_edit.text().strip() or None,
                     }
                 )
             )
@@ -377,17 +399,17 @@ class WorkflowProfileEditorDialog(QDialog):
         if not target_language:
             QMessageBox.warning(self, self.tr("Missing Information"), self.tr("Target language is required."))
             return
-        for route, combo, model_edit in self._row_widgets:
-            if route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
+        for row in self._rows:
+            if row.route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
                 continue
-            if combo is None or not str(combo.currentData() or "").strip():
+            if row.connection_combo is None or not str(row.connection_combo.currentData() or "").strip():
                 QMessageBox.warning(
                     self,
                     self.tr("Missing Connection"),
                     self.tr("Every workflow step must use a connection."),
                 )
                 return
-            if not model_edit.text().strip():
+            if not row.model_edit.text().strip():
                 QMessageBox.warning(
                     self,
                     self.tr("Missing Model"),
@@ -411,13 +433,13 @@ class WorkflowProfileEditorDialog(QDialog):
         return QTableWidgetItem(text)
 
     def _open_step_advanced_dialog(self, row: int, _column: int) -> None:
-        if row < 0 or row >= len(self._row_widgets):
+        if row < 0 or row >= len(self._rows):
             return
-        route, combo, model_edit = self._row_widgets[row]
-        dialog = StepAdvancedConfigDialog(route, self)
+        route_row = self._rows[row]
+        dialog = StepAdvancedConfigDialog(route_row.route, self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         updated_route = dialog.route()
-        self._row_widgets[row] = (updated_route, combo, model_edit)
+        route_row.route = updated_route
         if updated_route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
-            model_edit.setText(updated_route.model or "")
+            route_row.model_edit.setText(updated_route.model or "")

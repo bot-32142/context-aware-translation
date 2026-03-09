@@ -1,6 +1,5 @@
 from context_aware_translation.application.contracts.app_setup import (
     AppSetupState,
-    CapabilityCard,
     ConnectionStatus,
     ConnectionSummary,
     ProviderCard,
@@ -15,7 +14,6 @@ from context_aware_translation.application.contracts.common import (
     AcceptedCommand,
     BlockerCode,
     BlockerInfo,
-    CapabilityAvailability,
     CapabilityCode,
     DocumentRef,
     DocumentRowActionKind,
@@ -145,18 +143,8 @@ def test_setup_and_document_contracts_are_json_serializable() -> None:
                 capabilities=[CapabilityCode.IMAGE_TEXT_READING, CapabilityCode.IMAGE_EDITING],
             )
         ],
-        capabilities=[
-            CapabilityCard(
-                capability=CapabilityCode.IMAGE_TEXT_READING,
-                availability=CapabilityAvailability.READY,
-                message="Gemini ready",
-                connection_id="conn-gemini",
-                connection_label="Gemini",
-            )
-        ],
         shared_profiles=[shared_profile],
         default_profile_id=shared_profile.profile_id,
-        selected_profile=shared_profile,
         requires_wizard=False,
     )
     project_setup = ProjectSetupState(

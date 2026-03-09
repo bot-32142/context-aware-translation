@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, NoReturn
 
 from context_aware_translation.application.contracts.app_setup import (
-    CapabilityCard,
     ConnectionDraft,
     ConnectionStatus,
     ConnectionSummary,
@@ -21,7 +20,6 @@ from context_aware_translation.application.contracts.common import (
     AcceptedCommand,
     BlockerCode,
     BlockerInfo,
-    CapabilityAvailability,
     CapabilityCode,
     DocumentRef,
     DocumentSection,
@@ -297,44 +295,6 @@ def build_connection_summary(profile: EndpointProfile) -> ConnectionSummary:
         capabilities=infer_capabilities(provider),
     )
 
-
-def build_capability_cards(connections: list[ConnectionSummary]) -> list[CapabilityCard]:
-    cards: list[CapabilityCard] = []
-    for capability in CapabilityCode:
-        supporting = [conn for conn in connections if capability in conn.capabilities]
-        ready = next((conn for conn in supporting if conn.status is ConnectionStatus.READY), None)
-        partial = next((conn for conn in supporting if conn.status is ConnectionStatus.PARTIAL), None)
-        if ready is not None:
-            cards.append(
-                CapabilityCard(
-                    capability=capability,
-                    availability=CapabilityAvailability.READY,
-                    message=f"{ready.display_name} ready",
-                    connection_id=ready.connection_id,
-                    connection_label=ready.display_name,
-                )
-            )
-        elif partial is not None:
-            cards.append(
-                CapabilityCard(
-                    capability=capability,
-                    availability=CapabilityAvailability.PARTIAL,
-                    message=f"{partial.display_name} needs more details",
-                    connection_id=partial.connection_id,
-                    connection_label=partial.display_name,
-                )
-            )
-        else:
-            cards.append(
-                CapabilityCard(
-                    capability=capability,
-                    availability=CapabilityAvailability.MISSING,
-                    message="No configured connection supports this capability.",
-                )
-            )
-    return cards
-
-
 def build_default_routes_from_config(config: dict[str, Any]) -> list[DefaultRouteInfo]:
     capability_step_map: tuple[tuple[CapabilityCode, WorkflowStepId], ...] = (
         (CapabilityCode.TRANSLATION, WorkflowStepId.TRANSLATOR),
@@ -377,6 +337,69 @@ def read_source_profile_id(config: dict[str, Any]) -> str | None:
     return str(value) if isinstance(value, str) and value.strip() else None
 
 
+def _step_payload_without_routing(step_payload: dict[str, Any]) -> dict[str, bool | int | float | str | None]:
+    return {
+        str(key): value
+        for key, value in step_payload.items()
+        if key not in {"endpoint_profile", "model"} and value is not None
+    }
+
+
+def _build_standard_route(
+    *,
+    step_id: WorkflowStepId,
+    step_label: str,
+    step_payload: dict[str, Any],
+    connection_name_by_id: dict[str, str],
+    connection_model_by_id: dict[str, str | None],
+) -> WorkflowStepRoute:
+    connection_id = step_payload.get("endpoint_profile") if isinstance(step_payload.get("endpoint_profile"), str) else None
+    model = step_payload.get("model") if isinstance(step_payload.get("model"), str) and step_payload.get("model") else None
+    if model is None and connection_id is not None:
+        model = connection_model_by_id.get(connection_id)
+    return WorkflowStepRoute(
+        step_id=step_id,
+        step_label=step_label,
+        connection_id=connection_id,
+        connection_label=(connection_name_by_id.get(connection_id, connection_id) if connection_id else None),
+        model=model,
+        step_config=_step_payload_without_routing(step_payload),
+    )
+
+
+def _build_batch_route(step_label: str, config: dict[str, Any]) -> WorkflowStepRoute:
+    batch_payload = config.get("translator_batch_config")
+    batch_config = batch_payload if isinstance(batch_payload, dict) else {}
+    return WorkflowStepRoute(
+        step_id=WorkflowStepId.TRANSLATOR_BATCH,
+        step_label=step_label,
+        connection_id=None,
+        connection_label=(str(batch_config.get("provider") or "Direct batch config") if batch_config else None),
+        model=(str(batch_config.get("model") or "") or None),
+        step_config={str(key): value for key, value in batch_config.items() if key != "model" and value is not None},
+    )
+
+
+def _build_standard_step_payload(route: WorkflowStepRoute) -> dict[str, bool | int | float | str | None]:
+    payload: dict[str, bool | int | float | str | None] = {
+        str(key): value for key, value in route.step_config.items() if value is not None
+    }
+    if route.connection_id:
+        payload["endpoint_profile"] = route.connection_id
+    if route.model:
+        payload["model"] = route.model
+    return payload
+
+
+def _build_batch_step_payload(route: WorkflowStepRoute) -> dict[str, bool | int | float | str | None]:
+    payload: dict[str, bool | int | float | str | None] = {
+        str(key): value for key, value in route.step_config.items() if value is not None
+    }
+    if route.model:
+        payload["model"] = route.model
+    return payload
+
+
 def build_workflow_profile_detail(
     *,
     profile_id: str,
@@ -387,46 +410,19 @@ def build_workflow_profile_detail(
     connection_model_by_id: dict[str, str | None],
     is_default: bool = False,
 ) -> WorkflowProfileDetail:
-    routes: list[WorkflowStepRoute] = []
     step_config_map = _workflow_step_config_map(config)
-    for step_id, label, _config_key in _WORKFLOW_STEP_LAYOUT:
-        if step_id is WorkflowStepId.TRANSLATOR_BATCH:
-            raw_batch_cfg = config.get("translator_batch_config")
-            batch_cfg: dict[str, Any] = raw_batch_cfg if isinstance(raw_batch_cfg, dict) else {}
-            provider_label = str(batch_cfg.get("provider") or "Direct batch config") if batch_cfg else None
-            model = str(batch_cfg.get("model") or "") or None
-            routes.append(
-                WorkflowStepRoute(
-                    step_id=step_id,
-                    step_label=label,
-                    connection_id=None,
-                    connection_label=provider_label,
-                    model=model,
-                    step_config={
-                        str(key): value for key, value in batch_cfg.items() if key != "model"
-                    },
-                )
-            )
-            continue
-        step_cfg = step_config_map.get(step_id, {})
-        connection_id = step_cfg.get("endpoint_profile") if isinstance(step_cfg.get("endpoint_profile"), str) else None
-        model = step_cfg.get("model") if isinstance(step_cfg.get("model"), str) and step_cfg.get("model") else None
-        if model is None and connection_id is not None:
-            model = connection_model_by_id.get(connection_id)
-        routes.append(
-            WorkflowStepRoute(
-                step_id=step_id,
-                step_label=label,
-                connection_id=connection_id,
-                connection_label=(connection_name_by_id.get(connection_id, connection_id) if connection_id else None),
-                model=model,
-                step_config={
-                    str(key): value
-                    for key, value in step_cfg.items()
-                    if key not in {"endpoint_profile", "model"}
-                },
-            )
+    routes = [
+        _build_batch_route(label, config)
+        if step_id is WorkflowStepId.TRANSLATOR_BATCH
+        else _build_standard_route(
+            step_id=step_id,
+            step_label=label,
+            step_payload=step_config_map.get(step_id, {}),
+            connection_name_by_id=connection_name_by_id,
+            connection_model_by_id=connection_model_by_id,
         )
+        for step_id, label, _config_key in _WORKFLOW_STEP_LAYOUT
+    ]
 
     preset_value = read_ui_preset(config) or PresetCode.BALANCED.value
     try:
@@ -485,11 +481,7 @@ def build_workflow_profile_payload(
     for step_id, _label, config_key in _WORKFLOW_STEP_LAYOUT:
         route = route_map.get(step_id)
         if step_id is WorkflowStepId.TRANSLATOR_BATCH:
-            batch_payload = {
-                str(key): value for key, value in (route.step_config.items() if route is not None else []) if value is not None
-            }
-            if route is not None and route.model:
-                batch_payload["model"] = route.model
+            batch_payload = _build_batch_step_payload(route) if route is not None else {}
             if batch_payload:
                 payload["translator_batch_config"] = batch_payload
             else:
@@ -497,19 +489,7 @@ def build_workflow_profile_payload(
             continue
         if config_key is None:
             continue
-        next_step_payload = {
-            str(key): value for key, value in (route.step_config.items() if route is not None else []) if value is not None
-        }
-        if route is None:
-            if next_step_payload:
-                payload[config_key] = next_step_payload
-            else:
-                payload.pop(config_key, None)
-            continue
-        if route.connection_id:
-            next_step_payload["endpoint_profile"] = route.connection_id
-        if route.model:
-            next_step_payload["model"] = route.model
+        next_step_payload = _build_standard_step_payload(route) if route is not None else {}
         if next_step_payload:
             payload[config_key] = next_step_payload
         else:

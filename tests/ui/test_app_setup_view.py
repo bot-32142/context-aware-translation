@@ -92,23 +92,8 @@ def _make_state(*, requires_wizard: bool = False) -> AppSetupState:
         ]
         if not requires_wizard
         else [],
-        capabilities=[
-            CapabilityCard(
-                capability=CapabilityCode.TRANSLATION,
-                availability=CapabilityAvailability.READY,
-                connection_id="conn-gemini",
-                connection_label="Gemini",
-                message="Using Gemini",
-            ),
-            CapabilityCard(
-                capability=CapabilityCode.IMAGE_EDITING,
-                availability=CapabilityAvailability.MISSING,
-                message="No configured provider supports this capability.",
-            ),
-        ],
         shared_profiles=[profile] if not requires_wizard else [],
         default_profile_id=(profile.profile_id if not requires_wizard else None),
-        selected_profile=(profile if not requires_wizard else None),
         requires_wizard=requires_wizard,
     )
 

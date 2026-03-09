@@ -64,7 +64,7 @@ def test_services_publish_invalidation_events(tmp_path: Path) -> None:
 
         seen.clear()
         state = context.services.app_setup.get_state()
-        profile = state.selected_profile or state.shared_profiles[0]
+        profile = state.shared_profiles[0]
         context.services.app_setup.save_workflow_profile(SaveWorkflowProfileRequest(profile=profile))
         assert ApplicationEventKind.SETUP_INVALIDATED in seen
     finally:

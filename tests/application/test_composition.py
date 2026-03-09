@@ -31,7 +31,7 @@ def test_build_application_context_exposes_services(tmp_path: Path) -> None:
         setup_state = context.services.app_setup.get_state()
         assert setup_state.connections
         assert setup_state.shared_profiles
-        assert setup_state.selected_profile is not None
+        assert setup_state.default_profile_id is not None
     finally:
         context.close()
 
@@ -114,7 +114,7 @@ def test_project_specific_profile_remains_usable_without_shared_profiles(tmp_pat
         project_id = created.project.project_id
 
         app_setup = context.services.app_setup.get_state()
-        shared_profile = app_setup.selected_profile or app_setup.shared_profiles[0]
+        shared_profile = app_setup.shared_profiles[0]
         project_profile = shared_profile.model_copy(
             update={
                 "profile_id": f"project:{project_id}",

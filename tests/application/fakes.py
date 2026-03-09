@@ -92,7 +92,6 @@ class FakeAppSetupService:
     wizard_state: SetupWizardState | None = None
     preview_state: SetupWizardState | None = None
     test_result: ConnectionTestResult | None = None
-    seed_result: AcceptedCommand | None = None
     calls: list[tuple[str, Any]] = field(default_factory=list)
 
     def get_state(self) -> AppSetupState:
@@ -128,10 +127,6 @@ class FakeAppSetupService:
     def save_workflow_profile(self, request: SaveWorkflowProfileRequest) -> AppSetupState:
         self.calls.append(("save_workflow_profile", request))
         return self.state
-
-    def seed_defaults(self) -> AcceptedCommand:
-        self.calls.append(("seed_defaults", None))
-        return self.seed_result or AcceptedCommand(command_name="seed_defaults")
 
 
 @dataclass

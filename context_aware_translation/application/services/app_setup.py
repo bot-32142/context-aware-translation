@@ -19,7 +19,6 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowProfileKind,
 )
 from context_aware_translation.application.contracts.common import (
-    AcceptedCommand,
     CapabilityAvailability,
     CapabilityCode,
     PresetCode,
@@ -31,7 +30,6 @@ from context_aware_translation.application.errors import ApplicationErrorCode
 from context_aware_translation.application.runtime import (
     _DEFAULT_PROFILE_NAME,
     ApplicationRuntime,
-    build_capability_cards,
     build_connection_summary,
     build_workflow_profile_detail,
     build_workflow_profile_payload,
@@ -58,8 +56,6 @@ class AppSetupService(Protocol):
 
     def save_workflow_profile(self, request: SaveWorkflowProfileRequest) -> AppSetupState: ...
 
-    def seed_defaults(self) -> AcceptedCommand: ...
-
 
 class DefaultAppSetupService:
     def __init__(self, runtime: ApplicationRuntime) -> None:
@@ -67,16 +63,12 @@ class DefaultAppSetupService:
 
     def get_state(self) -> AppSetupState:
         connections = self._connection_summaries()
-        capabilities = build_capability_cards(connections)
         shared_profiles = self._shared_profile_details()
         default_profile = next((profile for profile in shared_profiles if profile.is_default), None)
-        selected_profile = default_profile or (shared_profiles[0] if shared_profiles else None)
         return AppSetupState(
             connections=connections,
-            capabilities=capabilities,
             shared_profiles=shared_profiles,
             default_profile_id=(default_profile.profile_id if default_profile is not None else None),
-            selected_profile=selected_profile,
             requires_wizard=not bool(connections),
             wizard=self.get_wizard_state() if not connections else None,
         )
@@ -278,14 +270,6 @@ class DefaultAppSetupService:
         self._runtime.invalidate_projects()
         self._runtime.invalidate_workboard()
         return self.get_state()
-
-    def seed_defaults(self) -> AcceptedCommand:
-        self._runtime.book_manager.seed_system_defaults()
-        self._runtime.invalidate_setup()
-        return AcceptedCommand(
-            command_name="seed_defaults",
-            message=UserMessage(severity=UserMessageSeverity.SUCCESS, text="Default setup profiles created."),
-        )
 
     def _connection_summaries(self) -> list:
         return [build_connection_summary(profile) for profile in self._runtime.book_manager.list_endpoint_profiles()]

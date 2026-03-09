@@ -679,7 +679,7 @@ class AppSetupView(QWidget):
             self._set_table_item(self.profiles_table, row, 1, profile.target_language)
             self._set_table_item(self.profiles_table, row, 2, self.tr("Yes") if profile.is_default else "")
 
-        selected_id = state.selected_profile.profile_id if state.selected_profile is not None else state.default_profile_id
+        selected_id = self._preferred_profile_id(state)
         if selected_id:
             for row in range(self.profiles_table.rowCount()):
                 item = self.profiles_table.item(row, 0)
@@ -698,12 +698,25 @@ class AppSetupView(QWidget):
 
     def _selected_profile(self) -> WorkflowProfileDetail | None:
         rows = self.profiles_table.selectionModel().selectedRows()
-        if not rows or self._state is None:
-            return self._state.selected_profile if self._state is not None else None
+        if self._state is None:
+            return None
+        if not rows:
+            preferred_profile_id = self._preferred_profile_id(self._state)
+            return next(
+                (profile for profile in self._state.shared_profiles if profile.profile_id == preferred_profile_id),
+                (self._state.shared_profiles[0] if self._state.shared_profiles else None),
+            )
         row = rows[0].row()
         if row < 0 or row >= len(self._state.shared_profiles):
             return None
         return self._state.shared_profiles[row]
+
+    def _preferred_profile_id(self, state: AppSetupState) -> str | None:
+        if state.default_profile_id:
+            return state.default_profile_id
+        if state.shared_profiles:
+            return state.shared_profiles[0].profile_id
+        return None
 
     def _update_connection_buttons(self) -> None:
         selected = self._selected_connection() is not None
