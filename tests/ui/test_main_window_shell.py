@@ -14,7 +14,7 @@ from context_aware_translation.application.events import (
     ProjectsInvalidatedEvent,
     SetupInvalidatedEvent,
 )
-from tests.application.fakes import FakeAppSetupService
+from tests.application.fakes import FakeAppSetupService, FakeDocumentService, FakeTermsService, FakeWorkService
 
 try:
     from PySide6.QtCore import QObject, Signal
@@ -77,24 +77,26 @@ class _FakeAppSetupView(QWidget):
         self.refresh_calls += 1
 
 
-class _FakeBookWorkspace(QWidget):
-    close_requested = Signal()
+class _FakeWorkView(QWidget):
+    open_app_setup_requested = Signal()
+    open_project_setup_requested = Signal()
 
     def __init__(
         self,
-        _book_manager,
-        book_id: str,
-        book_name: str,
-        task_engine,
+        project_id: str,
+        work_service,
+        document_service,
+        terms_service,
+        events,
         *,
-        embedded: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.book_id = book_id
-        self.book_name = book_name
-        self.task_engine = task_engine
-        self.embedded = embedded
+        self.project_id = project_id
+        self.work_service = work_service
+        self.document_service = document_service
+        self.terms_service = terms_service
+        self.events = events
         self.running_operations: list[str] = []
         self.cancel_requests: list[bool] = []
         self.cleanup_calls = 0
@@ -130,6 +132,9 @@ def _make_context():
     task_store = MagicMock()
     task_engine = _FakeTaskEngine()
     app_setup_service = FakeAppSetupService(state=MagicMock())
+    work_service = FakeWorkService(state_by_project={"project-1": MagicMock()})
+    document_service = FakeDocumentService(workspace=MagicMock())
+    terms_service = FakeTermsService(project_state=MagicMock())
     return SimpleNamespace(
         runtime=SimpleNamespace(
             book_manager=book_manager,
@@ -137,7 +142,13 @@ def _make_context():
             task_engine=task_engine,
             worker_deps=object(),
         ),
-        services=SimpleNamespace(app_setup=app_setup_service, project_setup=MagicMock()),
+        services=SimpleNamespace(
+            app_setup=app_setup_service,
+            project_setup=MagicMock(),
+            work=work_service,
+            document=document_service,
+            terms=terms_service,
+        ),
         events=InMemoryApplicationEventBus(),
     )
 
@@ -152,7 +163,7 @@ def _make_window():
     )
     patch_stack.enter_context(patch("context_aware_translation.ui.main_window.LibraryView", _FakeProjectsView))
     patch_stack.enter_context(patch("context_aware_translation.ui.main_window.AppSetupView", _FakeAppSetupView))
-    patch_stack.enter_context(patch("context_aware_translation.ui.main_window.BookWorkspace", _FakeBookWorkspace))
+    patch_stack.enter_context(patch("context_aware_translation.ui.main_window.WorkView", _FakeWorkView))
     patch_stack.enter_context(
         patch("context_aware_translation.ui.main_window.ProjectSetupView", _FakeProjectSetupView)
     )
@@ -167,7 +178,7 @@ def _make_window():
 def test_project_shell_view_delegates_to_work_widget():
     from context_aware_translation.ui.features.project_shell_view import ProjectShellView
 
-    work_widget = _FakeBookWorkspace(None, "project-1", "One Piece", task_engine=None, embedded=True)
+    work_widget = _FakeWorkView("project-1", None, None, None, None)
     work_widget.running_operations = ["Translation"]
 
     queue_calls: list[bool] = []
@@ -206,12 +217,15 @@ def test_main_window_routes_projects_into_project_shell():
         assert shell.tab_widget.tabText(0) == shell.tr("Work")
         assert shell.tab_widget.tabText(1) == shell.tr("Terms")
         assert shell.tab_widget.tabText(2) == shell.tr("Setup")
-        assert shell.work_tab.embedded is True
+        assert isinstance(shell.work_tab, _FakeWorkView)
         assert isinstance(shell.setup_tab, _FakeProjectSetupView)
         assert window._book_nav_item.text() == window.tr("Project: One Piece")
 
         shell.queue_button.click()
         assert "Queue drawer" in window.statusBar().currentMessage()
+
+        shell.work_tab.open_project_setup_requested.emit()
+        assert shell.tab_widget.currentWidget() is shell.setup_tab
 
         shell.setup_tab.open_app_setup_requested.emit()
         assert window._stack.currentWidget() is window.app_setup_view

@@ -25,10 +25,10 @@ from context_aware_translation.ui.constants import (
     MIN_WINDOW_WIDTH,
     SIDEBAR_WIDTH,
 )
-from context_aware_translation.ui.features import AppSetupView, ProjectSetupView, ProjectShellView
+from context_aware_translation.ui.features import AppSetupView, ProjectSetupView, ProjectShellView, WorkView
 from context_aware_translation.ui.i18n import qarg
 from context_aware_translation.ui.sleep_inhibitor import SleepInhibitor
-from context_aware_translation.ui.views import BookWorkspace, LibraryView
+from context_aware_translation.ui.views import LibraryView
 
 
 class MainWindow(QMainWindow):
@@ -356,12 +356,12 @@ class MainWindow(QMainWindow):
         self._nav_list.addItem(project_item)
         self._book_nav_item = project_item
 
-        work_view = BookWorkspace(
-            self.book_manager,
+        work_view = WorkView(
             book_id,
-            book_name,
-            task_engine=self._task_engine,
-            embedded=True,
+            self._app_context.services.work,
+            self._app_context.services.document,
+            self._app_context.services.terms,
+            self._app_context.events,
         )
         setup_view = ProjectSetupView(
             book_id,
@@ -376,6 +376,8 @@ class MainWindow(QMainWindow):
         )
         project_shell.close_requested.connect(self.close_book)
         project_shell.queue_requested.connect(self._on_queue_requested)
+        work_view.open_app_setup_requested.connect(self._open_app_setup)
+        work_view.open_project_setup_requested.connect(project_shell.show_setup)
         setup_view.open_app_setup_requested.connect(self._open_app_setup)
         setup_view.save_completed.connect(lambda _project_id: self._on_project_setup_saved(project_shell))
         self.register_view(f"project_{book_id}", project_shell)

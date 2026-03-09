@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Protocol
 
 from context_aware_translation.application.contracts.common import (
     AcceptedCommand,
     BlockerCode,
     BlockerInfo,
+    CapabilityCode,
     DocumentRowActionKind,
     ExportOption,
     ExportResult,
@@ -26,8 +28,9 @@ from context_aware_translation.application.contracts.work import (
 from context_aware_translation.application.errors import ApplicationErrorCode
 from context_aware_translation.application.runtime import (
     ApplicationRuntime,
+    build_default_routes_from_config,
     make_blocker,
-    make_document_ref,
+    map_document_type_code,
     raise_application_error,
 )
 from context_aware_translation.documents.base import get_supported_formats_for_type, is_ocr_required_for_type
@@ -52,30 +55,32 @@ class DefaultWorkService:
     def get_workboard(self, project_id: str) -> WorkboardState:
         project = self._runtime.get_project_ref(project_id)
         config = self._runtime.get_effective_config_payload(project_id)
-        setup_blocker = None
-        if not config.get("translation_target_language"):
-            setup_blocker = make_blocker(
-                BlockerCode.NEEDS_SETUP,
-                "Target language is not configured for this project.",
-                target_kind=NavigationTargetKind.PROJECT_SETUP,
-                project_id=project_id,
-            )
         with self._runtime.open_book_db(project_id) as dbx:
             docs = dbx.document_repo.get_documents_with_status()
+            document_sources = {
+                int(doc["document_id"]): dbx.document_repo.get_document_sources_metadata(int(doc["document_id"]))
+                for doc in docs
+            }
             pending_glossary_ids = {int(doc["document_id"]) for doc in dbx.document_repo.list_documents_pending_glossary()}
             pending_translation_ids = {int(doc["document_id"]) for doc in dbx.document_repo.list_documents_pending_translation()}
+        setup_blocker = self._resolve_setup_blocker(project_id, config, docs)
 
         rows: list[WorkDocumentRow] = []
         frontier_last_ready = None
         blocking_doc_id: int | None = None
         blocking_message: str | None = None
-        for doc in docs:
+        for order_index, doc in enumerate(docs, start=1):
             document_id = int(doc["document_id"])
             document_type = str(doc.get("document_type") or "")
             total_chunks = int(doc.get("total_chunks", 0) or 0)
             translated_chunks = int(doc.get("chunks_translated", 0) or 0)
             ocr_pending = int(doc.get("ocr_pending", 0) or 0)
-            ref = make_document_ref(document_id, f"Document {document_id}", document_type)
+            ref = self._build_document_ref(
+                document_id=document_id,
+                document_type=document_type,
+                order_index=order_index,
+                sources=document_sources.get(document_id, []),
+            )
 
             if blocking_doc_id is not None and document_id > blocking_doc_id:
                 row_blocker = make_blocker(
@@ -213,6 +218,76 @@ class DefaultWorkService:
             ),
         )
         return WorkboardState(project=project, context_frontier=context_frontier, rows=rows, setup_blocker=setup_blocker)
+
+    def _resolve_setup_blocker(
+        self,
+        project_id: str,
+        config: dict[str, object],
+        docs: list[dict],
+    ) -> BlockerInfo | None:
+        target_language = config.get("translation_target_language")
+        if not isinstance(target_language, str) or not target_language.strip():
+            return make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                "Target language is not configured for this project.",
+                target_kind=NavigationTargetKind.PROJECT_SETUP,
+                project_id=project_id,
+            )
+
+        configured_connection_ids = {connection_id for connection_id, _label in self._runtime.list_connection_options()}
+        route_map = {route.capability: route.connection_id for route in build_default_routes_from_config(config)}
+        if self._is_missing_route(route_map.get(CapabilityCode.TRANSLATION), configured_connection_ids):
+            return make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                "Translation needs a shared connection in App Setup.",
+                target_kind=NavigationTargetKind.APP_SETUP,
+                project_id=project_id,
+            )
+
+        needs_image_text_reading = any(is_ocr_required_for_type(str(doc.get("document_type") or "")) for doc in docs)
+        if needs_image_text_reading and self._is_missing_route(
+            route_map.get(CapabilityCode.IMAGE_TEXT_READING),
+            configured_connection_ids,
+        ):
+            return make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                "Image text reading needs a shared connection in App Setup.",
+                target_kind=NavigationTargetKind.APP_SETUP,
+                project_id=project_id,
+            )
+        return None
+
+    def _build_document_ref(
+        self,
+        *,
+        document_id: int,
+        document_type: str,
+        order_index: int,
+        sources: list[dict],
+    ):
+        label = f"Document {order_index}"
+        if sources:
+            first_source = sources[0]
+            relative_path = str(first_source.get("relative_path") or "").strip()
+            if relative_path:
+                label = Path(relative_path).name
+            else:
+                sequence_number = int(first_source.get("sequence_number", 1) or 1)
+                label = f"{document_type.replace('_', ' ').title()} {sequence_number}"
+        from context_aware_translation.application.contracts.common import DocumentRef
+
+        return DocumentRef(
+            document_id=document_id,
+            order_index=order_index,
+            label=label,
+            document_type=map_document_type_code(document_type),
+        )
+
+    @staticmethod
+    def _is_missing_route(connection_id: str | None, configured_connection_ids: set[str]) -> bool:
+        if connection_id is None:
+            return True
+        return connection_id not in configured_connection_ids
 
     def import_documents(self, request: ImportDocumentsRequest) -> AcceptedCommand:
         raise_application_error(

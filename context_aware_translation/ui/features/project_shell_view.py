@@ -116,6 +116,9 @@ class ProjectShellView(QWidget):
     def show_work(self) -> None:
         self.tab_widget.setCurrentIndex(0)
 
+    def show_setup(self) -> None:
+        self.tab_widget.setCurrentIndex(2)
+
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:
             self.retranslateUi()
