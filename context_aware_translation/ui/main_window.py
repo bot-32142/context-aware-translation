@@ -4,6 +4,7 @@ from PySide6.QtCore import QEvent, QSettings, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
+    QDockWidget,
     QHBoxLayout,
     QListWidget,
     QListWidgetItem,
@@ -15,6 +16,12 @@ from PySide6.QtWidgets import (
 )
 
 from context_aware_translation.application.composition import build_application_context
+from context_aware_translation.application.contracts.common import (
+    NavigationTarget,
+    NavigationTargetKind,
+    UserMessage,
+    UserMessageSeverity,
+)
 from context_aware_translation.ui import i18n
 from context_aware_translation.ui.adapters import QtApplicationEventBridge
 from context_aware_translation.ui.constants import (
@@ -25,7 +32,13 @@ from context_aware_translation.ui.constants import (
     MIN_WINDOW_WIDTH,
     SIDEBAR_WIDTH,
 )
-from context_aware_translation.ui.features import AppSetupView, ProjectSetupView, ProjectShellView, WorkView
+from context_aware_translation.ui.features import (
+    AppSetupView,
+    ProjectSetupView,
+    ProjectShellView,
+    QueueDrawerView,
+    WorkView,
+)
 from context_aware_translation.ui.i18n import qarg
 from context_aware_translation.ui.sleep_inhibitor import SleepInhibitor
 from context_aware_translation.ui.views import LibraryView
@@ -134,6 +147,16 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(self._nav_list)
         main_layout.addWidget(self._stack, 1)
+
+        self._queue_drawer = QueueDrawerView(self._app_context.services.queue, self._app_context.events, parent=self)
+        self._queue_drawer.open_related_item_requested.connect(self._open_navigation_target)
+        self._queue_drawer.notification_requested.connect(self._on_queue_notification)
+        self._queue_dock = QDockWidget(self.tr("Queue"), self)
+        self._queue_dock.setObjectName("queueDrawerDock")
+        self._queue_dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea)
+        self._queue_dock.setWidget(self._queue_drawer)
+        self._queue_dock.hide()
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._queue_dock)
 
         self._nav_list.setCurrentRow(0)
 
@@ -414,6 +437,8 @@ class MainWindow(QMainWindow):
         self._current_book_id = None
         self._current_book_name = None
         self._nav_list.setCurrentRow(0)
+        if self._queue_dock.isVisible():
+            self._queue_drawer.set_scope(None)
 
         if book_name:
             self.show_status(qarg(self.tr("Closed project: %1"), book_name))
@@ -435,7 +460,60 @@ class MainWindow(QMainWindow):
         self.show_status(self.tr("Project setup saved."), 3000)
 
     def _on_queue_requested(self) -> None:
-        self.show_status(self.tr("Queue drawer will attach to the new shell in a later migration task."), 3000)
+        self._open_queue_drawer(project_id=self._current_book_id, project_name=self._current_book_name)
+
+    def _open_queue_drawer(self, *, project_id: str | None, project_name: str | None = None) -> None:
+        self._queue_drawer.set_scope(project_id, project_name=project_name)
+        self._queue_dock.setWindowTitle(self.tr("Queue"))
+        self._queue_dock.show()
+        self._queue_dock.raise_()
+
+    def _on_queue_notification(self, message: UserMessage) -> None:
+        timeout_ms = 7000 if message.severity is UserMessageSeverity.ERROR else 3000
+        self.show_status(message.text, timeout_ms)
+
+    def _open_navigation_target(self, target: NavigationTarget) -> None:
+        if target.kind is NavigationTargetKind.PROJECTS:
+            if self._library_nav_item is not None:
+                self._nav_list.setCurrentItem(self._library_nav_item)
+            return
+        if target.kind is NavigationTargetKind.APP_SETUP:
+            self._open_app_setup()
+            return
+
+        if target.project_id is not None and target.project_id != self._current_book_id:
+            book = self.book_manager.get_book(target.project_id)
+            if book is not None:
+                self.open_project(book.book_id, book.name)
+
+        shell_name = self._current_project_view_name()
+        if shell_name is None:
+            return
+        shell = self._view_registry.get(shell_name)
+        if not isinstance(shell, ProjectShellView):
+            return
+
+        work_view = shell.work_widget
+
+        if target.kind is NavigationTargetKind.PROJECT_SETUP:
+            shell.show_setup()
+        elif target.kind is NavigationTargetKind.TERMS:
+            if shell.terms_widget is not None:
+                shell.show_terms()
+        elif target.kind in {
+            NavigationTargetKind.WORK,
+            NavigationTargetKind.DOCUMENT_OVERVIEW,
+            NavigationTargetKind.DOCUMENT_OCR,
+            NavigationTargetKind.DOCUMENT_TERMS,
+            NavigationTargetKind.DOCUMENT_TRANSLATION,
+            NavigationTargetKind.DOCUMENT_IMAGES,
+            NavigationTargetKind.DOCUMENT_EXPORT,
+        }:
+            shell.show_work()
+            if work_view is not None and hasattr(work_view, "open_navigation_target"):
+                work_view.open_navigation_target(target)
+        else:
+            shell.show_work()
 
     def show_status(self, message: str, timeout_ms: int = 5000) -> None:
         """Show a status message in the status bar."""
@@ -457,6 +535,8 @@ class MainWindow(QMainWindow):
             self._profiles_nav_item.setText(self.tr("App Setup"))
         if self._book_nav_item is not None and self._current_book_name is not None:
             self._book_nav_item.setText(qarg(self.tr("Project: %1"), self._current_book_name))
+        if hasattr(self, "_queue_dock"):
+            self._queue_dock.setWindowTitle(self.tr("Queue"))
 
         self._file_menu.setTitle(self.tr("&File"))
         self._language_menu.setTitle(self.tr("&Language"))
@@ -474,6 +554,7 @@ class MainWindow(QMainWindow):
         self._is_closing = True
         self._sleep_check_timer.stop()
         self.close_book()
+        self._queue_drawer.cleanup()
         self._app_events.close()
         self._task_engine.close()
         self._task_store.close()

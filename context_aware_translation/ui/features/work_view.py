@@ -646,6 +646,21 @@ class WorkView(QWidget):
     def _show_home(self) -> None:
         self.stack.setCurrentWidget(self.home_page)
 
+    def open_navigation_target(self, target: NavigationTarget) -> None:
+        if target.kind is NavigationTargetKind.APP_SETUP:
+            self.open_app_setup_requested.emit()
+            return
+        if target.kind is NavigationTargetKind.PROJECT_SETUP:
+            self.open_project_setup_requested.emit()
+            return
+        if target.kind is NavigationTargetKind.WORK:
+            self._show_home()
+            return
+        section = _TARGET_TO_SECTION.get(target.kind)
+        if section is None or target.document_id is None:
+            return
+        self._open_document_workspace(target.document_id, section)
+
     def _open_export_dialog(self, document_id: int) -> None:
         from context_aware_translation.application.contracts.work import PrepareExportRequest
 

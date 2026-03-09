@@ -9,12 +9,26 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from context_aware_translation.application.contracts.common import (
+    NavigationTarget,
+    NavigationTargetKind,
+    QueueActionKind,
+    QueueStatus,
+)
+from context_aware_translation.application.contracts.queue import QueueItem, QueueState
 from context_aware_translation.application.events import (
     InMemoryApplicationEventBus,
     ProjectsInvalidatedEvent,
+    QueueChangedEvent,
     SetupInvalidatedEvent,
 )
-from tests.application.fakes import FakeAppSetupService, FakeDocumentService, FakeTermsService, FakeWorkService
+from tests.application.fakes import (
+    FakeAppSetupService,
+    FakeDocumentService,
+    FakeQueueService,
+    FakeTermsService,
+    FakeWorkService,
+)
 
 try:
     from PySide6.QtCore import QObject, Signal
@@ -100,6 +114,7 @@ class _FakeWorkView(QWidget):
         self.running_operations: list[str] = []
         self.cancel_requests: list[bool] = []
         self.cleanup_calls = 0
+        self.routed_targets: list[NavigationTarget] = []
 
     def get_running_operations(self) -> list[str]:
         return list(self.running_operations)
@@ -109,6 +124,9 @@ class _FakeWorkView(QWidget):
 
     def cleanup(self) -> None:
         self.cleanup_calls += 1
+
+    def open_navigation_target(self, target: NavigationTarget) -> None:
+        self.routed_targets.append(target)
 
 
 class _FakeProjectSetupView(QWidget):
@@ -135,6 +153,25 @@ def _make_context():
     work_service = FakeWorkService(state_by_project={"project-1": MagicMock()})
     document_service = FakeDocumentService(workspace=MagicMock())
     terms_service = FakeTermsService(project_state=MagicMock())
+    queue_service = FakeQueueService(
+        state=QueueState(
+            items=[
+                QueueItem(
+                    queue_item_id="task-1",
+                    title="Read text from images",
+                    project_id="project-1",
+                    document_id=4,
+                    status=QueueStatus.RUNNING,
+                    related_target=NavigationTarget(
+                        kind=NavigationTargetKind.DOCUMENT_OCR,
+                        project_id="project-1",
+                        document_id=4,
+                    ),
+                    available_actions=[QueueActionKind.OPEN_RELATED_ITEM, QueueActionKind.CANCEL],
+                )
+            ]
+        )
+    )
     return SimpleNamespace(
         runtime=SimpleNamespace(
             book_manager=book_manager,
@@ -148,6 +185,7 @@ def _make_context():
             work=work_service,
             document=document_service,
             terms=terms_service,
+            queue=queue_service,
         ),
         events=InMemoryApplicationEventBus(),
     )
@@ -222,7 +260,8 @@ def test_main_window_routes_projects_into_project_shell():
         assert window._book_nav_item.text() == window.tr("Project: One Piece")
 
         shell.queue_button.click()
-        assert "Queue drawer" in window.statusBar().currentMessage()
+        assert not window._queue_dock.isHidden()
+        assert "One Piece" in window._queue_drawer.tip_label.text()
 
         shell.work_tab.open_project_setup_requested.emit()
         assert shell.tab_widget.currentWidget() is shell.setup_tab
@@ -248,6 +287,51 @@ def test_main_window_refreshes_shell_roots_from_application_events():
 
         assert window.projects_view.refresh_calls == 1
         assert window.app_setup_view.refresh_calls == 1
+    finally:
+        window.close()
+        QApplication.processEvents()
+        patch_stack.close()
+
+
+def test_main_window_routes_queue_targets_into_current_shell():
+    window, context, patch_stack = _make_window()
+    try:
+        window.open_project("project-1", "One Piece")
+        shell = window._view_registry["project_project-1"]
+        work_tab = shell.work_tab
+
+        window._open_navigation_target(
+            NavigationTarget(
+                kind=NavigationTargetKind.DOCUMENT_TRANSLATION,
+                project_id="project-1",
+                document_id=4,
+            )
+        )
+        assert shell.tab_widget.currentWidget() is shell.work_tab
+        assert work_tab.routed_targets[-1].kind is NavigationTargetKind.DOCUMENT_TRANSLATION
+
+        window._open_navigation_target(
+            NavigationTarget(
+                kind=NavigationTargetKind.PROJECT_SETUP,
+                project_id="project-1",
+            )
+        )
+        assert shell.tab_widget.currentWidget() is shell.setup_tab
+    finally:
+        window.close()
+        QApplication.processEvents()
+        patch_stack.close()
+
+
+def test_main_window_queue_drawer_refreshes_from_queue_events():
+    window, context, patch_stack = _make_window()
+    try:
+        window.open_project("project-1", "One Piece")
+        window._open_queue_drawer(project_id="project-1", project_name="One Piece")
+        context.events.publish(QueueChangedEvent(project_id="project-1"))
+        QApplication.processEvents()
+
+        assert ("get_queue", "project-1") in context.services.queue.calls
     finally:
         window.close()
         QApplication.processEvents()

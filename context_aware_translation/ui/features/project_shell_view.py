@@ -57,6 +57,18 @@ class ProjectShellView(QWidget):
         self._setup_widget = setup_widget
         self._init_ui()
 
+    @property
+    def work_widget(self) -> QWidget | None:
+        return self._work_widget
+
+    @property
+    def terms_widget(self) -> QWidget | None:
+        return self._terms_widget
+
+    @property
+    def setup_widget(self) -> QWidget | None:
+        return self._setup_widget
+
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
 
@@ -115,6 +127,9 @@ class ProjectShellView(QWidget):
 
     def show_work(self) -> None:
         self.tab_widget.setCurrentIndex(0)
+
+    def show_terms(self) -> None:
+        self.tab_widget.setCurrentIndex(1)
 
     def show_setup(self) -> None:
         self.tab_widget.setCurrentIndex(2)

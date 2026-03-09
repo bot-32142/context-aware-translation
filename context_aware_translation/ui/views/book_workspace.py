@@ -38,11 +38,17 @@ class BookWorkspace(QWidget):
     """Container view for working with an open book."""
 
     _TOKEN_REFRESH_INTERVAL_MS = 1500
+    IMPORT_TAB_INDEX = 0
+    OCR_TAB_INDEX = 1
+    GLOSSARY_TAB_INDEX = 2
     TRANSLATION_TAB_INDEX = 3
+    REEMBEDDING_TAB_INDEX = 4
+    EXPORT_TAB_INDEX = 5
     _ACTIVITY_RESTORE_MAX_RETRIES = 12
     _ACTIVITY_RESTORE_RETRY_MS = 40
 
     close_requested = Signal()
+    queue_requested = Signal()
 
     def __init__(
         self,
@@ -95,6 +101,8 @@ class BookWorkspace(QWidget):
         self.activity_btn.setToolTip(self.tr("Show/hide task activity panel"))
         self.activity_btn.setCheckable(True)
         self.activity_btn.clicked.connect(self._on_activity_toggled)
+        if self._embedded:
+            self.activity_btn.hide()
         header_layout.addWidget(self.activity_btn)
 
         layout.addLayout(header_layout)
@@ -299,6 +307,9 @@ class BookWorkspace(QWidget):
 
     def show_activity_panel(self) -> None:
         """Show the activity panel (callable by child views)."""
+        if self._embedded:
+            self.queue_requested.emit()
+            return
         already_visible = self._activity_panel.isVisible()
         self._activity_panel.setVisible(True)
         self.activity_btn.setChecked(True)
@@ -317,6 +328,8 @@ class BookWorkspace(QWidget):
 
     def hide_activity_panel(self) -> None:
         """Hide the activity panel."""
+        if self._embedded:
+            return
         self._activity_restore_timer.stop()
         sizes = self._main_splitter.sizes()
         if len(sizes) >= 2 and sizes[1] > 0:
@@ -331,6 +344,11 @@ class BookWorkspace(QWidget):
     # ------------------------------------------------------------------
 
     def _on_activity_toggled(self, checked: bool) -> None:
+        if self._embedded:
+            self.activity_btn.setChecked(False)
+            if checked:
+                self.queue_requested.emit()
+            return
         if checked:
             self.show_activity_panel()
         else:
@@ -409,6 +427,24 @@ class BookWorkspace(QWidget):
         """Return the translation view if it has been created, else None."""
         view = self._view_cache.get(self.TRANSLATION_TAB_INDEX)
         return view if isinstance(view, TranslationView) else None
+
+    def show_import_tab(self) -> None:
+        self.tab_widget.setCurrentIndex(self.IMPORT_TAB_INDEX)
+
+    def show_ocr_review_tab(self) -> None:
+        self.tab_widget.setCurrentIndex(self.OCR_TAB_INDEX)
+
+    def show_glossary_tab(self) -> None:
+        self.tab_widget.setCurrentIndex(self.GLOSSARY_TAB_INDEX)
+
+    def show_translation_tab(self) -> None:
+        self.tab_widget.setCurrentIndex(self.TRANSLATION_TAB_INDEX)
+
+    def show_reembedding_tab(self) -> None:
+        self.tab_widget.setCurrentIndex(self.REEMBEDDING_TAB_INDEX)
+
+    def show_export_tab(self) -> None:
+        self.tab_widget.setCurrentIndex(self.EXPORT_TAB_INDEX)
 
     def get_running_operations(self) -> list[str]:
         """Return human-readable names of running operations in this workspace."""
