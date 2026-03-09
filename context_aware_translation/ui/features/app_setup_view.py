@@ -275,7 +275,7 @@ class ConnectionEditorDialog(QDialog):
         self._connection_id = connection_id
         self.setWindowTitle(self.tr("Connection"))
         self.setMinimumWidth(460)
-        self.resize(520, 640)
+        self.resize(520, 420)
         self.form = ConnectionDraftForm(self)
         if draft is not None:
             self.form.set_draft(draft)

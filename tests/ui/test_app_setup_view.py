@@ -535,3 +535,4 @@ def test_connection_editor_dialog_uses_scrollable_form_layout():
     scroll_areas = dialog.findChildren(QScrollArea)
     assert scroll_areas
     assert dialog.width() <= 520
+    assert dialog.height() <= 420
