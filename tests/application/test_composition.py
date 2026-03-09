@@ -5,6 +5,8 @@ from pathlib import Path
 from PySide6.QtCore import QCoreApplication
 
 from context_aware_translation.application.composition import build_application_context
+from context_aware_translation.application.contracts.app_setup import ConnectionDraft, SetupWizardRequest
+from context_aware_translation.application.contracts.common import ProviderKind
 from context_aware_translation.application.contracts.projects import CreateProjectRequest
 
 
@@ -57,5 +59,38 @@ def test_project_setup_and_work_queries_use_service_boundary(tmp_path: Path) -> 
         assert project_setup.target_language == "English"
         assert workboard.project.project_id == project_id
         assert workboard.rows == []
+    finally:
+        context.close()
+
+
+def test_app_setup_preview_exposes_recommended_routing(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    try:
+        preview = context.services.app_setup.preview_setup_wizard(
+            SetupWizardRequest(
+                providers=[ProviderKind.GEMINI, ProviderKind.DEEPSEEK],
+                connections=[
+                    ConnectionDraft(
+                        display_name="Gemini",
+                        provider=ProviderKind.GEMINI,
+                        api_key="secret",
+                        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                        default_model="gemini-3-flash-preview",
+                    ),
+                    ConnectionDraft(
+                        display_name="DeepSeek",
+                        provider=ProviderKind.DEEPSEEK,
+                        api_key="secret",
+                        base_url="https://api.deepseek.com",
+                        default_model="deepseek-chat",
+                    ),
+                ],
+            )
+        )
+
+        assert preview.test_results
+        assert preview.recommendation is not None
+        assert preview.recommendation.routes
     finally:
         context.close()

@@ -14,6 +14,7 @@ from context_aware_translation.application.events import (
     ProjectsInvalidatedEvent,
     SetupInvalidatedEvent,
 )
+from tests.application.fakes import FakeAppSetupService
 
 try:
     from PySide6.QtCore import QObject, Signal
@@ -68,7 +69,7 @@ class _FakeProjectsView(QWidget):
 
 
 class _FakeAppSetupView(QWidget):
-    def __init__(self, _book_manager, parent: QWidget | None = None) -> None:
+    def __init__(self, _service, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.refresh_calls = 0
 
@@ -113,6 +114,7 @@ def _make_context():
     book_manager.library_root = Path("/tmp/context-aware-translation-tests")
     task_store = MagicMock()
     task_engine = _FakeTaskEngine()
+    app_setup_service = FakeAppSetupService(state=MagicMock())
     return SimpleNamespace(
         runtime=SimpleNamespace(
             book_manager=book_manager,
@@ -120,6 +122,7 @@ def _make_context():
             task_engine=task_engine,
             worker_deps=object(),
         ),
+        services=SimpleNamespace(app_setup=app_setup_service),
         events=InMemoryApplicationEventBus(),
     )
 
@@ -133,7 +136,7 @@ def _make_window():
         patch("context_aware_translation.ui.main_window.build_application_context", return_value=context)
     )
     patch_stack.enter_context(patch("context_aware_translation.ui.main_window.LibraryView", _FakeProjectsView))
-    patch_stack.enter_context(patch("context_aware_translation.ui.main_window.ProfileView", _FakeAppSetupView))
+    patch_stack.enter_context(patch("context_aware_translation.ui.main_window.AppSetupView", _FakeAppSetupView))
     patch_stack.enter_context(patch("context_aware_translation.ui.main_window.BookWorkspace", _FakeBookWorkspace))
     try:
         window = MainWindow()

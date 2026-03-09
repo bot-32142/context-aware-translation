@@ -5,6 +5,7 @@ from typing import Protocol
 from context_aware_translation.application.contracts.app_setup import (
     AppSetupState,
     CapabilityCard,
+    ConnectionDraft,
     ConnectionTestRequest,
     ConnectionTestResult,
     DefaultRoute,
@@ -41,6 +42,8 @@ class AppSetupService(Protocol):
     def get_state(self) -> AppSetupState: ...
 
     def get_wizard_state(self) -> SetupWizardState: ...
+
+    def preview_setup_wizard(self, request: SetupWizardRequest) -> SetupWizardState: ...
 
     def save_connection(self, request: SaveConnectionRequest) -> AppSetupState: ...
 
@@ -122,16 +125,33 @@ class DefaultAppSetupService:
             ],
         )
 
+    def preview_setup_wizard(self, request: SetupWizardRequest) -> SetupWizardState:
+        return SetupWizardState(
+            step=SetupWizardStep.REVIEW_ROUTING,
+            available_providers=self.get_wizard_state().available_providers,
+            selected_providers=request.providers,
+            drafts=request.connections,
+            test_results=[self._test_connection_result(draft) for draft in request.connections],
+            recommendation=self._build_recommendation(request.connections),
+        )
+
     def save_connection(self, request: SaveConnectionRequest) -> AppSetupState:
         draft = request.connection
         if request.connection_id:
+            existing = self._runtime.book_manager.get_endpoint_profile(request.connection_id)
+            if existing is None:
+                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {request.connection_id}")
             updated = self._runtime.book_manager.update_endpoint_profile(
                 request.connection_id,
                 name=draft.display_name,
-                api_key=draft.api_key or "",
-                base_url=draft.base_url or "",
-                model=draft.default_model or "",
-                kwargs={**{item.key: item.value for item in draft.metadata}, "provider": draft.provider.value},
+                api_key=existing.api_key if draft.api_key is None else draft.api_key,
+                base_url=existing.base_url if draft.base_url is None else draft.base_url,
+                model=existing.model if draft.default_model is None else draft.default_model,
+                kwargs=(
+                    {**existing.kwargs, "provider": draft.provider.value}
+                    if not draft.metadata
+                    else {**{item.key: item.value for item in draft.metadata}, "provider": draft.provider.value}
+                ),
             )
             if updated is None:
                 raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {request.connection_id}")
@@ -154,61 +174,29 @@ class DefaultAppSetupService:
         return self.get_state()
 
     def test_connection(self, request: ConnectionTestRequest) -> ConnectionTestResult:
-        draft = request.connection
-        capabilities = [
-                CapabilityCard(
-                    capability=capability,
-                    availability=CapabilityAvailability.READY,
-                    message=f"Supported by {draft.provider.value}",
-                )
-            for capability in infer_capabilities(draft.provider)
-        ]
-        recommendation = RoutingRecommendation(
-            routes=[],
-            notes=["Connection testing currently validates the configuration shape and inferred capability mapping."],
-        )
-        return ConnectionTestResult(
-            connection_label=draft.display_name,
-            capabilities=capabilities,
-            recommendation=recommendation,
-            message=UserMessage(
-                severity=UserMessageSeverity.INFO,
-                text="Connection accepted. Capability routing was inferred from the provider type.",
-            ),
-        )
+        return self._test_connection_result(request.connection)
 
     def run_setup_wizard(self, request: SetupWizardRequest) -> AppSetupState:
-        saved_ids: dict[ProviderKind, str] = {}
+        preview = self.preview_setup_wizard(request)
+        saved_ids: dict[str, str] = {}
         for draft in request.connections:
             state_before = {p.profile_id for p in self._runtime.book_manager.list_endpoint_profiles()}
             self.save_connection(SaveConnectionRequest(connection=draft))
             new_profiles = self._runtime.book_manager.list_endpoint_profiles()
             for profile in new_profiles:
                 if profile.profile_id not in state_before and profile.name == draft.display_name:
-                    saved_ids[draft.provider] = profile.profile_id
+                    saved_ids[draft.display_name] = profile.profile_id
                     break
             else:
                 existing = next((p for p in new_profiles if p.name == draft.display_name), None)
                 if existing is not None:
-                    saved_ids[draft.provider] = existing.profile_id
+                    saved_ids[draft.display_name] = existing.profile_id
         actual_routes = [
-            DefaultRoute(
-                capability=capability,
-                connection_id=connection_id,
-                connection_label=next(
-                    (
-                        draft.display_name
-                        for draft in request.connections
-                        if draft.provider is chosen and saved_ids.get(draft.provider) == connection_id
-                    ),
-                    connection_id,
-                ),
+            route.model_copy(
+                update={"connection_id": saved_ids.get(route.connection_label, route.connection_id)}
             )
-            for capability in CapabilityCode
-            for chosen in [next((provider for provider in request.providers if capability in infer_capabilities(provider)), None)]
-            if chosen is not None
-            for connection_id in [saved_ids.get(chosen)]
-            if connection_id is not None
+            for route in (preview.recommendation.routes if preview.recommendation is not None else [])
+            if saved_ids.get(route.connection_label, route.connection_id)
         ]
         self.save_default_routes(SaveDefaultRoutesRequest(routes=actual_routes))
         return self.get_state()
@@ -244,6 +232,45 @@ class DefaultAppSetupService:
         self._runtime.invalidate_projects()
         self._runtime.invalidate_workboard()
         return self.get_state()
+
+    def _test_connection_result(self, draft: ConnectionDraft) -> ConnectionTestResult:
+        capabilities = [
+            CapabilityCard(
+                capability=capability,
+                availability=CapabilityAvailability.READY,
+                message=f"Supported by {draft.provider.value}",
+            )
+            for capability in infer_capabilities(draft.provider)
+        ]
+        recommendation = self._build_recommendation([draft])
+        return ConnectionTestResult(
+            connection_label=draft.display_name,
+            capabilities=capabilities,
+            recommendation=recommendation,
+            message=UserMessage(
+                severity=UserMessageSeverity.INFO,
+                text="Connection accepted. Capability routing was inferred from the provider type.",
+            ),
+        )
+
+    def _build_recommendation(self, drafts: list[ConnectionDraft]) -> RoutingRecommendation:
+        routes: list[DefaultRoute] = []
+        notes: list[str] = []
+        for capability in CapabilityCode:
+            chosen = next((draft for draft in drafts if capability in infer_capabilities(draft.provider)), None)
+            if chosen is None:
+                notes.append(f"No configured provider supports {capability.value}.")
+                continue
+            routes.append(
+                DefaultRoute(
+                    capability=capability,
+                    connection_id=chosen.display_name,
+                    connection_label=chosen.display_name,
+                )
+            )
+        if drafts:
+            notes.append("Recommended routing prefers the first selected provider that supports each capability.")
+        return RoutingRecommendation(routes=routes, notes=notes)
 
     def seed_defaults(self) -> AcceptedCommand:
         self._runtime.book_manager.seed_system_defaults()

@@ -3,7 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from context_aware_translation.application.contracts.app_setup import AppSetupState
+from context_aware_translation.application.contracts.app_setup import (
+    AppSetupState,
+    ConnectionTestRequest,
+    ConnectionTestResult,
+    SaveConnectionRequest,
+    SaveDefaultRoutesRequest,
+    SetupWizardRequest,
+    SetupWizardState,
+    SetupWizardStep,
+)
 from context_aware_translation.application.contracts.common import AcceptedCommand
 from context_aware_translation.application.contracts.document import (
     DocumentExportResult,
@@ -79,11 +88,48 @@ class FakeProjectsService:
 @dataclass
 class FakeAppSetupService:
     state: AppSetupState
+    wizard_state: SetupWizardState | None = None
+    preview_state: SetupWizardState | None = None
+    test_result: ConnectionTestResult | None = None
     seed_result: AcceptedCommand | None = None
     calls: list[tuple[str, Any]] = field(default_factory=list)
 
     def get_state(self) -> AppSetupState:
         self.calls.append(("get_state", None))
+        return self.state
+
+    def get_wizard_state(self) -> SetupWizardState:
+        self.calls.append(("get_wizard_state", None))
+        return (
+            self.wizard_state
+            if self.wizard_state is not None
+            else SetupWizardState(step=SetupWizardStep.CHOOSE_PROVIDERS)
+        )
+
+    def preview_setup_wizard(self, request: SetupWizardRequest) -> SetupWizardState:
+        self.calls.append(("preview_setup_wizard", request))
+        return self.preview_state if self.preview_state is not None else self.get_wizard_state()
+
+    def save_connection(self, request: SaveConnectionRequest) -> AppSetupState:
+        self.calls.append(("save_connection", request))
+        return self.state
+
+    def delete_connection(self, connection_id: str) -> AppSetupState:
+        self.calls.append(("delete_connection", connection_id))
+        return self.state
+
+    def test_connection(self, request: ConnectionTestRequest) -> ConnectionTestResult:
+        self.calls.append(("test_connection", request))
+        if self.test_result is None:
+            raise NotImplementedError
+        return self.test_result
+
+    def run_setup_wizard(self, request: SetupWizardRequest) -> AppSetupState:
+        self.calls.append(("run_setup_wizard", request))
+        return self.state
+
+    def save_default_routes(self, request: SaveDefaultRoutesRequest) -> AppSetupState:
+        self.calls.append(("save_default_routes", request))
         return self.state
 
 

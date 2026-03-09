@@ -25,10 +25,10 @@ from context_aware_translation.ui.constants import (
     MIN_WINDOW_WIDTH,
     SIDEBAR_WIDTH,
 )
-from context_aware_translation.ui.features.project_shell_view import ProjectShellView
+from context_aware_translation.ui.features import AppSetupView, ProjectShellView
 from context_aware_translation.ui.i18n import qarg
 from context_aware_translation.ui.sleep_inhibitor import SleepInhibitor
-from context_aware_translation.ui.views import BookWorkspace, LibraryView, ProfileView
+from context_aware_translation.ui.views import BookWorkspace, LibraryView
 
 
 class MainWindow(QMainWindow):
@@ -128,7 +128,7 @@ class MainWindow(QMainWindow):
         self.library_view = self.projects_view
         self.register_view("projects", self.projects_view)
 
-        self.app_setup_view = ProfileView(self.book_manager)
+        self.app_setup_view = AppSetupView(self._app_context.services.app_setup)
         self.profile_view = self.app_setup_view
         self.register_view("app_setup", self.app_setup_view)
 
