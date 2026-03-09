@@ -12,6 +12,7 @@ Start after Task 10. Can run in parallel with Task 11.
 
 - [Task 01](01-foundation-contracts.md)
 - [Task 02](02-foundation-services-composition.md)
+- [Task 03](03-foundation-events-queue-contract.md)
 - [Task 10](10-app-shell-navigation.md)
 
 ## Must Read
@@ -41,3 +42,5 @@ Implement `Project Setup`:
 - project setup clearly distinguishes app defaults from project overrides
 - UI uses application contracts, not config/profile storage directly
 - saving project setup returns cleanly to the project shell
+- capability cards and setup actions come from backend query state
+- project setup refreshes via application invalidation + requery

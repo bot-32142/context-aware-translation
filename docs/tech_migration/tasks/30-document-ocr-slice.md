@@ -38,8 +38,12 @@ Implement the document `OCR` tab using application services:
 
 - saving OCR must not auto-rerun translation
 - UI should not open `SQLiteBookDB` or `DocumentRepository` directly after migration
+- OCR button state and blockers must come from `DocumentService`
+- migrated OCR UI must not call task-engine preflight or claim checks directly
+- OCR refresh must use application invalidation events + requery
 
 ## Acceptance Criteria
 
 - OCR UI is document-scoped and service-driven
 - OCR behavior matches existing semantics where UX did not change
+- OCR actions render from backend-provided action state

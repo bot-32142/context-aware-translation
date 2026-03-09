@@ -13,6 +13,7 @@ Start after Task 20 establishes Work navigation targets.
 - [Task 10](10-app-shell-navigation.md)
 - [Task 20](20-work-slice.md)
 - [Task 01](01-foundation-contracts.md)
+- [Task 03](03-foundation-events-queue-contract.md)
 
 ## Must Read
 
@@ -36,8 +37,14 @@ Create the document workspace shell and navigation for:
 
 This task should establish the shared document-scoped layout and routing, but not fully implement every tab.
 
+The shell should be built to:
+- accept backend-provided tab/action state
+- listen for application invalidation events
+- requery active document surfaces instead of maintaining local claim listeners
+
 ## Acceptance Criteria
 
 - document workspace exists as its own shell under Work
 - later OCR/Translation/Images/Export tasks can attach independently
 - document Terms uses the same conceptual component model as top-level Terms
+- shell refresh behavior is compatible with invalidation + requery

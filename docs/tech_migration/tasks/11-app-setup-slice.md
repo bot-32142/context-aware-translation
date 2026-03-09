@@ -12,6 +12,7 @@ Start after Task 10. Can run in parallel with Task 12 once the shell exists.
 
 - [Task 01](01-foundation-contracts.md)
 - [Task 02](02-foundation-services-composition.md)
+- [Task 03](03-foundation-events-queue-contract.md)
 - [Task 10](10-app-shell-navigation.md)
 
 ## Must Read
@@ -53,3 +54,6 @@ Avoid touching Work, Terms, or document feature code.
 - known providers are key-first
 - custom provider path can still handle base URL/model config
 - UI depends on application service contracts, not `BookManager` directly
+- setup actions and capability blockers are rendered from backend query state
+- setup refresh uses application invalidation events + requery, not direct
+  profile-storage listeners

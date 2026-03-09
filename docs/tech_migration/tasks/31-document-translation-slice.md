@@ -42,8 +42,12 @@ Implement the document `Translation` tab:
 - no hidden mass reruns
 - translation UI must consume service DTOs, not direct DB rows
 - document-scoped terms must still write through the shared Terms service
+- translation action state and blockers must come from `DocumentService`
+- migrated translation UI must not call task-engine preflight or claim checks directly
+- translation refresh must use application invalidation events + requery
 
 ## Acceptance Criteria
 
 - translation UI no longer imports repositories or raw task engine details directly
 - retranslation stays explicit and scoped
+- translation actions render from backend-provided action state

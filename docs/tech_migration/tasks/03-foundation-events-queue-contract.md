@@ -42,15 +42,28 @@ Build a UI-framework-agnostic event layer for:
 2. Event publisher/subscriber interface.
 3. Queue DTOs that map backend task state into UX state.
 4. A Qt adapter that translates application events into Qt signals.
+5. A locked invalidation model for migrated surfaces.
+6. Shared action-state patterns for feature queries where current contracts are
+   still ad hoc.
 
 ## Rules
 
 - the UI should not treat `TaskEngine` signals as the system of record anymore
 - queue items must use application DTOs, not raw `TaskRecord`
 - future HTTP/SSE/WebSocket transport should be plausible from the same event contract
+- events should be invalidation-first, not raw task-engine mirrors
+- migrated widgets must not call `TaskEngine.preflight()` or
+  `has_active_claims()` directly for button enable/disable
+- command execution paths must still run strict backend preflight at click time
+- invalidation must account for both persisted DB changes and in-memory active
+  claim changes
 
 ## Acceptance Criteria
 
 - queue updates can be consumed without importing Qt classes
 - task/queue state is exposed in UX-friendly terms
 - later Queue and feature slices can build on this without touching `EngineCore`
+- there is a documented way for migrated surfaces to refresh via invalidation +
+  requery
+- there is a documented way for migrated surfaces to render action availability
+  and blockers from backend query state

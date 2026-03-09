@@ -113,6 +113,31 @@ call out any dependency blocker instead of expanding the task.
 6. Keep tasks narrow. Do not opportunistically refactor adjacent slices.
 7. Add or update tests for every migrated slice.
 
+## Interaction-State Model
+
+This is a locked architectural rule for all migrated surfaces.
+
+1. Surface queries own button state.
+- Queries from `application.services` must return the enabled/disabled/busy
+  state and blocker reason for visible actions.
+- Migrated views should render that state, not recompute it locally.
+
+2. Click-time preflight remains authoritative.
+- Even if a button rendered enabled, the command path must run strict backend
+  preflight again before mutating state.
+- This preserves correctness for races around active claims and task state.
+
+3. Refresh uses invalidation + requery.
+- UI should subscribe to application invalidation events.
+- On invalidation, the surface reruns its query and rerenders from fresh DTOs.
+- Do not keep widget-local claim listeners or direct task-engine listeners as
+  the system of record.
+
+4. DB state alone is not sufficient.
+- Action availability depends on both persisted state and in-memory active
+  claims in the task engine.
+- Event invalidation must therefore represent both kinds of change.
+
 ## Execution Waves
 
 ### Wave 0: Foundation
@@ -124,6 +149,9 @@ Execute in this order:
 5. [Task 04](tasks/04-foundation-tests-and-boundaries.md)
 
 Wave 0 must land before feature-slice migration starts.
+Task 03 is the point where the action-state and invalidation model becomes
+usable. No feature slice should implement enable/disable or refresh behavior
+against raw task-engine APIs before Task 03 lands.
 
 ### Wave 1: Shell and Setup
 Can start after Wave 0. Recommended order:
@@ -169,6 +197,8 @@ The foundation is good enough when:
 - UI can depend on service interfaces and contract DTOs
 - backend internals are hidden behind composition
 - queue/task updates can be exposed as application events
+- action state and blockers can be rendered from application queries
+- migrated surfaces refresh through invalidation + requery
 - import boundaries are enforceable in CI
 - at least one migrated slice can be tested against a fake application service
 

@@ -109,7 +109,30 @@ These services own:
 
 UI code must not reconstruct workflow or persistence objects itself.
 
-### 4. Events live in `application.events`
+### 4. Surface queries own action state
+
+Application queries must return enough state for the UI to render buttons,
+toolbar actions, and blockers without calling backend internals directly.
+
+This includes:
+- whether an action is enabled
+- whether an action is currently busy
+- why an action is blocked
+- where the user should be routed to resolve the blocker
+
+Rules:
+- migrated UI must not call `TaskEngine.preflight()` directly
+- migrated UI must not call `has_active_claims()` directly
+- migrated UI must not reconstruct claim checks from raw task state
+- view code renders backend-provided action state and blocker info only
+
+This does **not** remove strict backend preflight.
+
+Render-time action state is advisory.
+Command execution must still perform authoritative preflight in the application
+service or backend task path, because claims can change between render and click.
+
+### 5. Events live in `application.events`
 
 `application.events` is the canonical location for:
 - typed event base classes or discriminated unions
@@ -127,8 +150,37 @@ Rules:
 - event types must be UI-framework-agnostic
 - events may reference DTOs from `application.contracts`
 - Qt signals are an adapter mechanism, not the canonical event model
+- events should primarily be invalidation events, not raw task-engine mirrors
 
-### 5. Composition lives in `application.composition`
+Recommended invalidation families:
+- `QueueChanged(project_id)`
+- `WorkboardInvalidated(project_id)`
+- `DocumentInvalidated(project_id, document_id, sections)`
+- `TermsInvalidated(project_id, document_id | None)`
+- `SetupInvalidated(project_id | None)`
+
+### 6. Refresh uses invalidation + requery
+
+Migrated UI surfaces should refresh by:
+1. receiving an application invalidation event
+2. re-running the relevant application query
+3. rerendering from fresh DTOs
+
+This replaces widget-local listener logic that currently mixes:
+- DB reads
+- task-engine signals
+- direct claim checks
+- ad hoc button enabling/disabling
+
+Important constraint:
+- invalidation must cover both persisted DB state changes and in-memory active
+  claim changes
+
+Reason:
+- current claim conflict state lives partly in memory in the task engine
+- DB-only refresh is not sufficient for correct button state
+
+### 7. Composition lives in `application.composition`
 
 `application.composition` becomes the single composition root for the desktop app.
 
@@ -146,7 +198,7 @@ Rules:
 - UI code must not know how `WorkflowSession` is created
 - future HTTP transport must be able to reuse the same composition root
 
-### 6. `BookManager` remains infrastructure-internal
+### 8. `BookManager` remains infrastructure-internal
 
 `BookManager` stays in `storage/` and remains part of backend infrastructure.
 
@@ -159,7 +211,7 @@ Reason:
 - `BookManager` mixes persistence, registry access, default seeding, and config/book lifecycle concerns
 - it is not a stable UI contract
 
-### 7. `TaskEngine` is wrapped, not exposed as the UI contract
+### 9. `TaskEngine` is wrapped, not exposed as the UI contract
 
 `TaskEngine` currently mixes:
 - Qt signal emission

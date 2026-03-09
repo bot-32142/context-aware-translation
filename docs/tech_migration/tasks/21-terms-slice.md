@@ -12,6 +12,7 @@ Start after Wave 1.
 
 - [Task 01](01-foundation-contracts.md)
 - [Task 02](02-foundation-services-composition.md)
+- [Task 03](03-foundation-events-queue-contract.md)
 - [Task 10](10-app-shell-navigation.md)
 
 ## Must Read
@@ -42,8 +43,12 @@ Implement the top-level `Terms` surface through application services:
 - preserve the existing table interaction model where possible
 - document Terms and top-level Terms should share backend service logic
 - do not auto-rerun translation after term edits
+- toolbar action enable/disable and blockers must come from `TermsService`
+- migrated Terms UI must not call task-engine preflight or claim checks directly
+- Terms refresh must use application invalidation events + requery
 
 ## Acceptance Criteria
 
 - Terms UI can operate against fake application services in tests
 - no direct DB or repository access remains in migrated Terms UI
+- toolbar buttons render from backend-provided action state

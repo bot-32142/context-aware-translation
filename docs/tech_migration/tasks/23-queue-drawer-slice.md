@@ -37,8 +37,13 @@ Implement:
 
 - do not let queue become the primary shell
 - use application event models, not raw task-engine internals
+- queue refresh should come from application invalidation/events, not direct
+  `TaskEngine` signals in the widget
+- queue actions may trigger strict backend preflight on execute, but the widget
+  should render availability from application DTOs
 
 ## Acceptance Criteria
 
 - queue UI can be backed by fake queue services/events in tests
 - queue items expose UX-friendly state and routing targets
+- queue drawer no longer treats raw Qt task-engine signals as its source of truth

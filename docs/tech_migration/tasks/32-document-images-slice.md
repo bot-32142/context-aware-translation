@@ -40,8 +40,12 @@ Implement the document `Images` tab:
 - image editing stays explicit
 - missing setup should route to the correct setup surface
 - UI should not talk to low-level image-backend code directly
+- image action state and blockers must come from `DocumentService`
+- migrated Images UI must not call task-engine preflight or claim checks directly
+- image-tab refresh must use application invalidation events + requery
 
 ## Acceptance Criteria
 
 - document images UI depends only on application services
 - setup blockers are surfaced through application contracts, not ad hoc logic in the view
+- image actions render from backend-provided action state
