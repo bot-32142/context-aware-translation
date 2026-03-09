@@ -96,7 +96,7 @@ class ConnectionDraftForm(QWidget):
         self.display_name_edit = QLineEdit()
         self.provider_combo = QComboBox()
         for provider in ProviderKind:
-            self.provider_combo.addItem(_PROVIDER_LABELS[provider], provider)
+            self.provider_combo.addItem(_PROVIDER_LABELS[provider], provider.value)
         self.api_key_edit = QLineEdit()
         self.api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.api_key_edit.setPlaceholderText(self.tr("Paste API key"))
@@ -126,7 +126,7 @@ class ConnectionDraftForm(QWidget):
 
     def set_draft(self, draft: ConnectionDraft, *, preserve_api_key_placeholder: bool = True) -> None:
         self.display_name_edit.setText(draft.display_name)
-        index = self.provider_combo.findData(draft.provider)
+        index = self.provider_combo.findData(draft.provider.value)
         if index >= 0:
             self.provider_combo.setCurrentIndex(index)
         self.api_key_edit.setText(draft.api_key or "")
@@ -148,7 +148,14 @@ class ConnectionDraftForm(QWidget):
 
     def current_provider(self) -> ProviderKind:
         provider = self.provider_combo.currentData()
-        return provider if isinstance(provider, ProviderKind) else ProviderKind.OPENAI_COMPATIBLE
+        if isinstance(provider, ProviderKind):
+            return provider
+        if isinstance(provider, str):
+            try:
+                return ProviderKind(provider)
+            except ValueError:
+                pass
+        return ProviderKind.OPENAI_COMPATIBLE
 
     def validate(self, *, require_api_key: bool) -> tuple[bool, str | None]:
         draft = self.to_draft(allow_empty_api_key=not require_api_key)
@@ -285,20 +292,11 @@ class SetupWizardDialog(QDialog):
         elif self._page_index == 1:
             self.step_title.setText(self.tr("Enter connection details"))
             self._draft_forms.clear()
-            for provider in self.selected_providers():
+            for provider in self._wizard_state.selected_providers:
                 group = QGroupBox(_PROVIDER_LABELS[provider])
                 group_layout = QVBoxLayout(group)
                 form = ConnectionDraftForm(group)
-                default_base_url, default_model = _PROVIDER_DEFAULTS[provider]
-                form.set_draft(
-                    ConnectionDraft(
-                        display_name=_PROVIDER_LABELS[provider],
-                        provider=provider,
-                        base_url=default_base_url or None,
-                        default_model=default_model or None,
-                    ),
-                    preserve_api_key_placeholder=False,
-                )
+                form.set_draft(self._draft_for_provider(provider), preserve_api_key_placeholder=False)
                 group_layout.addWidget(form)
                 self._draft_forms.append(form)
                 self.page_layout.addWidget(group)
@@ -344,14 +342,34 @@ class SetupWizardDialog(QDialog):
         self._update_buttons()
 
     def selected_providers(self) -> list[ProviderKind]:
-        return [provider for provider, checkbox in self._provider_checks.items() if checkbox.isChecked()]
+        checked = [provider for provider, checkbox in self._provider_checks.items() if checkbox.isChecked()]
+        return checked if checked else list(self._wizard_state.selected_providers)
+
+    def _draft_for_provider(self, provider: ProviderKind) -> ConnectionDraft:
+        for draft in self._wizard_state.drafts:
+            if draft.provider is provider:
+                return draft
+        default_base_url, default_model = _PROVIDER_DEFAULTS[provider]
+        return ConnectionDraft(
+            display_name=_PROVIDER_LABELS[provider],
+            provider=provider,
+            base_url=default_base_url or None,
+            default_model=default_model or None,
+        )
+
+    def _persist_drafts(self) -> None:
+        if not self._draft_forms:
+            return
+        self._wizard_state = self._wizard_state.model_copy(
+            update={"drafts": [form.to_draft(allow_empty_api_key=False) for form in self._draft_forms]}
+        )
 
     def final_request(self) -> SetupWizardRequest | None:
         if self._preview_state is None:
             return None
         return SetupWizardRequest(
-            providers=self.selected_providers(),
-            connections=[form.to_draft(allow_empty_api_key=False) for form in self._draft_forms],
+            providers=list(self._wizard_state.selected_providers),
+            connections=list(self._wizard_state.drafts),
         )
 
     def _populate_provider_cards(self, providers: Sequence[ProviderCard]) -> None:
@@ -368,16 +386,20 @@ class SetupWizardDialog(QDialog):
     def _go_back(self) -> None:
         if self._page_index == 0:
             return
+        if self._page_index == 1:
+            self._persist_drafts()
         self._page_index -= 1
         self._build_page()
 
     def _go_next(self) -> None:
         if self._page_index == 0:
-            if not self.selected_providers():
+            selected_providers = self.selected_providers()
+            if not selected_providers:
                 QMessageBox.warning(
                     self, self.tr("No Providers Selected"), self.tr("Select at least one provider to continue.")
                 )
                 return
+            self._wizard_state = self._wizard_state.model_copy(update={"selected_providers": selected_providers})
         elif self._page_index == 1:
             for form in self._draft_forms:
                 valid, message = form.validate(require_api_key=True)
@@ -386,6 +408,7 @@ class SetupWizardDialog(QDialog):
                         self, self.tr("Missing Information"), message or self.tr("Please complete the form.")
                     )
                     return
+            self._persist_drafts()
             self._preview_state = None
         self._page_index = min(self._page_index + 1, 2)
         self._build_page()
@@ -403,10 +426,11 @@ class SetupWizardDialog(QDialog):
     def _ensure_preview_state(self) -> None:
         if self._preview_state is not None:
             return
+        self._persist_drafts()
         self._preview_state = self._service.preview_setup_wizard(
             SetupWizardRequest(
-                providers=self.selected_providers(),
-                connections=[form.to_draft(allow_empty_api_key=False) for form in self._draft_forms],
+                providers=list(self._wizard_state.selected_providers),
+                connections=list(self._wizard_state.drafts),
             )
         )
 

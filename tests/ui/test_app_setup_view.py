@@ -281,6 +281,99 @@ def test_setup_wizard_dialog_renders_provider_cards_on_first_page():
     assert dialog._provider_checks[ProviderKind.GEMINI].isChecked() is True
 
 
+def test_setup_wizard_dialog_renders_connection_form_after_provider_step():
+    from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
+
+    wizard_state = SetupWizardState(
+        step=SetupWizardStep.CHOOSE_PROVIDERS,
+        available_providers=[
+            ProviderCard(
+                provider=ProviderKind.GEMINI,
+                label="Gemini",
+                helper_text="Good for image text reading and image editing.",
+                recommended_for=[CapabilityCode.TRANSLATION, CapabilityCode.IMAGE_TEXT_READING],
+            )
+        ],
+    )
+    service = FakeAppSetupService(state=_make_state(requires_wizard=True), wizard_state=wizard_state)
+    dialog = SetupWizardDialog(service, wizard_state)
+
+    dialog._provider_checks[ProviderKind.GEMINI].setChecked(True)
+    dialog._go_next()
+
+    assert dialog._page_index == 1
+    assert len(dialog._draft_forms) == 1
+    assert dialog._draft_forms[0].current_provider() is ProviderKind.GEMINI
+
+
+def test_setup_wizard_dialog_preserves_draft_when_going_back():
+    from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
+
+    wizard_state = SetupWizardState(
+        step=SetupWizardStep.CHOOSE_PROVIDERS,
+        available_providers=[
+            ProviderCard(
+                provider=ProviderKind.GEMINI,
+                label="Gemini",
+                helper_text="Good for image text reading and image editing.",
+                recommended_for=[CapabilityCode.TRANSLATION, CapabilityCode.IMAGE_TEXT_READING],
+            )
+        ],
+    )
+    service = FakeAppSetupService(state=_make_state(requires_wizard=True), wizard_state=wizard_state)
+    dialog = SetupWizardDialog(service, wizard_state)
+
+    dialog._provider_checks[ProviderKind.GEMINI].setChecked(True)
+    dialog._go_next()
+    form = dialog._draft_forms[0]
+    form.api_key_edit.setText("secret")
+    form.display_name_edit.setText("Gemini A")
+
+    dialog._go_back()
+    assert dialog._page_index == 0
+    assert dialog._provider_checks[ProviderKind.GEMINI].isChecked() is True
+
+    dialog._go_next()
+    assert dialog._draft_forms[0].api_key_edit.text() == "secret"
+    assert dialog._draft_forms[0].display_name_edit.text() == "Gemini A"
+
+
+def test_setup_wizard_dialog_custom_provider_requires_endpoint_and_model():
+    from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
+
+    wizard_state = SetupWizardState(
+        step=SetupWizardStep.CHOOSE_PROVIDERS,
+        available_providers=[
+            ProviderCard(
+                provider=ProviderKind.OPENAI_COMPATIBLE,
+                label="OpenAI-compatible / Custom",
+                helper_text="Use a custom base URL and model names.",
+                supports_custom_endpoint=True,
+                recommended_for=[CapabilityCode.TRANSLATION],
+            )
+        ],
+    )
+    service = FakeAppSetupService(state=_make_state(requires_wizard=True), wizard_state=wizard_state)
+    dialog = SetupWizardDialog(service, wizard_state)
+
+    dialog._provider_checks[ProviderKind.OPENAI_COMPATIBLE].setChecked(True)
+    dialog._go_next()
+
+    form = dialog._draft_forms[0]
+    assert form.current_provider() is ProviderKind.OPENAI_COMPATIBLE
+    assert form.advanced_section.is_expanded() is True
+
+    form.api_key_edit.setText("secret")
+    assert form.validate(require_api_key=True) == (
+        False,
+        form.tr("Custom connections require base URL and default model."),
+    )
+
+    form.base_url_edit.setText("https://example.com/v1")
+    form.default_model_edit.setText("test-model")
+    assert form.validate(require_api_key=True) == (True, None)
+
+
 def test_app_setup_view_refreshes_wizard_prompt_state():
     from context_aware_translation.ui.features.app_setup_view import AppSetupView
 
