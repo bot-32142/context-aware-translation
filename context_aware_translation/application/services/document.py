@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from typing import Any, Protocol
 
 from context_aware_translation.application.contracts.common import (
@@ -11,6 +12,7 @@ from context_aware_translation.application.contracts.common import (
     DocumentSection,
     ExportOption,
     NavigationTargetKind,
+    ProgressInfo,
     SurfaceStatus,
 )
 from context_aware_translation.application.contracts.document import (
@@ -32,11 +34,16 @@ from context_aware_translation.application.contracts.document import (
     RunOCRRequest,
     SaveOCRPageRequest,
     SaveTranslationRequest,
+    TranslationUnitActionState,
     TranslationUnitKind,
     TranslationUnitState,
 )
 from context_aware_translation.application.contracts.terms import TermsTableState
-from context_aware_translation.application.errors import ApplicationErrorCode
+from context_aware_translation.application.errors import (
+    ApplicationErrorCode,
+    ApplicationErrorPayload,
+    BlockedOperationError,
+)
 from context_aware_translation.application.runtime import (
     ApplicationRuntime,
     blocker_code_for_decision_code,
@@ -47,6 +54,8 @@ from context_aware_translation.application.runtime import (
 )
 from context_aware_translation.documents.base import get_supported_formats_for_type
 from context_aware_translation.documents.content.ocr_content import SinglePageOCRContent
+from context_aware_translation.documents.manga_alignment import align_sources_to_chunks, extract_ocr_text
+from context_aware_translation.storage.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, TaskAction
 
@@ -240,34 +249,87 @@ class DefaultDocumentService:
     def get_translation(self, project_id: str, document_id: int) -> DocumentTranslationState:
         workspace = self.get_workspace(project_id, document_id).model_copy(update={"active_tab": DocumentSection.TRANSLATION})
         with self._runtime.open_book_db(project_id) as dbx:
-            chunks = dbx.term_repo.list_chunks(document_id=document_id)
-            units = [
-                TranslationUnitState(
-                    unit_id=str(chunk.chunk_id),
-                    unit_kind=TranslationUnitKind.CHUNK,
-                    label=f"Chunk {chunk.chunk_id}",
-                    status=SurfaceStatus.DONE if chunk.is_translated else SurfaceStatus.READY,
-                    source_text=chunk.text,
-                    translated_text=chunk.translation,
-                    line_count=len(chunk.text.splitlines()) if chunk.text else 0,
-                )
-                for chunk in chunks
-            ]
+            doc = dbx.document_repo.get_document_by_id(document_id)
+            if doc is None:
+                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Document not found: {document_id}")
+            units = self._build_translation_units(
+                project_id,
+                document_id,
+                document_type=str(doc.get("document_type") or ""),
+                dbx=dbx,
+            )
+        active_task = self._active_translation_task(project_id, document_id)
+        translatable_units = [unit for unit in units if unit.blocker is None]
+        completed_units = sum(1 for unit in translatable_units if unit.status is SurfaceStatus.DONE)
+        progress = progress_from_task(active_task) if active_task is not None else None
+        if progress is None and translatable_units:
+            progress = ProgressInfo(
+                current=completed_units,
+                total=len(translatable_units),
+                label="Translated units",
+            )
+        current_unit = next((unit for unit in units if unit.blocker is None), units[0] if units else None)
         return DocumentTranslationState(
             workspace=workspace,
             units=units,
-            current_unit_id=units[0].unit_id if units else None,
+            current_unit_id=current_unit.unit_id if current_unit is not None else None,
+            progress=progress,
+            active_task_id=active_task.task_id if active_task is not None else None,
             terms=self.get_terms(project_id, document_id),
         )
 
     def save_translation(self, request: SaveTranslationRequest) -> DocumentTranslationState:
         with self._runtime.open_book_db(request.project_id) as dbx:
-            chunk = dbx.db.get_chunk_by_id(int(request.unit_id))
-            if chunk is None:
-                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Translation unit not found: {request.unit_id}")
-            chunk.translation = request.translated_text
-            chunk.is_translated = True
-            dbx.db.upsert_chunks([chunk])
+            doc = dbx.document_repo.get_document_by_id(request.document_id)
+            if doc is None:
+                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Document not found: {request.document_id}")
+            blocker = self._translation_save_blocker(request.project_id, request.document_id)
+            if blocker is not None:
+                self._raise_blocked_blocker(blocker, document_id=request.document_id, unit_id=request.unit_id)
+
+            document_type = str(doc.get("document_type") or "")
+            if document_type == "manga":
+                chunk = self._resolve_manga_chunk_for_source(
+                    dbx=dbx,
+                    document_id=request.document_id,
+                    source_id=int(request.unit_id),
+                )
+                if chunk is None:
+                    raise_blocked_or_not_found_for_manga_unit(
+                        project_id=request.project_id,
+                        document_id=request.document_id,
+                        source_id=int(request.unit_id),
+                    )
+                updated_chunk = replace(
+                    chunk,
+                    is_translated=bool(request.translated_text.strip()),
+                    translation=request.translated_text if request.translated_text.strip() else None,
+                )
+            else:
+                chunk = dbx.db.get_chunk_by_id(int(request.unit_id))
+                if chunk is None or chunk.document_id is None or chunk.document_id != request.document_id:
+                    raise_application_error(
+                        ApplicationErrorCode.NOT_FOUND,
+                        f"Translation unit not found: {request.unit_id}",
+                    )
+                source_line_count = self._line_count(chunk.text)
+                translated_line_count = self._line_count(request.translated_text)
+                if source_line_count > 0 and translated_line_count != source_line_count:
+                    raise_application_error(
+                        ApplicationErrorCode.VALIDATION,
+                        (
+                            f"Cannot save translation with {translated_line_count} lines; "
+                            f"expected {source_line_count} lines."
+                        ),
+                        document_id=request.document_id,
+                        unit_id=request.unit_id,
+                    )
+                updated_chunk = replace(
+                    chunk,
+                    is_translated=bool(request.translated_text.strip()),
+                    translation=request.translated_text if request.translated_text.strip() else None,
+                )
+            dbx.db.upsert_chunks([updated_chunk])
         self._runtime.invalidate_document(
             request.project_id,
             request.document_id,
@@ -277,11 +339,46 @@ class DefaultDocumentService:
         return self.get_translation(request.project_id, request.document_id)
 
     def retranslate(self, request: RetranslateRequest) -> AcceptedCommand:
+        with self._runtime.open_book_db(request.project_id) as dbx:
+            doc = dbx.document_repo.get_document_by_id(request.document_id)
+            if doc is None:
+                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Document not found: {request.document_id}")
+            document_type = str(doc.get("document_type") or "")
+            if document_type == "manga":
+                source_id = int(request.unit_id)
+                unit = self._build_manga_translation_units(request.project_id, request.document_id, dbx)
+                matched = next((candidate for candidate in unit if candidate.unit_id == request.unit_id), None)
+                if matched is None:
+                    raise_application_error(
+                        ApplicationErrorCode.NOT_FOUND,
+                        f"Translation unit not found: {request.unit_id}",
+                    )
+                blocker = matched.actions.retranslate_blocker or matched.blocker
+                if blocker is not None:
+                    self._raise_blocked_blocker(blocker, document_id=request.document_id, unit_id=request.unit_id)
+                return self._runtime.submit_task(
+                    "translation_manga",
+                    request.project_id,
+                    document_ids=[request.document_id],
+                    source_ids=[source_id],
+                    force=True,
+                )
+
+            unit = self._build_text_translation_units(request.project_id, request.document_id, dbx)
+            matched = next((candidate for candidate in unit if candidate.unit_id == request.unit_id), None)
+            if matched is None:
+                raise_application_error(
+                    ApplicationErrorCode.NOT_FOUND,
+                    f"Translation unit not found: {request.unit_id}",
+                )
+            blocker = matched.actions.retranslate_blocker or matched.blocker
+            if blocker is not None:
+                self._raise_blocked_blocker(blocker, document_id=request.document_id, unit_id=request.unit_id)
         return self._runtime.submit_task(
             "chunk_retranslation",
             request.project_id,
-            document_ids=[request.document_id],
             chunk_id=int(request.unit_id),
+            document_id=request.document_id,
         )
 
     def get_images(self, project_id: str, document_id: int) -> DocumentImagesState:
@@ -591,3 +688,302 @@ class DefaultDocumentService:
             extracted_text=extracted_text,
             elements=elements,
         )
+
+    def _build_translation_units(
+        self,
+        project_id: str,
+        document_id: int,
+        *,
+        document_type: str,
+        dbx: Any,
+    ) -> list[TranslationUnitState]:
+        if document_type == "manga":
+            return self._build_manga_translation_units(project_id, document_id, dbx)
+        return self._build_text_translation_units(project_id, document_id, dbx)
+
+    def _build_text_translation_units(
+        self,
+        project_id: str,
+        document_id: int,
+        dbx: Any,
+    ) -> list[TranslationUnitState]:
+        chunks = sorted(dbx.term_repo.list_chunks(document_id=document_id), key=lambda chunk: int(chunk.chunk_id))
+        save_blocker = self._translation_save_blocker(project_id, document_id)
+        units: list[TranslationUnitState] = []
+        for chunk in chunks:
+            retranslate_allowed, retranslate_blocker = self._retranslate_action_state_for_chunk(
+                project_id,
+                document_id,
+                int(chunk.chunk_id),
+            )
+            actions = TranslationUnitActionState(
+                can_save=save_blocker is None,
+                can_retranslate=retranslate_allowed,
+                save_blocker=save_blocker,
+                retranslate_blocker=retranslate_blocker,
+            )
+            units.append(
+                TranslationUnitState(
+                    unit_id=str(chunk.chunk_id),
+                    unit_kind=TranslationUnitKind.CHUNK,
+                    label=f"Chunk {chunk.chunk_id}",
+                    status=SurfaceStatus.DONE if chunk.is_translated else SurfaceStatus.READY,
+                    source_text=chunk.text,
+                    translated_text=chunk.translation,
+                    line_count=self._line_count(chunk.text),
+                    actions=actions,
+                )
+            )
+        return units
+
+    def _build_manga_translation_units(
+        self,
+        project_id: str,
+        document_id: int,
+        dbx: Any,
+    ) -> list[TranslationUnitState]:
+        save_blocker = self._translation_save_blocker(project_id, document_id)
+        sources = [
+            {
+                **source,
+                "ocr_json": dbx.document_repo.get_source_ocr_json(int(source["source_id"])),
+            }
+            for source in dbx.document_repo.get_document_sources_metadata(document_id)
+            if source.get("source_type") == "image"
+        ]
+        chunks = sorted(dbx.term_repo.list_chunks(document_id=document_id), key=lambda chunk: int(chunk.chunk_id))
+        source_to_chunk = align_sources_to_chunks(sources, len(chunks), strict=False)
+        units: list[TranslationUnitState] = []
+        for source_index, source in enumerate(sources):
+            source_id = int(source["source_id"])
+            page_number = int(source.get("sequence_number", 0)) + 1
+            source_text = extract_ocr_text(source.get("ocr_json"))
+            chunk_index = source_to_chunk.get(source_index)
+            chunk = chunks[chunk_index] if chunk_index is not None and chunk_index < len(chunks) else None
+
+            if not source_text.strip():
+                blocker = make_blocker(
+                    BlockerCode.NOTHING_TO_DO,
+                    "No OCR text detected on this page.",
+                    target_kind=NavigationTargetKind.DOCUMENT_OCR,
+                    project_id=project_id,
+                    document_id=document_id,
+                )
+                units.append(
+                    TranslationUnitState(
+                        unit_id=str(source_id),
+                        unit_kind=TranslationUnitKind.PAGE,
+                        label=f"Page {page_number}",
+                        status=SurfaceStatus.BLOCKED,
+                        source_text="",
+                        translated_text=None,
+                        source_id=source_id,
+                        actions=TranslationUnitActionState(
+                            can_save=False,
+                            can_retranslate=False,
+                            save_blocker=blocker,
+                            retranslate_blocker=blocker,
+                        ),
+                        blocker=blocker,
+                    )
+                )
+                continue
+
+            if chunk is None:
+                blocker = make_blocker(
+                    BlockerCode.NEEDS_REVIEW,
+                    "This page could not be aligned to a translation unit. Rebuild terms after OCR changes.",
+                    target_kind=NavigationTargetKind.DOCUMENT_TERMS,
+                    project_id=project_id,
+                    document_id=document_id,
+                )
+                units.append(
+                    TranslationUnitState(
+                        unit_id=str(source_id),
+                        unit_kind=TranslationUnitKind.PAGE,
+                        label=f"Page {page_number}",
+                        status=SurfaceStatus.BLOCKED,
+                        source_text=source_text,
+                        translated_text=None,
+                        line_count=self._line_count(source_text),
+                        source_id=source_id,
+                        actions=TranslationUnitActionState(
+                            can_save=False,
+                            can_retranslate=False,
+                            save_blocker=blocker,
+                            retranslate_blocker=blocker,
+                        ),
+                        blocker=blocker,
+                    )
+                )
+                continue
+
+            retranslate_allowed, retranslate_blocker = self._retranslate_action_state_for_manga_page(
+                project_id,
+                document_id,
+                source_id,
+            )
+            units.append(
+                TranslationUnitState(
+                    unit_id=str(source_id),
+                    unit_kind=TranslationUnitKind.PAGE,
+                    label=f"Page {page_number}",
+                    status=SurfaceStatus.DONE if chunk.is_translated else SurfaceStatus.READY,
+                    source_text=source_text,
+                    translated_text=chunk.translation,
+                    line_count=self._line_count(source_text),
+                    source_id=source_id,
+                    actions=TranslationUnitActionState(
+                        can_save=save_blocker is None,
+                        can_retranslate=retranslate_allowed,
+                        save_blocker=save_blocker,
+                        retranslate_blocker=retranslate_blocker,
+                    ),
+                )
+            )
+        return units
+
+    def _translation_save_blocker(self, project_id: str, document_id: int) -> Any:
+        wanted = frozenset({ResourceClaim("doc", project_id, str(document_id), ClaimMode.WRITE_EXCLUSIVE)})
+        if self._runtime.task_engine.has_active_claims(project_id, wanted):
+            return make_blocker(
+                BlockerCode.ALREADY_RUNNING_ELSEWHERE,
+                "Cannot save while another task is actively modifying this document.",
+                target_kind=NavigationTargetKind.QUEUE,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        return None
+
+    def _retranslate_action_state_for_chunk(
+        self,
+        project_id: str,
+        document_id: int,
+        chunk_id: int,
+    ) -> tuple[bool, Any]:
+        decision = self._runtime.task_engine.preflight(
+            "chunk_retranslation",
+            project_id,
+            {"chunk_id": chunk_id, "document_id": document_id},
+            TaskAction.RUN,
+        )
+        if decision.allowed:
+            return True, None
+        return False, make_blocker(
+            blocker_code_for_decision_code(decision.code or ""),
+            decision.reason or "Retranslate is currently unavailable.",
+            target_kind=NavigationTargetKind.QUEUE,
+            project_id=project_id,
+            document_id=document_id,
+        )
+
+    def _retranslate_action_state_for_manga_page(
+        self,
+        project_id: str,
+        document_id: int,
+        source_id: int,
+    ) -> tuple[bool, Any]:
+        decision = self._runtime.task_engine.preflight(
+            "translation_manga",
+            project_id,
+            {"document_ids": [document_id], "source_ids": [source_id], "force": True},
+            TaskAction.RUN,
+        )
+        if decision.allowed:
+            return True, None
+        return False, make_blocker(
+            blocker_code_for_decision_code(decision.code or ""),
+            decision.reason or "Retranslate is currently unavailable.",
+            target_kind=NavigationTargetKind.QUEUE,
+            project_id=project_id,
+            document_id=document_id,
+        )
+
+    def _active_translation_task(self, project_id: str, document_id: int) -> TaskRecord | None:
+        records = self._runtime.task_store.list_tasks(
+            book_id=project_id,
+            exclude_statuses=TERMINAL_TASK_STATUSES,
+        )
+        relevant = [record for record in records if self._record_targets_translation_document(record, document_id)]
+        if not relevant:
+            return None
+        return sorted(relevant, key=self._translation_task_sort_key, reverse=True)[0]
+
+    def _record_targets_translation_document(self, record: TaskRecord, document_id: int) -> bool:
+        if record.task_type not in {"translation_text", "translation_manga", "chunk_retranslation", "batch_translation"}:
+            return False
+        if record.document_ids_json is None:
+            return record.task_type != "chunk_retranslation"
+        try:
+            document_ids = json.loads(record.document_ids_json)
+        except json.JSONDecodeError:
+            return False
+        if not isinstance(document_ids, list):
+            return False
+        try:
+            normalized = {int(value) for value in document_ids}
+        except (TypeError, ValueError):
+            return False
+        return document_id in normalized
+
+    @staticmethod
+    def _translation_task_sort_key(record: TaskRecord) -> tuple[int, float]:
+        status_priority = 1 if record.status == "running" else 0
+        return (status_priority, float(record.updated_at))
+
+    def _resolve_manga_chunk_for_source(self, *, dbx: Any, document_id: int, source_id: int) -> Any:
+        sources = [
+            {
+                **source,
+                "ocr_json": dbx.document_repo.get_source_ocr_json(int(source["source_id"])),
+            }
+            for source in dbx.document_repo.get_document_sources_metadata(document_id)
+            if source.get("source_type") == "image"
+        ]
+        chunks = sorted(dbx.term_repo.list_chunks(document_id=document_id), key=lambda chunk: int(chunk.chunk_id))
+        source_ids = [int(source["source_id"]) for source in sources]
+        try:
+            source_index = source_ids.index(int(source_id))
+        except ValueError:
+            return None
+        mapping = align_sources_to_chunks(sources, len(chunks), strict=False)
+        chunk_index = mapping.get(source_index)
+        if chunk_index is None or chunk_index >= len(chunks):
+            return None
+        return chunks[chunk_index]
+
+    @staticmethod
+    def _line_count(text: str | None) -> int:
+        if text is None:
+            return 0
+        stripped = text.strip()
+        if not stripped:
+            return 0
+        return len(text.splitlines())
+
+    @staticmethod
+    def _raise_blocked_blocker(blocker: Any, **details: str | int | float | bool | None) -> None:
+        raise BlockedOperationError(
+            ApplicationErrorPayload(
+                code=ApplicationErrorCode.BLOCKED,
+                message=blocker.message,
+                details={"decision_code": blocker.code.value, **details},
+            )
+        )
+
+
+def raise_blocked_or_not_found_for_manga_unit(*, project_id: str, document_id: int, source_id: int) -> None:
+    blocker = make_blocker(
+        BlockerCode.NEEDS_REVIEW,
+        "This manga page cannot be edited because it is not aligned to a translation unit.",
+        target_kind=NavigationTargetKind.DOCUMENT_TERMS,
+        project_id=project_id,
+        document_id=document_id,
+    )
+    raise BlockedOperationError(
+        ApplicationErrorPayload(
+            code=ApplicationErrorCode.BLOCKED,
+            message=blocker.message,
+            details={"decision_code": blocker.code.value, "source_id": source_id},
+        )
+    )

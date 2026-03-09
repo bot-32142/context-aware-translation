@@ -14,8 +14,12 @@ from context_aware_translation.application.contracts.document import (
     DocumentOCRState,
     DocumentOverviewState,
     DocumentSectionCard,
+    DocumentTranslationState,
     DocumentWorkspaceState,
     OCRPageState,
+    TranslationUnitActionState,
+    TranslationUnitKind,
+    TranslationUnitState,
 )
 from context_aware_translation.application.contracts.terms import (
     TermsScope,
@@ -91,7 +95,6 @@ def _make_terms_state() -> TermsTableState:
         ],
     )
 
-
 def _make_ocr_state() -> DocumentOCRState:
     return DocumentOCRState(
         workspace=_make_workspace_state().model_copy(update={"active_tab": DocumentSection.OCR}),
@@ -120,6 +123,26 @@ def _make_ocr_state() -> DocumentOCRState:
     )
 
 
+def _make_translation_state() -> DocumentTranslationState:
+    workspace = _make_workspace_state().model_copy(update={"active_tab": DocumentSection.TRANSLATION})
+    return DocumentTranslationState(
+        workspace=workspace,
+        units=[
+            TranslationUnitState(
+                unit_id="1",
+                unit_kind=TranslationUnitKind.CHUNK,
+                label="Chunk 1",
+                status=SurfaceStatus.READY,
+                source_text="全員さっさと降りろ!!!",
+                translated_text="Everyone, get down now!!!",
+                line_count=1,
+                actions=TranslationUnitActionState(can_save=True, can_retranslate=True),
+            )
+        ],
+        current_unit_id="1",
+    )
+
+
 def _make_view():
     from context_aware_translation.ui.features.document_workspace_view import DocumentWorkspaceView
 
@@ -138,6 +161,7 @@ def _make_view():
         ),
         ocr=_make_ocr_state(),
         ocr_page_images={101: None, 102: None},
+        translation=_make_translation_state(),
     )
     terms_service = FakeTermsService(project_state=_make_terms_state(), document_state=_make_terms_state())
     work_service = FakeWorkService(state_by_project={"proj-1": object()})
@@ -181,7 +205,6 @@ def test_document_workspace_terms_tab_uses_shared_terms_component():
     finally:
         view.cleanup()
 
-
 def test_document_workspace_ocr_tab_routes_save_and_run_actions():
     view, _bus, document_service, _terms_service = _make_view()
     try:
@@ -199,6 +222,25 @@ def test_document_workspace_ocr_tab_routes_save_and_run_actions():
         call_names = [name for name, _payload in document_service.calls]
         assert "save_ocr" in call_names
         assert call_names.count("run_ocr") == 2
+    finally:
+        view.cleanup()
+
+
+def test_document_workspace_translation_tab_uses_migrated_translation_widget():
+    view, _bus, document_service, _terms_service = _make_view()
+    try:
+        view.show_section(DocumentSection.TRANSLATION)
+        translation_tab = view.tab_widget.currentWidget()
+        assert translation_tab is not None
+        assert hasattr(translation_tab, "unit_list")
+        assert translation_tab.unit_list.count() == 1
+
+        translation_tab.translation_text.setPlainText("Everyone get down now!!!")
+        translation_tab.save_button.click()
+
+        call_names = [name for name, _payload in document_service.calls]
+        assert "get_translation" in call_names
+        assert "save_translation" in call_names
     finally:
         view.cleanup()
 

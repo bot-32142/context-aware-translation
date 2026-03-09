@@ -86,6 +86,13 @@ class RunOCRRequest(ContractModel):
     pending_only: bool = False
 
 
+class TranslationUnitActionState(ContractModel):
+    can_save: bool = True
+    can_retranslate: bool = False
+    save_blocker: BlockerInfo | None = None
+    retranslate_blocker: BlockerInfo | None = None
+
+
 class TranslationUnitKind(StrEnum):
     CHUNK = "chunk"
     PAGE = "page"
@@ -99,6 +106,8 @@ class TranslationUnitState(ContractModel):
     source_text: str
     translated_text: str | None = None
     line_count: int | None = None
+    source_id: int | None = None
+    actions: TranslationUnitActionState = Field(default_factory=TranslationUnitActionState)
     blocker: BlockerInfo | None = None
 
 

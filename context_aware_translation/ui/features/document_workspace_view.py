@@ -37,6 +37,7 @@ from context_aware_translation.application.services.terms import TermsService
 from context_aware_translation.application.services.work import WorkService
 from context_aware_translation.ui.adapters import QtApplicationEventBridge
 from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
+from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
 from context_aware_translation.ui.features.terms_table_widget import TermsTableWidget
 from context_aware_translation.ui.i18n import qarg
 from context_aware_translation.ui.utils import create_tip_label
@@ -406,6 +407,8 @@ class DocumentWorkspaceView(QWidget):
             return DocumentOCRTab(self._document_service, self._project_id, self._document_id, parent=self)
         if section is DocumentSection.TERMS:
             return _DocumentTermsTab(self._terms_service, self._project_id, self._document_id, parent=self)
+        if section is DocumentSection.TRANSLATION:
+            return DocumentTranslationView(self._document_service, self._project_id, self._document_id, parent=self)
         if section is DocumentSection.EXPORT:
             return _DocumentExportTab(self._project_id, self._document_id, self._work_service, parent=self)
         return _PlaceholderDocumentTab(

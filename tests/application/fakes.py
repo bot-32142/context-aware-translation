@@ -21,6 +21,7 @@ from context_aware_translation.application.contracts.document import (
     DocumentOCRActions,
     DocumentOCRState,
     DocumentOverviewState,
+    DocumentSection,
     DocumentTranslationState,
     DocumentWorkspaceState,
     RetranslateRequest,
@@ -272,11 +273,15 @@ class FakeDocumentService:
 
     def get_translation(self, project_id: str, document_id: int) -> DocumentTranslationState:
         self.calls.append(("get_translation", (project_id, document_id)))
-        return self.translation  # type: ignore[return-value]
+        if self.translation is not None:
+            return self.translation
+        return DocumentTranslationState(
+            workspace=self.workspace.model_copy(update={"active_tab": DocumentSection.TRANSLATION}),
+        )
 
     def save_translation(self, request: SaveTranslationRequest) -> DocumentTranslationState:
         self.calls.append(("save_translation", request))
-        return self.translation  # type: ignore[return-value]
+        return self.get_translation(request.project_id, request.document_id)
 
     def retranslate(self, request: RetranslateRequest) -> AcceptedCommand:
         self.calls.append(("retranslate", request))

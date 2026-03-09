@@ -31,6 +31,7 @@ from context_aware_translation.application.contracts.document import (
     DocumentExportState,
     DocumentTranslationState,
     DocumentWorkspaceState,
+    TranslationUnitActionState,
     TranslationUnitKind,
     TranslationUnitState,
 )
@@ -175,6 +176,7 @@ def test_setup_and_document_contracts_are_json_serializable() -> None:
                 source_text="全員さっさと降りろ!!!",
                 translated_text="Everyone, get down now!!!",
                 line_count=1,
+                actions=TranslationUnitActionState(can_save=True, can_retranslate=True),
             )
         ],
         current_unit_id="chunk-1",
@@ -189,6 +191,7 @@ def test_setup_and_document_contracts_are_json_serializable() -> None:
     assert app_setup.model_dump(mode="json")["connections"][0]["provider"] == "gemini"
     assert project_setup.model_dump(mode="json")["preset"] == "balanced"
     assert translation.model_dump(mode="json")["workspace"]["active_tab"] == "translation"
+    assert translation.model_dump(mode="json")["units"][0]["actions"]["can_retranslate"] is True
     assert export_state.model_dump(mode="json")["can_export"] is True
 
 
