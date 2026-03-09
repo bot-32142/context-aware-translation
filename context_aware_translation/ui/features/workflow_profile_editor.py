@@ -7,9 +7,9 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
-    QGroupBox,
     QLineEdit,
     QMessageBox,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -24,6 +24,7 @@ from context_aware_translation.application.contracts.app_setup import (
 from context_aware_translation.application.contracts.common import PresetCode
 from context_aware_translation.ui.constants import LANGUAGES
 from context_aware_translation.ui.utils import create_tip_label
+from context_aware_translation.ui.widgets.collapsible_section import CollapsibleSection
 
 
 @dataclass(frozen=True)
@@ -48,7 +49,8 @@ class WorkflowProfileEditorDialog(QDialog):
         self._allow_name_edit = allow_name_edit
         self._row_widgets: list[tuple[WorkflowStepRoute, QComboBox | None, QLineEdit]] = []
         self.setWindowTitle(self.tr("Workflow Profile"))
-        self.resize(780, 620)
+        self.setMinimumSize(650, 600)
+        self.resize(750, 750)
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -61,8 +63,18 @@ class WorkflowProfileEditorDialog(QDialog):
         )
         layout.addWidget(header)
 
-        basics_group = QGroupBox(self.tr("Profile"))
-        basics_layout = QFormLayout(basics_group)
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+
+        self.general_section = CollapsibleSection(self.tr("General"))
+        general_widget = QWidget()
+        basics_layout = QFormLayout(general_widget)
+        basics_layout.setContentsMargins(16, 8, 8, 8)
+        basics_layout.setVerticalSpacing(8)
+        basics_layout.setHorizontalSpacing(12)
         self.name_edit = QLineEdit(self._original_profile.name)
         self.name_edit.setEnabled(self._allow_name_edit)
         self.target_language_combo = QComboBox()
@@ -89,17 +101,26 @@ class WorkflowProfileEditorDialog(QDialog):
         basics_layout.addRow(self.tr("Profile name"), self.name_edit)
         basics_layout.addRow(self.tr("Target language"), self.target_language_combo)
         basics_layout.addRow(self.tr("Preset"), self.preset_combo)
-        layout.addWidget(basics_group)
+        self.general_section.set_content(general_widget)
+        self.general_section.set_expanded(True)
+        scroll_layout.addWidget(self.general_section)
 
-        routes_group = QGroupBox(self.tr("Workflow routing"))
-        routes_layout = QVBoxLayout(routes_group)
+        self.routes_section = CollapsibleSection(self.tr("Workflow Routing"))
+        routes_widget = QWidget()
+        routes_layout = QVBoxLayout(routes_widget)
         self.routes_table = QTableWidget(0, 3)
         self.routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
         self.routes_table.verticalHeader().setVisible(False)
         self.routes_table.setAlternatingRowColors(True)
         self._populate_routes()
         routes_layout.addWidget(self.routes_table)
-        layout.addWidget(routes_group, 1)
+        self.routes_section.set_content(routes_widget)
+        self.routes_section.set_expanded(True)
+        scroll_layout.addWidget(self.routes_section)
+        scroll_layout.addStretch()
+
+        scroll_area.setWidget(scroll_content)
+        layout.addWidget(scroll_area, 1)
 
         footer = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
