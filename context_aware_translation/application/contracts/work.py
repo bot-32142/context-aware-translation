@@ -59,6 +59,8 @@ class ExportDialogState(ContractModel):
     available_formats: list[ExportOption]
     default_output_path: str | None = None
     blocker: BlockerInfo | None = None
+    supports_preserve_structure: bool = False
+    incomplete_translation_message: str | None = None
 
 
 class RunExportRequest(ContractModel):

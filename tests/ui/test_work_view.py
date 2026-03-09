@@ -20,6 +20,7 @@ from context_aware_translation.application.contracts.common import (
     UserMessageSeverity,
 )
 from context_aware_translation.application.contracts.document import (
+    DocumentExportState,
     DocumentOverviewState,
     DocumentSectionCard,
     DocumentWorkspaceState,
@@ -107,6 +108,12 @@ def _make_view(*, work_state: WorkboardState):
                     summary="Open Translation",
                 )
             ],
+        ),
+        export=DocumentExportState(
+            workspace=_make_workspace_state(active_tab=DocumentSection.EXPORT),
+            can_export=True,
+            available_formats=[ExportOption(format_id="txt", label="TXT", is_default=True)],
+            default_output_path="/tmp/04.txt",
         ),
     )
     terms_service = FakeTermsService(
@@ -226,3 +233,42 @@ def test_work_view_export_action_prepares_dialog():
         mock_open_export_dialog.assert_called_once_with(4)
     finally:
         view.cleanup()
+
+
+def test_work_export_dialog_runs_service_with_selected_options():
+    from PySide6.QtWidgets import QMessageBox
+
+    from context_aware_translation.ui.features.document_workspace_view import WorkExportDialog
+
+    work_service = FakeWorkService(state_by_project={})
+    work_service.export_result = ExportResult(
+        output_path="/tmp/out.epub",
+        message=UserMessage(severity=UserMessageSeverity.SUCCESS, text="Export complete."),
+    )
+    state = ExportDialogState(
+        project_id="proj-1",
+        document_ids=[4],
+        document_labels=["04.png"],
+        available_formats=[ExportOption(format_id="epub", label="EPUB", is_default=True)],
+        default_output_path="/tmp/out.epub",
+        supports_preserve_structure=True,
+        incomplete_translation_message="Needs fallback",
+    )
+    dialog = WorkExportDialog(work_service, state)
+    try:
+        dialog.controls.allow_original_fallback_cb.setChecked(True)
+        dialog.controls.preserve_structure_cb.setChecked(True)
+        dialog.controls.output_path_edit.setText("/tmp/export-dir")
+        with patch.object(QMessageBox, "information") as mock_information:
+            dialog.export_button.click()
+
+        assert (work_service.calls[-1][0],) == ("run_export",)
+        request = work_service.calls[-1][1]
+        assert request.project_id == "proj-1"
+        assert request.document_ids == [4]
+        assert request.options["allow_original_fallback"] is True
+        assert request.options["preserve_structure"] is True
+        assert request.output_path == "/tmp/export-dir"
+        mock_information.assert_called_once()
+    finally:
+        dialog.close()

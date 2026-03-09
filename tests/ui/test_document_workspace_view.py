@@ -1,17 +1,24 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
 from context_aware_translation.application.contracts.common import (
     ActionState,
     DocumentRef,
     DocumentSection,
+    ExportOption,
     ProjectRef,
     SurfaceStatus,
+    UserMessage,
+    UserMessageSeverity,
 )
 from context_aware_translation.application.contracts.document import (
     DocumentOCRActions,
     DocumentOCRState,
+    DocumentExportResult,
+    DocumentExportState,
     DocumentOverviewState,
     DocumentSectionCard,
     DocumentTranslationState,
@@ -162,6 +169,12 @@ def _make_view():
         ocr=_make_ocr_state(),
         ocr_page_images={101: None, 102: None},
         translation=_make_translation_state(),
+        export=DocumentExportState(
+            workspace=_make_workspace_state(),
+            can_export=True,
+            available_formats=[ExportOption(format_id="txt", label="TXT", is_default=True)],
+            default_output_path="/tmp/04.txt",
+        ),
     )
     terms_service = FakeTermsService(project_state=_make_terms_state(), document_state=_make_terms_state())
     work_service = FakeWorkService(state_by_project={"proj-1": object()})
@@ -259,5 +272,61 @@ def test_document_workspace_refreshes_on_invalidations():
         assert len(workspace_calls) == 4
         assert len(ocr_calls) == 4
         assert len(terms_calls) == 4
+    finally:
+        view.cleanup()
+
+
+def test_document_workspace_export_tab_runs_document_service():
+    from PySide6.QtWidgets import QMessageBox
+
+    from context_aware_translation.ui.features.document_workspace_view import DocumentWorkspaceView
+
+    bus = InMemoryApplicationEventBus()
+    export_state = DocumentExportState(
+        workspace=_make_workspace_state(),
+        can_export=True,
+        available_formats=[ExportOption(format_id="txt", label="TXT", is_default=True)],
+        default_output_path="/tmp/04.txt",
+        supports_preserve_structure=True,
+    )
+    document_service = FakeDocumentService(
+        workspace=_make_workspace_state(),
+        overview=DocumentOverviewState(
+            workspace=_make_workspace_state(),
+            sections=[
+                DocumentSectionCard(
+                    section=DocumentSection.EXPORT,
+                    status=SurfaceStatus.READY,
+                    summary="Export",
+                )
+            ],
+        ),
+        export=export_state,
+        export_result=DocumentExportResult(
+            document_id=4,
+            output_path="/tmp/04.txt",
+            message=UserMessage(severity=UserMessageSeverity.SUCCESS, text="Export complete."),
+        ),
+    )
+    terms_service = FakeTermsService(project_state=_make_terms_state(), document_state=_make_terms_state())
+    work_service = FakeWorkService(state_by_project={"proj-1": object()})
+    view = DocumentWorkspaceView("proj-1", 4, document_service, terms_service, work_service, bus)
+    try:
+        view.show_section(DocumentSection.EXPORT)
+        export_tab = view.tab_widget.currentWidget()
+        assert export_tab is not None
+        export_tab.controls.preserve_structure_cb.setChecked(True)
+        export_tab.controls.output_path_edit.setText("/tmp/export-dir")
+        with patch.object(QMessageBox, "warning") as mock_warning:
+            export_tab.export_button.click()
+        mock_warning.assert_not_called()
+
+        assert document_service.calls[-1][0] == "export_document"
+        request = document_service.calls[-1][1]
+        assert request.project_id == "proj-1"
+        assert request.document_id == 4
+        assert request.options["preserve_structure"] is True
+        assert not export_tab.result_label.isHidden()
+        assert export_tab.result_label.text() == "Export complete."
     finally:
         view.cleanup()

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QHBoxLayout,
@@ -17,12 +21,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from context_aware_translation.application.contracts.common import (
-    DocumentSection,
-    SurfaceStatus,
-    UserMessageSeverity,
+from context_aware_translation.application.contracts.common import DocumentSection, SurfaceStatus, UserMessageSeverity
+from context_aware_translation.application.contracts.document import (
+    DocumentExportResult,
+    DocumentExportState,
+    DocumentOverviewState,
 )
-from context_aware_translation.application.contracts.document import DocumentOverviewState
 from context_aware_translation.application.contracts.terms import BuildTermsRequest, TermsTableState, UpdateTermRequest
 from context_aware_translation.application.contracts.work import ExportDialogState
 from context_aware_translation.application.errors import ApplicationError, BlockedOperationError
@@ -80,6 +84,141 @@ class _StatusChip(QLabel):
         )
 
 
+class _ExportControls(QWidget):
+    changed = Signal()
+
+    def __init__(self, *, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._default_output_path = ""
+        self._init_ui()
+
+    def _init_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        self.blocker_label = create_tip_label("")
+        self.blocker_label.setVisible(False)
+        layout.addWidget(self.blocker_label)
+
+        self.warning_label = create_tip_label("")
+        self.warning_label.setVisible(False)
+        layout.addWidget(self.warning_label)
+
+        form = QFormLayout()
+        self.format_combo = QComboBox()
+        self.format_combo.currentIndexChanged.connect(self._sync_output_path)
+        self.format_combo.currentIndexChanged.connect(lambda *_args: self.changed.emit())
+        form.addRow(self.tr("Format"), self.format_combo)
+
+        output_row = QHBoxLayout()
+        self.output_path_edit = QLineEdit()
+        self.output_path_edit.textChanged.connect(lambda *_args: self.changed.emit())
+        output_row.addWidget(self.output_path_edit, 1)
+        self.browse_button = QPushButton(self.tr("Browse..."))
+        self.browse_button.clicked.connect(self._browse_output)
+        output_row.addWidget(self.browse_button)
+        form.addRow(self.tr("Output path"), output_row)
+        layout.addLayout(form)
+
+        self.preserve_structure_cb = QCheckBox(self.tr("Preserve folder structure"))
+        self.preserve_structure_cb.toggled.connect(self._on_options_changed)
+        layout.addWidget(self.preserve_structure_cb)
+
+        self.allow_original_fallback_cb = QCheckBox(
+            self.tr("Allow fallback to original content for untranslated chunks")
+        )
+        self.allow_original_fallback_cb.toggled.connect(self._on_options_changed)
+        layout.addWidget(self.allow_original_fallback_cb)
+
+    def apply_state(self, state: ExportDialogState | DocumentExportState) -> None:
+        self._default_output_path = state.default_output_path or ""
+        self.blocker_label.setVisible(state.blocker is not None)
+        self.blocker_label.setText(state.blocker.message if state.blocker is not None else "")
+        self.warning_label.setVisible(bool(state.incomplete_translation_message))
+        self.warning_label.setText(state.incomplete_translation_message or "")
+
+        self.format_combo.blockSignals(True)
+        self.format_combo.clear()
+        default_index = 0
+        for index, option in enumerate(state.available_formats):
+            self.format_combo.addItem(option.label, option.format_id)
+            if option.is_default:
+                default_index = index
+        if state.available_formats:
+            self.format_combo.setCurrentIndex(default_index)
+        self.format_combo.blockSignals(False)
+
+        self.preserve_structure_cb.setVisible(state.supports_preserve_structure)
+        if not state.supports_preserve_structure:
+            self.preserve_structure_cb.setChecked(False)
+        self.allow_original_fallback_cb.setVisible(bool(state.incomplete_translation_message))
+        if not state.incomplete_translation_message:
+            self.allow_original_fallback_cb.setChecked(False)
+
+        if not self.output_path_edit.text().strip():
+            self.output_path_edit.setText(self._default_output_path)
+        else:
+            self._sync_output_path()
+        self.changed.emit()
+
+    def can_submit(self, state: ExportDialogState | DocumentExportState) -> bool:
+        return (
+            state.blocker is None
+            and bool(state.available_formats)
+            and (not state.incomplete_translation_message or self.allow_original_fallback_cb.isChecked())
+        )
+
+    def format_id(self) -> str:
+        return str(self.format_combo.currentData() or "").strip()
+
+    def output_path(self) -> str:
+        return self.output_path_edit.text().strip()
+
+    def options(self) -> dict[str, bool]:
+        return {
+            "preserve_structure": self.preserve_structure_cb.isChecked(),
+            "allow_original_fallback": self.allow_original_fallback_cb.isChecked(),
+        }
+
+    def _on_options_changed(self) -> None:
+        self._sync_output_path()
+        self.changed.emit()
+
+    def _sync_output_path(self) -> None:
+        if not self._default_output_path:
+            return
+        if self.preserve_structure_cb.isChecked():
+            self.output_path_edit.setText(str(Path(self._default_output_path).parent))
+            return
+        format_id = self.format_id()
+        if not format_id:
+            self.output_path_edit.setText(self._default_output_path)
+            return
+        current = self.output_path_edit.text().strip()
+        if not current or current == str(Path(self._default_output_path).parent):
+            self.output_path_edit.setText(str(Path(self._default_output_path).with_suffix(f".{format_id}")))
+            return
+        self.output_path_edit.setText(str(Path(current).with_suffix(f".{format_id}")))
+
+    def _browse_output(self) -> None:
+        if self.preserve_structure_cb.isChecked():
+            folder = QFileDialog.getExistingDirectory(self, self.tr("Select Output Folder"))
+            if folder:
+                self.output_path_edit.setText(folder)
+            return
+        format_id = self.format_id()
+        if not format_id:
+            QMessageBox.warning(self, self.tr("Missing Information"), self.tr("Export format is required."))
+            return
+        suggested = self.output_path_edit.text().strip() or self._default_output_path or f"export.{format_id}"
+        file_path, _filter = QFileDialog.getSaveFileName(
+            self,
+            self.tr("Save Export File"),
+            suggested,
+            qarg(self.tr("%1 Files (*.%2)"), format_id.upper(), format_id),
+        )
+        if file_path:
+            self.output_path_edit.setText(file_path)
+
+
 class WorkExportDialog(QDialog):
     def __init__(
         self,
@@ -105,24 +244,10 @@ class WorkExportDialog(QDialog):
         docs_label.setWordWrap(True)
         docs_label.setStyleSheet("font-weight: 600;")
         layout.addWidget(docs_label)
-
-        self.blocker_label = create_tip_label(self._state.blocker.message if self._state.blocker is not None else "")
-        self.blocker_label.setVisible(self._state.blocker is not None)
-        layout.addWidget(self.blocker_label)
-
-        form = QFormLayout()
-        self.format_combo = QComboBox()
-        default_index = 0
-        for index, option in enumerate(self._state.available_formats):
-            self.format_combo.addItem(option.label, option.format_id)
-            if option.is_default:
-                default_index = index
-        if self._state.available_formats:
-            self.format_combo.setCurrentIndex(default_index)
-        self.output_path_edit = QLineEdit(self._state.default_output_path or "")
-        form.addRow(self.tr("Format"), self.format_combo)
-        form.addRow(self.tr("Output path"), self.output_path_edit)
-        layout.addLayout(form)
+        self.controls = _ExportControls(parent=self)
+        self.controls.apply_state(self._state)
+        self.controls.changed.connect(self._update_export_enabled)
+        layout.addWidget(self.controls)
 
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
         self.export_button = self.button_box.addButton(self.tr("Export"), QDialogButtonBox.ButtonRole.AcceptRole)
@@ -130,16 +255,16 @@ class WorkExportDialog(QDialog):
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)
 
-        self.export_button.setEnabled(self._state.blocker is None and bool(self._state.available_formats))
+        self._update_export_enabled()
 
     def _run_export(self) -> None:
-        output_path = self.output_path_edit.text().strip()
+        output_path = self.controls.output_path()
         if not output_path:
             QMessageBox.warning(self, self.tr("Missing Information"), self.tr("Output path is required."))
             return
         from context_aware_translation.application.contracts.work import RunExportRequest
 
-        format_id = str(self.format_combo.currentData() or "").strip()
+        format_id = self.controls.format_id()
         if not format_id:
             QMessageBox.warning(self, self.tr("Missing Information"), self.tr("Export format is required."))
             return
@@ -150,6 +275,7 @@ class WorkExportDialog(QDialog):
                     document_ids=self._state.document_ids,
                     format_id=format_id,
                     output_path=output_path,
+                    options=self.controls.options(),
                 )
             )
         except ApplicationError as exc:
@@ -161,6 +287,9 @@ class WorkExportDialog(QDialog):
             result.message.text if result.message is not None else result.output_path,
         )
         self.accept()
+
+    def _update_export_enabled(self) -> None:
+        self.export_button.setEnabled(self.controls.can_submit(self._state) and bool(self.controls.output_path()))
 
 
 class _DocumentOverviewTab(QWidget):
@@ -291,33 +420,85 @@ class _PlaceholderDocumentTab(QWidget):
 
 
 class _DocumentExportTab(QWidget):
-    def __init__(self, project_id: str, document_id: int, service: WorkService, *, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        project_id: str,
+        document_id: int,
+        service: DocumentService,
+        *,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._project_id = project_id
         self._document_id = document_id
         self._service = service
+        self._state: DocumentExportState | None = None
         layout = QVBoxLayout(self)
         self.tip_label = create_tip_label(
-            self.tr("Export can be started here or directly from the Work list. The export execution backend is still transitional."),
+            self.tr("Export applies only to the current document. You can also start export directly from the Work list when that row is exportable."),
         )
         layout.addWidget(self.tip_label)
+        self.controls = _ExportControls(parent=self)
+        self.controls.changed.connect(self._update_export_enabled)
+        layout.addWidget(self.controls)
         self.export_button = QPushButton(self.tr("Export This Document"))
-        self.export_button.clicked.connect(self._open_export_dialog)
+        self.export_button.clicked.connect(self._run_export)
         layout.addWidget(self.export_button)
+        self.result_label = QLabel()
+        self.result_label.setWordWrap(True)
+        self.result_label.hide()
+        layout.addWidget(self.result_label)
         layout.addStretch()
 
-    def _open_export_dialog(self) -> None:
-        from context_aware_translation.application.contracts.work import PrepareExportRequest
-
+    def refresh(self) -> None:
         try:
-            state = self._service.prepare_export(
-                PrepareExportRequest(project_id=self._project_id, document_ids=[self._document_id])
-            )
+            self._state = self._service.get_export(self._project_id, self._document_id)
         except ApplicationError as exc:
             QMessageBox.warning(self, self.tr("Export"), exc.payload.message)
             return
-        dialog = WorkExportDialog(self._service, state, parent=self)
-        dialog.exec()
+        self.controls.apply_state(self._state)
+        self.result_label.hide()
+        self.export_button.setEnabled(self._state.can_export and self.controls.can_submit(self._state))
+
+    def _update_export_enabled(self) -> None:
+        if self._state is None:
+            self.export_button.setEnabled(False)
+            return
+        self.export_button.setEnabled(self._state.can_export and self.controls.can_submit(self._state))
+
+    def _run_export(self) -> None:
+        if self._state is None:
+            return
+        output_path = self.controls.output_path()
+        if not output_path:
+            QMessageBox.warning(self, self.tr("Missing Information"), self.tr("Output path is required."))
+            return
+        format_id = self.controls.format_id()
+        if not format_id:
+            QMessageBox.warning(self, self.tr("Missing Information"), self.tr("Export format is required."))
+            return
+        from context_aware_translation.application.contracts.document import RunDocumentExportRequest
+
+        try:
+            result = self._service.export_document(
+                RunDocumentExportRequest(
+                    project_id=self._project_id,
+                    document_id=self._document_id,
+                    format_id=format_id,
+                    output_path=output_path,
+                    options=self.controls.options(),
+                )
+            )
+        except ApplicationError as exc:
+            QMessageBox.warning(self, self.tr("Export Failed"), exc.payload.message)
+            return
+        self._show_result(result)
+
+    def _show_result(self, result: DocumentExportResult) -> None:
+        message = result.message.text if result.message is not None else result.output_path
+        self.result_label.setText(message)
+        self.result_label.setStyleSheet("color: #15803d;")
+        self.result_label.show()
 
 
 class DocumentWorkspaceView(QWidget):
@@ -418,7 +599,7 @@ class DocumentWorkspaceView(QWidget):
         if section is DocumentSection.TRANSLATION:
             return DocumentTranslationView(self._document_service, self._project_id, self._document_id, parent=self)
         if section is DocumentSection.EXPORT:
-            return _DocumentExportTab(self._project_id, self._document_id, self._work_service, parent=self)
+            return _DocumentExportTab(self._project_id, self._document_id, self._document_service, parent=self)
         return _PlaceholderDocumentTab(
             self.tr(_SECTION_LABELS[section]),
             self.tr("This document-scoped surface will be attached in a later migration task."),

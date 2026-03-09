@@ -58,6 +58,7 @@ from context_aware_translation.application.runtime import (
     progress_from_task,
     raise_application_error,
 )
+from context_aware_translation.application.services._export_support import prepare_export, run_export
 from context_aware_translation.documents.base import Document, get_supported_formats_for_type
 from context_aware_translation.documents.content.ocr_content import SinglePageOCRContent
 from context_aware_translation.documents.content.ocr_items import ImageItem
@@ -468,31 +469,32 @@ class DefaultDocumentService:
 
     def get_export(self, project_id: str, document_id: int) -> DocumentExportState:
         workspace = self.get_workspace(project_id, document_id).model_copy(update={"active_tab": DocumentSection.EXPORT})
-        with self._runtime.open_book_db(project_id) as dbx:
-            doc = dbx.document_repo.get_document_by_id(document_id)
-            if doc is None:
-                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Document not found: {document_id}")
-            status = next((row for row in dbx.document_repo.get_documents_with_status() if int(row["document_id"]) == document_id), None)
-            if status is None:
-                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Document not found: {document_id}")
-            total_chunks = int(status.get("total_chunks", 0) or 0)
-            translated_chunks = int(status.get("chunks_translated", 0) or 0)
-            can_export = total_chunks > 0 and translated_chunks >= total_chunks
-            available_formats = [ExportOption(format_id=fmt, label=fmt, is_default=(idx == 0)) for idx, fmt in enumerate(get_supported_formats_for_type(str(doc["document_type"]))) ]
+        prepared = prepare_export(self._runtime, project_id=project_id, document_ids=[document_id])
         return DocumentExportState(
             workspace=workspace,
-            can_export=can_export,
-            available_formats=available_formats,
-            default_output_path=str(self._runtime.book_manager.get_book_path(project_id) / "export"),
+            can_export=True,
+            available_formats=prepared.available_formats,
+            default_output_path=prepared.default_output_path,
+            supports_preserve_structure=prepared.supports_preserve_structure,
+            incomplete_translation_message=prepared.incomplete_translation_message,
         )
 
     def export_document(self, request: RunDocumentExportRequest) -> DocumentExportResult:
-        raise_application_error(
-            ApplicationErrorCode.UNSUPPORTED,
-            "Document export execution is still owned by the existing export worker flow and has not been migrated into the application layer yet.",
+        result = run_export(
+            self._runtime,
             project_id=request.project_id,
-            document_id=request.document_id,
+            document_ids=[request.document_id],
+            format_id=request.format_id,
+            output_path=request.output_path,
+            options=request.options,
         )
+        self._runtime.invalidate_document(
+            request.project_id,
+            request.document_id,
+            sections=[DocumentSection.EXPORT],
+        )
+        self._runtime.invalidate_workboard(request.project_id)
+        return result.model_copy(update={"document_id": request.document_id})
 
     def _get_active_ocr_task(self, project_id: str, document_id: int) -> Any | None:
         for record in self._runtime.task_engine.get_tasks(project_id, task_type="ocr", full=True):

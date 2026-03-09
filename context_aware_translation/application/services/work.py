@@ -8,8 +8,9 @@ from context_aware_translation.application.contracts.common import (
     BlockerCode,
     BlockerInfo,
     CapabilityCode,
+    DocumentRef,
     DocumentRowActionKind,
-    ExportOption,
+    DocumentSection,
     ExportResult,
     NavigationTarget,
     NavigationTargetKind,
@@ -33,7 +34,12 @@ from context_aware_translation.application.runtime import (
     map_document_type_code,
     raise_application_error,
 )
-from context_aware_translation.documents.base import get_supported_formats_for_type, is_ocr_required_for_type
+from context_aware_translation.application.services._export_support import (
+    prepare_export,
+    run_export,
+    to_export_dialog_state,
+)
+from context_aware_translation.documents.base import is_ocr_required_for_type
 
 _IMAGE_DOCUMENT_TYPES = {"manga", "pdf", "epub", "scanned_book"}
 
@@ -264,7 +270,7 @@ class DefaultWorkService:
         document_type: str,
         order_index: int,
         sources: list[dict],
-    ):
+    ) -> DocumentRef:
         label = f"Document {order_index}"
         if sources:
             first_source = sources[0]
@@ -274,7 +280,6 @@ class DefaultWorkService:
             else:
                 sequence_number = int(first_source.get("sequence_number", 1) or 1)
                 label = f"{document_type.replace('_', ' ').title()} {sequence_number}"
-        from context_aware_translation.application.contracts.common import DocumentRef
 
         return DocumentRef(
             document_id=document_id,
@@ -297,51 +302,24 @@ class DefaultWorkService:
         )
 
     def prepare_export(self, request: PrepareExportRequest) -> ExportDialogState:
-        if not request.document_ids:
-            raise_application_error(ApplicationErrorCode.VALIDATION, "At least one document must be selected for export.")
-        project_id = request.project_id
-        with self._runtime.open_book_db(project_id) as dbx:
-            raw_docs = [dbx.document_repo.get_document_by_id(document_id) for document_id in request.document_ids]
-            docs = [doc for doc in raw_docs if doc is not None]
-            status_by_id = {int(doc["document_id"]): doc for doc in dbx.document_repo.get_documents_with_status()}
-        if len(docs) != len(request.document_ids):
-            raise_application_error(ApplicationErrorCode.NOT_FOUND, "One or more documents could not be loaded for export.")
-        doc_types = {str(doc["document_type"]) for doc in docs}
-        if len(doc_types) != 1:
-            raise_application_error(ApplicationErrorCode.VALIDATION, "Mixed document types cannot be exported together.")
-        doc_type = next(iter(doc_types))
-        available_formats = [ExportOption(format_id=fmt, label=fmt, is_default=(idx == 0)) for idx, fmt in enumerate(get_supported_formats_for_type(doc_type))]
-        blocker = None
-        for doc in docs:
-            status = status_by_id.get(int(doc["document_id"]))
-            if status is None:
-                raise_application_error(
-                    ApplicationErrorCode.NOT_FOUND,
-                    f"Export status missing for document {int(doc['document_id'])}.",
-                )
-            total_chunks = int(status.get("total_chunks", 0) or 0)
-            translated_chunks = int(status.get("chunks_translated", 0) or 0)
-            if total_chunks <= 0 or translated_chunks < total_chunks:
-                blocker = make_blocker(
-                    BlockerCode.NEEDS_REVIEW,
-                    "Selected documents must be fully translated before export.",
-                    target_kind=NavigationTargetKind.DOCUMENT_TRANSLATION,
-                    project_id=project_id,
-                    document_id=int(doc["document_id"]),
-                )
-                break
-        return ExportDialogState(
-            project_id=project_id,
-            document_ids=request.document_ids,
-            document_labels=[f"Document {int(doc['document_id'])}" for doc in docs],
-            available_formats=available_formats,
-            default_output_path=str(self._runtime.book_manager.get_book_path(project_id) / "export"),
-            blocker=blocker,
+        return to_export_dialog_state(
+            prepare_export(self._runtime, project_id=request.project_id, document_ids=request.document_ids)
         )
 
     def run_export(self, request: RunExportRequest) -> ExportResult:
-        raise_application_error(
-            ApplicationErrorCode.UNSUPPORTED,
-            "Export execution is still owned by the existing export worker flow and has not been migrated into the application layer yet.",
+        result = run_export(
+            self._runtime,
             project_id=request.project_id,
+            document_ids=request.document_ids,
+            format_id=request.format_id,
+            output_path=request.output_path,
+            options=request.options,
         )
+        self._runtime.invalidate_workboard(request.project_id)
+        for document_id in request.document_ids:
+            self._runtime.invalidate_document(
+                request.project_id,
+                document_id,
+                sections=[DocumentSection.EXPORT],
+            )
+        return result
