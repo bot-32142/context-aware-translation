@@ -251,6 +251,36 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
     assert any(call[0] == "run_setup_wizard" for call in service.calls)
 
 
+def test_setup_wizard_dialog_renders_provider_cards_on_first_page():
+    from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
+
+    wizard_state = SetupWizardState(
+        step=SetupWizardStep.CHOOSE_PROVIDERS,
+        available_providers=[
+            ProviderCard(
+                provider=ProviderKind.GEMINI,
+                label="Gemini",
+                helper_text="Good for image text reading and image editing.",
+                recommended_for=[CapabilityCode.TRANSLATION, CapabilityCode.IMAGE_TEXT_READING],
+            ),
+            ProviderCard(
+                provider=ProviderKind.DEEPSEEK,
+                label="DeepSeek",
+                helper_text="Good for text translation.",
+                recommended_for=[CapabilityCode.TRANSLATION],
+            ),
+        ],
+        selected_providers=[ProviderKind.GEMINI],
+    )
+    service = FakeAppSetupService(state=_make_state(requires_wizard=True), wizard_state=wizard_state)
+
+    dialog = SetupWizardDialog(service, wizard_state)
+
+    provider_checkboxes = dialog.page_content.findChildren(type(dialog._provider_checks[ProviderKind.GEMINI]))
+    assert len(provider_checkboxes) == 2
+    assert dialog._provider_checks[ProviderKind.GEMINI].isChecked() is True
+
+
 def test_app_setup_view_refreshes_wizard_prompt_state():
     from context_aware_translation.ui.features.app_setup_view import AppSetupView
 

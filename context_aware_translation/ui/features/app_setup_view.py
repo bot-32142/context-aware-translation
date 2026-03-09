@@ -227,6 +227,7 @@ class SetupWizardDialog(QDialog):
         self.resize(760, 620)
         self._init_ui()
         self._populate_provider_cards(initial_state.available_providers)
+        self._build_page()
         self._update_buttons()
 
     def _init_ui(self) -> None:
@@ -264,7 +265,6 @@ class SetupWizardDialog(QDialog):
         self._provider_checks: dict[ProviderKind, QCheckBox] = {}
         self._draft_forms: list[ConnectionDraftForm] = []
         self._page_widgets: list[QWidget] = []
-        self._build_page()
 
     def _build_page(self) -> None:
         while self.page_layout.count():
@@ -360,6 +360,7 @@ class SetupWizardDialog(QDialog):
             checkbox = QCheckBox(provider.label)
             checkbox.setToolTip(provider.helper_text or "")
             checkbox.setProperty("provider", provider.provider.value)
+            checkbox.setChecked(provider.provider in self._wizard_state.selected_providers)
             if provider.helper_text:
                 checkbox.setText(f"{provider.label} — {provider.helper_text}")
             self._provider_checks[provider.provider] = checkbox
