@@ -521,22 +521,6 @@ class AppSetupView(QWidget):
         profiles_tab_layout = QVBoxLayout(self.profiles_tab)
         profiles_tab_layout.addWidget(self.profiles_group)
         profiles_tab_layout.addStretch()
-
-        self.advanced_section = CollapsibleSection(self.tr("Advanced"))
-        advanced_content = QWidget()
-        advanced_layout = QVBoxLayout(advanced_content)
-        self.advanced_label = create_tip_label(
-            self.tr(
-                "Custom provider endpoint and model settings are edited per connection. Shared workflow profiles only choose which connection and model each workflow step uses."
-            )
-        )
-        self.seed_defaults_button = QPushButton(self.tr("Seed System Defaults"))
-        self.seed_defaults_button.clicked.connect(self._on_seed_defaults)
-        advanced_layout.addWidget(self.advanced_label)
-        advanced_layout.addWidget(self.seed_defaults_button)
-        advanced_layout.addStretch()
-        self.advanced_section.set_content(advanced_content)
-        connections_tab_layout.addWidget(self.advanced_section)
         connections_tab_layout.addStretch()
 
         self.setup_tabs.addTab(self.connections_tab, self.tr("Connections"))
@@ -581,13 +565,6 @@ class AppSetupView(QWidget):
             [self.tr("Name"), self.tr("Target language"), self.tr("Preset"), self.tr("Default")]
         )
         self.edit_profile_button.setText(self.tr("Edit workflow profile"))
-        self.advanced_section.toggle_button.setText(self.tr("Advanced"))
-        self.advanced_label.setText(
-            self.tr(
-                "Custom provider endpoint and model settings are edited per connection. Shared workflow profiles only choose which connection and model each workflow step uses."
-            )
-        )
-        self.seed_defaults_button.setText(self.tr("Seed System Defaults"))
         if self._state is not None:
             self.summary_label.setText(self._summary_text(self._state))
             self._populate_profiles(self._state)
@@ -740,12 +717,6 @@ class AppSetupView(QWidget):
                 )
             )
             self.refresh()
-
-    def _on_seed_defaults(self) -> None:
-        command = self._service.seed_defaults()
-        if command.message is not None:
-            self._show_message(command.message.severity, command.message.text)
-        self.refresh()
 
     def _show_test_result(self, result: ConnectionTestResult) -> None:
         lines = [result.connection_label]
