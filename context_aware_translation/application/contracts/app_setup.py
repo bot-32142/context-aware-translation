@@ -64,6 +64,11 @@ class ConnectionSummary(ContractModel):
     token_limit: int | None = None
     input_token_limit: int | None = None
     output_token_limit: int | None = None
+    tokens_used: int = 0
+    input_tokens_used: int = 0
+    output_tokens_used: int = 0
+    cached_input_tokens_used: int = 0
+    uncached_input_tokens_used: int = 0
     custom_parameters_json: str | None = None
     status: ConnectionStatus = ConnectionStatus.UNTESTED
     capabilities: list[CapabilityCode] = Field(default_factory=list)

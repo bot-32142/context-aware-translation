@@ -173,10 +173,13 @@ def test_app_setup_view_add_delete_test_and_edit_profile_calls_service():
         view._on_delete_connection()
         view.profiles_table.selectRow(0)
         view._on_edit_profile()
+        view.profiles_table.selectRow(0)
+        view._on_delete_profile()
 
     assert any(call[0] == "save_connection" for call in service.calls)
     assert any(call[0] == "delete_connection" for call in service.calls)
     assert any(call[0] == "save_workflow_profile" for call in service.calls)
+    assert any(call[0] == "delete_workflow_profile" for call in service.calls)
 
 
 def test_app_setup_view_opens_connection_dialog_on_double_click():
@@ -528,3 +531,37 @@ def test_connection_editor_dialog_tests_inside_dialog():
 
     assert len(seen) == 1
     assert seen[0].display_name == "Gemini"
+
+
+def test_connection_editor_dialog_resets_token_usage_inside_dialog():
+    from context_aware_translation.ui.features.app_setup_view import ConnectionEditorDialog
+
+    summary = ConnectionSummary(
+        connection_id="conn-gemini",
+        display_name="Gemini",
+        provider=ProviderKind.GEMINI,
+        tokens_used=1200,
+        input_tokens_used=900,
+        output_tokens_used=300,
+        cached_input_tokens_used=100,
+        uncached_input_tokens_used=800,
+    )
+    dialog = ConnectionEditorDialog(
+        draft=ConnectionDraft(display_name="Gemini", provider=ProviderKind.GEMINI),
+        connection_id="conn-gemini",
+        connection_summary=summary,
+        reset_tokens_callback=lambda _cid: summary.model_copy(
+            update={
+                "tokens_used": 0,
+                "input_tokens_used": 0,
+                "output_tokens_used": 0,
+                "cached_input_tokens_used": 0,
+                "uncached_input_tokens_used": 0,
+            }
+        ),
+    )
+
+    assert dialog.total_used_label.text() == "1,200"
+    dialog._on_reset_tokens()
+    assert dialog.total_used_label.text() == "0"
+    assert dialog.input_used_label.text() == "0"

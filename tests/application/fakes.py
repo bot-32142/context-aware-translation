@@ -5,6 +5,7 @@ from typing import Any
 
 from context_aware_translation.application.contracts.app_setup import (
     AppSetupState,
+    ConnectionSummary,
     ConnectionTestRequest,
     ConnectionTestResult,
     SaveConnectionRequest,
@@ -114,6 +115,10 @@ class FakeAppSetupService:
         self.calls.append(("delete_connection", connection_id))
         return self.state
 
+    def reset_connection_tokens(self, connection_id: str) -> ConnectionSummary:
+        self.calls.append(("reset_connection_tokens", connection_id))
+        return self.state.connections[0]
+
     def test_connection(self, request: ConnectionTestRequest) -> ConnectionTestResult:
         self.calls.append(("test_connection", request))
         if self.test_result is None:
@@ -126,6 +131,10 @@ class FakeAppSetupService:
 
     def save_workflow_profile(self, request: SaveWorkflowProfileRequest) -> AppSetupState:
         self.calls.append(("save_workflow_profile", request))
+        return self.state
+
+    def delete_workflow_profile(self, profile_id: str) -> AppSetupState:
+        self.calls.append(("delete_workflow_profile", profile_id))
         return self.state
 
 

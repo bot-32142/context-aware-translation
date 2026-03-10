@@ -6,6 +6,7 @@ from typing import Protocol
 from context_aware_translation.application.contracts.app_setup import (
     AppSetupState,
     ConnectionDraft,
+    ConnectionSummary,
     ConnectionTestRequest,
     ConnectionTestResult,
     ProviderCard,
@@ -47,11 +48,15 @@ class AppSetupService(Protocol):
 
     def delete_connection(self, connection_id: str) -> AppSetupState: ...
 
+    def reset_connection_tokens(self, connection_id: str) -> ConnectionSummary: ...
+
     def test_connection(self, request: ConnectionTestRequest) -> ConnectionTestResult: ...
 
     def run_setup_wizard(self, request: SetupWizardRequest) -> AppSetupState: ...
 
     def save_workflow_profile(self, request: SaveWorkflowProfileRequest) -> AppSetupState: ...
+
+    def delete_workflow_profile(self, profile_id: str) -> AppSetupState: ...
 
 
 class DefaultAppSetupService:
@@ -196,6 +201,13 @@ class DefaultAppSetupService:
         self._runtime.invalidate_setup()
         return self.get_state()
 
+    def reset_connection_tokens(self, connection_id: str) -> ConnectionSummary:
+        updated = self._runtime.book_manager.reset_endpoint_tokens(connection_id)
+        if updated is None:
+            raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
+        self._runtime.invalidate_setup()
+        return build_connection_summary(updated)
+
     def test_connection(self, request: ConnectionTestRequest) -> ConnectionTestResult:
         return self._test_connection_result(request.connection)
 
@@ -260,6 +272,18 @@ class DefaultAppSetupService:
         if request.set_as_default:
             self._runtime.book_manager.set_default_profile(profile_id)
 
+        self._runtime.invalidate_setup()
+        self._runtime.invalidate_projects()
+        self._runtime.invalidate_workboard()
+        return self.get_state()
+
+    def delete_workflow_profile(self, profile_id: str) -> AppSetupState:
+        try:
+            deleted = self._runtime.book_manager.delete_profile(profile_id)
+        except ValueError as exc:
+            raise_application_error(ApplicationErrorCode.PRECONDITION, str(exc))
+        if not deleted:
+            raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Workflow profile not found: {profile_id}")
         self._runtime.invalidate_setup()
         self._runtime.invalidate_projects()
         self._runtime.invalidate_workboard()

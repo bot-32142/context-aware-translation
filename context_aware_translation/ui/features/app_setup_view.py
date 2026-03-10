@@ -290,12 +290,16 @@ class ConnectionEditorDialog(QDialog):
         *,
         draft: ConnectionDraft | None = None,
         connection_id: str | None = None,
+        connection_summary: ConnectionSummary | None = None,
         test_callback: Callable[[ConnectionDraft], ConnectionTestResult] | None = None,
+        reset_tokens_callback: Callable[[str], ConnectionSummary] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._connection_id = connection_id
+        self._connection_summary = connection_summary
         self._test_callback = test_callback
+        self._reset_tokens_callback = reset_tokens_callback
         self.setWindowTitle(self.tr("Connection"))
         self.setMinimumWidth(460)
         self.resize(520, 420)
@@ -311,6 +315,24 @@ class ConnectionEditorDialog(QDialog):
         scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
         scroll_area.setWidget(self.form)
         layout.addWidget(scroll_area, 1)
+        if self._connection_summary is not None:
+            self.token_usage_group = QGroupBox(self.tr("Token usage"))
+            usage_layout = QFormLayout(self.token_usage_group)
+            self.total_used_label = QLabel()
+            self.input_used_label = QLabel()
+            self.cached_input_label = QLabel()
+            self.uncached_input_label = QLabel()
+            self.output_used_label = QLabel()
+            usage_layout.addRow(self.tr("Total"), self.total_used_label)
+            usage_layout.addRow(self.tr("Input"), self.input_used_label)
+            usage_layout.addRow(self.tr("  Cached input"), self.cached_input_label)
+            usage_layout.addRow(self.tr("  Uncached input"), self.uncached_input_label)
+            usage_layout.addRow(self.tr("Output"), self.output_used_label)
+            self.reset_tokens_button = QPushButton(self.tr("Reset Usage"))
+            self.reset_tokens_button.clicked.connect(self._on_reset_tokens)
+            usage_layout.addRow(self.reset_tokens_button)
+            layout.addWidget(self.token_usage_group)
+            self._set_token_usage(self._connection_summary)
         self.button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )
@@ -338,6 +360,20 @@ class ConnectionEditorDialog(QDialog):
             QMessageBox.warning(self, self.tr("Missing Information"), message or self.tr("Please complete the form."))
             return
         self._test_callback(self.form.to_draft(allow_empty_api_key=self._connection_id is not None))
+
+    def _on_reset_tokens(self) -> None:
+        if self._connection_id is None or self._reset_tokens_callback is None:
+            return
+        updated = self._reset_tokens_callback(self._connection_id)
+        self._connection_summary = updated
+        self._set_token_usage(updated)
+
+    def _set_token_usage(self, summary: ConnectionSummary) -> None:
+        self.total_used_label.setText(f"{summary.tokens_used:,}")
+        self.input_used_label.setText(f"{summary.input_tokens_used:,}")
+        self.cached_input_label.setText(f"{summary.cached_input_tokens_used:,}")
+        self.uncached_input_label.setText(f"{summary.uncached_input_tokens_used:,}")
+        self.output_used_label.setText(f"{summary.output_tokens_used:,}")
 
 
 class SetupWizardDialog(QDialog):
@@ -614,6 +650,12 @@ class AppSetupView(QWidget):
 
         self.profiles_group = QGroupBox(self.tr("Shared workflow profiles"))
         profiles_layout = QVBoxLayout(self.profiles_group)
+        profiles_toolbar = QHBoxLayout()
+        self.delete_profile_button = QPushButton(self.tr("Delete"))
+        self.delete_profile_button.clicked.connect(self._on_delete_profile)
+        profiles_toolbar.addWidget(self.delete_profile_button)
+        profiles_toolbar.addStretch()
+        profiles_layout.addLayout(profiles_toolbar)
         self.profiles_table = QTableWidget(0, 3)
         self.profiles_table.setHorizontalHeaderLabels(
             [self.tr("Name"), self.tr("Target language"), self.tr("Default")]
@@ -668,6 +710,7 @@ class AppSetupView(QWidget):
         )
         self.delete_connection_button.setText(self.tr("Delete"))
         self.profiles_group.setTitle(self.tr("Shared workflow profiles"))
+        self.delete_profile_button.setText(self.tr("Delete"))
         self.profiles_table.setHorizontalHeaderLabels(
             [self.tr("Name"), self.tr("Target language"), self.tr("Default")]
         )
@@ -743,7 +786,7 @@ class AppSetupView(QWidget):
         self.delete_connection_button.setEnabled(selected)
 
     def _update_profile_buttons(self) -> None:
-        return
+        self.delete_profile_button.setEnabled(self._selected_profile() is not None)
 
     def _on_run_wizard(self) -> None:
         dialog = SetupWizardDialog(self._service, self._service.get_wizard_state(), self)
@@ -777,7 +820,9 @@ class AppSetupView(QWidget):
                 custom_parameters_json=connection.custom_parameters_json,
             ),
             connection_id=connection.connection_id,
+            connection_summary=connection,
             test_callback=self._test_connection_draft,
+            reset_tokens_callback=self._reset_connection_tokens,
             parent=self,
         )
         if dialog.exec() == QDialog.DialogCode.Accepted:
@@ -828,6 +873,26 @@ class AppSetupView(QWidget):
             )
             self.refresh()
 
+    def _on_delete_profile(self) -> None:
+        profile = self._selected_profile()
+        if profile is None:
+            return
+        result = QMessageBox.question(
+            self,
+            self.tr("Delete Workflow Profile"),
+            self.tr("Delete the selected workflow profile? Projects using it will need setup first."),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if result != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self._service.delete_workflow_profile(profile.profile_id)
+        except Exception as exc:
+            QMessageBox.warning(self, self.tr("App Setup"), str(exc))
+            return
+        self.refresh()
+
     def _on_profile_double_clicked(self, _row: int, _column: int) -> None:
         self._on_edit_profile()
 
@@ -838,6 +903,11 @@ class AppSetupView(QWidget):
         result = self._service.test_connection(ConnectionTestRequest(connection=draft))
         self._show_test_result(result)
         return result
+
+    def _reset_connection_tokens(self, connection_id: str) -> ConnectionSummary:
+        updated = self._service.reset_connection_tokens(connection_id)
+        self.refresh()
+        return updated
 
     def _show_test_result(self, result: ConnectionTestResult) -> None:
         lines = [result.connection_label]
