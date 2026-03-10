@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import QEvent, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -28,6 +29,7 @@ from context_aware_translation.application.events import ApplicationEventSubscri
 from context_aware_translation.application.services.project_setup import ProjectSetupService
 from context_aware_translation.llm.image_generator import ImageBackend
 from context_aware_translation.ui.adapters import QtApplicationEventBridge
+from context_aware_translation.ui.features.workflow_profile_editor import StepAdvancedConfigDialog
 from context_aware_translation.ui.utils import create_tip_label
 
 
@@ -45,6 +47,14 @@ class ProjectSetupView(QWidget):
 
     open_app_setup_requested = Signal()
     save_completed = Signal(str)
+    _ADVANCED_STEP_IDS = frozenset(
+        {
+            WorkflowStepId.EXTRACTOR,
+            WorkflowStepId.TRANSLATOR,
+            WorkflowStepId.OCR,
+            WorkflowStepId.TRANSLATOR_BATCH,
+        }
+    )
 
     def __init__(
         self,
@@ -69,6 +79,7 @@ class ProjectSetupView(QWidget):
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.title_label = QLabel()
         self.title_label.setStyleSheet("font-size: 20px; font-weight: 600;")
         layout.addWidget(self.title_label)
@@ -105,12 +116,17 @@ class ProjectSetupView(QWidget):
         self.routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
         self.routes_table.verticalHeader().setVisible(False)
         self.routes_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.routes_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.routes_table.setWordWrap(False)
         self.routes_table.verticalHeader().setDefaultSectionSize(34)
         self.routes_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self.routes_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.routes_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.routes_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        self.routes_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
+        self.routes_table.setColumnWidth(1, 360)
+        self.routes_table.setColumnWidth(2, 320)
+        self.routes_table.cellDoubleClicked.connect(self._on_custom_step_double_clicked)
         custom_layout.addWidget(self.routes_table)
-        layout.addWidget(self.custom_profile_group, 1)
+        layout.addWidget(self.custom_profile_group)
 
         actions_layout = QHBoxLayout()
         self.open_app_setup_button = QPushButton(self.tr("Open App Setup"))
@@ -121,6 +137,7 @@ class ProjectSetupView(QWidget):
         actions_layout.addStretch()
         actions_layout.addWidget(self.save_button)
         layout.addLayout(actions_layout)
+        layout.addStretch()
 
     def refresh(self) -> None:
         self._apply_state(self._service.get_state(self.project_id))
@@ -212,16 +229,23 @@ class ProjectSetupView(QWidget):
         for route in profile.routes:
             row = self.routes_table.rowCount()
             self.routes_table.insertRow(row)
-            self.routes_table.setItem(row, 0, QTableWidgetItem(route.step_label))
+            step_item = QTableWidgetItem(route.step_label)
+            if route.step_id in self._ADVANCED_STEP_IDS:
+                step_item.setToolTip(self.tr("Double-click to edit advanced settings."))
+            self.routes_table.setItem(row, 0, step_item)
             combo = QComboBox()
             combo.addItem(self.tr("Select connection"), "")
             for connection in self._state.available_connections if self._state is not None else []:
                 combo.addItem(connection.display_name, connection.connection_id)
+            combo.setMinimumWidth(340)
+            combo.setStyleSheet("QComboBox { font-size: 13px; padding: 4px 8px; }")
             if route.connection_id:
                 index = combo.findData(route.connection_id)
                 if index >= 0:
                     combo.setCurrentIndex(index)
             model_edit = QLineEdit(route.model or "")
+            model_edit.setMinimumWidth(300)
+            model_edit.setStyleSheet("QLineEdit { font-size: 13px; padding: 4px 6px; }")
             combo.currentIndexChanged.connect(lambda _i, c=combo, e=model_edit: self._sync_model_from_connection(c, e))
             self.routes_table.setCellWidget(row, 1, combo)
             self.routes_table.setCellWidget(row, 2, model_edit)
@@ -381,6 +405,34 @@ class ProjectSetupView(QWidget):
                 )
             )
         return self._draft_project_profile.model_copy(update={"routes": routes, "kind": WorkflowProfileKind.PROJECT_SPECIFIC})
+
+    def _on_custom_step_double_clicked(self, row: int, column: int) -> None:
+        if column != 0 or not self._is_custom_selected():
+            return
+        if row < 0 or row >= len(self._custom_rows) or self._draft_project_profile is None:
+            return
+        row_state = self._custom_rows[row]
+        if row_state.step_id not in self._ADVANCED_STEP_IDS:
+            return
+        route = next(route for route in self._draft_project_profile.routes if route.step_id is row_state.step_id).model_copy(
+            update={
+                "connection_id": self._current_combo_connection_id(row_state.connection_combo),
+                "connection_label": row_state.connection_combo.currentText().strip() or None,
+                "model": row_state.model_edit.text().strip() or None,
+                "step_config": dict(row_state.step_config),
+            }
+        )
+        dialog = StepAdvancedConfigDialog(route, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        updated = dialog.route()
+        row_state.step_config = dict(updated.step_config)
+        if updated.step_id is WorkflowStepId.TRANSLATOR_BATCH and updated.model is not None:
+            row_state.model_edit.setText(updated.model)
+
+    def _current_combo_connection_id(self, combo: QComboBox) -> str | None:
+        current = combo.currentData()
+        return str(current) if isinstance(current, str) and current else None
 
     def _infer_image_backend(self, connection_id: str | None, model: str | None) -> str | None:
         if self._state is None or not connection_id:

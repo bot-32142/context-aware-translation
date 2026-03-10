@@ -24,7 +24,8 @@ from context_aware_translation.application.events import InMemoryApplicationEven
 from tests.application.fakes import FakeProjectSetupService
 
 try:
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication, QDialog
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -122,6 +123,7 @@ def test_project_setup_view_renders_backend_state():
         assert view.title_label.text() == view.tr("Setup for One Piece")
         assert "shared workflow profile" in view.summary_label.text().lower()
         assert view.custom_profile_group.isHidden()
+        assert view.layout().alignment() == Qt.AlignmentFlag.AlignTop
         assert service.calls == [("get_state", "proj-1")]
     finally:
         view.cleanup()
@@ -180,6 +182,50 @@ def test_project_setup_view_can_select_custom_profile():
         )
         assert translator_route.connection_id == "conn-openai"
         assert translator_route.model == "gpt-4.1-mini"
+    finally:
+        view.cleanup()
+
+
+def test_project_setup_view_custom_step_double_click_opens_advanced_dialog():
+    from context_aware_translation.ui.features import project_setup_view as view_module
+    from context_aware_translation.ui.features.project_setup_view import ProjectSetupView
+
+    service = FakeProjectSetupService(state=_make_state())
+    bus = InMemoryApplicationEventBus()
+    view = ProjectSetupView("proj-1", service, bus)
+    try:
+        custom_index = view.shared_profile_combo.findData("__custom__")
+        view.shared_profile_combo.setCurrentIndex(custom_index)
+        translator_row = next(
+            index for index, row in enumerate(view._custom_rows) if row.step_id is WorkflowStepId.TRANSLATOR
+        )
+
+        opened: list[WorkflowStepId] = []
+
+        class _FakeStepDialog:
+            def __init__(self, route: WorkflowStepRoute, *_args, **_kwargs):
+                opened.append(route.step_id)
+                self._route = route.model_copy(update={"step_config": {"chunk_size": 1234}})
+
+            def exec(self):
+                return QDialog.DialogCode.Accepted
+
+            def route(self):
+                return self._route
+
+        original = view_module.StepAdvancedConfigDialog
+        view_module.StepAdvancedConfigDialog = _FakeStepDialog
+        try:
+            view._on_custom_step_double_clicked(translator_row, 0)
+            image_row = next(
+                index for index, row in enumerate(view._custom_rows) if row.step_id is WorkflowStepId.OCR
+            )
+            view._on_custom_step_double_clicked(image_row, 1)
+        finally:
+            view_module.StepAdvancedConfigDialog = original
+
+        assert opened == [WorkflowStepId.TRANSLATOR]
+        assert view._custom_rows[translator_row].step_config["chunk_size"] == 1234
     finally:
         view.cleanup()
 
