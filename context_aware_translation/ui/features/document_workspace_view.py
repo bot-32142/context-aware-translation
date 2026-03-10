@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QFormLayout,
-    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -21,13 +20,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from context_aware_translation.application.contracts.common import DocumentSection, SurfaceStatus, UserMessageSeverity
+from context_aware_translation.application.contracts.common import DocumentSection, UserMessageSeverity
 from context_aware_translation.application.contracts.document import (
     DocumentExportResult,
     DocumentExportState,
-    DocumentOverviewState,
 )
-from context_aware_translation.application.contracts.terms import BuildTermsRequest, TermsTableState, UpdateTermRequest
+from context_aware_translation.application.contracts.terms import (
+    BuildTermsRequest,
+    FilterNoiseRequest,
+    ReviewTermsRequest,
+    TermsTableState,
+    TranslatePendingTermsRequest,
+    UpdateTermRequest,
+)
 from context_aware_translation.application.contracts.work import ExportDialogState
 from context_aware_translation.application.errors import ApplicationError, BlockedOperationError
 from context_aware_translation.application.events import (
@@ -47,24 +52,6 @@ from context_aware_translation.ui.features.terms_table_widget import TermsTableW
 from context_aware_translation.ui.i18n import qarg
 from context_aware_translation.ui.utils import create_tip_label
 
-_STATUS_LABELS: dict[SurfaceStatus, str] = {
-    SurfaceStatus.READY: "Ready",
-    SurfaceStatus.RUNNING: "Running",
-    SurfaceStatus.BLOCKED: "Blocked",
-    SurfaceStatus.FAILED: "Failed",
-    SurfaceStatus.DONE: "Done",
-    SurfaceStatus.CANCELLED: "Cancelled",
-}
-
-_STATUS_COLORS: dict[SurfaceStatus, str] = {
-    SurfaceStatus.READY: "#2563eb",
-    SurfaceStatus.RUNNING: "#b45309",
-    SurfaceStatus.BLOCKED: "#b91c1c",
-    SurfaceStatus.FAILED: "#b91c1c",
-    SurfaceStatus.DONE: "#15803d",
-    SurfaceStatus.CANCELLED: "#6b7280",
-}
-
 _SECTION_LABELS: dict[DocumentSection, str] = {
     DocumentSection.OVERVIEW: "Overview",
     DocumentSection.OCR: "OCR",
@@ -73,15 +60,6 @@ _SECTION_LABELS: dict[DocumentSection, str] = {
     DocumentSection.IMAGES: "Images",
     DocumentSection.EXPORT: "Export",
 }
-
-
-class _StatusChip(QLabel):
-    def set_status(self, status: SurfaceStatus) -> None:
-        self.setText(self.tr(_STATUS_LABELS[status]))
-        color = _STATUS_COLORS[status]
-        self.setStyleSheet(
-            f"QLabel {{ background-color: {color}; color: white; border-radius: 10px; padding: 2px 8px; font-weight: 600; }}"
-        )
 
 
 class _ExportControls(QWidget):
@@ -110,6 +88,8 @@ class _ExportControls(QWidget):
 
         output_row = QHBoxLayout()
         self.output_path_edit = QLineEdit()
+        self.output_path_edit.setMinimumWidth(420)
+        self.output_path_edit.textChanged.connect(self._sync_output_tooltip)
         self.output_path_edit.textChanged.connect(lambda *_args: self.changed.emit())
         output_row.addWidget(self.output_path_edit, 1)
         self.browse_button = QPushButton(self.tr("Browse..."))
@@ -146,17 +126,28 @@ class _ExportControls(QWidget):
             self.format_combo.setCurrentIndex(default_index)
         self.format_combo.blockSignals(False)
 
-        self.preserve_structure_cb.setVisible(state.supports_preserve_structure)
+        self.preserve_structure_cb.setVisible(True)
+        self.preserve_structure_cb.setEnabled(state.supports_preserve_structure)
         if not state.supports_preserve_structure:
             self.preserve_structure_cb.setChecked(False)
-        self.allow_original_fallback_cb.setVisible(bool(state.incomplete_translation_message))
+            self.preserve_structure_cb.setToolTip(self.tr("Preserve folder structure is not supported for this export."))
+        else:
+            self.preserve_structure_cb.setToolTip("")
+        self.allow_original_fallback_cb.setVisible(True)
+        self.allow_original_fallback_cb.setEnabled(bool(state.incomplete_translation_message))
         if not state.incomplete_translation_message:
             self.allow_original_fallback_cb.setChecked(False)
+            self.allow_original_fallback_cb.setToolTip(
+                self.tr("Fallback to original content is only needed when translation is incomplete.")
+            )
+        else:
+            self.allow_original_fallback_cb.setToolTip(state.incomplete_translation_message)
 
         if not self.output_path_edit.text().strip():
             self.output_path_edit.setText(self._default_output_path)
         else:
             self._sync_output_path()
+        self._sync_output_tooltip()
         self.changed.emit()
 
     def can_submit(self, state: ExportDialogState | DocumentExportState) -> bool:
@@ -197,6 +188,13 @@ class _ExportControls(QWidget):
             self.output_path_edit.setText(str(Path(self._default_output_path).with_suffix(f".{format_id}")))
             return
         self.output_path_edit.setText(str(Path(current).with_suffix(f".{format_id}")))
+        self._sync_output_tooltip()
+
+    def _sync_output_tooltip(self) -> None:
+        text = self.output_path_edit.text().strip()
+        self.output_path_edit.setToolTip(text)
+        if text:
+            self.output_path_edit.setCursorPosition(0)
 
     def _browse_output(self) -> None:
         if self.preserve_structure_cb.isChecked():
@@ -292,61 +290,6 @@ class WorkExportDialog(QDialog):
         self.export_button.setEnabled(self.controls.can_submit(self._state) and bool(self.controls.output_path()))
 
 
-class _DocumentOverviewTab(QWidget):
-    def __init__(
-        self, service: DocumentService, project_id: str, document_id: int, *, parent: QWidget | None = None
-    ) -> None:
-        super().__init__(parent)
-        self._service = service
-        self._project_id = project_id
-        self._document_id = document_id
-        self._init_ui()
-
-    def _init_ui(self) -> None:
-        layout = QVBoxLayout(self)
-        self.tip_label = create_tip_label(
-            self.tr("Overview summarizes the current document and links the rest of the document-scoped tools."),
-        )
-        layout.addWidget(self.tip_label)
-        self.cards_host = QWidget()
-        self.cards_layout = QVBoxLayout(self.cards_host)
-        self.cards_layout.setContentsMargins(0, 0, 0, 0)
-        self.cards_layout.setSpacing(12)
-        layout.addWidget(self.cards_host)
-        layout.addStretch()
-
-    def refresh(self) -> None:
-        state = self._service.get_overview(self._project_id, self._document_id)
-        self._apply_state(state)
-
-    def _apply_state(self, state: DocumentOverviewState) -> None:
-        while self.cards_layout.count():
-            item = self.cards_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-        for section in state.sections:
-            card = QFrame()
-            card.setFrameShape(QFrame.Shape.StyledPanel)
-            card.setStyleSheet("QFrame { border: 1px solid #d8dee9; border-radius: 6px; }")
-            card_layout = QVBoxLayout(card)
-            title = QLabel(self.tr(_SECTION_LABELS[section.section]))
-            title.setStyleSheet("font-weight: 600;")
-            status = _StatusChip()
-            status.set_status(section.status)
-            summary = QLabel(section.summary)
-            summary.setWordWrap(True)
-            card_layout.addWidget(title)
-            card_layout.addWidget(status)
-            card_layout.addWidget(summary)
-            if section.blocker is not None:
-                blocker = create_tip_label(section.blocker.message)
-                blocker.setStyleSheet("QLabel { color: #b42318; }")
-                card_layout.addWidget(blocker)
-            self.cards_layout.addWidget(card)
-        self.cards_layout.addStretch(1)
-
-
 class _DocumentTermsTab(QWidget):
     def __init__(
         self,
@@ -369,6 +312,15 @@ class _DocumentTermsTab(QWidget):
         self.build_button = QPushButton(self.tr("Build Terms"))
         self.build_button.clicked.connect(self._on_build_terms)
         toolbar.addWidget(self.build_button)
+        self.translate_button = QPushButton(self.tr("Translate Untranslated"))
+        self.translate_button.clicked.connect(self._on_translate_terms)
+        toolbar.addWidget(self.translate_button)
+        self.review_button = QPushButton(self.tr("Review Terms"))
+        self.review_button.clicked.connect(self._on_review_terms)
+        toolbar.addWidget(self.review_button)
+        self.filter_noise_button = QPushButton(self.tr("Filter Rare"))
+        self.filter_noise_button.clicked.connect(self._on_filter_noise)
+        toolbar.addWidget(self.filter_noise_button)
         toolbar.addStretch()
         layout.addLayout(toolbar)
 
@@ -385,6 +337,24 @@ class _DocumentTermsTab(QWidget):
         self.build_button.setToolTip(
             state.toolbar.build_blocker.message if state.toolbar.build_blocker is not None else ""
         )
+        self.translate_button.setEnabled(state.toolbar.can_translate_pending)
+        self.translate_button.setToolTip(
+            state.toolbar.translate_pending_blocker.message
+            if state.toolbar.translate_pending_blocker is not None
+            else self.tr("Translate all currently untranslated glossary terms for this document.")
+        )
+        self.review_button.setEnabled(state.toolbar.can_review)
+        self.review_button.setToolTip(
+            state.toolbar.review_blocker.message
+            if state.toolbar.review_blocker is not None
+            else self.tr("Run the review pass for this document terms.")
+        )
+        self.filter_noise_button.setEnabled(state.toolbar.can_filter_noise)
+        self.filter_noise_button.setToolTip(
+            state.toolbar.filter_noise_blocker.message
+            if state.toolbar.filter_noise_blocker is not None
+            else self.tr("Ignore rare terms for this document.")
+        )
         self.table_panel.set_state(state)
 
     def _on_build_terms(self) -> None:
@@ -394,6 +364,52 @@ class _DocumentTermsTab(QWidget):
             QMessageBox.warning(self, self.tr("Build Terms Failed"), exc.payload.message)
             return
         self.table_panel.set_message(UserMessageSeverity.INFO, self.tr("Terms extraction queued for this document."))
+
+    def _on_translate_terms(self) -> None:
+        try:
+            accepted = self._service.translate_pending(
+                TranslatePendingTermsRequest(project_id=self._project_id, document_id=self._document_id)
+            )
+        except BlockedOperationError as exc:
+            QMessageBox.warning(self, self.tr("Translate Terms"), exc.payload.message)
+            return
+        except ApplicationError as exc:
+            QMessageBox.warning(self, self.tr("Translate Terms"), exc.payload.message)
+            return
+        self.table_panel.set_message(
+            UserMessageSeverity.INFO,
+            accepted.message.text if accepted.message is not None else self.tr("Terms translation queued."),
+        )
+
+    def _on_review_terms(self) -> None:
+        try:
+            accepted = self._service.review_terms(
+                ReviewTermsRequest(project_id=self._project_id, document_id=self._document_id)
+            )
+        except BlockedOperationError as exc:
+            QMessageBox.warning(self, self.tr("Review Terms"), exc.payload.message)
+            return
+        except ApplicationError as exc:
+            QMessageBox.warning(self, self.tr("Review Terms"), exc.payload.message)
+            return
+        self.table_panel.set_message(
+            UserMessageSeverity.INFO,
+            accepted.message.text if accepted.message is not None else self.tr("Terms review queued."),
+        )
+
+    def _on_filter_noise(self) -> None:
+        try:
+            state = self._service.filter_noise(FilterNoiseRequest(project_id=self._project_id, document_id=self._document_id))
+        except BlockedOperationError as exc:
+            QMessageBox.warning(self, self.tr("Filter Rare Terms"), exc.payload.message)
+            self.refresh()
+            return
+        except ApplicationError as exc:
+            QMessageBox.warning(self, self.tr("Filter Rare Terms"), exc.payload.message)
+            self.refresh()
+            return
+        self._apply_state(state)
+        self.table_panel.set_message(UserMessageSeverity.SUCCESS, self.tr("Rare document terms were filtered."))
 
     def _on_term_update_requested(self, request: UpdateTermRequest) -> None:
         try:
@@ -575,7 +591,7 @@ class DocumentWorkspaceView(QWidget):
     def _sync_tabs(self) -> None:
         if self._state is None:
             return
-        wanted_sections = list(self._state.available_tabs)
+        wanted_sections = [section for section in self._state.available_tabs if section is not DocumentSection.OVERVIEW]
         if list(self._tab_indexes.keys()) == wanted_sections:
             return
         while self.tab_widget.count():
@@ -591,8 +607,6 @@ class DocumentWorkspaceView(QWidget):
             self._tab_indexes[section] = self.tab_widget.addTab(widget, self.tr(_SECTION_LABELS[section]))
 
     def _make_tab_widget(self, section: DocumentSection) -> QWidget:
-        if section is DocumentSection.OVERVIEW:
-            return _DocumentOverviewTab(self._document_service, self._project_id, self._document_id, parent=self)
         if section is DocumentSection.OCR:
             return DocumentOCRTab(self._document_service, self._project_id, self._document_id, parent=self)
         if section is DocumentSection.TERMS:

@@ -5,6 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from context_aware_translation.application.contracts.common import (
+    ActionState,
     BlockerCode,
     BlockerInfo,
     DocumentRef,
@@ -21,9 +22,17 @@ from context_aware_translation.application.contracts.common import (
 )
 from context_aware_translation.application.contracts.document import (
     DocumentExportState,
+    DocumentImagesState,
+    DocumentOCRActions,
+    DocumentOCRState,
     DocumentOverviewState,
     DocumentSectionCard,
+    DocumentTranslationState,
     DocumentWorkspaceState,
+    OCRPageState,
+    TranslationUnitActionState,
+    TranslationUnitKind,
+    TranslationUnitState,
 )
 from context_aware_translation.application.contracts.terms import (
     TermsScope,
@@ -117,6 +126,34 @@ def _make_view(*, work_state: WorkboardState):
             available_formats=[ExportOption(format_id="txt", label="TXT", is_default=True)],
             default_output_path="/tmp/04.txt",
         ),
+        ocr=DocumentOCRState(
+            workspace=_make_workspace_state(active_tab=DocumentSection.OCR),
+            pages=[
+                OCRPageState(source_id=101, page_number=1, total_pages=1, status=SurfaceStatus.DONE, extracted_text="hello")
+            ],
+            current_page_index=0,
+            actions=DocumentOCRActions(save=ActionState(enabled=True), run_current=ActionState(enabled=True), run_pending=ActionState(enabled=True)),
+        ),
+        ocr_page_images={101: None},
+        translation=DocumentTranslationState(
+            workspace=_make_workspace_state(active_tab=DocumentSection.TRANSLATION),
+            units=[
+                TranslationUnitState(
+                    unit_id="1",
+                    unit_kind=TranslationUnitKind.CHUNK,
+                    label="Chunk 1",
+                    status=SurfaceStatus.READY,
+                    source_text="hello",
+                    translated_text="world",
+                    actions=TranslationUnitActionState(can_save=True, can_retranslate=True),
+                )
+            ],
+            current_unit_id="1",
+        ),
+        images=DocumentImagesState(
+            workspace=_make_workspace_state(active_tab=DocumentSection.IMAGES),
+            assets=[],
+        ),
     )
     terms_service = FakeTermsService(
         project_state=TermsTableState(
@@ -196,6 +233,23 @@ def test_work_view_opens_document_workspace_for_row_target():
         assert view._document_view is not None
         assert view.stack.currentWidget() is view._document_view
         assert view._document_view.tab_widget.tabText(view._document_view.tab_widget.currentIndex()) == "Translation"
+    finally:
+        view.cleanup()
+
+
+def test_work_view_routes_document_overview_to_first_real_document_tab():
+    action = DocumentRowAction(
+        kind=DocumentRowActionKind.OPEN,
+        label="Open",
+        target=NavigationTarget(kind=NavigationTargetKind.DOCUMENT_OVERVIEW, project_id="proj-1", document_id=4),
+    )
+    view, _bus, _work_service, _document_service, _terms_service = _make_view(
+        work_state=_make_workboard(action=action, summary="Open")
+    )
+    try:
+        view.rows_table.cellWidget(0, 4).click()
+        assert view._document_view is not None
+        assert view._document_view.tab_widget.tabText(view._document_view.tab_widget.currentIndex()) == "OCR"
     finally:
         view.cleanup()
 

@@ -26,6 +26,7 @@ from context_aware_translation.application.contracts.document import (
     DocumentWorkspaceState,
     RetranslateRequest,
     RunDocumentExportRequest,
+    RunDocumentTranslationRequest,
     RunImageReinsertionRequest,
     RunOCRRequest,
     SaveOCRPageRequest,
@@ -297,6 +298,10 @@ class FakeDocumentService:
         self.calls.append(("retranslate", request))
         return self.command_result or AcceptedCommand(command_name="retranslate")
 
+    def run_translation(self, request: RunDocumentTranslationRequest) -> AcceptedCommand:
+        self.calls.append(("run_translation", request))
+        return self.command_result or AcceptedCommand(command_name="run_translation")
+
     def get_images(self, project_id: str, document_id: int) -> DocumentImagesState:
         self.calls.append(("get_images", (project_id, document_id)))
         if self.images is None:
@@ -307,14 +312,18 @@ class FakeDocumentService:
         self.calls.append(("run_image_reinsertion", request))
         return self.command_result or AcceptedCommand(command_name="run_image_reinsertion")
 
+    def cancel_image_reinsertion(self, project_id: str, task_id: str) -> AcceptedCommand:
+        self.calls.append(("cancel_image_reinsertion", (project_id, task_id)))
+        return self.command_result or AcceptedCommand(command_name="cancel_image_reinsertion")
+
     def get_export(self, project_id: str, document_id: int) -> DocumentExportState:
         self.calls.append(("get_export", (project_id, document_id)))
         if self.export is None:
             raise NotImplementedError
         return self.export
 
-    def run_export(self, request: RunDocumentExportRequest) -> DocumentExportResult:
-        self.calls.append(("run_export", request))
+    def export_document(self, request: RunDocumentExportRequest) -> DocumentExportResult:
+        self.calls.append(("export_document", request))
         if self.export_result is None:
             raise NotImplementedError
         return self.export_result

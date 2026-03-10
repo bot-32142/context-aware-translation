@@ -34,6 +34,7 @@ from context_aware_translation.application.contracts.document import (
     OCRTextElement,
     RetranslateRequest,
     RunDocumentExportRequest,
+    RunDocumentTranslationRequest,
     RunImageReinsertionRequest,
     RunOCRRequest,
     SaveOCRPageRequest,
@@ -88,6 +89,8 @@ class DocumentService(Protocol):
     def save_translation(self, request: SaveTranslationRequest) -> DocumentTranslationState: ...
 
     def retranslate(self, request: RetranslateRequest) -> AcceptedCommand: ...
+
+    def run_translation(self, request: RunDocumentTranslationRequest) -> AcceptedCommand: ...
 
     def get_images(self, project_id: str, document_id: int) -> DocumentImagesState: ...
 
@@ -421,6 +424,24 @@ class DefaultDocumentService:
             request.project_id,
             chunk_id=int(request.unit_id),
             document_id=request.document_id,
+        )
+
+    def run_translation(self, request: RunDocumentTranslationRequest) -> AcceptedCommand:
+        with self._runtime.open_book_db(request.project_id) as dbx:
+            doc = dbx.document_repo.get_document_by_id(request.document_id)
+            if doc is None:
+                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Document not found: {request.document_id}")
+            document_type = str(doc.get("document_type") or "")
+        if document_type == "manga":
+            return self._runtime.submit_task(
+                "translation_manga",
+                request.project_id,
+                document_ids=[request.document_id],
+            )
+        return self._runtime.submit_task(
+            "translation_text",
+            request.project_id,
+            document_ids=[request.document_id],
         )
 
     def get_images(self, project_id: str, document_id: int) -> DocumentImagesState:

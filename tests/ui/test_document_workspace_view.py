@@ -17,6 +17,7 @@ from context_aware_translation.application.contracts.common import (
 from context_aware_translation.application.contracts.document import (
     DocumentExportResult,
     DocumentExportState,
+    DocumentImagesState,
     DocumentOCRActions,
     DocumentOCRState,
     DocumentOverviewState,
@@ -45,7 +46,7 @@ from context_aware_translation.application.events import (
 from tests.application.fakes import FakeDocumentService, FakeTermsService, FakeWorkService
 
 try:
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication, QMessageBox
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -85,7 +86,12 @@ def _make_terms_state() -> TermsTableState:
             project=ProjectRef(project_id="proj-1", name="One Piece"),
             document=DocumentRef(document_id=4, order_index=4, label="04.png"),
         ),
-        toolbar=TermsToolbarState(can_build=True),
+        toolbar=TermsToolbarState(
+            can_build=True,
+            can_translate_pending=True,
+            can_review=True,
+            can_filter_noise=True,
+        ),
         rows=[
             TermTableRow(
                 term_id=1,
@@ -170,6 +176,10 @@ def _make_view():
         ocr=_make_ocr_state(),
         ocr_page_images={101: None, 102: None},
         translation=_make_translation_state(),
+        images=DocumentImagesState(
+            workspace=_make_workspace_state().model_copy(update={"active_tab": DocumentSection.IMAGES}),
+            assets=[],
+        ),
         export=DocumentExportState(
             workspace=_make_workspace_state(),
             can_export=True,
@@ -189,7 +199,6 @@ def test_document_workspace_view_renders_shell_tabs():
         assert view.title_label.text() == "04.png"
         assert "current document" in view.tip_label.text().lower()
         assert [view.tab_widget.tabText(index) for index in range(view.tab_widget.count())] == [
-            "Overview",
             "OCR",
             "Terms",
             "Translation",
@@ -210,11 +219,19 @@ def test_document_workspace_terms_tab_uses_shared_terms_component():
         assert terms_tab.table_panel.proxy_model.rowCount() == 1
 
         terms_tab.build_button.click()
+        terms_tab.translate_button.click()
+        terms_tab.review_button.click()
+        with patch.object(QMessageBox, "warning") as mock_warning:
+            terms_tab.filter_noise_button.click()
+        mock_warning.assert_not_called()
         translation_item = terms_tab.table_panel.table_model.item(0, 1)
         translation_item.setText("Monkey D. Luffy")
 
         call_names = [name for name, _payload in terms_service.calls]
         assert "build_terms" in call_names
+        assert "translate_pending" in call_names
+        assert "review_terms" in call_names
+        assert "filter_noise" in call_names
         assert "update_term" in call_names
     finally:
         view.cleanup()
@@ -249,13 +266,16 @@ def test_document_workspace_translation_tab_uses_migrated_translation_widget():
         assert translation_tab is not None
         assert hasattr(translation_tab, "unit_list")
         assert translation_tab.unit_list.count() == 1
+        assert translation_tab.translate_button.isEnabled()
 
         translation_tab.translation_text.setPlainText("Everyone get down now!!!")
         translation_tab.save_button.click()
+        translation_tab.translate_button.click()
 
         call_names = [name for name, _payload in document_service.calls]
         assert "get_translation" in call_names
         assert "save_translation" in call_names
+        assert "run_translation" in call_names
     finally:
         view.cleanup()
 
@@ -304,6 +324,13 @@ def test_document_workspace_export_tab_runs_document_service():
             ],
         ),
         export=export_state,
+        translation=_make_translation_state(),
+        images=DocumentImagesState(
+            workspace=_make_workspace_state().model_copy(update={"active_tab": DocumentSection.IMAGES}),
+            assets=[],
+        ),
+        ocr=_make_ocr_state(),
+        ocr_page_images={101: None, 102: None},
         export_result=DocumentExportResult(
             document_id=4,
             output_path="/tmp/04.txt",

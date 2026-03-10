@@ -3,14 +3,15 @@ from __future__ import annotations
 import json
 import time
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from PySide6.QtWidgets import QApplication
 
 from context_aware_translation.application.composition import build_application_context
-from context_aware_translation.application.contracts.common import ProjectRef, SurfaceStatus
+from context_aware_translation.application.contracts.common import AcceptedCommand, ProjectRef, SurfaceStatus
 from context_aware_translation.application.contracts.document import (
     RetranslateRequest,
+    RunDocumentTranslationRequest,
     SaveTranslationRequest,
     TranslationUnitKind,
 )
@@ -250,6 +251,36 @@ def test_retranslate_manga_page_submits_scoped_translation_task(tmp_path) -> Non
             document_ids=[document_id],
             source_ids=[source_3],
             force=True,
+        )
+    finally:
+        context.close()
+
+
+def test_run_translation_submits_document_translation_task(tmp_path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    try:
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Text Doc", target_language="English")
+        )
+        project_id = created.project.project_id
+        document_id = _create_text_document(context, project_id)
+
+        service = context.services.document
+        with patch.object(
+            type(context.runtime),
+            "submit_task",
+            return_value=AcceptedCommand(command_name="translation_text", command_id="task-1"),
+        ) as mock_submit:
+            command = service.run_translation(
+                RunDocumentTranslationRequest(project_id=project_id, document_id=document_id)
+            )
+
+        assert command.command_name == "translation_text"
+        mock_submit.assert_called_once_with(
+            "translation_text",
+            project_id,
+            document_ids=[document_id],
         )
     finally:
         context.close()

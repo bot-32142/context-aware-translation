@@ -46,7 +46,6 @@ _STATUS_LABELS: dict[SurfaceStatus, str] = {
 }
 
 _TARGET_TO_SECTION: dict[NavigationTargetKind, DocumentSection] = {
-    NavigationTargetKind.DOCUMENT_OVERVIEW: DocumentSection.OVERVIEW,
     NavigationTargetKind.DOCUMENT_OCR: DocumentSection.OCR,
     NavigationTargetKind.DOCUMENT_TERMS: DocumentSection.TERMS,
     NavigationTargetKind.DOCUMENT_TRANSLATION: DocumentSection.TRANSLATION,
@@ -233,8 +232,10 @@ class WorkView(QWidget):
             return
         if action.target is None:
             return
-        section = _TARGET_TO_SECTION.get(action.target.kind)
-        if section is None or action.target.document_id is None:
+        if action.target.document_id is None:
+            return
+        section = self._section_for_target(action.target)
+        if section is None:
             return
         self._open_document_workspace(action.target.document_id, section)
 
@@ -273,10 +274,21 @@ class WorkView(QWidget):
         if target.kind is NavigationTargetKind.WORK:
             self._show_home()
             return
-        section = _TARGET_TO_SECTION.get(target.kind)
-        if section is None or target.document_id is None:
+        if target.document_id is None:
+            return
+        section = self._section_for_target(target)
+        if section is None:
             return
         self._open_document_workspace(target.document_id, section)
+
+    def _section_for_target(self, target: NavigationTarget) -> DocumentSection | None:
+        if target.kind is NavigationTargetKind.DOCUMENT_OVERVIEW:
+            workspace = self._document_service.get_workspace(self._project_id, target.document_id or 0)
+            for section in workspace.available_tabs:
+                if section is not DocumentSection.OVERVIEW:
+                    return section
+            return None
+        return _TARGET_TO_SECTION.get(target.kind)
 
     def _open_export_dialog(self, document_id: int) -> None:
         from context_aware_translation.application.contracts.work import PrepareExportRequest

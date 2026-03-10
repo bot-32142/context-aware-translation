@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QSpinBox,
     QSplitter,
     QTextEdit,
     QVBoxLayout,
@@ -62,20 +63,41 @@ class DocumentOCRTab(QWidget):
         layout.addWidget(splitter, 1)
 
         nav_row = QHBoxLayout()
+        self.first_button = QPushButton(self.tr("|<"), self)
+        self.first_button.clicked.connect(self._go_first)
+        nav_row.addWidget(self.first_button)
+
         self.prev_button = QPushButton(self.tr("Previous"), self)
         self.prev_button.clicked.connect(self._go_previous)
         nav_row.addWidget(self.prev_button)
 
-        self.page_combo = QComboBox(self)
-        self.page_combo.currentIndexChanged.connect(self._on_page_changed)
-        nav_row.addWidget(self.page_combo, 1)
+        self.page_label = QLabel(self.tr("Page 0 of 0"), self)
+        nav_row.addWidget(self.page_label)
+
+        self.page_status_label = QLabel(self)
+        nav_row.addWidget(self.page_status_label)
 
         self.next_button = QPushButton(self.tr("Next"), self)
         self.next_button.clicked.connect(self._go_next)
         nav_row.addWidget(self.next_button)
 
-        self.page_status_label = QLabel(self)
-        nav_row.addWidget(self.page_status_label)
+        self.last_button = QPushButton(self.tr(">|"), self)
+        self.last_button.clicked.connect(self._go_last)
+        nav_row.addWidget(self.last_button)
+
+        self.page_combo = QComboBox(self)
+        self.page_combo.hide()
+        self.page_combo.currentIndexChanged.connect(self._on_page_changed)
+
+        self.page_spinbox = QSpinBox(self)
+        self.page_spinbox.setMinimum(1)
+        self.page_spinbox.setMaximum(1)
+        self.page_spinbox.setFixedWidth(64)
+        nav_row.addWidget(self.page_spinbox)
+
+        self.go_button = QPushButton(self.tr("Go"), self)
+        self.go_button.clicked.connect(self._go_to_entered_page)
+        nav_row.addWidget(self.go_button)
         layout.addLayout(nav_row)
 
         action_row = QHBoxLayout()
@@ -142,7 +164,9 @@ class DocumentOCRTab(QWidget):
             self._current_page_index = None
             self.image_viewer.clear_image()
             self.text_edit.clear()
+            self.page_label.setText(self.tr("Page 0 of 0"))
             self.page_status_label.clear()
+            self.page_spinbox.setMaximum(1)
             self.empty_label.show()
             return
 
@@ -170,8 +194,14 @@ class DocumentOCRTab(QWidget):
         self.page_combo.blockSignals(False)
 
         page = self._state.pages[index]
+        total_pages = len(self._state.pages)
+        self.page_label.setText(self.tr("Page %1 of %2").replace("%1", str(index + 1)).replace("%2", str(total_pages)))
+        self.page_spinbox.setMaximum(total_pages)
+        self.page_spinbox.setValue(index + 1)
+        self.first_button.setEnabled(index > 0)
         self.prev_button.setEnabled(index > 0)
         self.next_button.setEnabled(index < len(self._state.pages) - 1)
+        self.last_button.setEnabled(index < len(self._state.pages) - 1)
         self.page_status_label.setText(page.status.value.replace("_", " ").title())
 
         try:
@@ -239,15 +269,30 @@ class DocumentOCRTab(QWidget):
             return
         self._set_current_page(self._current_page_index - 1)
 
+    def _go_first(self) -> None:
+        if self._state is None or not self._state.pages:
+            return
+        self._set_current_page(0)
+
     def _go_next(self) -> None:
         if self._current_page_index is None:
             return
         self._set_current_page(self._current_page_index + 1)
 
+    def _go_last(self) -> None:
+        if self._state is None or not self._state.pages:
+            return
+        self._set_current_page(len(self._state.pages) - 1)
+
     def _on_page_changed(self, index: int) -> None:
         if self._state is None or not self._state.pages:
             return
         self._set_current_page(index)
+
+    def _go_to_entered_page(self) -> None:
+        if self._state is None or not self._state.pages:
+            return
+        self._set_current_page(self.page_spinbox.value() - 1)
 
     def _save_current(self) -> None:
         page = self._current_page

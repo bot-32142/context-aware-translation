@@ -133,6 +133,11 @@ class RetranslateRequest(ContractModel):
     unit_id: str
 
 
+class RunDocumentTranslationRequest(ContractModel):
+    project_id: str
+    document_id: int
+
+
 class ImageAssetState(ContractModel):
     asset_id: str
     label: str

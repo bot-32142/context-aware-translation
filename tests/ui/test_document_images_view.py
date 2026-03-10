@@ -17,12 +17,20 @@ from context_aware_translation.application.contracts.common import (
     UserMessageSeverity,
 )
 from context_aware_translation.application.contracts.document import (
+    DocumentExportState,
     DocumentImagesState,
     DocumentImagesToolbarState,
+    DocumentOCRActions,
+    DocumentOCRState,
     DocumentOverviewState,
     DocumentSectionCard,
+    DocumentTranslationState,
     DocumentWorkspaceState,
     ImageAssetState,
+    OCRPageState,
+    TranslationUnitActionState,
+    TranslationUnitKind,
+    TranslationUnitState,
 )
 from context_aware_translation.application.contracts.terms import TermsScope, TermsScopeKind, TermsTableState
 from tests.application.fakes import FakeDocumentService, FakeTermsService, FakeWorkService
@@ -107,6 +115,7 @@ def test_document_images_view_renders_backend_state_and_runs_actions():
     service = FakeDocumentService(
         workspace=_workspace_state(),
         images=_images_state(),
+        ocr_page_images={101: b"image-1", 102: b"image-2"},
         command_result=AcceptedCommand(
             command_name="run_image_reinsertion",
             message=UserMessage(severity=UserMessageSeverity.INFO, text="Queued."),
@@ -116,8 +125,8 @@ def test_document_images_view_renders_backend_state_and_runs_actions():
     try:
         view.refresh()
 
-        assert view.assets_table.rowCount() == 2
-        assert view.assets_table.item(0, 0).text() == "Image 1"
+        assert view.page_label.text() == "Image 1 of 2"
+        assert view.status_label.text() == "Ready"
         assert view.text_panel.toPlainText() == "Everyone, get down now!!!"
         assert view.run_selected_button.isEnabled()
         assert view.run_pending_button.isEnabled()
@@ -149,6 +158,7 @@ def test_document_images_view_cancels_active_task():
     service = FakeDocumentService(
         workspace=_workspace_state(),
         images=_images_state(active_task_id="task-1"),
+        ocr_page_images={101: b"image-1", 102: b"image-2"},
         command_result=AcceptedCommand(
             command_name="cancel_image_reinsertion",
             message=UserMessage(severity=UserMessageSeverity.INFO, text="Cancel requested."),
@@ -191,6 +201,31 @@ def test_document_images_view_routes_setup_blocker_and_document_workspace_forwar
             ],
         ),
         images=_images_state(asset_blocker=blocker, toolbar_blocker=blocker),
+        ocr=DocumentOCRState(
+            workspace=_workspace_state(active_tab=DocumentSection.OCR),
+            pages=[OCRPageState(source_id=101, page_number=1, total_pages=1, status=SurfaceStatus.DONE, extracted_text="hello")],
+            current_page_index=0,
+            actions=DocumentOCRActions(),
+        ),
+        translation=DocumentTranslationState(
+            workspace=_workspace_state(active_tab=DocumentSection.TRANSLATION),
+            units=[
+                TranslationUnitState(
+                    unit_id="1",
+                    unit_kind=TranslationUnitKind.CHUNK,
+                    label="Chunk 1",
+                    status=SurfaceStatus.READY,
+                    source_text="hello",
+                    translated_text="world",
+                    actions=TranslationUnitActionState(can_save=True, can_retranslate=True),
+                )
+            ],
+            current_unit_id="1",
+        ),
+        export=DocumentExportState(
+            workspace=_workspace_state(active_tab=DocumentSection.EXPORT),
+            can_export=True,
+        ),
     )
     terms_service = FakeTermsService(
         project_state=TermsTableState(

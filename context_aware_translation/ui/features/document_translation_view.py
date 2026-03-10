@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
@@ -18,6 +20,7 @@ from context_aware_translation.application.contracts.common import SurfaceStatus
 from context_aware_translation.application.contracts.document import (
     DocumentTranslationState,
     RetranslateRequest,
+    RunDocumentTranslationRequest,
     SaveTranslationRequest,
     TranslationUnitKind,
     TranslationUnitState,
@@ -59,6 +62,7 @@ class DocumentTranslationView(QWidget):
         self._project_id = project_id
         self._document_id = document_id
         self._state: DocumentTranslationState | None = None
+        self._find_pos = 0
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -73,6 +77,13 @@ class DocumentTranslationView(QWidget):
         self.progress_label = QLabel()
         self.progress_label.setStyleSheet("color: #666666;")
         layout.addWidget(self.progress_label)
+
+        top_actions = QHBoxLayout()
+        self.translate_button = QPushButton(self.tr("Translate"))
+        self.translate_button.clicked.connect(self._translate_document)
+        top_actions.addWidget(self.translate_button)
+        top_actions.addStretch()
+        layout.addLayout(top_actions)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
@@ -109,6 +120,26 @@ class DocumentTranslationView(QWidget):
         self.translation_label = QLabel(self.tr("Translation"))
         self.translation_label.setStyleSheet("font-weight: 600;")
         right_layout.addWidget(self.translation_label)
+
+        find_replace_layout = QHBoxLayout()
+        self.find_input = QLineEdit()
+        self.find_input.setPlaceholderText(self.tr("Find..."))
+        self.find_input.textChanged.connect(self._on_find_text_changed)
+        self.find_input.returnPressed.connect(self._find_next)
+        self.replace_input = QLineEdit()
+        self.replace_input.setPlaceholderText(self.tr("Replace with..."))
+        self.find_next_button = QPushButton(self.tr("Find Next"))
+        self.find_next_button.clicked.connect(self._find_next)
+        self.replace_button = QPushButton(self.tr("Replace"))
+        self.replace_button.clicked.connect(self._replace_current)
+        self.replace_all_button = QPushButton(self.tr("Replace All"))
+        self.replace_all_button.clicked.connect(self._replace_all)
+        find_replace_layout.addWidget(self.find_input, 1)
+        find_replace_layout.addWidget(self.replace_input, 1)
+        find_replace_layout.addWidget(self.find_next_button)
+        find_replace_layout.addWidget(self.replace_button)
+        find_replace_layout.addWidget(self.replace_all_button)
+        right_layout.addLayout(find_replace_layout)
 
         self.translation_text = QTextEdit()
         right_layout.addWidget(self.translation_text, 1)
@@ -147,6 +178,7 @@ class DocumentTranslationView(QWidget):
     def _apply_state(self, state: DocumentTranslationState, *, previous_unit_id: str | None) -> None:
         self._state = state
         self.progress_label.setText(self._progress_text(state))
+        self.translate_button.setEnabled(state.active_task_id is None and bool(state.units))
         self.unit_list.blockSignals(True)
         self.unit_list.clear()
         selected_row = 0
@@ -178,11 +210,14 @@ class DocumentTranslationView(QWidget):
             self.source_text.clear()
             self.translation_text.clear()
             self.translation_text.setReadOnly(True)
+            self._clear_find_highlight()
             self.line_hint.hide()
             self.save_button.setEnabled(False)
             self.retranslate_button.setEnabled(False)
             return
 
+        self._find_pos = 0
+        self._clear_find_highlight()
         self.selection_label.setText(f"{unit.label} · {self.tr(_STATUS_TEXT[unit.status])}")
         self.source_text.setPlainText(unit.source_text or "")
         self.translation_text.setPlainText(unit.translated_text or "")
@@ -275,6 +310,25 @@ class DocumentTranslationView(QWidget):
         else:
             self._set_message(UserMessageSeverity.INFO, self.tr("Retranslate queued."))
 
+    def _translate_document(self) -> None:
+        try:
+            command = self._service.run_translation(
+                RunDocumentTranslationRequest(project_id=self._project_id, document_id=self._document_id)
+            )
+        except BlockedOperationError as exc:
+            QMessageBox.information(self, self.tr("Translate Unavailable"), exc.payload.message)
+            self.refresh()
+            return
+        except ApplicationError as exc:
+            QMessageBox.warning(self, self.tr("Translate Failed"), exc.payload.message)
+            self.refresh()
+            return
+        self.refresh()
+        if command.message is not None:
+            self._set_message(command.message.severity, command.message.text)
+        else:
+            self._set_message(UserMessageSeverity.INFO, self.tr("Translation queued."))
+
     def _set_message(self, severity: UserMessageSeverity, text: str) -> None:
         color = {
             UserMessageSeverity.SUCCESS: "#15803d",
@@ -300,6 +354,57 @@ class DocumentTranslationView(QWidget):
         if state.active_task_id is not None:
             parts.append(self.tr("Active task: %1").replace("%1", state.active_task_id))
         return " | ".join(parts)
+
+    def _on_find_text_changed(self, _text: str) -> None:
+        self._find_pos = 0
+        self._clear_find_highlight()
+
+    def _find_next(self) -> None:
+        search_text = self.find_input.text()
+        if not search_text:
+            return
+        self._clear_find_highlight()
+        text = self.translation_text.toPlainText()
+        start = self._find_pos
+        pos = text.find(search_text, start)
+        if pos < 0 and start > 0:
+            pos = text.find(search_text, 0)
+        if pos < 0:
+            return
+        self._find_pos = pos + len(search_text)
+        cursor = self.translation_text.textCursor()
+        cursor.setPosition(pos)
+        cursor.setPosition(pos + len(search_text), QTextCursor.MoveMode.KeepAnchor)
+        self.translation_text.setTextCursor(cursor)
+        extra = QTextEdit.ExtraSelection()
+        extra.cursor = cursor
+        fmt = QTextCharFormat()
+        fmt.setBackground(Qt.GlobalColor.yellow)
+        extra.format = fmt
+        self.translation_text.setExtraSelections([extra])
+
+    def _replace_current(self) -> None:
+        search_text = self.find_input.text()
+        if not search_text:
+            return
+        cursor = self.translation_text.textCursor()
+        if cursor.hasSelection() and cursor.selectedText() == search_text:
+            cursor.insertText(self.replace_input.text())
+            self._find_pos = cursor.position()
+        self._find_next()
+
+    def _replace_all(self) -> None:
+        search_text = self.find_input.text()
+        if not search_text:
+            return
+        self.translation_text.setPlainText(
+            self.translation_text.toPlainText().replace(search_text, self.replace_input.text())
+        )
+        self._find_pos = 0
+        self._clear_find_highlight()
+
+    def _clear_find_highlight(self) -> None:
+        self.translation_text.setExtraSelections([])
 
 
 __all__ = ["DocumentTranslationView"]

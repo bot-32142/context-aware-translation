@@ -89,17 +89,20 @@ def test_document_translation_view_renders_units_and_routes_actions():
     try:
         view.refresh()
         assert view.unit_list.count() == 2
+        assert view.translate_button.isEnabled()
         assert view.save_button.isEnabled()
         assert view.retranslate_button.isEnabled()
         assert "Line count must stay at 2" in view.line_hint.text()
 
         view.translation_text.setPlainText("One\nTwo updated")
         view.save_button.click()
+        view.translate_button.click()
 
         with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
             view.retranslate_button.click()
 
         call_names = [name for name, _payload in service.calls]
+        assert "run_translation" in call_names
         assert "save_translation" in call_names
         assert "retranslate" in call_names
     finally:
