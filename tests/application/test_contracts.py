@@ -269,10 +269,10 @@ def test_recommended_workflow_profile_uses_ranked_step_rules() -> None:
     route_map = {route.step_id: route for route in detail.routes}
     assert route_map[WorkflowStepId.EXTRACTOR].model == "deepseek-chat"
     assert route_map[WorkflowStepId.SUMMARIZER].model == "deepseek-chat"
-    assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].model == "gemini-2.5-flash-lite"
+    assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].model == "gemini-2.5-flash"
     assert route_map[WorkflowStepId.TRANSLATOR].model == "gemini-2.5-pro"
     assert route_map[WorkflowStepId.REVIEWER].model == "gemini-2.5-pro"
-    assert route_map[WorkflowStepId.OCR].model == "gemini-2.5-flash-lite"
+    assert route_map[WorkflowStepId.OCR].model == "gemini-3-flash-preview"
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].model == "gemini-3.1-flash-image-preview"
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].step_config["backend"] == "gemini"
     assert route_map[WorkflowStepId.MANGA_TRANSLATOR].model == "gemini-2.5-pro"
