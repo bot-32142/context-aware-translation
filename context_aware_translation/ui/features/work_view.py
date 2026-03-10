@@ -234,7 +234,11 @@ class WorkView(QWidget):
         self.select_files_button.setText(self.tr("Select Files"))
         self.select_folder_button.setText(self.tr("Select Folder"))
         self.import_button.setText(self.tr("Import"))
-        self.import_summary_label.setText(self.tr("No file or folder selected") if not self._selected_import_paths else self.import_summary_label.text())
+        self.import_summary_label.setText(
+            self.tr("No file or folder selected")
+            if not self._selected_import_paths
+            else self.import_summary_label.text()
+        )
         self.rows_table.setHorizontalHeaderLabels(
             [
                 self.tr("#"),
@@ -329,7 +333,9 @@ class WorkView(QWidget):
 
     def _inspect_import_paths(self, paths: list[str]) -> None:
         self._selected_import_paths = list(paths)
-        state = self._work_service.inspect_import_paths(InspectImportPathsRequest(project_id=self._project_id, paths=paths))
+        state = self._work_service.inspect_import_paths(
+            InspectImportPathsRequest(project_id=self._project_id, paths=paths)
+        )
         self.import_type_combo.clear()
         for option in state.available_types:
             self.import_type_combo.addItem(option.label, option.document_type)

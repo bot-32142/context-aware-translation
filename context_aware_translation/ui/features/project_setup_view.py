@@ -188,7 +188,9 @@ class ProjectSetupView(QWidget):
     def _effective_profile(self) -> WorkflowProfileDetail | None:
         if self._is_custom_selected():
             return self._draft_project_profile or (self._state.project_profile if self._state is not None else None)
-        return self._current_shared_profile() or (self._state.selected_shared_profile if self._state is not None else None)
+        return self._current_shared_profile() or (
+            self._state.selected_shared_profile if self._state is not None else None
+        )
 
     def _render_effective_profile(self) -> None:
         profile = self._effective_profile()
@@ -294,7 +296,11 @@ class ProjectSetupView(QWidget):
         base_profile = self._current_shared_profile()
         if base_profile is None:
             base_profile = next(
-                (profile for profile in self._state.shared_profiles if profile.profile_id == self._last_shared_profile_id),
+                (
+                    profile
+                    for profile in self._state.shared_profiles
+                    if profile.profile_id == self._last_shared_profile_id
+                ),
                 (self._state.shared_profiles[0] if self._state.shared_profiles else None),
             )
         if base_profile is None:
@@ -313,14 +319,20 @@ class ProjectSetupView(QWidget):
         if self._state is None or self._custom_base_profile_id is None:
             return self.tr("the selected shared profile")
         return next(
-            (profile.name for profile in self._state.shared_profiles if profile.profile_id == self._custom_base_profile_id),
+            (
+                profile.name
+                for profile in self._state.shared_profiles
+                if profile.profile_id == self._custom_base_profile_id
+            ),
             self.tr("the selected shared profile"),
         )
 
     def _build_custom_profile(self) -> WorkflowProfileDetail:
         assert self._draft_project_profile is not None
         routes = self.routes_editor.build_routes()
-        return self._draft_project_profile.model_copy(update={"routes": routes, "kind": WorkflowProfileKind.PROJECT_SPECIFIC})
+        return self._draft_project_profile.model_copy(
+            update={"routes": routes, "kind": WorkflowProfileKind.PROJECT_SPECIFIC}
+        )
 
     def _connection_choices(self) -> list[ConnectionChoice]:
         if self._state is None:

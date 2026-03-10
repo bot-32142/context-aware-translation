@@ -165,7 +165,9 @@ def test_app_setup_view_add_delete_test_and_edit_profile_calls_service():
 
     with (
         patch("context_aware_translation.ui.features.app_setup_view.ConnectionEditorDialog", _FakeConnectionDialog),
-        patch("context_aware_translation.ui.features.app_setup_view.WorkflowProfileEditorDialog", _FakeProfileEditorDialog),
+        patch(
+            "context_aware_translation.ui.features.app_setup_view.WorkflowProfileEditorDialog", _FakeProfileEditorDialog
+        ),
         patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes),
     ):
         view._on_add_connection()
@@ -529,7 +531,9 @@ def test_connection_editor_dialog_tests_inside_dialog():
     dialog = ConnectionEditorDialog(
         test_callback=lambda draft: (
             seen.append(draft),
-            ConnectionTestResult(connection_label=draft.display_name, supported_capabilities=[CapabilityCode.TRANSLATION]),
+            ConnectionTestResult(
+                connection_label=draft.display_name, supported_capabilities=[CapabilityCode.TRANSLATION]
+            ),
         )[1]
     )
     dialog.form.display_name_edit.setText("Gemini")

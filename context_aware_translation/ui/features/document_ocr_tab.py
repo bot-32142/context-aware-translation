@@ -78,9 +78,7 @@ class _StructuredElementCard(QFrame):
     def _apply_style(self) -> None:
         border = "#f79009" if self._selected else "#d0d5dd"
         background = "#fff7ed" if self._selected else "#ffffff"
-        self.setStyleSheet(
-            f"QFrame {{ border: 2px solid {border}; border-radius: 6px; background: {background}; }}"
-        )
+        self.setStyleSheet(f"QFrame {{ border: 2px solid {border}; border-radius: 6px; background: {background}; }}")
 
     @staticmethod
     def _title_text(element: OCRTextElement) -> str:

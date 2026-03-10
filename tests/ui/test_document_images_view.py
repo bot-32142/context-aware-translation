@@ -203,7 +203,11 @@ def test_document_images_view_routes_setup_blocker_and_document_workspace_forwar
         images=_images_state(asset_blocker=blocker, toolbar_blocker=blocker),
         ocr=DocumentOCRState(
             workspace=_workspace_state(active_tab=DocumentSection.OCR),
-            pages=[OCRPageState(source_id=101, page_number=1, total_pages=1, status=SurfaceStatus.DONE, extracted_text="hello")],
+            pages=[
+                OCRPageState(
+                    source_id=101, page_number=1, total_pages=1, status=SurfaceStatus.DONE, extracted_text="hello"
+                )
+            ],
             current_page_index=0,
             actions=DocumentOCRActions(),
         ),

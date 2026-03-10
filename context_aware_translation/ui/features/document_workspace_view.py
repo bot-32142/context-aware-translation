@@ -130,7 +130,9 @@ class _ExportControls(QWidget):
         self.preserve_structure_cb.setEnabled(state.supports_preserve_structure)
         if not state.supports_preserve_structure:
             self.preserve_structure_cb.setChecked(False)
-            self.preserve_structure_cb.setToolTip(self.tr("Preserve folder structure is not supported for this export."))
+            self.preserve_structure_cb.setToolTip(
+                self.tr("Preserve folder structure is not supported for this export.")
+            )
         else:
             self.preserve_structure_cb.setToolTip("")
         self.allow_original_fallback_cb.setVisible(True)
@@ -399,7 +401,9 @@ class _DocumentTermsTab(QWidget):
 
     def _on_filter_noise(self) -> None:
         try:
-            state = self._service.filter_noise(FilterNoiseRequest(project_id=self._project_id, document_id=self._document_id))
+            state = self._service.filter_noise(
+                FilterNoiseRequest(project_id=self._project_id, document_id=self._document_id)
+            )
         except BlockedOperationError as exc:
             QMessageBox.warning(self, self.tr("Filter Rare Terms"), exc.payload.message)
             self.refresh()

@@ -443,7 +443,9 @@ class WorkflowRoutesEditor(QWidget):
         header_height = self.table.horizontalHeader().height()
         frame_height = self.table.frameWidth() * 2
         row_heights = [self.table.rowHeight(index) for index in range(self.table.rowCount())]
-        visible_rows = len(row_heights) if self._max_visible_rows is None else min(len(row_heights), self._max_visible_rows)
+        visible_rows = (
+            len(row_heights) if self._max_visible_rows is None else min(len(row_heights), self._max_visible_rows)
+        )
         visible_height = sum(row_heights[:visible_rows])
         self.table.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
@@ -544,9 +546,7 @@ class WorkflowProfileEditorDialog(QDialog):
         self.routes_section.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         layout.addWidget(self.routes_section)
 
-        footer = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
-        )
+        footer = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         footer.accepted.connect(self._accept_if_valid)
         footer.rejected.connect(self.reject)
         layout.addWidget(footer)

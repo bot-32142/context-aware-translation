@@ -89,7 +89,9 @@ def test_import_worker_late_interrupt_still_emits_success(monkeypatch: pytest.Mo
         "context_aware_translation.ui.workers.import_worker.DocumentRepository",
         lambda *_a, **_k: fake_repo,
     )
-    monkeypatch.setattr("context_aware_translation.workflow.ops.import_support.get_document_classes", lambda: [_TextDoc])
+    monkeypatch.setattr(
+        "context_aware_translation.workflow.ops.import_support.get_document_classes", lambda: [_TextDoc]
+    )
 
     success, cancelled, errors = _capture_signals(worker)
     worker.run()
@@ -137,7 +139,9 @@ def test_import_worker_multiple_files_imports_as_staged_folder(monkeypatch: pyte
         "context_aware_translation.ui.workers.import_worker.DocumentRepository",
         lambda *_a, **_k: fake_repo,
     )
-    monkeypatch.setattr("context_aware_translation.workflow.ops.import_support.get_document_classes", lambda: [_FolderDoc])
+    monkeypatch.setattr(
+        "context_aware_translation.workflow.ops.import_support.get_document_classes", lambda: [_FolderDoc]
+    )
 
     success, cancelled, errors = _capture_signals(worker)
     worker.run()
@@ -231,7 +235,9 @@ def test_import_worker_does_not_emit_success_when_import_fails(monkeypatch: pyte
         "context_aware_translation.ui.workers.import_worker.DocumentRepository",
         lambda *_a, **_k: fake_repo,
     )
-    monkeypatch.setattr("context_aware_translation.workflow.ops.import_support.get_document_classes", lambda: [_TextDoc])
+    monkeypatch.setattr(
+        "context_aware_translation.workflow.ops.import_support.get_document_classes", lambda: [_TextDoc]
+    )
 
     success, cancelled, errors = _capture_signals(worker)
     worker.run()

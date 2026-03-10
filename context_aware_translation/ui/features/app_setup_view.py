@@ -259,7 +259,9 @@ class ConnectionDraftForm(QWidget):
             concurrency=int(self.concurrency_spin.value()),
             token_limit=(int(self.total_limit_spin.value()) if self.total_limit_checkbox.isChecked() else None),
             input_token_limit=(int(self.input_limit_spin.value()) if self.input_limit_checkbox.isChecked() else None),
-            output_token_limit=(int(self.output_limit_spin.value()) if self.output_limit_checkbox.isChecked() else None),
+            output_token_limit=(
+                int(self.output_limit_spin.value()) if self.output_limit_checkbox.isChecked() else None
+            ),
             custom_parameters_json=self.custom_parameters_edit.toPlainText().strip() or None,
         )
 
@@ -411,7 +413,9 @@ class ConnectionEditorDialog(QDialog):
 
 
 class SetupWizardDialog(QDialog):
-    def __init__(self, service: AppSetupService, initial_state: SetupWizardState, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, service: AppSetupService, initial_state: SetupWizardState, parent: QWidget | None = None
+    ) -> None:
         super().__init__(parent)
         self._service = service
         self._wizard_state = initial_state
@@ -569,9 +573,7 @@ class SetupWizardDialog(QDialog):
             for provider, api_key_edit in self._provider_api_key_edits.items()
             if provider in self.selected_providers()
         ]
-        self._wizard_state = self._wizard_state.model_copy(
-            update={"drafts": drafts}
-        )
+        self._wizard_state = self._wizard_state.model_copy(update={"drafts": drafts})
 
     def final_request(self) -> SetupWizardRequest | None:
         if self._preview_state is None:
@@ -619,7 +621,9 @@ class SetupWizardDialog(QDialog):
         request = self.final_request()
         if request is None:
             QMessageBox.warning(
-                self, self.tr("Wizard Incomplete"), self.tr("Review the recommended workflow profile before saving setup.")
+                self,
+                self.tr("Wizard Incomplete"),
+                self.tr("Review the recommended workflow profile before saving setup."),
             )
             return
         if not (request.profile_name or "").strip():
@@ -721,9 +725,7 @@ class AppSetupView(QWidget):
         profiles_toolbar.addStretch()
         profiles_layout.addLayout(profiles_toolbar)
         self.profiles_table = QTableWidget(0, 3)
-        self.profiles_table.setHorizontalHeaderLabels(
-            [self.tr("Name"), self.tr("Target language"), self.tr("Default")]
-        )
+        self.profiles_table.setHorizontalHeaderLabels([self.tr("Name"), self.tr("Target language"), self.tr("Default")])
         self.profiles_table.verticalHeader().setVisible(False)
         self.profiles_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.profiles_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -779,9 +781,7 @@ class AppSetupView(QWidget):
         self.profiles_group.setTitle(self.tr("Shared workflow profiles"))
         self.duplicate_profile_button.setText(self.tr("Duplicate"))
         self.delete_profile_button.setText(self.tr("Delete"))
-        self.profiles_table.setHorizontalHeaderLabels(
-            [self.tr("Name"), self.tr("Target language"), self.tr("Default")]
-        )
+        self.profiles_table.setHorizontalHeaderLabels([self.tr("Name"), self.tr("Target language"), self.tr("Default")])
         if self._state is not None:
             self.summary_label.setText(self._summary_text(self._state))
             self._populate_profiles(self._state)
@@ -796,9 +796,7 @@ class AppSetupView(QWidget):
                 self.connections_table, row, 0, connection.display_name, connection.connection_id
             )
             if connection.is_managed:
-                name_item.setToolTip(
-                    self.tr("Managed by the setup wizard. Duplicate it if you need an editable copy.")
-                )
+                name_item.setToolTip(self.tr("Managed by the setup wizard. Duplicate it if you need an editable copy."))
             self._set_table_item(
                 self.connections_table, row, 1, _PROVIDER_LABELS.get(connection.provider, connection.provider.value)
             )
@@ -916,7 +914,9 @@ class AppSetupView(QWidget):
         result = QMessageBox.question(
             self,
             self.tr("Delete Connection"),
-            self.tr("Delete the selected connection? Existing profiles or projects may stop working until setup is fixed."),
+            self.tr(
+                "Delete the selected connection? Existing profiles or projects may stop working until setup is fixed."
+            ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )

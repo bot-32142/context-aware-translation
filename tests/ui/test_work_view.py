@@ -156,10 +156,16 @@ def _make_view(*, work_state: WorkboardState):
         ocr=DocumentOCRState(
             workspace=_make_workspace_state(active_tab=DocumentSection.OCR),
             pages=[
-                OCRPageState(source_id=101, page_number=1, total_pages=1, status=SurfaceStatus.DONE, extracted_text="hello")
+                OCRPageState(
+                    source_id=101, page_number=1, total_pages=1, status=SurfaceStatus.DONE, extracted_text="hello"
+                )
             ],
             current_page_index=0,
-            actions=DocumentOCRActions(save=ActionState(enabled=True), run_current=ActionState(enabled=True), run_pending=ActionState(enabled=True)),
+            actions=DocumentOCRActions(
+                save=ActionState(enabled=True),
+                run_current=ActionState(enabled=True),
+                run_pending=ActionState(enabled=True),
+            ),
         ),
         ocr_page_images={101: None},
         translation=DocumentTranslationState(
@@ -351,8 +357,14 @@ def test_work_view_inspects_paths_and_imports_document():
 
         view.import_button.click()
 
-        assert ("inspect_import_paths", InspectImportPathsRequest(project_id="proj-1", paths=["/tmp/04.png"])) in work_service.calls
-        assert ("import_documents", ImportDocumentsRequest(project_id="proj-1", paths=["/tmp/04.png"], document_type="manga")) in work_service.calls
+        assert (
+            "inspect_import_paths",
+            InspectImportPathsRequest(project_id="proj-1", paths=["/tmp/04.png"]),
+        ) in work_service.calls
+        assert (
+            "import_documents",
+            ImportDocumentsRequest(project_id="proj-1", paths=["/tmp/04.png"], document_type="manga"),
+        ) in work_service.calls
         assert view.import_summary_label.text() == "No file or folder selected"
     finally:
         view.cleanup()
@@ -372,15 +384,24 @@ def test_work_view_reset_and_delete_selected_document():
     try:
         view.rows_table.selectRow(0)
         with (
-            patch("context_aware_translation.ui.features.work_view.QMessageBox.warning", return_value=QMessageBox.StandardButton.Yes),
+            patch(
+                "context_aware_translation.ui.features.work_view.QMessageBox.warning",
+                return_value=QMessageBox.StandardButton.Yes,
+            ),
             patch("context_aware_translation.ui.features.work_view.QMessageBox.information"),
         ):
             view.reset_document_button.click()
             view.rows_table.selectRow(0)
             view.delete_document_button.click()
 
-        assert ("reset_document_stack", ResetDocumentStackRequest(project_id="proj-1", document_id=4)) in work_service.calls
-        assert ("delete_document_stack", DeleteDocumentStackRequest(project_id="proj-1", document_id=4)) in work_service.calls
+        assert (
+            "reset_document_stack",
+            ResetDocumentStackRequest(project_id="proj-1", document_id=4),
+        ) in work_service.calls
+        assert (
+            "delete_document_stack",
+            DeleteDocumentStackRequest(project_id="proj-1", document_id=4),
+        ) in work_service.calls
     finally:
         view.cleanup()
 

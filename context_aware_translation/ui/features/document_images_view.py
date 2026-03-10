@@ -62,7 +62,9 @@ class DocumentImagesView(QWidget):
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
         self.tip_label = create_tip_label(
-            self.tr("Image actions are explicit. Review one image, reinsert pending images, or rerun everything for this document.")
+            self.tr(
+                "Image actions are explicit. Review one image, reinsert pending images, or rerun everything for this document."
+            )
         )
         layout.addWidget(self.tip_label)
 
@@ -179,7 +181,9 @@ class DocumentImagesView(QWidget):
 
     def refresh(self) -> None:
         previous_asset_id = self._selected_asset_id()
-        self._apply_state(self._service.get_images(self._project_id, self._document_id), previous_asset_id=previous_asset_id)
+        self._apply_state(
+            self._service.get_images(self._project_id, self._document_id), previous_asset_id=previous_asset_id
+        )
 
     def get_running_operations(self) -> list[str]:
         if self._state is not None and self._state.active_task_id is not None:
@@ -310,7 +314,9 @@ class DocumentImagesView(QWidget):
             label = state.progress.label or self.tr("Processing")
             self.progress_label.setText(f"{label}: {state.progress.current}/{state.progress.total}")
         else:
-            self.progress_label.setText(state.progress.label or self.tr("Image reinsertion is running for this document."))
+            self.progress_label.setText(
+                state.progress.label or self.tr("Image reinsertion is running for this document.")
+            )
         self.progress_label.show()
 
     def _update_action_buttons(self) -> None:
@@ -465,7 +471,9 @@ class DocumentImagesView(QWidget):
             self._set_message(exc.payload.message)
             self.refresh()
             return
-        self._set_message(result.message.text if result.message is not None else self.tr("Pending image reinsertion queued."))
+        self._set_message(
+            result.message.text if result.message is not None else self.tr("Pending image reinsertion queued.")
+        )
         self.refresh()
 
     def _force_all(self) -> None:
@@ -482,7 +490,9 @@ class DocumentImagesView(QWidget):
             self._set_message(exc.payload.message)
             self.refresh()
             return
-        self._set_message(result.message.text if result.message is not None else self.tr("Full image reinsertion queued."))
+        self._set_message(
+            result.message.text if result.message is not None else self.tr("Full image reinsertion queued.")
+        )
         self.refresh()
 
     def _cancel(self) -> None:

@@ -394,7 +394,9 @@ class DefaultWorkService:
             self._raise_blocked_blocker(blocker, project_id=request.project_id, document_id=request.document_id)
         context_tree_path = self._runtime.book_manager.get_book_context_tree_path(request.project_id)
         with self._runtime.open_book_db(request.project_id) as dbx:
-            result = dbx.document_repo.delete_documents_stack(request.document_id, context_tree_db_path=context_tree_path)
+            result = dbx.document_repo.delete_documents_stack(
+                request.document_id, context_tree_db_path=context_tree_path
+            )
         self._runtime.invalidate_workboard(request.project_id)
         self._runtime.invalidate_terms(request.project_id)
         self._runtime.invalidate_document(request.project_id)

@@ -30,6 +30,7 @@ except ImportError:  # pragma: no cover - environment dependent
 
 pytestmark = pytest.mark.skipif(not HAS_PYSIDE6, reason="PySide6 not available")
 
+
 @pytest.fixture(autouse=True, scope="module")
 def _qapp():
     app = QApplication.instance()
@@ -91,7 +92,9 @@ def test_document_ocr_tab_uses_structured_editor_and_bbox_overlay():
                 )
             ],
             current_page_index=0,
-            actions=DocumentOCRActions(save={"enabled": True}, run_current={"enabled": True}, run_pending={"enabled": True}),
+            actions=DocumentOCRActions(
+                save={"enabled": True}, run_current={"enabled": True}, run_pending={"enabled": True}
+            ),
         ),
         ocr_page_images={101: _png_1x1()},
     )
@@ -125,7 +128,9 @@ def test_document_ocr_tab_saves_structured_elements():
             workspace=_workspace_state(),
             pages=[page],
             current_page_index=0,
-            actions=DocumentOCRActions(save={"enabled": True}, run_current={"enabled": True}, run_pending={"enabled": True}),
+            actions=DocumentOCRActions(
+                save={"enabled": True}, run_current={"enabled": True}, run_pending={"enabled": True}
+            ),
         ),
         ocr_page_images={101: _png_1x1()},
         command_result=AcceptedCommand(

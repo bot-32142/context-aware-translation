@@ -261,7 +261,9 @@ class DefaultAppSetupService:
         preview = self.preview_setup_wizard(request)
         recommendation = preview.recommendation
         if recommendation is None:
-            raise_application_error(ApplicationErrorCode.PRECONDITION, "Setup wizard did not produce a workflow profile.")
+            raise_application_error(
+                ApplicationErrorCode.PRECONDITION, "Setup wizard did not produce a workflow profile."
+            )
 
         saved_ids: dict[str, str] = {}
         for draft in expand_wizard_connection_drafts(request.connections):

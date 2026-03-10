@@ -133,7 +133,9 @@ def resolve_imported_document_id(
     if imported_count <= 0:
         return None
     after_documents = repo.list_documents()
-    new_ids = sorted(int(doc["document_id"]) for doc in after_documents if int(doc["document_id"]) not in existing_document_ids)
+    new_ids = sorted(
+        int(doc["document_id"]) for doc in after_documents if int(doc["document_id"]) not in existing_document_ids
+    )
     if not new_ids:
         return None
     return new_ids[-1]
@@ -184,14 +186,17 @@ def import_via_repository(
                 raise ValueError("Cannot import path: no supported document type matches.")
 
         document_class = matches[0]
+        import_method = getattr(document_class, "do_import", None)
+        if not callable(import_method):
+            raise ValueError(f"Document type {document_class.__name__} does not support import.")
         kwargs: dict[str, Any] = {"cancel_check": cancel_check}
         try:
-            params = inspect.signature(document_class.do_import).parameters
+            has_progress_callback = "progress_callback" in inspect.signature(import_method).parameters
         except (TypeError, ValueError):
-            params = {}
-        if "progress_callback" in params:
+            has_progress_callback = False
+        if has_progress_callback:
             kwargs["progress_callback"] = progress_callback
-        result = document_class.do_import(repo, import_path, **kwargs)
+        result = import_method(repo, import_path, **kwargs)
         document_id = resolve_imported_document_id(repo, existing_document_ids, int(result["imported"]))
         return {
             "imported": int(result["imported"]),

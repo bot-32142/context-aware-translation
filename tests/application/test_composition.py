@@ -126,7 +126,9 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
         assert "recommended-DeepSeek Chat" in connection_names
         assert "recommended-DeepSeek Reasoner" in connection_names
 
-        created_profile = next(profile for profile in context.runtime.book_manager.list_profiles() if profile.name == "Team Default")
+        created_profile = next(
+            profile for profile in context.runtime.book_manager.list_profiles() if profile.name == "Team Default"
+        )
         detail = context.services.app_setup.get_state()
         assert any(profile.name == "Team Default" for profile in detail.shared_profiles)
         assert created_profile.is_default is True
@@ -214,7 +216,11 @@ def test_app_setup_service_persists_advanced_connection_fields(tmp_path: Path) -
             "extra_body": {"foo": "bar"},
         }
 
-        endpoint = next(profile for profile in context.runtime.book_manager.list_endpoint_profiles() if profile.name == "DeepSeek Advanced")
+        endpoint = next(
+            profile
+            for profile in context.runtime.book_manager.list_endpoint_profiles()
+            if profile.name == "DeepSeek Advanced"
+        )
         assert endpoint.description == "Detailed legacy endpoint-profile settings"
         assert endpoint.temperature == 0.15
         assert endpoint.timeout == 90

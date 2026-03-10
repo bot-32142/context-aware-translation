@@ -52,6 +52,7 @@ class CapabilityCode(StrEnum):
     IMAGE_EDITING = "image_editing"
     REASONING_AND_REVIEW = "reasoning_and_review"
 
+
 class ProviderKind(StrEnum):
     GEMINI = "gemini"
     OPENAI = "openai"

@@ -135,7 +135,9 @@ def test_workboard_state_serializes_cleanly() -> None:
 
 def test_setup_and_document_contracts_are_json_serializable() -> None:
     shared_profile = _profile(profile_id="profile:shared", name="Recommended", kind=WorkflowProfileKind.SHARED)
-    project_profile = _profile(profile_id="project:proj-1", name="One Piece profile", kind=WorkflowProfileKind.PROJECT_SPECIFIC)
+    project_profile = _profile(
+        profile_id="project:proj-1", name="One Piece profile", kind=WorkflowProfileKind.PROJECT_SPECIFIC
+    )
     app_setup = AppSetupState(
         connections=[
             ConnectionSummary(
