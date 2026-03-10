@@ -692,8 +692,6 @@ class SetupWizardDialog(QDialog):
 
 
 class AppSetupView(QWidget):
-    _TABLE_MAX_VISIBLE_ROWS = 8
-
     def __init__(self, service: AppSetupService, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._service = service
@@ -714,6 +712,7 @@ class AppSetupView(QWidget):
 
         self.connections_tab = QWidget()
         connections_tab_layout = QVBoxLayout(self.connections_tab)
+        connections_tab_layout.setContentsMargins(0, 0, 0, 0)
         connections_toolbar = QHBoxLayout()
         self.run_wizard_button = QPushButton(self.tr("Run Setup Wizard"))
         self.run_wizard_button.clicked.connect(self._on_run_wizard)
@@ -729,10 +728,6 @@ class AppSetupView(QWidget):
         connections_toolbar.addWidget(self.delete_connection_button)
         connections_toolbar.addStretch()
         connections_tab_layout.addLayout(connections_toolbar)
-
-        self.connections_group = QGroupBox(self.tr("Connections"))
-        self.connections_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
-        connections_layout = QVBoxLayout(self.connections_group)
         self.connections_table = QTableWidget(0, 5)
         self.connections_table.setHorizontalHeaderLabels(
             [self.tr("Name"), self.tr("Provider"), self.tr("Status"), self.tr("Model"), self.tr("Base URL")]
@@ -751,13 +746,9 @@ class AppSetupView(QWidget):
         self.connections_table.setColumnWidth(4, 500)
         self.connections_table.itemSelectionChanged.connect(self._update_connection_buttons)
         self.connections_table.cellDoubleClicked.connect(self._on_connection_double_clicked)
-        connections_layout.addWidget(self.connections_table)
-        connections_tab_layout.addWidget(self.connections_group, 0, Qt.AlignmentFlag.AlignTop)
-        connections_tab_layout.addStretch()
+        self.connections_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        connections_tab_layout.addWidget(self.connections_table)
 
-        self.profiles_group = QGroupBox(self.tr("Shared workflow profiles"))
-        self.profiles_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
-        profiles_layout = QVBoxLayout(self.profiles_group)
         profiles_toolbar = QHBoxLayout()
         self.add_profile_button = QPushButton(self.tr("Add Profile"))
         self.add_profile_button.clicked.connect(self._on_add_profile)
@@ -772,7 +763,6 @@ class AppSetupView(QWidget):
         self.delete_profile_button.clicked.connect(self._on_delete_profile)
         profiles_toolbar.addWidget(self.delete_profile_button)
         profiles_toolbar.addStretch()
-        profiles_layout.addLayout(profiles_toolbar)
         self.profiles_table = QTableWidget(0, 3)
         self.profiles_table.setHorizontalHeaderLabels([self.tr("Name"), self.tr("Target language"), self.tr("Default")])
         self.profiles_table.verticalHeader().setVisible(False)
@@ -787,12 +777,13 @@ class AppSetupView(QWidget):
         self.profiles_table.setColumnWidth(1, 220)
         self.profiles_table.itemSelectionChanged.connect(self._update_profile_buttons)
         self.profiles_table.cellDoubleClicked.connect(self._on_profile_double_clicked)
-        profiles_layout.addWidget(self.profiles_table)
 
         self.profiles_tab = QWidget()
         profiles_tab_layout = QVBoxLayout(self.profiles_tab)
-        profiles_tab_layout.addWidget(self.profiles_group, 0, Qt.AlignmentFlag.AlignTop)
-        profiles_tab_layout.addStretch()
+        profiles_tab_layout.setContentsMargins(0, 0, 0, 0)
+        profiles_tab_layout.addLayout(profiles_toolbar)
+        self.profiles_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        profiles_tab_layout.addWidget(self.profiles_table)
 
         self.setup_tabs.addTab(self.connections_tab, self.tr("Connections"))
         self.setup_tabs.addTab(self.profiles_tab, self.tr("Workflow Profiles"))
@@ -823,12 +814,10 @@ class AppSetupView(QWidget):
         self.duplicate_connection_button.setText(self.tr("Duplicate"))
         self.setup_tabs.setTabText(self.setup_tabs.indexOf(self.connections_tab), self.tr("Connections"))
         self.setup_tabs.setTabText(self.setup_tabs.indexOf(self.profiles_tab), self.tr("Workflow Profiles"))
-        self.connections_group.setTitle(self.tr("Connections"))
         self.connections_table.setHorizontalHeaderLabels(
             [self.tr("Name"), self.tr("Provider"), self.tr("Status"), self.tr("Model"), self.tr("Base URL")]
         )
         self.delete_connection_button.setText(self.tr("Delete"))
-        self.profiles_group.setTitle(self.tr("Shared workflow profiles"))
         self.add_profile_button.setText(self.tr("Add Profile"))
         self.duplicate_profile_button.setText(self.tr("Duplicate"))
         self.set_default_profile_button.setText(self.tr("Set Default"))
@@ -857,7 +846,7 @@ class AppSetupView(QWidget):
             self._set_table_item(self.connections_table, row, 4, connection.base_url or "")
         self.connections_table.resizeColumnsToContents()
         self.connections_table.resizeRowsToContents()
-        self._fit_table_height(self.connections_table)
+        self.connections_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self._fit_table_min_width(self.connections_table)
 
     def _populate_profiles(self, state: AppSetupState) -> None:
@@ -870,7 +859,7 @@ class AppSetupView(QWidget):
             self._set_table_item(self.profiles_table, row, 2, self.tr("Yes") if profile.is_default else "")
         self.profiles_table.resizeColumnsToContents()
         self.profiles_table.resizeRowsToContents()
-        self._fit_table_height(self.profiles_table)
+        self.profiles_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self._fit_table_min_width(self.profiles_table)
 
         selected_id = self._preferred_profile_id(state)
@@ -1186,24 +1175,6 @@ class AppSetupView(QWidget):
         return self.tr(
             "App Setup manages reusable connections and shared workflow profiles. The wizard creates a concrete shared workflow profile using the existing step-based config system."
         )
-
-    def _fit_table_height(self, table: QTableWidget) -> None:
-        header_height = table.horizontalHeader().height()
-        frame_height = table.frameWidth() * 2
-        row_count = table.rowCount()
-        if row_count == 0:
-            table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-            table.setFixedHeight(header_height + frame_height + 8)
-            return
-        row_heights = [table.rowHeight(index) for index in range(row_count)]
-        visible_rows = min(row_count, self._TABLE_MAX_VISIBLE_ROWS)
-        visible_height = sum(row_heights[:visible_rows])
-        table.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-            if row_count <= self._TABLE_MAX_VISIBLE_ROWS
-            else Qt.ScrollBarPolicy.ScrollBarAsNeeded
-        )
-        table.setFixedHeight(header_height + visible_height + frame_height + 8)
 
     def _fit_table_min_width(self, table: QTableWidget) -> None:
         total_width = table.verticalHeader().width() + table.frameWidth() * 2 + 6
