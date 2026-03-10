@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
-from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QRect, Qt, QTimer, Signal
-from PySide6.QtGui import QImage, QTextCursor
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -48,6 +49,7 @@ class DocumentImagesView(QWidget):
         self._state: DocumentImagesState | None = None
         self._assets: list[ImageAssetState] = []
         self._current_index: int | None = None
+        self._preview_cache: dict[tuple[str, str], bytes] = {}
         self._refit_timer = QTimer(self)
         self._refit_timer.setSingleShot(True)
         self._refit_timer.timeout.connect(self._refit_viewers)
@@ -204,6 +206,7 @@ class DocumentImagesView(QWidget):
 
     def _apply_state(self, state: DocumentImagesState, *, previous_asset_id: str | None) -> None:
         self._state = state
+        self._preview_cache.clear()
         self._assets = list(state.assets)
         self._render_progress(state)
         self._update_current_index(previous_asset_id)
@@ -279,7 +282,7 @@ class DocumentImagesView(QWidget):
             except ApplicationError:
                 image_bytes = None
         if image_bytes:
-            self.image_viewer.set_image(self._prepare_preview_image(image_bytes))
+            self.image_viewer.set_image(self._prepare_preview_image(asset, "original", image_bytes))
         else:
             self.image_viewer.clear_image()
 
@@ -288,7 +291,7 @@ class DocumentImagesView(QWidget):
 
         reembedded_bytes = asset.reembedded_image_bytes or self._load_reembedded_image(asset)
         if reembedded_bytes is not None:
-            self.reembedded_viewer.set_image(self._prepare_preview_image(reembedded_bytes))
+            self.reembedded_viewer.set_image(self._prepare_preview_image(asset, "reembedded", reembedded_bytes))
             self.right_stack.setCurrentWidget(self.reembedded_viewer)
             self.right_label.setText(self.tr("Reembedded"))
             self.toggle_button.setText(self.tr("Show Text"))
@@ -316,34 +319,36 @@ class DocumentImagesView(QWidget):
         except OSError:
             return None
 
-    def _prepare_preview_image(self, data: bytes) -> bytes:
-        image = QImage()
-        if not image.loadFromData(data):
-            return data
-        trimmed = self._trim_transparent_margins(image)
-        if trimmed is None:
-            return data
-        payload = QByteArray()
-        buffer = QBuffer(payload)
-        buffer.open(QIODevice.OpenModeFlag.WriteOnly)
-        trimmed.save(buffer, "PNG")
-        return bytes(payload)
+    def _prepare_preview_image(self, asset: ImageAssetState, kind: str, data: bytes) -> bytes:
+        cache_key = (asset.asset_id, kind)
+        cached = self._preview_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        trimmed = self._trim_transparent_margins_fast(data)
+        preview = trimmed if trimmed is not None else data
+        self._preview_cache[cache_key] = preview
+        return preview
 
     @staticmethod
-    def _trim_transparent_margins(image: QImage) -> QImage | None:
-        if not image.hasAlphaChannel():
+    def _trim_transparent_margins_fast(data: bytes) -> bytes | None:
+        try:
+            from PIL import Image
+        except Exception:
             return None
-        bounds = QRect()
-        for y in range(image.height()):
-            for x in range(image.width()):
-                if image.pixelColor(x, y).alpha() == 0:
-                    continue
-                bounds = QRect(x, y, 1, 1) if bounds.isNull() else bounds.united(QRect(x, y, 1, 1))
-        if bounds.isNull():
+
+        try:
+            with Image.open(io.BytesIO(data)) as image:
+                if "A" not in image.getbands():
+                    return None
+                bounds = image.getchannel("A").getbbox()
+                if bounds is None or bounds == (0, 0, image.width, image.height):
+                    return None
+                trimmed = image.crop(bounds)
+                output = io.BytesIO()
+                trimmed.save(output, format="PNG")
+                return output.getvalue()
+        except Exception:
             return None
-        if bounds.width() == image.width() and bounds.height() == image.height():
-            return None
-        return image.copy(bounds)
 
     def _toggle_right_panel(self) -> None:
         if self.right_stack.currentWidget() is self.text_panel:

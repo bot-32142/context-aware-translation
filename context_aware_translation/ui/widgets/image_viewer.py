@@ -264,6 +264,8 @@ class ImageViewer(QGraphicsView):
     def _fit_pending_image(self) -> None:
         if self.pixmap_item is None or not self._auto_fit_pending or self._user_zoomed:
             return
+        if not self.isVisible() or not self.viewport().isVisible():
+            return
         if self.viewport().width() <= 1 or self.viewport().height() <= 1:
             return
         self.fit_to_window()
