@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from PySide6.QtCore import QEvent, Signal
 from PySide6.QtWidgets import (
     QComboBox,
-    QDialog,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -18,14 +20,24 @@ from PySide6.QtWidgets import (
 from context_aware_translation.application.contracts.app_setup import (
     WorkflowProfileDetail,
     WorkflowProfileKind,
+    WorkflowStepId,
 )
 from context_aware_translation.application.contracts.project_setup import ProjectSetupState, SaveProjectSetupRequest
 from context_aware_translation.application.errors import ApplicationError, BlockedOperationError
 from context_aware_translation.application.events import ApplicationEventSubscriber, SetupInvalidatedEvent
 from context_aware_translation.application.services.project_setup import ProjectSetupService
+from context_aware_translation.llm.image_generator import ImageBackend
 from context_aware_translation.ui.adapters import QtApplicationEventBridge
-from context_aware_translation.ui.features.workflow_profile_editor import ConnectionChoice, WorkflowProfileEditorDialog
 from context_aware_translation.ui.utils import create_tip_label
+
+
+@dataclass
+class _CustomRouteRow:
+    step_id: WorkflowStepId
+    step_label: str
+    connection_combo: QComboBox
+    model_edit: QLineEdit
+    step_config: dict[str, bool | int | float | str | None]
 
 
 class ProjectSetupView(QWidget):
@@ -47,6 +59,9 @@ class ProjectSetupView(QWidget):
         self._service = service
         self._state: ProjectSetupState | None = None
         self._draft_project_profile: WorkflowProfileDetail | None = None
+        self._custom_base_profile_id: str | None = None
+        self._last_shared_profile_id: str | None = None
+        self._custom_rows: list[_CustomRouteRow] = []
         self._event_bridge = QtApplicationEventBridge(events, parent=self)
         self._event_bridge.setup_invalidated.connect(self._on_setup_invalidated)
         self._init_ui()
@@ -79,39 +94,29 @@ class ProjectSetupView(QWidget):
         self.shared_profile_combo = QComboBox()
         self.shared_profile_combo.currentIndexChanged.connect(self._on_shared_profile_changed)
         row.addWidget(self.shared_profile_combo, 1)
-        self.use_shared_button = QPushButton(self.tr("Use shared profile"))
-        self.use_shared_button.clicked.connect(self._use_shared_profile)
-        row.addWidget(self.use_shared_button)
         selector_layout.addLayout(row)
         layout.addWidget(selector_group)
 
-        self.current_profile_group = QGroupBox(self.tr("Current profile"))
-        current_layout = QVBoxLayout(self.current_profile_group)
-        self.current_profile_label = create_tip_label("")
-        current_layout.addWidget(self.current_profile_label)
+        self.custom_profile_group = QGroupBox(self.tr("Custom profile"))
+        custom_layout = QVBoxLayout(self.custom_profile_group)
+        self.custom_profile_label = create_tip_label("")
+        custom_layout.addWidget(self.custom_profile_label)
         self.routes_table = QTableWidget(0, 3)
         self.routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
         self.routes_table.verticalHeader().setVisible(False)
-        self.routes_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.routes_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.routes_table.verticalHeader().setDefaultSectionSize(34)
         self.routes_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.routes_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.routes_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        current_layout.addWidget(self.routes_table)
-        layout.addWidget(self.current_profile_group, 1)
+        custom_layout.addWidget(self.routes_table)
+        layout.addWidget(self.custom_profile_group, 1)
 
         actions_layout = QHBoxLayout()
-        self.customize_button = QPushButton(self.tr("Customize for this project"))
-        self.customize_button.clicked.connect(self._customize_for_project)
-        self.edit_project_button = QPushButton(self.tr("Edit project profile"))
-        self.edit_project_button.clicked.connect(self._edit_project_profile)
         self.open_app_setup_button = QPushButton(self.tr("Open App Setup"))
         self.open_app_setup_button.clicked.connect(self.open_app_setup_requested.emit)
         self.save_button = QPushButton(self.tr("Save"))
         self.save_button.clicked.connect(self._save)
-        actions_layout.addWidget(self.customize_button)
-        actions_layout.addWidget(self.edit_project_button)
         actions_layout.addWidget(self.open_app_setup_button)
         actions_layout.addStretch()
         actions_layout.addWidget(self.save_button)
@@ -130,11 +135,8 @@ class ProjectSetupView(QWidget):
 
     def retranslateUi(self) -> None:
         self.tip_label.setText(self._tip_text())
-        self.current_profile_group.setTitle(self.tr("Current profile"))
+        self.custom_profile_group.setTitle(self.tr("Custom profile"))
         self.routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
-        self.use_shared_button.setText(self.tr("Use shared profile"))
-        self.customize_button.setText(self.tr("Customize for this project"))
-        self.edit_project_button.setText(self.tr("Edit project profile"))
         self.open_app_setup_button.setText(self.tr("Open App Setup"))
         self.save_button.setText(self.tr("Save"))
         self.title_label.setText(self._title_text())
@@ -145,8 +147,8 @@ class ProjectSetupView(QWidget):
     def _apply_state(self, state: ProjectSetupState) -> None:
         self._state = state
         self._draft_project_profile = state.project_profile
+        self._custom_base_profile_id = state.selected_shared_profile_id
         self.title_label.setText(self._title_text())
-        self.summary_label.setText(self._summary_text())
         self.blocker_label.setVisible(state.blocker is not None)
         self.blocker_label.setText(state.blocker.message if state.blocker is not None else "")
 
@@ -154,16 +156,21 @@ class ProjectSetupView(QWidget):
         self.shared_profile_combo.clear()
         for profile in state.shared_profiles:
             self.shared_profile_combo.addItem(profile.name, profile.profile_id)
-        if state.selected_shared_profile_id is not None:
+        if state.shared_profiles or state.project_profile is not None:
+            self.shared_profile_combo.addItem(self.tr("Custom profile"), "__custom__")
+        if state.project_profile is not None:
+            index = self.shared_profile_combo.findData("__custom__")
+            if index >= 0:
+                self.shared_profile_combo.setCurrentIndex(index)
+        elif state.selected_shared_profile_id is not None:
             index = self.shared_profile_combo.findData(state.selected_shared_profile_id)
             if index >= 0:
                 self.shared_profile_combo.setCurrentIndex(index)
+                self._last_shared_profile_id = state.selected_shared_profile_id
         self.shared_profile_combo.blockSignals(False)
 
-        self.use_shared_button.setEnabled(state.selected_shared_profile is not None)
-        self.customize_button.setEnabled(state.selected_shared_profile is not None)
-        self.edit_project_button.setEnabled(self._draft_project_profile is not None)
         self.open_app_setup_button.setVisible(state.blocker is not None)
+        self.summary_label.setText(self._summary_text())
         self._render_effective_profile()
         self._show_message("", is_error=False)
 
@@ -171,92 +178,83 @@ class ProjectSetupView(QWidget):
         current = self.shared_profile_combo.currentData()
         return str(current) if isinstance(current, str) and current else None
 
+    def _is_custom_selected(self) -> bool:
+        return self._current_shared_profile_id() == "__custom__"
+
     def _current_shared_profile(self) -> WorkflowProfileDetail | None:
         if self._state is None:
             return None
         profile_id = self._current_shared_profile_id()
-        if profile_id is None:
+        if profile_id is None or profile_id == "__custom__":
             return None
         return next((profile for profile in self._state.shared_profiles if profile.profile_id == profile_id), None)
 
     def _effective_profile(self) -> WorkflowProfileDetail | None:
-        return self._draft_project_profile or (self._state.project_profile if self._state is not None else None) or (self._state.selected_shared_profile if self._state is not None else None)
+        if self._is_custom_selected():
+            return self._draft_project_profile or (self._state.project_profile if self._state is not None else None)
+        return self._current_shared_profile() or (self._state.selected_shared_profile if self._state is not None else None)
 
     def _render_effective_profile(self) -> None:
         profile = self._effective_profile()
         self.routes_table.setRowCount(0)
+        self._custom_rows.clear()
         if profile is None:
-            self.current_profile_label.setText(self.tr("No workflow profile selected yet."))
+            self.custom_profile_group.hide()
             return
-        scope_label = self.tr("Project-specific profile") if profile.kind is WorkflowProfileKind.PROJECT_SPECIFIC else self.tr("Shared profile")
-        self.current_profile_label.setText(
-            self.tr("%1 | Target language: %2")
-            .replace("%1", scope_label)
-            .replace("%2", profile.target_language)
+        if not self._is_custom_selected():
+            self.custom_profile_group.hide()
+            return
+        self.custom_profile_group.show()
+        base_name = self._base_profile_name()
+        self.custom_profile_label.setText(
+            self.tr("Editing a project-specific profile based on %1.").replace("%1", base_name)
         )
         for route in profile.routes:
             row = self.routes_table.rowCount()
             self.routes_table.insertRow(row)
             self.routes_table.setItem(row, 0, QTableWidgetItem(route.step_label))
-            self.routes_table.setItem(row, 1, QTableWidgetItem(route.connection_label or ""))
-            self.routes_table.setItem(row, 2, QTableWidgetItem(route.model or ""))
-    def _use_shared_profile(self) -> None:
-        self._draft_project_profile = None
-        self.edit_project_button.setEnabled(False)
-        self._render_effective_profile()
-
-    def _customize_for_project(self) -> None:
-        shared_profile = self._current_shared_profile()
-        if shared_profile is None:
-            self._show_message(self.tr("Select a shared workflow profile first."), is_error=True)
-            return
-        project_profile = shared_profile.model_copy(
-            update={
-                "profile_id": f"project:{self.project_id}",
-                "name": f"{self._state.project.name} project profile" if self._state is not None else shared_profile.name,
-                "kind": WorkflowProfileKind.PROJECT_SPECIFIC,
-                "is_default": False,
-            }
-        )
-        dialog = WorkflowProfileEditorDialog(
-            profile=project_profile,
-            connection_choices=self._connection_choices(),
-            allow_name_edit=False,
-            parent=self,
-        )
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        self._draft_project_profile = dialog.profile().model_copy(update={"kind": WorkflowProfileKind.PROJECT_SPECIFIC})
-        self.edit_project_button.setEnabled(True)
-        self._render_effective_profile()
-
-    def _edit_project_profile(self) -> None:
-        profile = self._draft_project_profile or (self._state.project_profile if self._state is not None else None)
-        if profile is None:
-            self._show_message(self.tr("No project-specific profile is available to edit."), is_error=True)
-            return
-        dialog = WorkflowProfileEditorDialog(
-            profile=profile,
-            connection_choices=self._connection_choices(),
-            allow_name_edit=False,
-            parent=self,
-        )
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        self._draft_project_profile = dialog.profile().model_copy(update={"kind": WorkflowProfileKind.PROJECT_SPECIFIC})
-        self._render_effective_profile()
+            combo = QComboBox()
+            combo.addItem(self.tr("Select connection"), "")
+            for connection in self._state.available_connections if self._state is not None else []:
+                combo.addItem(connection.display_name, connection.connection_id)
+            if route.connection_id:
+                index = combo.findData(route.connection_id)
+                if index >= 0:
+                    combo.setCurrentIndex(index)
+            model_edit = QLineEdit(route.model or "")
+            combo.currentIndexChanged.connect(lambda _i, c=combo, e=model_edit: self._sync_model_from_connection(c, e))
+            self.routes_table.setCellWidget(row, 1, combo)
+            self.routes_table.setCellWidget(row, 2, model_edit)
+            self._custom_rows.append(
+                _CustomRouteRow(
+                    step_id=route.step_id,
+                    step_label=route.step_label,
+                    connection_combo=combo,
+                    model_edit=model_edit,
+                    step_config=dict(route.step_config),
+                )
+            )
 
     def _save(self) -> None:
         shared_profile_id = self._current_shared_profile_id()
-        if shared_profile_id is None and self._draft_project_profile is None:
+        if self._is_custom_selected():
+            if self._draft_project_profile is None:
+                self._show_message(self.tr("Select a shared workflow profile first."), is_error=True)
+                return
+            project_profile = self._build_custom_profile()
+            base_profile_id = self._custom_base_profile_id
+        else:
+            project_profile = None
+            base_profile_id = shared_profile_id
+        if base_profile_id is None and project_profile is None:
             self._show_message(self.tr("Select a shared workflow profile before saving."), is_error=True)
             return
         try:
             state = self._service.save(
                 SaveProjectSetupRequest(
                     project_id=self.project_id,
-                    shared_profile_id=shared_profile_id,
-                    project_profile=self._draft_project_profile,
+                    shared_profile_id=(base_profile_id if project_profile is not None else shared_profile_id),
+                    project_profile=project_profile,
                 )
             )
         except BlockedOperationError as exc:
@@ -276,8 +274,13 @@ class ProjectSetupView(QWidget):
         self.refresh()
 
     def _on_shared_profile_changed(self, _index: int) -> None:
-        if self._draft_project_profile is None:
-            self._render_effective_profile()
+        profile_id = self._current_shared_profile_id()
+        if profile_id == "__custom__":
+            self._ensure_custom_profile()
+        elif profile_id:
+            self._last_shared_profile_id = profile_id
+            self._draft_project_profile = None
+        self._render_effective_profile()
 
     def _show_message(self, text: str, *, is_error: bool) -> None:
         if not text:
@@ -297,27 +300,102 @@ class ProjectSetupView(QWidget):
     def _summary_text(self) -> str:
         if self._state is None:
             return ""
-        if self._draft_project_profile is not None or self._state.project_profile is not None:
+        if self._is_custom_selected():
             return self.tr("This project is using a project-specific workflow profile.")
-        if self._state.selected_shared_profile is not None:
+        if self._current_shared_profile() is not None or self._state.selected_shared_profile is not None:
             return self.tr("This project is using a shared workflow profile.")
         return self.tr("Choose a shared workflow profile to continue.")
 
     def _tip_text(self) -> str:
         return self.tr(
-            "Project Setup chooses a shared workflow profile or creates a project-specific profile. Target language lives inside the selected profile."
+            "Choose a shared workflow profile, or select Custom profile to edit connection and model choices for this project."
         )
 
-    def _connection_choices(self) -> list[ConnectionChoice]:
+    def _ensure_custom_profile(self) -> None:
+        if self._draft_project_profile is not None:
+            return
         if self._state is None:
-            return []
-        return [
-            ConnectionChoice(
-                connection_id=connection.connection_id,
-                label=connection.display_name,
-                default_model=connection.default_model,
-                provider=connection.provider.value,
-                base_url=connection.base_url,
+            return
+        if self._state.project_profile is not None:
+            self._draft_project_profile = self._state.project_profile
+            return
+        base_profile = self._current_shared_profile()
+        if base_profile is None:
+            base_profile = next(
+                (profile for profile in self._state.shared_profiles if profile.profile_id == self._last_shared_profile_id),
+                (self._state.shared_profiles[0] if self._state.shared_profiles else None),
             )
-            for connection in self._state.available_connections
-        ]
+        if base_profile is None:
+            return
+        self._custom_base_profile_id = base_profile.profile_id
+        self._draft_project_profile = base_profile.model_copy(
+            update={
+                "profile_id": f"project:{self.project_id}",
+                "name": f"{self._state.project.name} custom profile",
+                "kind": WorkflowProfileKind.PROJECT_SPECIFIC,
+                "is_default": False,
+            }
+        )
+
+    def _base_profile_name(self) -> str:
+        if self._state is None or self._custom_base_profile_id is None:
+            return self.tr("the selected shared profile")
+        return next(
+            (profile.name for profile in self._state.shared_profiles if profile.profile_id == self._custom_base_profile_id),
+            self.tr("the selected shared profile"),
+        )
+
+    def _sync_model_from_connection(self, combo: QComboBox, model_edit: QLineEdit) -> None:
+        if self._state is None:
+            return
+        connection_id = combo.currentData()
+        if not isinstance(connection_id, str) or not connection_id:
+            return
+        default_model = next(
+            (connection.default_model for connection in self._state.available_connections if connection.connection_id == connection_id),
+            None,
+        )
+        if default_model:
+            model_edit.setText(default_model)
+
+    def _build_custom_profile(self) -> WorkflowProfileDetail:
+        assert self._draft_project_profile is not None
+        routes = []
+        for row in self._custom_rows:
+            connection_id = row.connection_combo.currentData()
+            connection_id_str = str(connection_id) if isinstance(connection_id, str) and connection_id else None
+            connection_label = row.connection_combo.currentText().strip() or None
+            step_config = dict(row.step_config)
+            if row.step_id is WorkflowStepId.IMAGE_REEMBEDDING:
+                inferred_backend = self._infer_image_backend(connection_id_str, row.model_edit.text().strip() or None)
+                if inferred_backend is not None:
+                    step_config["backend"] = inferred_backend
+            routes.append(
+                next(route for route in self._draft_project_profile.routes if route.step_id is row.step_id).model_copy(
+                    update={
+                        "connection_id": connection_id_str,
+                        "connection_label": connection_label,
+                        "model": row.model_edit.text().strip() or None,
+                        "step_config": step_config,
+                    }
+                )
+            )
+        return self._draft_project_profile.model_copy(update={"routes": routes, "kind": WorkflowProfileKind.PROJECT_SPECIFIC})
+
+    def _infer_image_backend(self, connection_id: str | None, model: str | None) -> str | None:
+        if self._state is None or not connection_id:
+            return None
+        connection = next(
+            (connection for connection in self._state.available_connections if connection.connection_id == connection_id),
+            None,
+        )
+        if connection is None:
+            return None
+        provider = connection.provider.value.lower()
+        base_url = (connection.base_url or "").lower()
+        model_name = (model or connection.default_model or "").lower()
+        if provider == "gemini" or model_name.startswith("gemini") or "generativelanguage.googleapis.com" in base_url:
+            return ImageBackend.GEMINI.value
+        if model_name.startswith("qwen") or "dashscope" in base_url:
+            return ImageBackend.QWEN.value
+        return ImageBackend.OPENAI.value

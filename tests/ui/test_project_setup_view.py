@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from unittest.mock import patch
-
 import pytest
 
 from context_aware_translation.application.contracts.app_setup import (
@@ -26,7 +24,7 @@ from context_aware_translation.application.events import InMemoryApplicationEven
 from tests.application.fakes import FakeProjectSetupService
 
 try:
-    from PySide6.QtWidgets import QApplication, QDialog
+    from PySide6.QtWidgets import QApplication
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -114,31 +112,6 @@ def _make_state(*, blocker: str | None = None, project_specific: bool = False) -
     )
 
 
-class _FakeProfileEditorDialog:
-    def __init__(self, *args, profile: WorkflowProfileDetail, **kwargs):
-        self._profile = profile.model_copy(
-            update={
-                "target_language": "Chinese",
-                "routes": [
-                    route.model_copy(
-                        update={
-                            "connection_id": "conn-openai" if route.step_id is WorkflowStepId.TRANSLATOR else route.connection_id,
-                            "connection_label": "OpenAI Shared" if route.step_id is WorkflowStepId.TRANSLATOR else route.connection_label,
-                            "model": "gpt-4.1-mini" if route.step_id is WorkflowStepId.TRANSLATOR else route.model,
-                        }
-                    )
-                    for route in profile.routes
-                ],
-            }
-        )
-
-    def exec(self):
-        return QDialog.DialogCode.Accepted
-
-    def profile(self):
-        return self._profile
-
-
 def test_project_setup_view_renders_backend_state():
     from context_aware_translation.ui.features.project_setup_view import ProjectSetupView
 
@@ -148,7 +121,7 @@ def test_project_setup_view_renders_backend_state():
     try:
         assert view.title_label.text() == view.tr("Setup for One Piece")
         assert "shared workflow profile" in view.summary_label.text().lower()
-        assert view.routes_table.rowCount() == 2
+        assert view.custom_profile_group.isHidden()
         assert service.calls == [("get_state", "proj-1")]
     finally:
         view.cleanup()
@@ -175,30 +148,38 @@ def test_project_setup_view_saves_selected_shared_profile():
         view.cleanup()
 
 
-def test_project_setup_view_can_customize_project_profile():
+def test_project_setup_view_can_select_custom_profile():
     from context_aware_translation.ui.features.project_setup_view import ProjectSetupView
 
     service = FakeProjectSetupService(state=_make_state())
     bus = InMemoryApplicationEventBus()
     view = ProjectSetupView("proj-1", service, bus)
     try:
-        with patch(
-            "context_aware_translation.ui.features.project_setup_view.WorkflowProfileEditorDialog",
-            _FakeProfileEditorDialog,
-        ):
-            view.customize_button.click()
-            view.save_button.click()
+        custom_index = view.shared_profile_combo.findData("__custom__")
+        assert custom_index >= 0
+        view.shared_profile_combo.setCurrentIndex(custom_index)
+
+        assert not view.custom_profile_group.isHidden()
+        assert view.routes_table.rowCount() == 2
+
+        translator_row = next(
+            index for index, row in enumerate(view._custom_rows) if row.step_id is WorkflowStepId.TRANSLATOR
+        )
+        translator = view._custom_rows[translator_row]
+        translator.connection_combo.setCurrentIndex(translator.connection_combo.findData("conn-openai"))
+        translator.model_edit.setText("gpt-4.1-mini")
+        view.save_button.click()
 
         call_name, request = service.calls[-1]
         assert call_name == "save"
         assert request.shared_profile_id == "profile:shared"
         assert request.project_profile is not None
         assert request.project_profile.kind is WorkflowProfileKind.PROJECT_SPECIFIC
-        assert request.project_profile.target_language == "Chinese"
         translator_route = next(
             route for route in request.project_profile.routes if route.step_id is WorkflowStepId.TRANSLATOR
         )
         assert translator_route.connection_id == "conn-openai"
+        assert translator_route.model == "gpt-4.1-mini"
     finally:
         view.cleanup()
 
@@ -231,6 +212,7 @@ def test_project_setup_view_refreshes_on_setup_invalidation():
         QApplication.processEvents()
 
         assert "project-specific workflow profile" in view.summary_label.text().lower()
+        assert not view.custom_profile_group.isHidden()
         assert service.calls == [("get_state", "proj-1"), ("get_state", "proj-1")]
     finally:
         view.cleanup()
