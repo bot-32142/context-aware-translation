@@ -491,6 +491,8 @@ class SetupWizardDialog(QDialog):
             item = self.page_layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
+                widget.hide()
+                widget.setParent(None)
                 widget.deleteLater()
 
         if self._page_index == 0:
@@ -555,6 +557,7 @@ class SetupWizardDialog(QDialog):
                 table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
                 table.verticalHeader().setVisible(False)
                 table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+                table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
                 for route in recommendation.routes:
                     row = table.rowCount()
                     table.insertRow(row)
@@ -562,10 +565,16 @@ class SetupWizardDialog(QDialog):
                     table.setItem(row, 1, QTableWidgetItem(route.connection_label or ""))
                     table.setItem(row, 2, QTableWidgetItem(route.model or ""))
                 table.resizeColumnsToContents()
+                table.resizeRowsToContents()
+                header_height = table.horizontalHeader().height()
+                rows_height = sum(table.rowHeight(index) for index in range(table.rowCount()))
+                table.setFixedHeight(header_height + rows_height + table.frameWidth() * 2 + 4)
                 profile_layout.addWidget(table)
             self.page_layout.addWidget(profile_group)
             self.page_layout.addStretch()
         self._update_buttons()
+        QTimer.singleShot(0, self._resize_to_page)
+        QTimer.singleShot(120, self._resize_to_page)
 
     def selected_providers(self) -> list[ProviderKind]:
         checked = [provider for provider, checkbox in self._provider_checks.items() if checkbox.isChecked()]
@@ -673,6 +682,13 @@ class SetupWizardDialog(QDialog):
         self.back_button.setVisible(self._page_index > 0)
         self.next_button.setVisible(self._page_index < 1)
         self.finish_button.setVisible(self._page_index == 1)
+
+    def _resize_to_page(self) -> None:
+        self.layout().activate()
+        self.page_content.adjustSize()
+        minimum_height = 360 if self._page_index == 0 else 520
+        target_height = min(max(self.sizeHint().height(), minimum_height), 760)
+        self.resize(max(self.width(), 780), target_height)
 
 
 class AppSetupView(QWidget):
