@@ -197,7 +197,7 @@ def test_project_setup_view_can_select_custom_profile():
 
 
 def test_project_setup_view_custom_step_advanced_button_opens_advanced_dialog():
-    from context_aware_translation.ui.features import project_setup_view as view_module
+    from context_aware_translation.ui.features import workflow_profile_editor as editor_module
     from context_aware_translation.ui.features.project_setup_view import ProjectSetupView
 
     service = FakeProjectSetupService(state=_make_state())
@@ -223,14 +223,14 @@ def test_project_setup_view_custom_step_advanced_button_opens_advanced_dialog():
             def route(self):
                 return self._route
 
-        original = view_module.StepAdvancedConfigDialog
-        view_module.StepAdvancedConfigDialog = _FakeStepDialog
+        original = editor_module.StepAdvancedConfigDialog
+        editor_module.StepAdvancedConfigDialog = _FakeStepDialog
         try:
             translator_button = view.routes_table.cellWidget(translator_row, 3)
             assert translator_button is not None
             translator_button.click()
         finally:
-            view_module.StepAdvancedConfigDialog = original
+            editor_module.StepAdvancedConfigDialog = original
 
         assert opened == [WorkflowStepId.TRANSLATOR]
         assert view._custom_rows[translator_row].step_config["chunk_size"] == 1234
