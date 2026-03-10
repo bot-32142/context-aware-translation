@@ -426,7 +426,7 @@ class SetupWizardDialog(QDialog):
         layout = QVBoxLayout(self)
         self.tip_label = create_tip_label(
             self.tr(
-                "Tell the app which providers you already have. The wizard will test capabilities and create a concrete shared workflow profile."
+                "Choose providers and paste API keys. The wizard will test capabilities and create a concrete shared workflow profile. Use Connections for custom providers and advanced connection settings."
             )
         )
         layout.addWidget(self.tip_label)
@@ -456,7 +456,7 @@ class SetupWizardDialog(QDialog):
         self._page_index = 0
         self._available_providers: list[ProviderCard] = []
         self._provider_checks: dict[ProviderKind, QCheckBox] = {}
-        self._draft_forms: list[ConnectionDraftForm] = []
+        self._provider_api_key_edits: dict[ProviderKind, QLineEdit] = {}
 
     def _build_page(self) -> None:
         while self.page_layout.count():
@@ -468,32 +468,32 @@ class SetupWizardDialog(QDialog):
         if self._page_index == 0:
             self.step_title.setText(self.tr("Choose providers"))
             self._provider_checks = {}
+            self._provider_api_key_edits = {}
             host = QWidget()
             host_layout = QVBoxLayout(host)
             host_layout.setSpacing(12)
             for provider in self._available_providers:
-                checkbox = QCheckBox(provider.label)
+                group = QGroupBox(provider.label)
+                group_layout = QFormLayout(group)
+                checkbox = QCheckBox(self.tr("Use this provider"))
                 checkbox.setToolTip(provider.helper_text or "")
                 checkbox.setProperty("provider", provider.provider.value)
                 checkbox.setChecked(provider.provider in self._wizard_state.selected_providers)
+                api_key_edit = QLineEdit()
+                api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+                api_key_edit.setPlaceholderText(self.tr("Paste API key"))
+                api_key_edit.setText(self._draft_for_provider(provider.provider).api_key or "")
+                api_key_edit.setEnabled(checkbox.isChecked())
+                checkbox.toggled.connect(api_key_edit.setEnabled)
+                group_layout.addRow(checkbox)
                 if provider.helper_text:
-                    checkbox.setText(f"{provider.label} — {provider.helper_text}")
+                    group_layout.addRow(create_tip_label(provider.helper_text))
+                group_layout.addRow(self.tr("API key"), api_key_edit)
                 self._provider_checks[provider.provider] = checkbox
-                host_layout.addWidget(checkbox)
+                self._provider_api_key_edits[provider.provider] = api_key_edit
+                host_layout.addWidget(group)
             host_layout.addStretch()
             self.page_layout.addWidget(host)
-        elif self._page_index == 1:
-            self.step_title.setText(self.tr("Enter connection details"))
-            self._draft_forms.clear()
-            for provider in self._wizard_state.selected_providers:
-                group = QGroupBox(_PROVIDER_LABELS[provider])
-                group_layout = QVBoxLayout(group)
-                form = ConnectionDraftForm(group)
-                form.set_draft(self._draft_for_provider(provider), preserve_api_key_placeholder=False)
-                group_layout.addWidget(form)
-                self._draft_forms.append(form)
-                self.page_layout.addWidget(group)
-            self.page_layout.addStretch()
         else:
             self._ensure_preview_state()
             self.step_title.setText(self.tr("Review workflow profile"))
@@ -555,10 +555,15 @@ class SetupWizardDialog(QDialog):
         )
 
     def _persist_drafts(self) -> None:
-        if not self._draft_forms:
+        if not self._provider_api_key_edits:
             return
+        drafts = [
+            self._draft_for_provider(provider).model_copy(update={"api_key": api_key_edit.text().strip() or None})
+            for provider, api_key_edit in self._provider_api_key_edits.items()
+            if provider in self.selected_providers()
+        ]
         self._wizard_state = self._wizard_state.model_copy(
-            update={"drafts": [form.to_draft(allow_empty_api_key=False) for form in self._draft_forms]}
+            update={"drafts": drafts}
         )
 
     def final_request(self) -> SetupWizardRequest | None:
@@ -570,13 +575,13 @@ class SetupWizardDialog(QDialog):
         )
 
     def _populate_provider_cards(self, providers: Sequence[ProviderCard]) -> None:
-        self._available_providers = list(providers)
+        self._available_providers = [
+            provider for provider in providers if provider.provider is not ProviderKind.OPENAI_COMPATIBLE
+        ]
 
     def _go_back(self) -> None:
         if self._page_index == 0:
             return
-        if self._page_index == 1:
-            self._persist_drafts()
         self._page_index -= 1
         self._build_page()
 
@@ -589,17 +594,17 @@ class SetupWizardDialog(QDialog):
                 )
                 return
             self._wizard_state = self._wizard_state.model_copy(update={"selected_providers": selected_providers})
-        elif self._page_index == 1:
-            for form in self._draft_forms:
-                valid, message = form.validate(require_api_key=True)
-                if not valid:
+            self._persist_drafts()
+            for draft in self._wizard_state.drafts:
+                if not draft.api_key:
                     QMessageBox.warning(
-                        self, self.tr("Missing Information"), message or self.tr("Please complete the form.")
+                        self,
+                        self.tr("Missing Information"),
+                        self.tr("API key is required for every selected provider."),
                     )
                     return
-            self._persist_drafts()
             self._preview_state = None
-        self._page_index = min(self._page_index + 1, 2)
+        self._page_index = min(self._page_index + 1, 1)
         self._build_page()
 
     def _finish(self) -> None:
@@ -625,8 +630,8 @@ class SetupWizardDialog(QDialog):
 
     def _update_buttons(self) -> None:
         self.back_button.setVisible(self._page_index > 0)
-        self.next_button.setVisible(self._page_index < 2)
-        self.finish_button.setVisible(self._page_index == 2)
+        self.next_button.setVisible(self._page_index < 1)
+        self.finish_button.setVisible(self._page_index == 1)
 
 
 class AppSetupView(QWidget):

@@ -243,14 +243,10 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
     dialog = SetupWizardDialog(service, wizard_state)
 
     dialog._provider_checks[ProviderKind.GEMINI].setChecked(True)
+    dialog._provider_api_key_edits[ProviderKind.GEMINI].setText("secret")
     dialog._go_next()
+
     assert dialog._page_index == 1
-
-    form = dialog._draft_forms[0]
-    form.api_key_edit.setText("secret")
-    dialog._go_next()
-
-    assert dialog._page_index == 2
     assert any(call[0] == "preview_setup_wizard" for call in service.calls)
 
     dialog._finish()
@@ -288,7 +284,7 @@ def test_setup_wizard_dialog_renders_provider_cards_on_first_page():
     assert dialog._provider_checks[ProviderKind.GEMINI].isChecked() is True
 
 
-def test_setup_wizard_dialog_renders_connection_form_after_provider_step():
+def test_setup_wizard_dialog_collects_api_keys_on_provider_page():
     from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
 
     wizard_state = SetupWizardState(
@@ -305,12 +301,11 @@ def test_setup_wizard_dialog_renders_connection_form_after_provider_step():
     service = FakeAppSetupService(state=_make_state(requires_wizard=True), wizard_state=wizard_state)
     dialog = SetupWizardDialog(service, wizard_state)
 
-    dialog._provider_checks[ProviderKind.GEMINI].setChecked(True)
-    dialog._go_next()
+    assert ProviderKind.GEMINI in dialog._provider_api_key_edits
+    assert dialog._provider_api_key_edits[ProviderKind.GEMINI].isEnabled() is False
 
-    assert dialog._page_index == 1
-    assert len(dialog._draft_forms) == 1
-    assert dialog._draft_forms[0].current_provider() is ProviderKind.GEMINI
+    dialog._provider_checks[ProviderKind.GEMINI].setChecked(True)
+    assert dialog._provider_api_key_edits[ProviderKind.GEMINI].isEnabled() is True
 
 
 def test_setup_wizard_dialog_preserves_draft_when_going_back():
@@ -331,21 +326,18 @@ def test_setup_wizard_dialog_preserves_draft_when_going_back():
     dialog = SetupWizardDialog(service, wizard_state)
 
     dialog._provider_checks[ProviderKind.GEMINI].setChecked(True)
-    dialog._go_next()
-    form = dialog._draft_forms[0]
-    form.api_key_edit.setText("secret")
-    form.display_name_edit.setText("Gemini A")
+    dialog._provider_api_key_edits[ProviderKind.GEMINI].setText("secret")
 
+    dialog._go_next()
+    assert dialog._page_index == 1
     dialog._go_back()
+
     assert dialog._page_index == 0
     assert dialog._provider_checks[ProviderKind.GEMINI].isChecked() is True
-
-    dialog._go_next()
-    assert dialog._draft_forms[0].api_key_edit.text() == "secret"
-    assert dialog._draft_forms[0].display_name_edit.text() == "Gemini A"
+    assert dialog._provider_api_key_edits[ProviderKind.GEMINI].text() == "secret"
 
 
-def test_setup_wizard_dialog_custom_provider_requires_endpoint_and_model():
+def test_setup_wizard_dialog_excludes_custom_provider():
     from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
 
     wizard_state = SetupWizardState(
@@ -363,22 +355,8 @@ def test_setup_wizard_dialog_custom_provider_requires_endpoint_and_model():
     service = FakeAppSetupService(state=_make_state(requires_wizard=True), wizard_state=wizard_state)
     dialog = SetupWizardDialog(service, wizard_state)
 
-    dialog._provider_checks[ProviderKind.OPENAI_COMPATIBLE].setChecked(True)
-    dialog._go_next()
-
-    form = dialog._draft_forms[0]
-    assert form.current_provider() is ProviderKind.OPENAI_COMPATIBLE
-    assert form.advanced_section.is_expanded() is True
-
-    form.api_key_edit.setText("secret")
-    assert form.validate(require_api_key=True) == (
-        False,
-        form.tr("Custom connections require base URL and default model."),
-    )
-
-    form.base_url_edit.setText("https://example.com/v1")
-    form.default_model_edit.setText("test-model")
-    assert form.validate(require_api_key=True) == (True, None)
+    assert dialog._provider_checks == {}
+    assert dialog._provider_api_key_edits == {}
 
 
 def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
@@ -421,13 +399,10 @@ def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
     dialog = SetupWizardDialog(service, wizard_state)
 
     dialog._provider_checks[ProviderKind.GEMINI].setChecked(True)
+    dialog._provider_api_key_edits[ProviderKind.GEMINI].setText("secret")
     dialog._go_next()
-    dialog._draft_forms[0].api_key_edit.setText("secret")
-    dialog._go_next()
-    assert dialog._page_index == 2
-
-    dialog._go_back()
     assert dialog._page_index == 1
+
     dialog._go_back()
     assert dialog._page_index == 0
 
@@ -436,8 +411,9 @@ def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
     assert card_host.layout() is not None
     assert card_host.layout().count() >= 1
     first_item_widget = card_host.layout().itemAt(0).widget()
-    assert first_item_widget is dialog._provider_checks[ProviderKind.GEMINI]
+    assert first_item_widget is not None
     assert dialog._provider_checks[ProviderKind.GEMINI].isChecked() is True
+    assert dialog._provider_api_key_edits[ProviderKind.GEMINI].text() == "secret"
 
 
 def test_app_setup_view_refreshes_wizard_prompt_state():
