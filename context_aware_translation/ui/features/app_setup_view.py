@@ -793,7 +793,13 @@ class AppSetupView(QWidget):
         for connection in connections:
             row = self.connections_table.rowCount()
             self.connections_table.insertRow(row)
-            self._set_table_item(self.connections_table, row, 0, connection.display_name, connection.connection_id)
+            name_item = self._set_table_item(
+                self.connections_table, row, 0, connection.display_name, connection.connection_id
+            )
+            if connection.is_managed:
+                name_item.setToolTip(
+                    self.tr("Managed by the setup wizard. Duplicate it if you need an editable copy.")
+                )
             self._set_table_item(
                 self.connections_table, row, 1, _PROVIDER_LABELS.get(connection.provider, connection.provider.value)
             )
@@ -852,9 +858,11 @@ class AppSetupView(QWidget):
         return None
 
     def _update_connection_buttons(self) -> None:
-        selected = self._selected_connection() is not None
+        selected_connection = self._selected_connection()
+        selected = selected_connection is not None
+        managed = bool(selected_connection and selected_connection.is_managed)
         self.duplicate_connection_button.setEnabled(selected)
-        self.delete_connection_button.setEnabled(selected)
+        self.delete_connection_button.setEnabled(selected and not managed)
 
     def _update_profile_buttons(self) -> None:
         selected = self._selected_profile() is not None
@@ -984,6 +992,9 @@ class AppSetupView(QWidget):
         self._on_edit_profile()
 
     def _on_connection_double_clicked(self, _row: int, _column: int) -> None:
+        connection = self._selected_connection()
+        if connection is None or connection.is_managed:
+            return
         self._on_edit_connection()
 
     def _test_connection_draft(self, draft: ConnectionDraft) -> ConnectionTestResult:
@@ -1015,11 +1026,12 @@ class AppSetupView(QWidget):
 
     def _set_table_item(
         self, table: QTableWidget, row: int, column: int, text: str, user_data: str | None = None
-    ) -> None:
+    ) -> QTableWidgetItem:
         item = QTableWidgetItem(text)
         if user_data is not None:
             item.setData(Qt.ItemDataRole.UserRole, user_data)
         table.setItem(row, column, item)
+        return item
 
     def _summary_text(self, state: AppSetupState) -> str:
         if state.requires_wizard:

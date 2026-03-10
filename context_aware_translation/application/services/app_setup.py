@@ -33,6 +33,8 @@ from context_aware_translation.application.runtime import (
     build_workflow_profile_payload,
     expand_wizard_connection_drafts,
     infer_capabilities,
+    is_managed_connection_name,
+    public_connection_name,
     raise_application_error,
     recommended_workflow_profile_from_drafts,
 )
@@ -156,6 +158,11 @@ class DefaultAppSetupService:
                 raise_application_error(
                     ApplicationErrorCode.NOT_FOUND, f"Connection not found: {request.connection_id}"
                 )
+            if is_managed_connection_name(existing.name):
+                raise_application_error(
+                    ApplicationErrorCode.PRECONDITION,
+                    "Managed wizard connections cannot be edited directly. Duplicate the connection if you need a custom copy.",
+                )
             updated = self._runtime.book_manager.update_endpoint_profile(
                 request.connection_id,
                 name=draft.display_name,
@@ -196,6 +203,14 @@ class DefaultAppSetupService:
         return self.get_state()
 
     def delete_connection(self, connection_id: str) -> AppSetupState:
+        existing = self._runtime.book_manager.get_endpoint_profile(connection_id)
+        if existing is None:
+            raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
+        if is_managed_connection_name(existing.name):
+            raise_application_error(
+                ApplicationErrorCode.PRECONDITION,
+                "Managed wizard connections cannot be deleted directly.",
+            )
         deleted = self._runtime.book_manager.delete_endpoint_profile(connection_id)
         if not deleted:
             raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
@@ -207,7 +222,7 @@ class DefaultAppSetupService:
         if existing is None:
             raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
         self._runtime.book_manager.create_endpoint_profile(
-            name=self._next_connection_copy_name(existing.name),
+            name=self._next_connection_copy_name(public_connection_name(existing.name)),
             api_key=existing.api_key,
             base_url=existing.base_url,
             model=existing.model,
@@ -225,6 +240,14 @@ class DefaultAppSetupService:
         return self.get_state()
 
     def reset_connection_tokens(self, connection_id: str) -> ConnectionSummary:
+        existing = self._runtime.book_manager.get_endpoint_profile(connection_id)
+        if existing is None:
+            raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
+        if is_managed_connection_name(existing.name):
+            raise_application_error(
+                ApplicationErrorCode.PRECONDITION,
+                "Managed wizard connections cannot be modified directly.",
+            )
         updated = self._runtime.book_manager.reset_endpoint_tokens(connection_id)
         if updated is None:
             raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")

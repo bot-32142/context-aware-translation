@@ -53,6 +53,7 @@ class ProviderCard(ContractModel):
 class ConnectionSummary(ContractModel):
     connection_id: str
     display_name: str
+    is_managed: bool = False
     provider: ProviderKind
     description: str | None = None
     base_url: str | None = None

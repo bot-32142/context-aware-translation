@@ -203,6 +203,27 @@ def test_app_setup_view_opens_connection_dialog_on_double_click():
         view.deleteLater()
 
 
+def test_app_setup_view_disables_managed_connection_edits():
+    from context_aware_translation.ui.features.app_setup_view import AppSetupView
+
+    managed_state = _make_state()
+    managed_state = managed_state.model_copy(
+        update={"connections": [managed_state.connections[0].model_copy(update={"is_managed": True})]}
+    )
+    service = FakeAppSetupService(state=managed_state)
+    view = AppSetupView(service)
+    opened: list[bool] = []
+    try:
+        view.connections_table.selectRow(0)
+        assert view.duplicate_connection_button.isEnabled()
+        assert not view.delete_connection_button.isEnabled()
+        with patch.object(view, "_on_edit_connection", side_effect=lambda: opened.append(True)):
+            view._on_connection_double_clicked(0, 0)
+        assert opened == []
+    finally:
+        view.deleteLater()
+
+
 def test_setup_wizard_dialog_previews_and_saves_through_service():
     from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
 

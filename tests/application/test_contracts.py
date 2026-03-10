@@ -57,10 +57,12 @@ from context_aware_translation.application.contracts.work import (
 )
 from context_aware_translation.application.errors import ApplicationError, ApplicationErrorCode, ApplicationErrorPayload
 from context_aware_translation.application.runtime import (
+    build_connection_summary,
     build_workflow_profile_detail,
     build_workflow_profile_payload,
     recommended_workflow_profile_from_drafts,
 )
+from context_aware_translation.storage.endpoint_profile import EndpointProfile
 
 
 def _profile(*, profile_id: str, name: str, kind: WorkflowProfileKind) -> WorkflowProfileDetail:
@@ -207,6 +209,23 @@ def test_setup_and_document_contracts_are_json_serializable() -> None:
     assert translation.model_dump(mode="json")["units"][0]["actions"]["can_retranslate"] is True
     assert export_state.model_dump(mode="json")["can_export"] is True
     assert images_state.model_dump(mode="json")["assets"][0]["translated_text"] == "Everyone, get down now!!!"
+
+
+def test_managed_connection_names_are_hidden_from_display() -> None:
+    summary = build_connection_summary(
+        EndpointProfile(
+            profile_id="conn-1",
+            name="recommended-Gemini 2.5 Pro",
+            created_at=0.0,
+            updated_at=0.0,
+            api_key="secret",
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            model="gemini-2.5-pro",
+        )
+    )
+
+    assert summary.display_name == "Gemini 2.5 Pro"
+    assert summary.is_managed is True
 
 
 def test_setup_wizard_state_serializes_for_provider_first_flow() -> None:

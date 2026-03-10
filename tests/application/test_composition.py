@@ -121,10 +121,10 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
         )
 
         connection_names = {profile.name for profile in context.runtime.book_manager.list_endpoint_profiles()}
-        assert "Gemini 2.5 Pro" in connection_names
-        assert "Gemini 3.1 Flash Image Preview" in connection_names
-        assert "DeepSeek Chat" in connection_names
-        assert "DeepSeek Reasoner" in connection_names
+        assert "recommended-Gemini 2.5 Pro" in connection_names
+        assert "recommended-Gemini 3.1 Flash Image Preview" in connection_names
+        assert "recommended-DeepSeek Chat" in connection_names
+        assert "recommended-DeepSeek Reasoner" in connection_names
 
         created_profile = next(profile for profile in context.runtime.book_manager.list_profiles() if profile.name == "Team Default")
         detail = context.services.app_setup.get_state()

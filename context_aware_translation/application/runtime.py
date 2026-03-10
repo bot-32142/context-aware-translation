@@ -69,6 +69,7 @@ if TYPE_CHECKING:
 
 _DEFAULT_PROFILE_NAME = "app-default-profile"
 _UI_SOURCE_PROFILE_ID_KEY = "_ui_source_profile_id"
+_MANAGED_CONNECTION_PREFIXES = ("recommended-", "system-default-")
 
 _WORKFLOW_STEP_LAYOUT: tuple[tuple[WorkflowStepId, str, str | None], ...] = (
     (WorkflowStepId.EXTRACTOR, "Extractor", "extractor_config"),
@@ -379,12 +380,28 @@ def infer_connection_status(profile: EndpointProfile) -> ConnectionStatus:
     return ConnectionStatus.UNTESTED
 
 
+def is_managed_connection_name(name: str) -> bool:
+    normalized = name.strip().lower()
+    return any(normalized.startswith(prefix) for prefix in _MANAGED_CONNECTION_PREFIXES)
+
+
+def public_connection_name(name: str) -> str:
+    stripped = name.strip()
+    lowered = stripped.lower()
+    for prefix in _MANAGED_CONNECTION_PREFIXES:
+        if lowered.startswith(prefix):
+            return stripped[len(prefix) :]
+    return stripped
+
+
 def build_connection_summary(profile: EndpointProfile) -> ConnectionSummary:
     provider = infer_provider_kind(profile.base_url, profile.model)
     kwargs_payload = {str(key): value for key, value in (profile.kwargs or {}).items() if key != "provider"}
+    is_managed = is_managed_connection_name(profile.name)
     return ConnectionSummary(
         connection_id=profile.profile_id,
-        display_name=profile.name,
+        display_name=public_connection_name(profile.name),
+        is_managed=is_managed,
         provider=provider,
         description=profile.description,
         base_url=profile.base_url or None,
@@ -577,7 +594,7 @@ def expand_wizard_connection_drafts(seed_drafts: list[ConnectionDraft]) -> list[
         for template in templates:
             expanded.append(
                 ConnectionDraft(
-                    display_name=template.display_name,
+                    display_name=f"recommended-{template.display_name}",
                     provider=template.provider,
                     description=seed.description,
                     api_key=seed.api_key,
@@ -652,7 +669,7 @@ def _recommended_step_route(
         step_id=step_id,
         step_label=label,
         connection_id=selected.display_name if selected is not None else None,
-        connection_label=selected.display_name if selected is not None else None,
+        connection_label=public_connection_name(selected.display_name) if selected is not None else None,
         model=selected.default_model if selected is not None else None,
         step_config=step_config,
     )
