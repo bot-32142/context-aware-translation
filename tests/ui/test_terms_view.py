@@ -149,6 +149,12 @@ def test_terms_view_routes_edits_and_toolbar_actions_through_service():
 
             translation_item = view.table_model.item(0, 1)
             translation_item.setText("Monkey D. Luffy")
+            description_item = view.table_model.item(0, 2)
+            description_item.setText("Future pirate king")
+            ignored_item = view.table_model.item(0, 5)
+            ignored_item.setCheckState(Qt.CheckState.Checked)
+            reviewed_item = view.table_model.item(0, 6)
+            reviewed_item.setCheckState(Qt.CheckState.Checked)
             view.table_view.selectRow(0)
             assert view.bulk_button.isEnabled()
             view.bulk_mark_reviewed_action.trigger()
@@ -161,6 +167,12 @@ def test_terms_view_routes_edits_and_toolbar_actions_through_service():
         assert "export_terms" in call_names
         assert "update_term" in call_names
         assert "bulk_update_terms" in call_names
+
+        update_requests = [payload for name, payload in service.calls if name == "update_term"]
+        assert any(payload.translation == "Monkey D. Luffy" for payload in update_requests)
+        assert any(payload.description == "Future pirate king" for payload in update_requests)
+        assert any(payload.ignored is True for payload in update_requests)
+        assert any(payload.reviewed is True for payload in update_requests)
     finally:
         view.cleanup()
 
@@ -263,5 +275,29 @@ def test_terms_view_uses_stable_row_aware_sort_for_reviewed_and_ignored():
             for row in range(view.proxy_model.rowCount())
         ]
         assert ordered_terms == ["B", "A", "C"]
+    finally:
+        view.cleanup()
+
+
+def test_terms_view_context_menu_selects_row_and_copies_description():
+    from context_aware_translation.ui.features.terms_view import TermsView
+
+    service = FakeTermsService(project_state=_make_state())
+    bus = InMemoryApplicationEventBus()
+    view = TermsView("proj-1", service, bus)
+    try:
+        view.show()
+        QApplication.processEvents()
+        first_rect = view.table_view.visualRect(view.proxy_model.index(0, 0))
+        expected_term = view.proxy_model.index(0, 0).data()
+        with patch.object(QApplication.clipboard(), "setText") as set_text:
+            view._show_context_menu(first_rect.center())
+            assert view.bulk_button.isEnabled()
+            assert view.table_panel.selected_rows()[0].term == expected_term
+            actions = view._context_menu.actions()
+            assert actions[0].text() == "Copy Description"
+            actions[0].trigger()
+        expected_description = view.proxy_model.index(0, 2).data(Qt.ItemDataRole.ToolTipRole)
+        set_text.assert_called_once_with(expected_description)
     finally:
         view.cleanup()

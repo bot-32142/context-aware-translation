@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent
+from PySide6.QtCore import QEvent, QPoint, Qt
 from PySide6.QtWidgets import (
+    QApplication,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -78,6 +79,8 @@ class TermsView(QWidget):
         self.proxy_model = self.table_panel.proxy_model
         self.table_view = self.table_panel.table_view
         self.table_view.selectionModel().selectionChanged.connect(lambda *_args: self._update_bulk_button_state())
+        self.table_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table_view.customContextMenuRequested.connect(self._show_context_menu)
         toolbar_layout.addWidget(self.search_input, 1)
         toolbar_layout.addWidget(self.filter_combo)
 
@@ -360,6 +363,42 @@ class TermsView(QWidget):
 
     def _update_bulk_button_state(self) -> None:
         self.bulk_button.setEnabled(bool(self.table_panel.selected_rows()))
+
+    def _show_context_menu(self, pos: QPoint) -> None:
+        index = self.table_view.indexAt(pos)
+        row = index.row() if index.isValid() else self.table_view.rowAt(pos.y())
+        if row < 0:
+            viewport_pos = self.table_view.viewport().mapFrom(self.table_view, pos)
+            row = self.table_view.rowAt(viewport_pos.y())
+        if row < 0:
+            return
+
+        proxy_index = self.proxy_model.index(row, 0)
+        if proxy_index.isValid():
+            self.table_view.setCurrentIndex(proxy_index)
+        self.table_view.selectRow(row)
+        self._update_bulk_button_state()
+
+        menu = QMenu(self)
+        source_index = self.proxy_model.mapToSource(proxy_index)
+        description = self.table_model.data(self.table_model.index(source_index.row(), 2), Qt.ItemDataRole.ToolTipRole)
+        if isinstance(description, str) and description.strip():
+            copy_action = menu.addAction(self.tr("Copy Description"))
+            copy_action.triggered.connect(lambda: self._copy_description(description))
+            menu.addSeparator()
+
+        menu.addAction(self.bulk_mark_reviewed_action)
+        menu.addAction(self.bulk_unmark_reviewed_action)
+        menu.addAction(self.bulk_mark_ignored_action)
+        menu.addAction(self.bulk_unmark_ignored_action)
+        menu.addAction(self.bulk_delete_action)
+        self._context_menu = menu
+        menu.popup(self.table_view.viewport().mapToGlobal(pos))
+
+    def _copy_description(self, text: str) -> None:
+        clipboard = QApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setText(text)
 
     def _show_application_error(self, title: str, exc: ApplicationError) -> None:
         if isinstance(exc, BlockedOperationError):
