@@ -496,7 +496,6 @@ class WorkflowProfileEditorDialog(QDialog):
         self._allow_name_edit = allow_name_edit
         self.setWindowTitle(self.tr("Workflow Profile"))
         self.setMinimumWidth(980)
-        self.resize(980, 520)
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -561,6 +560,9 @@ class WorkflowProfileEditorDialog(QDialog):
         footer.accepted.connect(self._accept_if_valid)
         footer.rejected.connect(self.reject)
         layout.addWidget(footer)
+        self.general_section.toggled.connect(self._schedule_resize)
+        self.routes_section.toggled.connect(self._schedule_resize)
+        self._schedule_resize()
 
     def profile(self) -> WorkflowProfileDetail:
         return WorkflowProfileDetail(
@@ -585,3 +587,11 @@ class WorkflowProfileEditorDialog(QDialog):
             )
             return
         self.accept()
+
+    def _schedule_resize(self, *_args: object) -> None:
+        self.layout().activate()
+        self.adjustSize()
+        target_width = max(980, self.routes_editor.table.minimumWidth() + 44)
+        target_height = min(max(self.sizeHint().height(), 260), 700)
+        self.setMinimumWidth(target_width)
+        self.setFixedSize(target_width, target_height)
