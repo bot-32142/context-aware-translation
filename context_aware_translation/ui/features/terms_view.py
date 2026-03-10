@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QPoint, Qt
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -96,32 +97,18 @@ class TermsView(QWidget):
         self.filter_noise_button.clicked.connect(self._on_filter_noise)
         toolbar_layout.addWidget(self.filter_noise_button)
 
-        self.bulk_menu = QMenu(self)
-        self.edit_selected_action = self.bulk_menu.addAction(
-            self.tr("Edit Selected"),
-            self._edit_selected_terms,
-        )
-        self.bulk_menu.addSeparator()
-        self.bulk_mark_reviewed_action = self.bulk_menu.addAction(
-            self.tr("Mark Reviewed"),
-            lambda: self._run_bulk_update(reviewed=True),
-        )
-        self.bulk_unmark_reviewed_action = self.bulk_menu.addAction(
-            self.tr("Unmark Reviewed"),
-            lambda: self._run_bulk_update(reviewed=False),
-        )
-        self.bulk_mark_ignored_action = self.bulk_menu.addAction(
-            self.tr("Mark Ignored"),
-            lambda: self._run_bulk_update(ignored=True),
-        )
-        self.bulk_unmark_ignored_action = self.bulk_menu.addAction(
-            self.tr("Unmark Ignored"),
-            lambda: self._run_bulk_update(ignored=False),
-        )
-        self.bulk_delete_action = self.bulk_menu.addAction(
-            self.tr("Delete Selected"),
-            self._delete_selected_terms,
-        )
+        self.edit_selected_action = QAction(self.tr("Edit Selected"), self)
+        self.edit_selected_action.triggered.connect(self._edit_selected_terms)
+        self.bulk_mark_reviewed_action = QAction(self.tr("Mark Reviewed"), self)
+        self.bulk_mark_reviewed_action.triggered.connect(lambda: self._run_bulk_update(reviewed=True))
+        self.bulk_unmark_reviewed_action = QAction(self.tr("Unmark Reviewed"), self)
+        self.bulk_unmark_reviewed_action.triggered.connect(lambda: self._run_bulk_update(reviewed=False))
+        self.bulk_mark_ignored_action = QAction(self.tr("Mark Ignored"), self)
+        self.bulk_mark_ignored_action.triggered.connect(lambda: self._run_bulk_update(ignored=True))
+        self.bulk_unmark_ignored_action = QAction(self.tr("Unmark Ignored"), self)
+        self.bulk_unmark_ignored_action.triggered.connect(lambda: self._run_bulk_update(ignored=False))
+        self.bulk_delete_action = QAction(self.tr("Delete Selected"), self)
+        self.bulk_delete_action.triggered.connect(self._delete_selected_terms)
 
         self.import_button = QPushButton(self.tr("Import Terms"))
         self.import_button.clicked.connect(self._on_import_terms)
