@@ -634,8 +634,14 @@ def _recommended_step_route(
 ) -> WorkflowStepRoute:
     if step_id is WorkflowStepId.TRANSLATOR_BATCH:
         gemini_batch = _recommended_connection_by_model(
+            drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-pro")
+        ) or _recommended_connection_by_model(
             drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash")
-        ) or _recommended_connection_by_model(drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-3-flash-preview"))
+        ) or _recommended_connection_by_model(
+            drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-3-flash-preview")
+        ) or _recommended_connection_by_model(
+            drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash-lite")
+        )
         if gemini_batch is None:
             return WorkflowStepRoute(step_id=step_id, step_label=label)
         return WorkflowStepRoute(

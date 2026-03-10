@@ -276,7 +276,7 @@ def test_recommended_workflow_profile_uses_ranked_step_rules() -> None:
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].model == "gemini-3.1-flash-image-preview"
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].step_config["backend"] == "gemini"
     assert route_map[WorkflowStepId.MANGA_TRANSLATOR].model == "gemini-2.5-pro"
-    assert route_map[WorkflowStepId.TRANSLATOR_BATCH].model == "gemini-2.5-flash"
+    assert route_map[WorkflowStepId.TRANSLATOR_BATCH].model == "gemini-2.5-pro"
 
 
 def test_terms_queue_and_errors_expose_ui_safe_contracts() -> None:
