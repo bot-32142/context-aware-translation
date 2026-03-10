@@ -248,10 +248,14 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
 
     assert dialog._page_index == 1
     assert any(call[0] == "preview_setup_wizard" for call in service.calls)
+    assert dialog._profile_name_edit is not None
+    dialog._profile_name_edit.setText("Team Default")
 
     dialog._finish()
 
     assert any(call[0] == "run_setup_wizard" for call in service.calls)
+    run_request = next(call[1] for call in service.calls if call[0] == "run_setup_wizard")
+    assert run_request.profile_name == "Team Default"
 
 
 def test_setup_wizard_dialog_renders_provider_cards_on_first_page():

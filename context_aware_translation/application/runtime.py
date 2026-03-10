@@ -84,6 +84,115 @@ _WORKFLOW_STEP_LAYOUT: tuple[tuple[WorkflowStepId, str, str | None], ...] = (
 
 
 @dataclass(frozen=True)
+class WizardModelTemplate:
+    provider: ProviderKind
+    display_name: str
+    model: str
+    base_url: str
+    timeout: int = 180
+    max_retries: int = 3
+    concurrency: int = 5
+
+
+@dataclass(frozen=True)
+class StepModelPreference:
+    provider: ProviderKind
+    model: str
+
+
+_WIZARD_MODEL_CATALOG: dict[ProviderKind, tuple[WizardModelTemplate, ...]] = {
+    ProviderKind.GEMINI: (
+        WizardModelTemplate(ProviderKind.GEMINI, "Gemini 2.5 Pro", "gemini-2.5-pro", "https://generativelanguage.googleapis.com/v1beta/openai/", timeout=300),
+        WizardModelTemplate(ProviderKind.GEMINI, "Gemini 2.5 Flash", "gemini-2.5-flash", "https://generativelanguage.googleapis.com/v1beta/openai/"),
+        WizardModelTemplate(ProviderKind.GEMINI, "Gemini 2.5 Flash Lite", "gemini-2.5-flash-lite", "https://generativelanguage.googleapis.com/v1beta/openai/", timeout=120),
+        WizardModelTemplate(ProviderKind.GEMINI, "Gemini 3 Flash Preview", "gemini-3-flash-preview", "https://generativelanguage.googleapis.com/v1beta/openai/"),
+        WizardModelTemplate(ProviderKind.GEMINI, "Gemini 3.1 Flash Image Preview", "gemini-3.1-flash-image-preview", "https://generativelanguage.googleapis.com/v1beta/openai/", timeout=300, concurrency=2),
+    ),
+    ProviderKind.OPENAI: (
+        WizardModelTemplate(ProviderKind.OPENAI, "GPT-4.1", "gpt-4.1", "https://api.openai.com/v1"),
+        WizardModelTemplate(ProviderKind.OPENAI, "GPT-4.1 Mini", "gpt-4.1-mini", "https://api.openai.com/v1"),
+        WizardModelTemplate(ProviderKind.OPENAI, "GPT-4.1 Nano", "gpt-4.1-nano", "https://api.openai.com/v1", timeout=120),
+        WizardModelTemplate(ProviderKind.OPENAI, "o4-mini", "o4-mini", "https://api.openai.com/v1", timeout=300),
+        WizardModelTemplate(ProviderKind.OPENAI, "GPT Image 1", "gpt-image-1", "https://api.openai.com/v1", timeout=300, concurrency=2),
+    ),
+    ProviderKind.DEEPSEEK: (
+        WizardModelTemplate(ProviderKind.DEEPSEEK, "DeepSeek Chat", "deepseek-chat", "https://api.deepseek.com"),
+        WizardModelTemplate(ProviderKind.DEEPSEEK, "DeepSeek Reasoner", "deepseek-reasoner", "https://api.deepseek.com", timeout=300),
+    ),
+    ProviderKind.ANTHROPIC: (
+        WizardModelTemplate(ProviderKind.ANTHROPIC, "Claude Sonnet 3.5", "claude-3-5-sonnet-latest", "https://api.anthropic.com/v1", timeout=300),
+        WizardModelTemplate(ProviderKind.ANTHROPIC, "Claude Haiku 3.5", "claude-3-5-haiku-latest", "https://api.anthropic.com/v1"),
+    ),
+}
+
+_STEP_RECOMMENDATION_ORDER: dict[WorkflowStepId, tuple[StepModelPreference, ...]] = {
+    WorkflowStepId.EXTRACTOR: (
+        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-chat"),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash-lite"),
+        StepModelPreference(ProviderKind.OPENAI, "gpt-4.1-nano"),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash"),
+        StepModelPreference(ProviderKind.OPENAI, "gpt-4.1-mini"),
+        StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-haiku-latest"),
+        StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-pro"),
+    ),
+    WorkflowStepId.SUMMARIZER: (
+        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-chat"),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash-lite"),
+        StepModelPreference(ProviderKind.OPENAI, "gpt-4.1-nano"),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash"),
+        StepModelPreference(ProviderKind.OPENAI, "gpt-4.1-mini"),
+        StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-haiku-latest"),
+        StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-pro"),
+    ),
+    WorkflowStepId.GLOSSARY_TRANSLATOR: (
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash-lite"),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash"),
+        StepModelPreference(ProviderKind.OPENAI, "gpt-4.1-mini"),
+        StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-haiku-latest"),
+        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-chat"),
+    ),
+    WorkflowStepId.TRANSLATOR: (
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-pro"),
+        StepModelPreference(ProviderKind.OPENAI, "gpt-4.1"),
+        StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
+        StepModelPreference(ProviderKind.OPENAI, "gpt-4.1-mini"),
+        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-chat"),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash"),
+    ),
+    WorkflowStepId.REVIEWER: (
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-pro"),
+        StepModelPreference(ProviderKind.OPENAI, "o4-mini"),
+        StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
+        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-reasoner"),
+        StepModelPreference(ProviderKind.OPENAI, "gpt-4.1"),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash"),
+    ),
+    WorkflowStepId.OCR: (
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash-lite"),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-3-flash-preview"),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash"),
+        StepModelPreference(ProviderKind.OPENAI, "gpt-4.1-mini"),
+        StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-haiku-latest"),
+        StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-pro"),
+    ),
+    WorkflowStepId.IMAGE_REEMBEDDING: (
+        StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-flash-image-preview"),
+        StepModelPreference(ProviderKind.OPENAI, "gpt-image-1"),
+    ),
+    WorkflowStepId.MANGA_TRANSLATOR: (
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-pro"),
+        StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
+        StepModelPreference(ProviderKind.OPENAI, "gpt-4.1"),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-3-flash-preview"),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash"),
+    ),
+}
+
+
+@dataclass(frozen=True)
 class DefaultRouteInfo:
     capability: CapabilityCode
     connection_id: str | None = None
@@ -458,10 +567,95 @@ def build_workflow_profile_payload(
     return payload
 
 
-def first_connection_for_capability(
-    drafts: list[ConnectionDraft], capability: CapabilityCode
+def expand_wizard_connection_drafts(seed_drafts: list[ConnectionDraft]) -> list[ConnectionDraft]:
+    expanded: list[ConnectionDraft] = []
+    for seed in seed_drafts:
+        templates = _WIZARD_MODEL_CATALOG.get(seed.provider)
+        if not templates:
+            expanded.append(seed)
+            continue
+        for template in templates:
+            expanded.append(
+                ConnectionDraft(
+                    display_name=template.display_name,
+                    provider=template.provider,
+                    description=seed.description,
+                    api_key=seed.api_key,
+                    base_url=template.base_url,
+                    default_model=template.model,
+                    temperature=seed.temperature,
+                    timeout=template.timeout,
+                    max_retries=template.max_retries,
+                    concurrency=template.concurrency,
+                    token_limit=seed.token_limit,
+                    input_token_limit=seed.input_token_limit,
+                    output_token_limit=seed.output_token_limit,
+                    custom_parameters_json=seed.custom_parameters_json,
+                )
+            )
+    return expanded
+
+
+def _recommended_connection_by_model(
+    drafts: list[ConnectionDraft],
+    preference: StepModelPreference,
 ) -> ConnectionDraft | None:
-    return next((draft for draft in drafts if capability in infer_capabilities(draft.provider)), None)
+    return next(
+        (
+            draft
+            for draft in drafts
+            if draft.provider is preference.provider and (draft.default_model or "") == preference.model
+        ),
+        None,
+    )
+
+
+def _recommended_step_route(
+    step_id: WorkflowStepId,
+    label: str,
+    drafts: list[ConnectionDraft],
+) -> WorkflowStepRoute:
+    if step_id is WorkflowStepId.TRANSLATOR_BATCH:
+        gemini_batch = _recommended_connection_by_model(
+            drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash")
+        ) or _recommended_connection_by_model(drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-3-flash-preview"))
+        if gemini_batch is None:
+            return WorkflowStepRoute(step_id=step_id, step_label=label)
+        return WorkflowStepRoute(
+            step_id=step_id,
+            step_label=label,
+            connection_id=None,
+            connection_label="Gemini AI Studio",
+            model=gemini_batch.default_model,
+            step_config={
+                "provider": "gemini_ai_studio",
+                "api_key": gemini_batch.api_key or "",
+                "batch_size": 100,
+                "thinking_mode": "auto",
+            },
+        )
+
+    selected = None
+    for preference in _STEP_RECOMMENDATION_ORDER.get(step_id, ()):
+        selected = _recommended_connection_by_model(drafts, preference)
+        if selected is not None:
+            break
+
+    step_config: dict[str, bool | int | float | str | None] = {}
+    if step_id is WorkflowStepId.IMAGE_REEMBEDDING and selected is not None:
+        if selected.provider is ProviderKind.GEMINI:
+            step_config["backend"] = "gemini"
+        elif selected.provider is ProviderKind.OPENAI:
+            step_config["backend"] = "openai"
+
+    return WorkflowStepRoute(
+        step_id=step_id,
+        step_label=label,
+        connection_id=selected.display_name if selected is not None else None,
+        connection_label=selected.display_name if selected is not None else None,
+        model=selected.default_model if selected is not None else None,
+        step_config=step_config,
+    )
 
 
 def recommended_workflow_profile_from_drafts(
@@ -471,34 +665,11 @@ def recommended_workflow_profile_from_drafts(
     name: str = "Recommended",
     target_language: str = "English",
 ) -> WorkflowProfileDetail:
-    routes: list[WorkflowStepRoute] = []
-    translation_draft = first_connection_for_capability(drafts, CapabilityCode.TRANSLATION)
-    ocr_draft = first_connection_for_capability(drafts, CapabilityCode.IMAGE_TEXT_READING) or translation_draft
-    image_draft = first_connection_for_capability(drafts, CapabilityCode.IMAGE_EDITING) or ocr_draft or translation_draft
-    review_draft = first_connection_for_capability(drafts, CapabilityCode.REASONING_AND_REVIEW) or translation_draft
-
-    step_draft_map = {
-        WorkflowStepId.EXTRACTOR: translation_draft,
-        WorkflowStepId.SUMMARIZER: translation_draft,
-        WorkflowStepId.GLOSSARY_TRANSLATOR: translation_draft,
-        WorkflowStepId.TRANSLATOR: translation_draft,
-        WorkflowStepId.REVIEWER: review_draft,
-        WorkflowStepId.OCR: ocr_draft,
-        WorkflowStepId.IMAGE_REEMBEDDING: image_draft,
-        WorkflowStepId.MANGA_TRANSLATOR: ocr_draft or translation_draft,
-        WorkflowStepId.TRANSLATOR_BATCH: None,
-    }
-    for step_id, label, _config_key in _WORKFLOW_STEP_LAYOUT:
-        draft = step_draft_map.get(step_id)
-        routes.append(
-            WorkflowStepRoute(
-                step_id=step_id,
-                step_label=label,
-                connection_id=draft.display_name if draft is not None else None,
-                connection_label=draft.display_name if draft is not None else None,
-                model=draft.default_model if draft is not None else None,
-            )
-        )
+    curated_drafts = expand_wizard_connection_drafts(drafts)
+    routes = [
+        _recommended_step_route(step_id, label, curated_drafts)
+        for step_id, label, _config_key in _WORKFLOW_STEP_LAYOUT
+    ]
     return WorkflowProfileDetail(
         profile_id=profile_id,
         name=name,

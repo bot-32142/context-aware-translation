@@ -31,6 +31,7 @@ from context_aware_translation.application.runtime import (
     build_connection_summary,
     build_workflow_profile_detail,
     build_workflow_profile_payload,
+    expand_wizard_connection_drafts,
     infer_capabilities,
     raise_application_error,
     recommended_workflow_profile_from_drafts,
@@ -115,14 +116,8 @@ class DefaultAppSetupService:
                     helper_text="Text translation and image understanding.",
                     recommended_for=[CapabilityCode.TRANSLATION, CapabilityCode.IMAGE_TEXT_READING],
                 ),
-                ProviderCard(
-                    provider=ProviderKind.OPENAI_COMPATIBLE,
-                    label="OpenAI-compatible / Custom",
-                    helper_text="Use a custom base URL and model names.",
-                    supports_custom_endpoint=True,
-                    recommended_for=[CapabilityCode.TRANSLATION],
-                ),
             ],
+            profile_name="Recommended",
         )
 
     def preview_setup_wizard(self, request: SetupWizardRequest) -> SetupWizardState:
@@ -139,6 +134,7 @@ class DefaultAppSetupService:
             target_language = current_detail.target_language
         recommendation = recommended_workflow_profile_from_drafts(
             request.connections,
+            name=(request.profile_name or "Recommended").strip() or "Recommended",
             target_language=target_language,
         )
         return SetupWizardState(
@@ -148,6 +144,7 @@ class DefaultAppSetupService:
             drafts=request.connections,
             test_results=[self._test_connection_result(draft) for draft in request.connections],
             recommendation=recommendation,
+            profile_name=recommendation.name,
         )
 
     def save_connection(self, request: SaveConnectionRequest) -> AppSetupState:
@@ -244,7 +241,7 @@ class DefaultAppSetupService:
             raise_application_error(ApplicationErrorCode.PRECONDITION, "Setup wizard did not produce a workflow profile.")
 
         saved_ids: dict[str, str] = {}
-        for draft in request.connections:
+        for draft in expand_wizard_connection_drafts(request.connections):
             state_before = {p.profile_id for p in self._runtime.book_manager.list_endpoint_profiles()}
             self.save_connection(SaveConnectionRequest(connection=draft))
             new_profiles = self._runtime.book_manager.list_endpoint_profiles()
@@ -274,6 +271,7 @@ class DefaultAppSetupService:
         return self.get_state()
 
     def save_workflow_profile(self, request: SaveWorkflowProfileRequest) -> AppSetupState:
+        should_be_default = request.set_as_default or request.profile.is_default
         existing = self._runtime.book_manager.get_profile(request.profile.profile_id)
         if existing is not None:
             payload = build_workflow_profile_payload(base_config=existing.config, profile=request.profile)
@@ -281,7 +279,7 @@ class DefaultAppSetupService:
                 request.profile.profile_id,
                 name=request.profile.name,
                 config=payload,
-                is_default=request.set_as_default or request.profile.is_default,
+                is_default=existing.is_default,
             )
             if updated is None:
                 raise_application_error(ApplicationErrorCode.INTERNAL, "Failed to update workflow profile.")
@@ -291,11 +289,11 @@ class DefaultAppSetupService:
             created = self._runtime.book_manager.create_profile(
                 name=request.profile.name or _DEFAULT_PROFILE_NAME,
                 config=payload,
-                is_default=request.set_as_default or request.profile.is_default,
+                is_default=False,
             )
             profile_id = created.profile_id
 
-        if request.set_as_default:
+        if should_be_default:
             self._runtime.book_manager.set_default_profile(profile_id)
 
         self._runtime.invalidate_setup()

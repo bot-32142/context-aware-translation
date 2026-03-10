@@ -100,6 +100,36 @@ def test_app_setup_preview_exposes_recommended_profile(tmp_path: Path) -> None:
         assert preview.test_results
         assert preview.recommendation is not None
         assert preview.recommendation.routes
+        assert preview.recommendation.name == "Recommended"
+    finally:
+        context.close()
+
+
+def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    try:
+        context.services.app_setup.run_setup_wizard(
+            SetupWizardRequest(
+                providers=[ProviderKind.GEMINI, ProviderKind.DEEPSEEK],
+                profile_name="Team Default",
+                connections=[
+                    ConnectionDraft(display_name="Gemini", provider=ProviderKind.GEMINI, api_key="gkey"),
+                    ConnectionDraft(display_name="DeepSeek", provider=ProviderKind.DEEPSEEK, api_key="dkey"),
+                ],
+            )
+        )
+
+        connection_names = {profile.name for profile in context.runtime.book_manager.list_endpoint_profiles()}
+        assert "Gemini 2.5 Pro" in connection_names
+        assert "Gemini 3.1 Flash Image Preview" in connection_names
+        assert "DeepSeek Chat" in connection_names
+        assert "DeepSeek Reasoner" in connection_names
+
+        created_profile = next(profile for profile in context.runtime.book_manager.list_profiles() if profile.name == "Team Default")
+        detail = context.services.app_setup.get_state()
+        assert any(profile.name == "Team Default" for profile in detail.shared_profiles)
+        assert created_profile.is_default is True
     finally:
         context.close()
 

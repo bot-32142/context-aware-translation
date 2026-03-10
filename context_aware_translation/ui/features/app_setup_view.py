@@ -14,11 +14,13 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
@@ -457,6 +459,7 @@ class SetupWizardDialog(QDialog):
         self._available_providers: list[ProviderCard] = []
         self._provider_checks: dict[ProviderKind, QCheckBox] = {}
         self._provider_api_key_edits: dict[ProviderKind, QLineEdit] = {}
+        self._profile_name_edit: QLineEdit | None = None
 
     def _build_page(self) -> None:
         while self.page_layout.count():
@@ -500,6 +503,11 @@ class SetupWizardDialog(QDialog):
             preview = self._preview_state
             if preview is None:
                 return
+            profile_name_group = QGroupBox(self.tr("Workflow profile"))
+            profile_name_layout = QFormLayout(profile_name_group)
+            self._profile_name_edit = QLineEdit(preview.profile_name or "Recommended")
+            profile_name_layout.addRow(self.tr("Profile name"), self._profile_name_edit)
+            self.page_layout.addWidget(profile_name_group)
             for result in preview.test_results:
                 result_group = QGroupBox(result.connection_label)
                 result_layout = QVBoxLayout(result_group)
@@ -572,6 +580,7 @@ class SetupWizardDialog(QDialog):
         return SetupWizardRequest(
             providers=list(self._wizard_state.selected_providers),
             connections=list(self._wizard_state.drafts),
+            profile_name=(self._profile_name_edit.text().strip() if self._profile_name_edit is not None else None),
         )
 
     def _populate_provider_cards(self, providers: Sequence[ProviderCard]) -> None:
@@ -612,6 +621,13 @@ class SetupWizardDialog(QDialog):
         if request is None:
             QMessageBox.warning(
                 self, self.tr("Wizard Incomplete"), self.tr("Review the recommended workflow profile before saving setup.")
+            )
+            return
+        if not (request.profile_name or "").strip():
+            QMessageBox.warning(
+                self,
+                self.tr("Missing Information"),
+                self.tr("Workflow profile name is required."),
             )
             return
         self._service.run_setup_wizard(request)
@@ -681,10 +697,18 @@ class AppSetupView(QWidget):
         self.connections_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.connections_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.connections_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.connections_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.connections_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.connections_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.connections_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.connections_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
+        self.connections_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
+        self.connections_table.setColumnWidth(3, 320)
+        self.connections_table.setColumnWidth(4, 500)
         self.connections_table.itemSelectionChanged.connect(self._update_connection_buttons)
         self.connections_table.cellDoubleClicked.connect(self._on_connection_double_clicked)
         connections_layout.addWidget(self.connections_table)
-        connections_tab_layout.addWidget(self.connections_group)
+        connections_tab_layout.addWidget(self.connections_group, 1)
 
         self.profiles_group = QGroupBox(self.tr("Shared workflow profiles"))
         profiles_layout = QVBoxLayout(self.profiles_group)
@@ -705,16 +729,19 @@ class AppSetupView(QWidget):
         self.profiles_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.profiles_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.profiles_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.profiles_table.horizontalHeader().setStretchLastSection(True)
+        self.profiles_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.profiles_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
+        self.profiles_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        self.profiles_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.profiles_table.setColumnWidth(0, 360)
+        self.profiles_table.setColumnWidth(1, 220)
         self.profiles_table.itemSelectionChanged.connect(self._update_profile_buttons)
         self.profiles_table.cellDoubleClicked.connect(self._on_profile_double_clicked)
         profiles_layout.addWidget(self.profiles_table)
 
         self.profiles_tab = QWidget()
         profiles_tab_layout = QVBoxLayout(self.profiles_tab)
-        profiles_tab_layout.addWidget(self.profiles_group)
-        profiles_tab_layout.addStretch()
-        connections_tab_layout.addStretch()
+        profiles_tab_layout.addWidget(self.profiles_group, 1)
 
         self.setup_tabs.addTab(self.connections_tab, self.tr("Connections"))
         self.setup_tabs.addTab(self.profiles_tab, self.tr("Workflow Profiles"))
@@ -773,7 +800,7 @@ class AppSetupView(QWidget):
             self._set_table_item(self.connections_table, row, 2, connection.status.value.replace("_", " ").title())
             self._set_table_item(self.connections_table, row, 3, connection.default_model or "")
             self._set_table_item(self.connections_table, row, 4, connection.base_url or "")
-        self.connections_table.resizeColumnsToContents()
+        self.connections_table.resizeRowsToContents()
 
     def _populate_profiles(self, state: AppSetupState) -> None:
         self.profiles_table.setRowCount(0)
@@ -783,6 +810,7 @@ class AppSetupView(QWidget):
             self._set_table_item(self.profiles_table, row, 0, profile.name, profile.profile_id)
             self._set_table_item(self.profiles_table, row, 1, profile.target_language)
             self._set_table_item(self.profiles_table, row, 2, self.tr("Yes") if profile.is_default else "")
+        self.profiles_table.resizeRowsToContents()
 
         selected_id = self._preferred_profile_id(state)
         if selected_id:

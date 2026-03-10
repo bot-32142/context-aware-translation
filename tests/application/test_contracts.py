@@ -1,5 +1,6 @@
 from context_aware_translation.application.contracts.app_setup import (
     AppSetupState,
+    ConnectionDraft,
     ConnectionStatus,
     ConnectionSummary,
     ProviderCard,
@@ -55,7 +56,11 @@ from context_aware_translation.application.contracts.work import (
     WorkDocumentRow,
 )
 from context_aware_translation.application.errors import ApplicationError, ApplicationErrorCode, ApplicationErrorPayload
-from context_aware_translation.application.runtime import build_workflow_profile_detail, build_workflow_profile_payload
+from context_aware_translation.application.runtime import (
+    build_workflow_profile_detail,
+    build_workflow_profile_payload,
+    recommended_workflow_profile_from_drafts,
+)
 
 
 def _profile(*, profile_id: str, name: str, kind: WorkflowProfileKind) -> WorkflowProfileDetail:
@@ -206,7 +211,7 @@ def test_setup_and_document_contracts_are_json_serializable() -> None:
 
 def test_setup_wizard_state_serializes_for_provider_first_flow() -> None:
     wizard = SetupWizardState(
-        step=SetupWizardStep.ENTER_KEYS,
+        step=SetupWizardStep.CHOOSE_PROVIDERS,
         available_providers=[
             ProviderCard(
                 provider=ProviderKind.GEMINI,
@@ -219,14 +224,40 @@ def test_setup_wizard_state_serializes_for_provider_first_flow() -> None:
             )
         ],
         selected_providers=[ProviderKind.GEMINI],
+        profile_name="Team Default",
         recommendation=_profile(profile_id="recommended", name="Recommended", kind=WorkflowProfileKind.SHARED),
     )
 
     payload = wizard.to_payload()
 
-    assert payload["step"] == "enter_keys"
+    assert payload["step"] == "choose_providers"
+    assert payload["profile_name"] == "Team Default"
     assert payload["available_providers"][0]["provider"] == "gemini"
     assert payload["recommendation"]["routes"][0]["step_id"] == "translator"
+
+
+def test_recommended_workflow_profile_uses_ranked_step_rules() -> None:
+    detail = recommended_workflow_profile_from_drafts(
+        [
+            ConnectionDraft(display_name="Gemini", provider=ProviderKind.GEMINI, api_key="gkey"),
+            ConnectionDraft(display_name="DeepSeek", provider=ProviderKind.DEEPSEEK, api_key="dkey"),
+            ConnectionDraft(display_name="OpenAI", provider=ProviderKind.OPENAI, api_key="okey"),
+        ],
+        name="Wizard Profile",
+        target_language="English",
+    )
+
+    route_map = {route.step_id: route for route in detail.routes}
+    assert route_map[WorkflowStepId.EXTRACTOR].model == "deepseek-chat"
+    assert route_map[WorkflowStepId.SUMMARIZER].model == "deepseek-chat"
+    assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].model == "gemini-2.5-flash-lite"
+    assert route_map[WorkflowStepId.TRANSLATOR].model == "gemini-2.5-pro"
+    assert route_map[WorkflowStepId.REVIEWER].model == "gemini-2.5-pro"
+    assert route_map[WorkflowStepId.OCR].model == "gemini-2.5-flash-lite"
+    assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].model == "gemini-3.1-flash-image-preview"
+    assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].step_config["backend"] == "gemini"
+    assert route_map[WorkflowStepId.MANGA_TRANSLATOR].model == "gemini-2.5-pro"
+    assert route_map[WorkflowStepId.TRANSLATOR_BATCH].model == "gemini-2.5-flash"
 
 
 def test_terms_queue_and_errors_expose_ui_safe_contracts() -> None:
