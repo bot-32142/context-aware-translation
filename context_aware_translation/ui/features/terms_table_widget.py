@@ -27,6 +27,7 @@ from context_aware_translation.application.contracts.terms import (
 from context_aware_translation.ui.utils import create_tip_label
 
 _ROLE_ROW = Qt.ItemDataRole.UserRole + 1
+_ROLE_ORDER = Qt.ItemDataRole.UserRole + 2
 _COLUMN_TERM = 0
 _COLUMN_TRANSLATION = 1
 _COLUMN_DESCRIPTION = 2
@@ -34,6 +35,26 @@ _COLUMN_OCCURRENCES = 3
 _COLUMN_VOTES = 4
 _COLUMN_IGNORED = 5
 _COLUMN_REVIEWED = 6
+
+_HEADER_TOOLTIPS = {
+    _COLUMN_TERM: (
+        "Source-language term key. During glossary translation, terms can be grouped "
+        "with similar keys using string-similarity matching."
+    ),
+    _COLUMN_TRANSLATION: (
+        "Target-language term. For untranslated terms, the translator receives up to "
+        "3 most similar already-translated terms as references, and similar "
+        "untranslated terms may be sent together in the same LLM call."
+    ),
+    _COLUMN_DESCRIPTION: (
+        "Primary description built from accumulated context. During chunk translation, "
+        "only context summaries ending at or before the current chunk are sent."
+    ),
+    _COLUMN_OCCURRENCES: "Number of chunks where this term appears.",
+    _COLUMN_VOTES: "Number of chunks where the LLM recognized this as a term.",
+    _COLUMN_IGNORED: "Ignored terms are excluded from glossary and chunk translation term injection.",
+    _COLUMN_REVIEWED: "Whether this term has been processed by the Review Terms pass.",
+}
 
 
 class _TranslationDelegate(QStyledItemDelegate):
@@ -65,6 +86,7 @@ class _TermsFilterProxyModel(QSortFilterProxyModel):
         super().__init__(parent)
         self._query = ""
         self._filter_id = "all"
+        self._sort_stack: list[tuple[int, Qt.SortOrder]] = []
         self.setDynamicSortFilter(True)
         self.setSortCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
@@ -102,6 +124,63 @@ class _TermsFilterProxyModel(QSortFilterProxyModel):
         if self._filter_id == "untranslated":
             return (row.translation or "").strip() == ""
         return True
+
+    def sort(self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder) -> None:
+        sortable = {
+            _COLUMN_TERM,
+            _COLUMN_TRANSLATION,
+            _COLUMN_DESCRIPTION,
+            _COLUMN_OCCURRENCES,
+            _COLUMN_VOTES,
+            _COLUMN_IGNORED,
+            _COLUMN_REVIEWED,
+        }
+        if column not in sortable:
+            return
+        self._sort_stack = [(c, o) for c, o in self._sort_stack if c != column]
+        self._sort_stack.insert(0, (column, order))
+        self.invalidate()
+        super().sort(column, order)
+
+    def lessThan(self, left, right) -> bool:  # noqa: ANN001
+        model = self.sourceModel()
+        if model is None:
+            return super().lessThan(left, right)
+        left_row = model.data(model.index(left.row(), 0), _ROLE_ROW)
+        right_row = model.data(model.index(right.row(), 0), _ROLE_ROW)
+        if not isinstance(left_row, TermTableRow) or not isinstance(right_row, TermTableRow):
+            return super().lessThan(left, right)
+
+        for column, order in self._sort_stack:
+            left_key = self._sort_key(column, left_row)
+            right_key = self._sort_key(column, right_row)
+            if left_key == right_key:
+                continue
+            if order == Qt.SortOrder.DescendingOrder:
+                return left_key > right_key
+            return left_key < right_key
+
+        left_order = model.data(model.index(left.row(), 0), _ROLE_ORDER)
+        right_order = model.data(model.index(right.row(), 0), _ROLE_ORDER)
+        return int(left_order or 0) < int(right_order or 0)
+
+    @staticmethod
+    def _sort_key(column: int, row: TermTableRow) -> tuple:
+        if column == _COLUMN_TERM:
+            return ((row.term or "").casefold(),)
+        if column == _COLUMN_TRANSLATION:
+            return ((row.translation or "").casefold(),)
+        if column == _COLUMN_DESCRIPTION:
+            return ((row.description or "").casefold(),)
+        if column == _COLUMN_OCCURRENCES:
+            return (row.occurrences,)
+        if column == _COLUMN_VOTES:
+            return (row.votes,)
+        if column == _COLUMN_IGNORED:
+            return (row.ignored,)
+        if column == _COLUMN_REVIEWED:
+            return (row.reviewed,)
+        return ((row.term_key or "").casefold(),)
 
 
 class TermsTableWidget(QWidget):
@@ -214,6 +293,8 @@ class TermsTableWidget(QWidget):
                 self.tr("Reviewed"),
             ]
         )
+        for column, tooltip in _HEADER_TOOLTIPS.items():
+            self.table_model.setHeaderData(column, Qt.Orientation.Horizontal, self.tr(tooltip), Qt.ItemDataRole.ToolTipRole)
         if self._state is not None:
             self.scope_label.setText(self._scope_text(self._state))
             self.summary_label.setText(self._summary_text(self._state.rows))
@@ -221,41 +302,49 @@ class TermsTableWidget(QWidget):
     def _populate_table(self, rows: list[TermTableRow]) -> None:
         self._suppress_item_changed = True
         self.table_model.removeRows(0, self.table_model.rowCount())
-        for row in rows:
-            self.table_model.appendRow(self._build_items_for_row(row))
+        for order, row in enumerate(rows):
+            self.table_model.appendRow(self._build_items_for_row(row, order=order))
         self._suppress_item_changed = False
         self.table_view.sortByColumn(_COLUMN_TERM, Qt.SortOrder.AscendingOrder)
 
-    def _build_items_for_row(self, row: TermTableRow) -> list[QStandardItem]:
+    def _build_items_for_row(self, row: TermTableRow, *, order: int) -> list[QStandardItem]:
         term_item = QStandardItem(row.term)
         term_item.setEditable(False)
         term_item.setData(row, _ROLE_ROW)
+        term_item.setData(order, _ROLE_ORDER)
 
         translation_item = QStandardItem(row.translation or "")
         translation_item.setData(row, _ROLE_ROW)
+        translation_item.setData(order, _ROLE_ORDER)
 
         description_item = QStandardItem(row.description or "")
         description_item.setData(row, _ROLE_ROW)
+        description_item.setData(order, _ROLE_ORDER)
+        description_item.setToolTip(row.description or "")
 
         occurrences_item = QStandardItem(str(row.occurrences))
         occurrences_item.setEditable(False)
         occurrences_item.setData(row, _ROLE_ROW)
+        occurrences_item.setData(order, _ROLE_ORDER)
 
         votes_item = QStandardItem(str(row.votes))
         votes_item.setEditable(False)
         votes_item.setData(row, _ROLE_ROW)
+        votes_item.setData(order, _ROLE_ORDER)
 
         ignored_item = QStandardItem()
         ignored_item.setCheckable(True)
         ignored_item.setEditable(False)
         ignored_item.setCheckState(Qt.CheckState.Checked if row.ignored else Qt.CheckState.Unchecked)
         ignored_item.setData(row, _ROLE_ROW)
+        ignored_item.setData(order, _ROLE_ORDER)
 
         reviewed_item = QStandardItem()
         reviewed_item.setCheckable(True)
         reviewed_item.setEditable(False)
         reviewed_item.setCheckState(Qt.CheckState.Checked if row.reviewed else Qt.CheckState.Unchecked)
         reviewed_item.setData(row, _ROLE_ROW)
+        reviewed_item.setData(order, _ROLE_ORDER)
 
         return [
             term_item,

@@ -28,6 +28,7 @@ from context_aware_translation.application.events import (
 from tests.application.fakes import FakeTermsService
 
 try:
+    from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
     HAS_PYSIDE6 = True
@@ -176,5 +177,91 @@ def test_terms_view_refreshes_on_terms_and_setup_invalidations():
 
         get_state_calls = [name for name, _payload in service.calls if name == "get_project_terms"]
         assert len(get_state_calls) == 3
+    finally:
+        view.cleanup()
+
+
+def test_terms_view_description_tooltip_and_header_tooltips_are_restored():
+    from context_aware_translation.ui.features.terms_view import TermsView
+
+    service = FakeTermsService(project_state=_make_state())
+    bus = InMemoryApplicationEventBus()
+    view = TermsView("proj-1", service, bus)
+    try:
+        description_index = view.table_model.index(0, 2)
+        assert view.table_model.data(description_index, Qt.ItemDataRole.ToolTipRole) == "Main character"
+
+        header_tooltip = view.table_model.headerData(2, Qt.Orientation.Horizontal, Qt.ItemDataRole.ToolTipRole)
+        assert "only context summaries ending at or before the current chunk are sent" in header_tooltip
+    finally:
+        view.cleanup()
+
+
+def test_terms_view_uses_stable_row_aware_sort_for_reviewed_and_ignored():
+    from context_aware_translation.ui.features.terms_view import TermsView
+
+    state = TermsTableState(
+        scope=TermsScope(
+            kind=TermsScopeKind.PROJECT,
+            project=ProjectRef(project_id="proj-1", name="One Piece"),
+        ),
+        toolbar=TermsToolbarState(),
+        rows=[
+            TermTableRow(
+                term_id=1,
+                term_key="a",
+                term="A",
+                translation="",
+                description="desc a",
+                occurrences=5,
+                votes=2,
+                ignored=False,
+                reviewed=True,
+                status=TermStatus.READY,
+            ),
+            TermTableRow(
+                term_id=2,
+                term_key="b",
+                term="B",
+                translation="",
+                description="desc b",
+                occurrences=10,
+                votes=1,
+                ignored=False,
+                reviewed=False,
+                status=TermStatus.NEEDS_REVIEW,
+            ),
+            TermTableRow(
+                term_id=3,
+                term_key="c",
+                term="C",
+                translation="",
+                description="desc c",
+                occurrences=7,
+                votes=1,
+                ignored=True,
+                reviewed=False,
+                status=TermStatus.IGNORED,
+            ),
+        ],
+    )
+    service = FakeTermsService(project_state=state)
+    bus = InMemoryApplicationEventBus()
+    view = TermsView("proj-1", service, bus)
+    try:
+        view.table_view.sortByColumn(3, Qt.SortOrder.DescendingOrder)
+        view.table_view.sortByColumn(6, Qt.SortOrder.AscendingOrder)
+        ordered_terms = [
+            view.proxy_model.index(row, 0).data()
+            for row in range(view.proxy_model.rowCount())
+        ]
+        assert ordered_terms == ["B", "C", "A"]
+
+        view.table_view.sortByColumn(5, Qt.SortOrder.AscendingOrder)
+        ordered_terms = [
+            view.proxy_model.index(row, 0).data()
+            for row in range(view.proxy_model.rowCount())
+        ]
+        assert ordered_terms == ["B", "A", "C"]
     finally:
         view.cleanup()
