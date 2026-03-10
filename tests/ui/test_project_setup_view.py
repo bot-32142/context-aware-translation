@@ -163,6 +163,7 @@ def test_project_setup_view_can_select_custom_profile():
 
         assert not view.custom_profile_group.isHidden()
         assert view.routes_table.rowCount() == 2
+        assert view.routes_table.columnCount() == 4
         assert view.routes_table.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         assert view.routes_table.columnWidth(1) >= 480
         assert view.routes_table.columnWidth(2) >= 440
@@ -233,6 +234,7 @@ def test_project_setup_view_custom_step_advanced_button_opens_advanced_dialog():
 
         assert opened == [WorkflowStepId.TRANSLATOR]
         assert view._custom_rows[translator_row].step_config["chunk_size"] == 1234
+        assert view.routes_table.cellWidget(translator_row, 3) is not None
     finally:
         view.cleanup()
 

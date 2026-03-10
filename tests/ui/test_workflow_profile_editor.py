@@ -64,6 +64,7 @@ def test_workflow_profile_editor_uses_scrollable_dialog_layout():
     assert dialog.routes_table.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
     assert dialog.routes_table.columnWidth(1) >= 480
     assert dialog.routes_table.columnWidth(2) >= 440
+    assert dialog.routes_table.columnCount() == 4
     assert dialog.routes_table.item(0, 0).text() == "Translator"
     assert dialog.routes_table.cellWidget(0, 3) is not None
     route_row = dialog._rows[0]
