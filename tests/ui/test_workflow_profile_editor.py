@@ -64,8 +64,8 @@ def test_workflow_profile_editor_uses_scrollable_dialog_layout():
     assert dialog.routes_table.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
     assert dialog.routes_table.columnWidth(1) >= 480
     assert dialog.routes_table.columnWidth(2) >= 440
-    assert dialog.routes_table.item(0, 0).text().endswith("[advanced]")
-    assert dialog.routes_table.item(0, 0).toolTip()
+    assert dialog.routes_table.item(0, 0).text() == "Translator"
+    assert dialog.routes_table.cellWidget(0, 3) is not None
     route_row = dialog._rows[0]
     assert route_row.connection_combo is not None
     assert route_row.connection_combo.minimumWidth() >= 400
@@ -95,7 +95,7 @@ def test_step_advanced_config_dialog_updates_route_config():
     }
 
 
-def test_workflow_profile_editor_only_opens_advanced_dialog_for_configurable_step_names():
+def test_workflow_profile_editor_only_shows_advanced_button_for_configurable_steps():
     from context_aware_translation.ui.features import workflow_profile_editor as editor_module
 
     profile = WorkflowProfileDetail(
@@ -153,13 +153,14 @@ def test_workflow_profile_editor_only_opens_advanced_dialog_for_configurable_ste
     original = editor_module.StepAdvancedConfigDialog
     editor_module.StepAdvancedConfigDialog = _FakeStepDialog
     try:
-        dialog._open_step_advanced_dialog(0, 0)
-        dialog._open_step_advanced_dialog(1, 0)
-        dialog._open_step_advanced_dialog(0, 1)
+        advanced_button = dialog.routes_table.cellWidget(0, 3)
+        assert advanced_button is not None
+        advanced_button.click()
     finally:
         editor_module.StepAdvancedConfigDialog = original
 
     assert opened == [WorkflowStepId.TRANSLATOR]
+    assert dialog.routes_table.item(1, 3).text() == "—"
 
 
 def test_workflow_profile_editor_infers_image_backend_from_connection():
@@ -196,3 +197,4 @@ def test_workflow_profile_editor_infers_image_backend_from_connection():
 
     assert built.routes[0].step_config["backend"] == "openai"
     assert dialog.routes_table.item(0, 0).text() == "Image reembedding"
+    assert dialog.routes_table.item(0, 3).text() == "—"

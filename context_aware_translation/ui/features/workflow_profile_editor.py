@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLineEdit,
     QMessageBox,
+    QPushButton,
     QScrollArea,
     QSizePolicy,
     QSpinBox,
@@ -282,11 +283,11 @@ class WorkflowProfileEditorDialog(QDialog):
         routes_widget = QWidget()
         routes_layout = QVBoxLayout(routes_widget)
         routes_layout.setContentsMargins(0, 0, 0, 0)
-        routes_layout.addWidget(
-            create_tip_label(self.tr("Steps marked [advanced] can be double-clicked to edit advanced step settings."))
+        routes_layout.addWidget(create_tip_label(self.tr("Use the Advanced column to edit step-specific settings.")))
+        self.routes_table = QTableWidget(0, 4)
+        self.routes_table.setHorizontalHeaderLabels(
+            [self.tr("Step"), self.tr("Connection"), self.tr("Model"), self.tr("Advanced")]
         )
-        self.routes_table = QTableWidget(0, 3)
-        self.routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
         self.routes_table.verticalHeader().setVisible(False)
         self.routes_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.routes_table.setAlternatingRowColors(True)
@@ -299,10 +300,9 @@ class WorkflowProfileEditorDialog(QDialog):
         self.routes_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.routes_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
         self.routes_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
-        self.routes_table.horizontalHeader().setStretchLastSection(True)
+        self.routes_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.routes_table.setColumnWidth(1, 480)
         self.routes_table.setColumnWidth(2, 440)
-        self.routes_table.cellDoubleClicked.connect(self._open_step_advanced_dialog)
         self._populate_routes()
         routes_layout.addWidget(self.routes_table, 1)
         self.routes_section.set_content(routes_widget)
@@ -332,8 +332,9 @@ class WorkflowProfileEditorDialog(QDialog):
         for route in self._original_profile.routes:
             row = self.routes_table.rowCount()
             self.routes_table.insertRow(row)
-            step_item = self._step_item(route.step_label, route.step_id in self._ADVANCED_STEP_IDS)
+            step_item = self._step_item(route.step_label)
             self.routes_table.setItem(row, 0, step_item)
+            self._set_advanced_widget(row, route)
 
             if route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
                 self.routes_table.setItem(row, 1, self._item(route.connection_label or self.tr("Direct batch config")))
@@ -437,17 +438,24 @@ class WorkflowProfileEditorDialog(QDialog):
     def _item(self, text: str) -> QTableWidgetItem:
         return QTableWidgetItem(text)
 
-    def _step_item(self, step_label: str, is_advanced: bool) -> QTableWidgetItem:
-        item = self._item(f"{step_label} [advanced]" if is_advanced else step_label)
-        item.setToolTip(
-            self.tr("Double-click to edit advanced settings.")
-            if is_advanced
-            else self.tr("This step has no additional settings beyond connection and model.")
-        )
+    def _step_item(self, step_label: str) -> QTableWidgetItem:
+        item = self._item(step_label)
+        item.setToolTip(self.tr("Connection and model settings for this workflow step."))
         return item
 
-    def _open_step_advanced_dialog(self, row: int, _column: int) -> None:
-        if _column != 0 or row < 0 or row >= len(self._rows):
+    def _set_advanced_widget(self, row: int, route: WorkflowStepRoute) -> None:
+        if route.step_id in self._ADVANCED_STEP_IDS:
+            button = QPushButton(self.tr("Advanced"))
+            button.clicked.connect(lambda _checked=False, r=row: self._open_step_advanced_dialog(r))
+            self.routes_table.setCellWidget(row, 3, button)
+            return
+        item = self._item("—")
+        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        item.setToolTip(self.tr("This step has no additional settings beyond connection and model."))
+        self.routes_table.setItem(row, 3, item)
+
+    def _open_step_advanced_dialog(self, row: int) -> None:
+        if row < 0 or row >= len(self._rows):
             return
         route_row = self._rows[row]
         if route_row.route.step_id not in self._ADVANCED_STEP_IDS:

@@ -113,11 +113,11 @@ class ProjectSetupView(QWidget):
         custom_layout = QVBoxLayout(self.custom_profile_group)
         self.custom_profile_label = create_tip_label("")
         custom_layout.addWidget(self.custom_profile_label)
-        custom_layout.addWidget(
-            create_tip_label(self.tr("Steps marked [advanced] can be double-clicked to edit advanced step settings."))
+        custom_layout.addWidget(create_tip_label(self.tr("Use the Advanced column to edit step-specific settings.")))
+        self.routes_table = QTableWidget(0, 4)
+        self.routes_table.setHorizontalHeaderLabels(
+            [self.tr("Step"), self.tr("Connection"), self.tr("Model"), self.tr("Advanced")]
         )
-        self.routes_table = QTableWidget(0, 3)
-        self.routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
         self.routes_table.verticalHeader().setVisible(False)
         self.routes_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.routes_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -129,10 +129,9 @@ class ProjectSetupView(QWidget):
         self.routes_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.routes_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
         self.routes_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
-        self.routes_table.horizontalHeader().setStretchLastSection(True)
+        self.routes_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.routes_table.setColumnWidth(1, 480)
         self.routes_table.setColumnWidth(2, 440)
-        self.routes_table.cellDoubleClicked.connect(self._on_custom_step_double_clicked)
         custom_layout.addWidget(self.routes_table)
         layout.addWidget(self.custom_profile_group)
 
@@ -161,7 +160,9 @@ class ProjectSetupView(QWidget):
     def retranslateUi(self) -> None:
         self.tip_label.setText(self._tip_text())
         self.custom_profile_group.setTitle(self.tr("Custom profile"))
-        self.routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
+        self.routes_table.setHorizontalHeaderLabels(
+            [self.tr("Step"), self.tr("Connection"), self.tr("Model"), self.tr("Advanced")]
+        )
         self.open_app_setup_button.setText(self.tr("Open App Setup"))
         self.save_button.setText(self.tr("Save"))
         self.title_label.setText(self._title_text())
@@ -237,8 +238,9 @@ class ProjectSetupView(QWidget):
         for route in profile.routes:
             row = self.routes_table.rowCount()
             self.routes_table.insertRow(row)
-            step_item = self._step_item(route.step_label, route.step_id in self._ADVANCED_STEP_IDS)
+            step_item = self._step_item(route.step_label)
             self.routes_table.setItem(row, 0, step_item)
+            self._set_advanced_widget(row, route)
             combo = QComboBox()
             combo.addItem(self.tr("Select connection"), "")
             for connection in self._state.available_connections if self._state is not None else []:
@@ -413,8 +415,8 @@ class ProjectSetupView(QWidget):
             )
         return self._draft_project_profile.model_copy(update={"routes": routes, "kind": WorkflowProfileKind.PROJECT_SPECIFIC})
 
-    def _on_custom_step_double_clicked(self, row: int, column: int) -> None:
-        if column != 0 or not self._is_custom_selected():
+    def _on_custom_step_advanced_clicked(self, row: int) -> None:
+        if not self._is_custom_selected():
             return
         if row < 0 or row >= len(self._custom_rows) or self._draft_project_profile is None:
             return
@@ -447,14 +449,21 @@ class ProjectSetupView(QWidget):
         row_height = sum(self.routes_table.rowHeight(index) for index in range(self.routes_table.rowCount()))
         self.routes_table.setFixedHeight(header_height + row_height + frame_height + 4)
 
-    def _step_item(self, step_label: str, is_advanced: bool) -> QTableWidgetItem:
-        item = QTableWidgetItem(f"{step_label} [advanced]" if is_advanced else step_label)
-        item.setToolTip(
-            self.tr("Double-click to edit advanced settings.")
-            if is_advanced
-            else self.tr("This step has no additional settings beyond connection and model.")
-        )
+    def _step_item(self, step_label: str) -> QTableWidgetItem:
+        item = QTableWidgetItem(step_label)
+        item.setToolTip(self.tr("Connection and model settings for this workflow step."))
         return item
+
+    def _set_advanced_widget(self, row: int, route) -> None:
+        if route.step_id in self._ADVANCED_STEP_IDS:
+            button = QPushButton(self.tr("Advanced"))
+            button.clicked.connect(lambda _checked=False, r=row: self._on_custom_step_advanced_clicked(r))
+            self.routes_table.setCellWidget(row, 3, button)
+            return
+        item = QTableWidgetItem("—")
+        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        item.setToolTip(self.tr("This step has no additional settings beyond connection and model."))
+        self.routes_table.setItem(row, 3, item)
 
     def _infer_image_backend(self, connection_id: str | None, model: str | None) -> str | None:
         if self._state is None or not connection_id:

@@ -166,8 +166,10 @@ def test_project_setup_view_can_select_custom_profile():
         assert view.routes_table.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         assert view.routes_table.columnWidth(1) >= 480
         assert view.routes_table.columnWidth(2) >= 440
-        assert view.routes_table.item(0, 0).text().endswith("[advanced]")
-        assert view.routes_table.item(1, 0).text().endswith("[advanced]")
+        assert view.routes_table.item(0, 0).text() == "Translator"
+        assert view.routes_table.item(1, 0).text() == "OCR"
+        assert view.routes_table.cellWidget(0, 3) is not None
+        assert view.routes_table.cellWidget(1, 3) is not None
 
         translator_row = next(
             index for index, row in enumerate(view._custom_rows) if row.step_id is WorkflowStepId.TRANSLATOR
@@ -193,7 +195,7 @@ def test_project_setup_view_can_select_custom_profile():
         view.cleanup()
 
 
-def test_project_setup_view_custom_step_double_click_opens_advanced_dialog():
+def test_project_setup_view_custom_step_advanced_button_opens_advanced_dialog():
     from context_aware_translation.ui.features import project_setup_view as view_module
     from context_aware_translation.ui.features.project_setup_view import ProjectSetupView
 
@@ -223,11 +225,9 @@ def test_project_setup_view_custom_step_double_click_opens_advanced_dialog():
         original = view_module.StepAdvancedConfigDialog
         view_module.StepAdvancedConfigDialog = _FakeStepDialog
         try:
-            view._on_custom_step_double_clicked(translator_row, 0)
-            image_row = next(
-                index for index, row in enumerate(view._custom_rows) if row.step_id is WorkflowStepId.OCR
-            )
-            view._on_custom_step_double_clicked(image_row, 1)
+            translator_button = view.routes_table.cellWidget(translator_row, 3)
+            assert translator_button is not None
+            translator_button.click()
         finally:
             view_module.StepAdvancedConfigDialog = original
 
