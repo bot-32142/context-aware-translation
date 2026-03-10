@@ -166,22 +166,32 @@ def test_app_setup_view_add_delete_test_and_edit_profile_calls_service():
     with (
         patch("context_aware_translation.ui.features.app_setup_view.ConnectionEditorDialog", _FakeConnectionDialog),
         patch("context_aware_translation.ui.features.app_setup_view.WorkflowProfileEditorDialog", _FakeProfileEditorDialog),
-        patch.object(QMessageBox, "information") as info_mock,
         patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes),
     ):
         view._on_add_connection()
-        view.connections_table.selectRow(0)
-        view._on_test_connection()
         view.connections_table.selectRow(0)
         view._on_delete_connection()
         view.profiles_table.selectRow(0)
         view._on_edit_profile()
 
     assert any(call[0] == "save_connection" for call in service.calls)
-    assert any(call[0] == "test_connection" for call in service.calls)
     assert any(call[0] == "delete_connection" for call in service.calls)
     assert any(call[0] == "save_workflow_profile" for call in service.calls)
-    assert info_mock.called
+
+
+def test_app_setup_view_opens_connection_dialog_on_double_click():
+    from context_aware_translation.ui.features.app_setup_view import AppSetupView
+
+    service = FakeAppSetupService(state=_make_state())
+    view = AppSetupView(service)
+    opened: list[bool] = []
+    try:
+        with patch.object(view, "_on_edit_connection", side_effect=lambda: opened.append(True)):
+            view.connections_table.selectRow(0)
+            view._on_connection_double_clicked(0, 0)
+        assert opened == [True]
+    finally:
+        view.deleteLater()
 
 
 def test_setup_wizard_dialog_previews_and_saves_through_service():
@@ -499,3 +509,22 @@ def test_connection_editor_dialog_uses_scrollable_form_layout():
     assert scroll_areas
     assert dialog.width() <= 520
     assert dialog.height() <= 420
+
+
+def test_connection_editor_dialog_tests_inside_dialog():
+    from context_aware_translation.ui.features.app_setup_view import ConnectionEditorDialog
+
+    seen: list[ConnectionDraft] = []
+    dialog = ConnectionEditorDialog(
+        test_callback=lambda draft: (
+            seen.append(draft),
+            ConnectionTestResult(connection_label=draft.display_name, supported_capabilities=[CapabilityCode.TRANSLATION]),
+        )[1]
+    )
+    dialog.form.display_name_edit.setText("Gemini")
+    dialog.form.api_key_edit.setText("secret")
+
+    dialog._on_test()
+
+    assert len(seen) == 1
+    assert seen[0].display_name == "Gemini"

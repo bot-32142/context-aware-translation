@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from PySide6.QtCore import QEvent, Qt
@@ -290,10 +290,12 @@ class ConnectionEditorDialog(QDialog):
         *,
         draft: ConnectionDraft | None = None,
         connection_id: str | None = None,
+        test_callback: Callable[[ConnectionDraft], ConnectionTestResult] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._connection_id = connection_id
+        self._test_callback = test_callback
         self.setWindowTitle(self.tr("Connection"))
         self.setMinimumWidth(460)
         self.resize(520, 420)
@@ -312,8 +314,10 @@ class ConnectionEditorDialog(QDialog):
         self.button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )
+        self.test_button = self.button_box.addButton(self.tr("Test"), QDialogButtonBox.ButtonRole.ActionRole)
         self.button_box.accepted.connect(self._accept_if_valid)
         self.button_box.rejected.connect(self.reject)
+        self.test_button.clicked.connect(self._on_test)
         layout.addWidget(self.button_box)
 
     def request(self) -> SaveConnectionRequest:
@@ -325,6 +329,15 @@ class ConnectionEditorDialog(QDialog):
             QMessageBox.warning(self, self.tr("Missing Information"), message or self.tr("Please complete the form."))
             return
         self.accept()
+
+    def _on_test(self) -> None:
+        if self._test_callback is None:
+            return
+        valid, message = self.form.validate(require_api_key=self._connection_id is None)
+        if not valid:
+            QMessageBox.warning(self, self.tr("Missing Information"), message or self.tr("Please complete the form."))
+            return
+        self._test_callback(self.form.to_draft(allow_empty_api_key=self._connection_id is not None))
 
 
 class SetupWizardDialog(QDialog):
@@ -573,10 +586,13 @@ class AppSetupView(QWidget):
         self.run_wizard_button.clicked.connect(self._on_run_wizard)
         self.add_connection_button = QPushButton(self.tr("Add Connection"))
         self.add_connection_button.clicked.connect(self._on_add_connection)
+        self.delete_connection_button = QPushButton(self.tr("Delete"))
+        self.delete_connection_button.clicked.connect(self._on_delete_connection)
         self.refresh_button = QPushButton(self.tr("Refresh"))
         self.refresh_button.clicked.connect(self.refresh)
         connections_toolbar.addWidget(self.run_wizard_button)
         connections_toolbar.addWidget(self.add_connection_button)
+        connections_toolbar.addWidget(self.delete_connection_button)
         connections_toolbar.addWidget(self.refresh_button)
         connections_toolbar.addStretch()
         connections_tab_layout.addLayout(connections_toolbar)
@@ -592,19 +608,8 @@ class AppSetupView(QWidget):
         self.connections_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.connections_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.connections_table.itemSelectionChanged.connect(self._update_connection_buttons)
+        self.connections_table.cellDoubleClicked.connect(self._on_connection_double_clicked)
         connections_layout.addWidget(self.connections_table)
-        connection_actions = QHBoxLayout()
-        self.edit_connection_button = QPushButton(self.tr("Edit"))
-        self.edit_connection_button.clicked.connect(self._on_edit_connection)
-        self.test_connection_button = QPushButton(self.tr("Test"))
-        self.test_connection_button.clicked.connect(self._on_test_connection)
-        self.delete_connection_button = QPushButton(self.tr("Delete"))
-        self.delete_connection_button.clicked.connect(self._on_delete_connection)
-        connection_actions.addWidget(self.edit_connection_button)
-        connection_actions.addWidget(self.test_connection_button)
-        connection_actions.addWidget(self.delete_connection_button)
-        connection_actions.addStretch()
-        connections_layout.addLayout(connection_actions)
         connections_tab_layout.addWidget(self.connections_group)
 
         self.profiles_group = QGroupBox(self.tr("Shared workflow profiles"))
@@ -661,8 +666,6 @@ class AppSetupView(QWidget):
         self.connections_table.setHorizontalHeaderLabels(
             [self.tr("Name"), self.tr("Provider"), self.tr("Status"), self.tr("Model"), self.tr("Base URL")]
         )
-        self.edit_connection_button.setText(self.tr("Edit"))
-        self.test_connection_button.setText(self.tr("Test"))
         self.delete_connection_button.setText(self.tr("Delete"))
         self.profiles_group.setTitle(self.tr("Shared workflow profiles"))
         self.profiles_table.setHorizontalHeaderLabels(
@@ -737,8 +740,6 @@ class AppSetupView(QWidget):
 
     def _update_connection_buttons(self) -> None:
         selected = self._selected_connection() is not None
-        self.edit_connection_button.setEnabled(selected)
-        self.test_connection_button.setEnabled(selected)
         self.delete_connection_button.setEnabled(selected)
 
     def _update_profile_buttons(self) -> None:
@@ -750,7 +751,7 @@ class AppSetupView(QWidget):
             self.refresh()
 
     def _on_add_connection(self) -> None:
-        dialog = ConnectionEditorDialog(parent=self)
+        dialog = ConnectionEditorDialog(test_callback=self._test_connection_draft, parent=self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self._service.save_connection(dialog.request())
             self.refresh()
@@ -776,36 +777,12 @@ class AppSetupView(QWidget):
                 custom_parameters_json=connection.custom_parameters_json,
             ),
             connection_id=connection.connection_id,
+            test_callback=self._test_connection_draft,
             parent=self,
         )
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self._service.save_connection(dialog.request())
             self.refresh()
-
-    def _on_test_connection(self) -> None:
-        connection = self._selected_connection()
-        if connection is None:
-            return
-        result = self._service.test_connection(
-            ConnectionTestRequest(
-                connection=ConnectionDraft(
-                    display_name=connection.display_name,
-                    provider=connection.provider,
-                    description=connection.description,
-                    base_url=connection.base_url,
-                    default_model=connection.default_model,
-                    temperature=connection.temperature,
-                    timeout=connection.timeout,
-                    max_retries=connection.max_retries,
-                    concurrency=connection.concurrency,
-                    token_limit=connection.token_limit,
-                    input_token_limit=connection.input_token_limit,
-                    output_token_limit=connection.output_token_limit,
-                    custom_parameters_json=connection.custom_parameters_json,
-                )
-            )
-        )
-        self._show_test_result(result)
 
     def _on_delete_connection(self) -> None:
         connection = self._selected_connection()
@@ -834,6 +811,8 @@ class AppSetupView(QWidget):
                     connection_id=connection.connection_id,
                     label=connection.display_name,
                     default_model=connection.default_model,
+                    provider=connection.provider.value,
+                    base_url=connection.base_url,
                 )
                 for connection in self._state.connections
             ],
@@ -851,6 +830,14 @@ class AppSetupView(QWidget):
 
     def _on_profile_double_clicked(self, _row: int, _column: int) -> None:
         self._on_edit_profile()
+
+    def _on_connection_double_clicked(self, _row: int, _column: int) -> None:
+        self._on_edit_connection()
+
+    def _test_connection_draft(self, draft: ConnectionDraft) -> ConnectionTestResult:
+        result = self._service.test_connection(ConnectionTestRequest(connection=draft))
+        self._show_test_result(result)
+        return result
 
     def _show_test_result(self, result: ConnectionTestResult) -> None:
         lines = [result.connection_label]

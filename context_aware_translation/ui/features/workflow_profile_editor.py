@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -36,6 +37,8 @@ class ConnectionChoice:
     connection_id: str
     label: str
     default_model: str | None = None
+    provider: str | None = None
+    base_url: str | None = None
 
 
 @dataclass
@@ -63,24 +66,14 @@ class _CheckFieldSpec:
     default: bool
 
 
-@dataclass(frozen=True)
-class _ChoiceFieldSpec:
-    attr_name: str
-    label: str
-    key: str
-    default: str
-    options: tuple[tuple[str, str], ...]
-
-
 class StepAdvancedConfigDialog(QDialog):
     _TIP_TEXTS = {
         WorkflowStepId.EXTRACTOR: "Extraction settings control how aggressively terms are discovered.",
         WorkflowStepId.TRANSLATOR: "Translator settings tune chunk sizing and request budget.",
         WorkflowStepId.OCR: "OCR settings control image compression and artifact cleanup.",
-        WorkflowStepId.IMAGE_REEMBEDDING: "Image reembedding settings choose the image-edit backend for this workflow step.",
         WorkflowStepId.TRANSLATOR_BATCH: "Batch settings configure optional async translation jobs.",
     }
-    _SIMPLE_STEP_SPECS: dict[WorkflowStepId, tuple[_SpinFieldSpec | _CheckFieldSpec | _ChoiceFieldSpec, ...]] = {
+    _SIMPLE_STEP_SPECS: dict[WorkflowStepId, tuple[_SpinFieldSpec | _CheckFieldSpec, ...]] = {
         WorkflowStepId.EXTRACTOR: (
             _SpinFieldSpec("max_gleaning_spin", "Max gleaning", "max_gleaning", 0, 10, 3),
             _SpinFieldSpec("max_term_name_spin", "Max term name length", "max_term_name_length", 10, 500, 200),
@@ -92,19 +85,6 @@ class StepAdvancedConfigDialog(QDialog):
         WorkflowStepId.OCR: (
             _SpinFieldSpec("ocr_dpi_spin", "OCR DPI", "ocr_dpi", 72, 600, 150),
             _CheckFieldSpec("strip_artifacts_check", "Strip artifacts", "strip_llm_artifacts", True),
-        ),
-        WorkflowStepId.IMAGE_REEMBEDDING: (
-            _ChoiceFieldSpec(
-                "backend_combo",
-                "Backend",
-                "backend",
-                ImageBackend.GEMINI.value,
-                (
-                    ("Gemini", ImageBackend.GEMINI.value),
-                    ("OpenAI", ImageBackend.OPENAI.value),
-                    ("Qwen", ImageBackend.QWEN.value),
-                ),
-            ),
         ),
     }
     _BATCH_THINKING_OPTIONS = (
@@ -176,23 +156,17 @@ class StepAdvancedConfigDialog(QDialog):
     def _build_simple_step(
         self,
         config: dict[str, object],
-        specs: tuple[_SpinFieldSpec | _CheckFieldSpec | _ChoiceFieldSpec, ...],
+        specs: tuple[_SpinFieldSpec | _CheckFieldSpec, ...],
     ) -> Callable[[], WorkflowStepRoute]:
         readers: dict[str, Callable[[], bool | int | float | str | None]] = {}
         for spec in specs:
             if isinstance(spec, _SpinFieldSpec):
                 widget = self._spin(spec.minimum, spec.maximum, int(config.get(spec.key, spec.default) or spec.default))
                 readers[spec.key] = lambda w=widget: int(w.value())
-            elif isinstance(spec, _CheckFieldSpec):
+            else:
                 widget = QCheckBox()
                 widget.setChecked(bool(config.get(spec.key, spec.default)))
                 readers[spec.key] = lambda w=widget: bool(w.isChecked())
-            else:
-                widget = QComboBox()
-                for label, value in spec.options:
-                    widget.addItem(label, value)
-                self._select_combo_value(widget, str(config.get(spec.key) or spec.default))
-                readers[spec.key] = lambda w=widget, d=spec.default: str(w.currentData() or d)
             setattr(self, spec.attr_name, widget)
             self._form_layout.addRow(self.tr(spec.label), widget)
         return lambda: self._route.model_copy(update={"step_config": {key: read() for key, read in readers.items()}})
@@ -237,6 +211,15 @@ class StepAdvancedConfigDialog(QDialog):
 
 
 class WorkflowProfileEditorDialog(QDialog):
+    _ADVANCED_STEP_IDS = frozenset(
+        {
+            WorkflowStepId.EXTRACTOR,
+            WorkflowStepId.TRANSLATOR,
+            WorkflowStepId.OCR,
+            WorkflowStepId.TRANSLATOR_BATCH,
+        }
+    )
+
     def __init__(
         self,
         profile: WorkflowProfileDetail,
@@ -248,11 +231,12 @@ class WorkflowProfileEditorDialog(QDialog):
         super().__init__(parent)
         self._original_profile = profile
         self._connection_choices = connection_choices
+        self._connection_choice_by_id = {choice.connection_id: choice for choice in connection_choices}
         self._allow_name_edit = allow_name_edit
         self._rows: list[RouteRow] = []
         self.setWindowTitle(self.tr("Workflow Profile"))
-        self.setMinimumSize(650, 600)
-        self.resize(750, 750)
+        self.setMinimumSize(880, 620)
+        self.resize(980, 720)
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -308,11 +292,13 @@ class WorkflowProfileEditorDialog(QDialog):
         self.routes_table.verticalHeader().setVisible(False)
         self.routes_table.setAlternatingRowColors(True)
         self.routes_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.routes_table.verticalHeader().setDefaultSectionSize(34)
+        self.routes_table.verticalHeader().setDefaultSectionSize(38)
         self.routes_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self.routes_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.routes_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.routes_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        self.routes_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
         self.routes_table.horizontalHeader().setStretchLastSection(True)
+        self.routes_table.setColumnWidth(1, 280)
+        self.routes_table.setColumnWidth(2, 300)
         self.routes_table.cellDoubleClicked.connect(self._open_step_advanced_dialog)
         self._populate_routes()
         routes_layout.addWidget(self.routes_table)
@@ -347,17 +333,25 @@ class WorkflowProfileEditorDialog(QDialog):
         for route in self._original_profile.routes:
             row = self.routes_table.rowCount()
             self.routes_table.insertRow(row)
-            self.routes_table.setItem(row, 0, self._item(route.step_label))
+            step_item = self._item(route.step_label)
+            if route.step_id in self._ADVANCED_STEP_IDS:
+                step_item.setToolTip(self.tr("Double-click to edit advanced settings."))
+                step_item.setData(Qt.ItemDataRole.UserRole + 1, True)
+            self.routes_table.setItem(row, 0, step_item)
 
             if route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
                 self.routes_table.setItem(row, 1, self._item(route.connection_label or self.tr("Direct batch config")))
                 model_edit = QLineEdit(route.model or "")
                 model_edit.setReadOnly(True)
+                model_edit.setMinimumWidth(300)
                 self.routes_table.setCellWidget(row, 2, model_edit)
                 self._rows.append(RouteRow(route=route, connection_combo=None, model_edit=model_edit))
                 continue
 
             combo = QComboBox()
+            combo.setMinimumContentsLength(24)
+            combo.setMinimumWidth(280)
+            combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
             combo.addItem(self.tr("Select connection"), "")
             for choice in self._connection_choices:
                 combo.addItem(choice.label, choice.connection_id)
@@ -366,6 +360,7 @@ class WorkflowProfileEditorDialog(QDialog):
                 if index >= 0:
                     combo.setCurrentIndex(index)
             model_edit = QLineEdit(route.model or "")
+            model_edit.setMinimumWidth(300)
             combo.currentIndexChanged.connect(lambda _i, c=combo, e=model_edit: self._sync_model_from_connection(c, e))
             self.routes_table.setCellWidget(row, 1, combo)
             self.routes_table.setCellWidget(row, 2, model_edit)
@@ -382,12 +377,18 @@ class WorkflowProfileEditorDialog(QDialog):
             connection_label = None
             if row.connection_combo is not None and connection_id_str is not None:
                 connection_label = row.connection_combo.currentText().strip() or None
+            step_config = dict(row.route.step_config)
+            if row.route.step_id is WorkflowStepId.IMAGE_REEMBEDDING:
+                inferred_backend = self._infer_image_backend(connection_id_str, row.model_edit.text().strip() or None)
+                if inferred_backend is not None:
+                    step_config["backend"] = inferred_backend
             routes.append(
                 row.route.model_copy(
                     update={
                         "connection_id": connection_id_str,
                         "connection_label": connection_label,
                         "model": row.model_edit.text().strip() or None,
+                        "step_config": step_config,
                     }
                 )
             )
@@ -432,9 +433,11 @@ class WorkflowProfileEditorDialog(QDialog):
         return QTableWidgetItem(text)
 
     def _open_step_advanced_dialog(self, row: int, _column: int) -> None:
-        if row < 0 or row >= len(self._rows):
+        if _column != 0 or row < 0 or row >= len(self._rows):
             return
         route_row = self._rows[row]
+        if route_row.route.step_id not in self._ADVANCED_STEP_IDS:
+            return
         dialog = StepAdvancedConfigDialog(route_row.route, self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
@@ -442,3 +445,16 @@ class WorkflowProfileEditorDialog(QDialog):
         route_row.route = updated_route
         if updated_route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
             route_row.model_edit.setText(updated_route.model or "")
+
+    def _infer_image_backend(self, connection_id: str | None, model: str | None) -> str | None:
+        if not connection_id:
+            return None
+        choice = self._connection_choice_by_id.get(connection_id)
+        provider = (choice.provider or "").lower() if choice is not None else ""
+        base_url = (choice.base_url or "").lower() if choice is not None and choice.base_url else ""
+        model_name = (model or (choice.default_model if choice is not None else "") or "").lower()
+        if provider == "gemini" or model_name.startswith("gemini") or "generativelanguage.googleapis.com" in base_url:
+            return ImageBackend.GEMINI.value
+        if model_name.startswith("qwen") or "dashscope" in base_url:
+            return ImageBackend.QWEN.value
+        return ImageBackend.OPENAI.value
