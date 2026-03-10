@@ -42,6 +42,7 @@ from context_aware_translation.application.contracts.projects import (
 from context_aware_translation.application.contracts.queue import QueueActionRequest, QueueState
 from context_aware_translation.application.contracts.terms import (
     BuildTermsRequest,
+    BulkUpdateTermsRequest,
     ExportTermsRequest,
     FilterNoiseRequest,
     ImportTermsRequest,
@@ -281,6 +282,10 @@ class FakeTermsService:
     def export_terms(self, request: ExportTermsRequest) -> AcceptedCommand:
         self.calls.append(("export_terms", request))
         return self.command_result or AcceptedCommand(command_name="export_terms")
+
+    def bulk_update_terms(self, request: BulkUpdateTermsRequest) -> TermsTableState:
+        self.calls.append(("bulk_update_terms", request))
+        return self.document_state or self.project_state
 
 
 @dataclass

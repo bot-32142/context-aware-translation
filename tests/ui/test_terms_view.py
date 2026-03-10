@@ -109,6 +109,7 @@ def test_terms_view_renders_backend_state_and_local_filters():
         assert not view.review_button.isEnabled()
         assert not view.export_button.isEnabled()
         assert view.review_button.toolTip() == "Review config missing."
+        assert not view.bulk_button.isEnabled()
 
         view.search_input.setText("luffy")
         assert view.proxy_model.rowCount() == 1
@@ -146,6 +147,9 @@ def test_terms_view_routes_edits_and_toolbar_actions_through_service():
 
             translation_item = view.table_model.item(0, 1)
             translation_item.setText("Monkey D. Luffy")
+            view.table_view.selectRow(0)
+            assert view.bulk_button.isEnabled()
+            view.bulk_mark_reviewed_action.trigger()
 
         call_names = [name for name, _payload in service.calls]
         assert "translate_pending" in call_names
@@ -154,6 +158,7 @@ def test_terms_view_routes_edits_and_toolbar_actions_through_service():
         assert "import_terms" in call_names
         assert "export_terms" in call_names
         assert "update_term" in call_names
+        assert "bulk_update_terms" in call_names
     finally:
         view.cleanup()
 

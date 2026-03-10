@@ -109,3 +109,11 @@ class ExportTermsRequest(ContractModel):
     project_id: str
     output_path: str
     document_id: int | None = None
+
+
+class BulkUpdateTermsRequest(ContractModel):
+    scope: TermsScope
+    term_keys: list[str] = Field(default_factory=list)
+    ignored: bool | None = None
+    reviewed: bool | None = None
+    delete: bool = False

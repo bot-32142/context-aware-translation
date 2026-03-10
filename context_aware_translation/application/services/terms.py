@@ -12,6 +12,7 @@ from context_aware_translation.application.contracts.common import (
 )
 from context_aware_translation.application.contracts.terms import (
     BuildTermsRequest,
+    BulkUpdateTermsRequest,
     ExportTermsRequest,
     FilterNoiseRequest,
     ImportTermsRequest,
@@ -64,6 +65,8 @@ class TermsService(Protocol):
     def import_terms(self, request: ImportTermsRequest) -> TermsTableState: ...
 
     def export_terms(self, request: ExportTermsRequest) -> AcceptedCommand: ...
+
+    def bulk_update_terms(self, request: BulkUpdateTermsRequest) -> TermsTableState: ...
 
 
 class DefaultTermsService:
@@ -166,6 +169,33 @@ class DefaultTermsService:
         if request.document_id is not None:
             params["document_ids"] = [request.document_id]
         return self._runtime.submit_task("glossary_export", request.project_id, **params)
+
+    def bulk_update_terms(self, request: BulkUpdateTermsRequest) -> TermsTableState:
+        blocker = self._glossary_mutation_blocker(request.scope.project.project_id)
+        if blocker is not None:
+            self._raise_blocked_blocker(blocker, project_id=request.scope.project.project_id)
+        if not request.term_keys:
+            return (
+                self.get_document_terms(request.scope.project.project_id, request.scope.document.document_id)
+                if request.scope.kind is TermsScopeKind.DOCUMENT and request.scope.document is not None
+                else self.get_project_terms(request.scope.project.project_id)
+            )
+        with self._runtime.open_book_db(request.scope.project.project_id) as dbx:
+            if request.delete:
+                dbx.term_repo.delete_terms(request.term_keys)
+            else:
+                dbx.term_repo.update_terms_bulk(
+                    request.term_keys,
+                    ignored=request.ignored,
+                    is_reviewed=request.reviewed,
+                )
+        self._runtime.invalidate_terms(
+            request.scope.project.project_id,
+            request.scope.document.document_id if request.scope.document is not None else None,
+        )
+        if request.scope.kind is TermsScopeKind.DOCUMENT and request.scope.document is not None:
+            return self.get_document_terms(request.scope.project.project_id, request.scope.document.document_id)
+        return self.get_project_terms(request.scope.project.project_id)
 
     def _build_terms_table(self, project_id: str, document_id: int | None) -> TermsTableState:
         project = self._runtime.get_project_ref(project_id)

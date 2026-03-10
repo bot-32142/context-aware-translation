@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QMessageBox,
     QPushButton,
     QVBoxLayout,
@@ -13,6 +14,7 @@ from PySide6.QtWidgets import (
 
 from context_aware_translation.application.contracts.common import UserMessageSeverity
 from context_aware_translation.application.contracts.terms import (
+    BulkUpdateTermsRequest,
     ExportTermsRequest,
     FilterNoiseRequest,
     ImportTermsRequest,
@@ -75,6 +77,7 @@ class TermsView(QWidget):
         self.table_model = self.table_panel.table_model
         self.proxy_model = self.table_panel.proxy_model
         self.table_view = self.table_panel.table_view
+        self.table_view.selectionModel().selectionChanged.connect(lambda *_args: self._update_bulk_button_state())
         toolbar_layout.addWidget(self.search_input, 1)
         toolbar_layout.addWidget(self.filter_combo)
 
@@ -90,6 +93,31 @@ class TermsView(QWidget):
         self.filter_noise_button.clicked.connect(self._on_filter_noise)
         toolbar_layout.addWidget(self.filter_noise_button)
 
+        self.bulk_menu = QMenu(self)
+        self.bulk_mark_reviewed_action = self.bulk_menu.addAction(
+            self.tr("Mark Reviewed"),
+            lambda: self._run_bulk_update(reviewed=True),
+        )
+        self.bulk_unmark_reviewed_action = self.bulk_menu.addAction(
+            self.tr("Unmark Reviewed"),
+            lambda: self._run_bulk_update(reviewed=False),
+        )
+        self.bulk_mark_ignored_action = self.bulk_menu.addAction(
+            self.tr("Mark Ignored"),
+            lambda: self._run_bulk_update(ignored=True),
+        )
+        self.bulk_unmark_ignored_action = self.bulk_menu.addAction(
+            self.tr("Unmark Ignored"),
+            lambda: self._run_bulk_update(ignored=False),
+        )
+        self.bulk_delete_action = self.bulk_menu.addAction(
+            self.tr("Delete Selected"),
+            self._delete_selected_terms,
+        )
+        self.bulk_button = QPushButton(self.tr("Bulk Actions"))
+        self.bulk_button.setMenu(self.bulk_menu)
+        toolbar_layout.addWidget(self.bulk_button)
+
         self.import_button = QPushButton(self.tr("Import Terms"))
         self.import_button.clicked.connect(self._on_import_terms)
         toolbar_layout.addWidget(self.import_button)
@@ -97,10 +125,6 @@ class TermsView(QWidget):
         self.export_button = QPushButton(self.tr("Export Terms"))
         self.export_button.clicked.connect(self._on_export_terms)
         toolbar_layout.addWidget(self.export_button)
-
-        self.refresh_button = QPushButton(self.tr("Refresh"))
-        self.refresh_button.clicked.connect(self.refresh)
-        toolbar_layout.addWidget(self.refresh_button)
 
         layout.addLayout(toolbar_layout)
         layout.addWidget(self.table_panel, 1)
@@ -122,9 +146,14 @@ class TermsView(QWidget):
         self.translate_button.setText(self.tr("Translate Untranslated"))
         self.review_button.setText(self.tr("Review Terms"))
         self.filter_noise_button.setText(self.tr("Filter Rare"))
+        self.bulk_button.setText(self.tr("Bulk Actions"))
+        self.bulk_mark_reviewed_action.setText(self.tr("Mark Reviewed"))
+        self.bulk_unmark_reviewed_action.setText(self.tr("Unmark Reviewed"))
+        self.bulk_mark_ignored_action.setText(self.tr("Mark Ignored"))
+        self.bulk_unmark_ignored_action.setText(self.tr("Unmark Ignored"))
+        self.bulk_delete_action.setText(self.tr("Delete Selected"))
         self.import_button.setText(self.tr("Import Terms"))
         self.export_button.setText(self.tr("Export Terms"))
-        self.refresh_button.setText(self.tr("Refresh"))
         self.table_panel.retranslateUi()
         if self._state is not None:
             self._apply_toolbar_state(self._state.toolbar)
@@ -133,6 +162,7 @@ class TermsView(QWidget):
         self._state = state
         self._apply_toolbar_state(state.toolbar)
         self.table_panel.set_state(state)
+        self._update_bulk_button_state()
 
     def _apply_toolbar_state(self, toolbar) -> None:  # noqa: ANN001
         self.translate_button.setEnabled(toolbar.can_translate_pending)
@@ -166,6 +196,7 @@ class TermsView(QWidget):
         self.export_button.setToolTip(
             toolbar.export_blocker.message if toolbar.export_blocker else self.tr("Export terms to a JSON file.")
         )
+        self._update_bulk_button_state()
 
     def _on_translate_pending(self) -> None:
         self._run_command(
@@ -264,6 +295,71 @@ class TermsView(QWidget):
         severity = accepted.message.severity if accepted.message is not None else UserMessageSeverity.INFO
         self._show_message(severity, message)
         self.refresh()
+
+    def _run_bulk_update(
+        self,
+        *,
+        ignored: bool | None = None,
+        reviewed: bool | None = None,
+    ) -> None:
+        if self._state is None:
+            return
+        selected = self.table_panel.selected_rows()
+        if not selected:
+            return
+        try:
+            state = self._service.bulk_update_terms(
+                BulkUpdateTermsRequest(
+                    scope=self._state.scope,
+                    term_keys=[row.term_key for row in selected],
+                    ignored=ignored,
+                    reviewed=reviewed,
+                )
+            )
+        except BlockedOperationError as exc:
+            self._show_application_error(self.tr("Terms"), exc)
+            return
+        except ApplicationError as exc:
+            self._show_application_error(self.tr("Terms"), exc)
+            return
+        self._apply_state(state)
+
+    def _delete_selected_terms(self) -> None:
+        if self._state is None:
+            return
+        selected = self.table_panel.selected_rows()
+        if not selected:
+            return
+        if (
+            QMessageBox.question(
+                self,
+                self.tr("Delete Terms"),
+                self.tr("Delete the selected terms from this project?"),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+        try:
+            state = self._service.bulk_update_terms(
+                BulkUpdateTermsRequest(
+                    scope=self._state.scope,
+                    term_keys=[row.term_key for row in selected],
+                    delete=True,
+                )
+            )
+        except BlockedOperationError as exc:
+            self._show_application_error(self.tr("Delete Terms"), exc)
+            return
+        except ApplicationError as exc:
+            self._show_application_error(self.tr("Delete Terms"), exc)
+            return
+        self._apply_state(state)
+        self._show_message(UserMessageSeverity.SUCCESS, self.tr("Selected terms were deleted."))
+
+    def _update_bulk_button_state(self) -> None:
+        self.bulk_button.setEnabled(bool(self.table_panel.selected_rows()))
 
     def _show_application_error(self, title: str, exc: ApplicationError) -> None:
         if isinstance(exc, BlockedOperationError):

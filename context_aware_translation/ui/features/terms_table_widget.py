@@ -5,6 +5,7 @@ from collections.abc import Iterable
 from PySide6.QtCore import QEvent, QSortFilterProxyModel, Qt, Signal
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
     QHeaderView,
     QLabel,
@@ -120,7 +121,7 @@ class TermsTableWidget(QWidget):
         self.table_view.setModel(self.proxy_model)
         self.table_view.setSortingEnabled(True)
         self.table_view.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
-        self.table_view.setSelectionMode(QTableView.SelectionMode.SingleSelection)
+        self.table_view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table_view.horizontalHeader().setSectionResizeMode(_COLUMN_TERM, QHeaderView.ResizeMode.Stretch)
         self.table_view.horizontalHeader().setSectionResizeMode(_COLUMN_TRANSLATION, QHeaderView.ResizeMode.Stretch)
         self.table_view.horizontalHeader().setSectionResizeMode(_COLUMN_DESCRIPTION, QHeaderView.ResizeMode.Stretch)
@@ -283,6 +284,18 @@ class TermsTableWidget(QWidget):
             .replace("%3", str(translated))
             .replace("%4", str(ignored))
         )
+
+    def selected_rows(self) -> list[TermTableRow]:
+        rows: list[TermTableRow] = []
+        seen_keys: set[str] = set()
+        for index in self.table_view.selectionModel().selectedRows():
+            source_index = self.proxy_model.mapToSource(index)
+            row = self.table_model.data(source_index, _ROLE_ROW)
+            if not isinstance(row, TermTableRow) or row.term_key in seen_keys:
+                continue
+            seen_keys.add(row.term_key)
+            rows.append(row)
+        return rows
 
 
 __all__ = ["TermsTableWidget"]
