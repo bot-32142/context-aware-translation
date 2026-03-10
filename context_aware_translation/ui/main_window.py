@@ -135,7 +135,7 @@ class MainWindow(QMainWindow):
 
         self._stack = QStackedWidget()
 
-        self.projects_view = LibraryView(self.book_manager)
+        self.projects_view = LibraryView(self._app_context.services.projects)
         self.projects_view.book_opened.connect(self._on_book_opened)
         self.library_view = self.projects_view
         self.register_view("projects", self.projects_view)

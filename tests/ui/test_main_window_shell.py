@@ -12,9 +12,11 @@ import pytest
 from context_aware_translation.application.contracts.common import (
     NavigationTarget,
     NavigationTargetKind,
+    ProjectRef,
     QueueActionKind,
     QueueStatus,
 )
+from context_aware_translation.application.contracts.projects import ProjectsScreenState, ProjectSummary
 from context_aware_translation.application.contracts.queue import QueueItem, QueueState
 from context_aware_translation.application.events import (
     InMemoryApplicationEventBus,
@@ -25,6 +27,7 @@ from context_aware_translation.application.events import (
 from tests.application.fakes import (
     FakeAppSetupService,
     FakeDocumentService,
+    FakeProjectsService,
     FakeQueueService,
     FakeTermsService,
     FakeWorkService,
@@ -74,7 +77,7 @@ class _FakeTaskEngine(QObject):
 class _FakeProjectsView(QWidget):
     book_opened = Signal(str, str)
 
-    def __init__(self, _book_manager, parent: QWidget | None = None) -> None:
+    def __init__(self, _service, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.refresh_calls = 0
 
@@ -192,6 +195,17 @@ def _make_context():
             worker_deps=object(),
         ),
         services=SimpleNamespace(
+            projects=FakeProjectsService(
+                list_state=ProjectsScreenState(
+                    items=[
+                        ProjectSummary(
+                            project=ProjectRef(project_id="project-1", name="One Piece"),
+                            target_language="English",
+                            progress_summary="0.0% (0/0)",
+                        )
+                    ]
+                )
+            ),
             app_setup=app_setup_service,
             project_setup=MagicMock(),
             work=work_service,
