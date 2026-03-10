@@ -113,6 +113,23 @@ def _images_state(
     )
 
 
+def _transparent_png_with_center_dot(size: int = 64, dot: int = 8) -> bytes:
+    from PySide6.QtCore import QBuffer, QByteArray, QIODevice
+    from PySide6.QtGui import QColor, QImage
+
+    image = QImage(size, size, QImage.Format.Format_RGBA8888)
+    image.fill(QColor(0, 0, 0, 0))
+    offset = (size - dot) // 2
+    for y in range(offset, offset + dot):
+        for x in range(offset, offset + dot):
+            image.setPixelColor(x, y, QColor("white"))
+    payload = QByteArray()
+    buffer = QBuffer(payload)
+    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    image.save(buffer, "PNG")
+    return bytes(payload)
+
+
 def test_document_images_view_renders_backend_state_and_runs_actions():
     from context_aware_translation.ui.features.document_images_view import DocumentImagesView
 
@@ -204,6 +221,34 @@ def test_document_images_view_uses_embedded_bytes_and_shows_reembedded_first():
         assert view.toggle_button.isEnabled()
         assert view.toggle_button.text() == "Show Text"
         assert not any(name == "get_ocr_page_image" and payload[2] == 102 for name, payload in service.calls)
+    finally:
+        view.deleteLater()
+
+
+def test_document_images_view_trims_transparent_preview_padding():
+    from context_aware_translation.ui.features.document_images_view import DocumentImagesView
+
+    preview = _transparent_png_with_center_dot()
+    state = _images_state().model_copy(
+        update={
+            "assets": [
+                _images_state().assets[0].model_copy(update={"original_image_bytes": preview}),
+                _images_state().assets[1].model_copy(update={"original_image_bytes": preview}),
+            ]
+        }
+    )
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        images=state,
+        ocr_page_images={101: None, 102: None},
+    )
+    view = DocumentImagesView("proj-1", 4, service)
+    try:
+        view.refresh()
+
+        assert view.image_viewer.pixmap_item is not None
+        assert int(view.image_viewer.pixmap_item.pixmap().width()) == 8
+        assert int(view.image_viewer.pixmap_item.pixmap().height()) == 8
     finally:
         view.deleteLater()
 

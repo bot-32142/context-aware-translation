@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QTextCursor
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QRect, Qt, Signal
+from PySide6.QtGui import QImage, QTextCursor
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -270,7 +270,7 @@ class DocumentImagesView(QWidget):
             except ApplicationError:
                 image_bytes = None
         if image_bytes:
-            self.image_viewer.set_image(image_bytes)
+            self.image_viewer.set_image(self._prepare_preview_image(image_bytes))
         else:
             self.image_viewer.clear_image()
 
@@ -279,7 +279,7 @@ class DocumentImagesView(QWidget):
 
         reembedded_bytes = asset.reembedded_image_bytes or self._load_reembedded_image(asset)
         if reembedded_bytes is not None:
-            self.reembedded_viewer.set_image(reembedded_bytes)
+            self.reembedded_viewer.set_image(self._prepare_preview_image(reembedded_bytes))
             self.right_stack.setCurrentWidget(self.reembedded_viewer)
             self.right_label.setText(self.tr("Reembedded"))
             self.toggle_button.setText(self.tr("Show Text"))
@@ -305,6 +305,35 @@ class DocumentImagesView(QWidget):
             return output_path.read_bytes()
         except OSError:
             return None
+
+    def _prepare_preview_image(self, data: bytes) -> bytes:
+        image = QImage()
+        if not image.loadFromData(data):
+            return data
+        trimmed = self._trim_transparent_margins(image)
+        if trimmed is None:
+            return data
+        payload = QByteArray()
+        buffer = QBuffer(payload)
+        buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+        trimmed.save(buffer, "PNG")
+        return bytes(payload)
+
+    @staticmethod
+    def _trim_transparent_margins(image: QImage) -> QImage | None:
+        if not image.hasAlphaChannel():
+            return None
+        bounds = QRect()
+        for y in range(image.height()):
+            for x in range(image.width()):
+                if image.pixelColor(x, y).alpha() == 0:
+                    continue
+                bounds = QRect(x, y, 1, 1) if bounds.isNull() else bounds.united(QRect(x, y, 1, 1))
+        if bounds.isNull():
+            return None
+        if bounds.width() == image.width() and bounds.height() == image.height():
+            return None
+        return image.copy(bounds)
 
     def _toggle_right_panel(self) -> None:
         if self.right_stack.currentWidget() is self.text_panel:
