@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPixmap, QWheelEvent
 from PySide6.QtWidgets import (
     QGraphicsPixmapItem,
@@ -69,6 +69,8 @@ class ImageViewer(QGraphicsView):
         # Zoom state
         self._zoom_factor = 1.0
         self._zoom_step = 1.1  # 10% per step for smoother zooming
+        self._auto_fit_pending = False
+        self._user_zoomed = False
 
         # Configure view
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
@@ -113,14 +115,19 @@ class ImageViewer(QGraphicsView):
 
         # Reset zoom and fit to window
         self.reset_zoom()
+        self._auto_fit_pending = True
+        self._user_zoomed = False
         self.fit_to_window()
+        QTimer.singleShot(0, self._fit_pending_image)
 
     def zoom_in(self) -> None:
         """Zoom in by the zoom step factor."""
+        self._user_zoomed = True
         self._zoom(self._zoom_step)
 
     def zoom_out(self) -> None:
         """Zoom out by the zoom step factor."""
+        self._user_zoomed = True
         self._zoom(1.0 / self._zoom_step)
 
     def _zoom(self, factor: float) -> None:
@@ -143,11 +150,13 @@ class ImageViewer(QGraphicsView):
             self.fitInView(self.pixmap_item, Qt.AspectRatioMode.KeepAspectRatio)
             # Update zoom factor based on current transform
             self._zoom_factor = self.transform().m11()
+            self._auto_fit_pending = False
 
     def reset_zoom(self) -> None:
         """Reset zoom to 100%."""
         self.resetTransform()
         self._zoom_factor = 1.0
+        self._user_zoomed = False
 
     def set_bboxes(self, bboxes: list[object]) -> None:
         """Set bounding boxes to overlay on the image.
@@ -235,6 +244,22 @@ class ImageViewer(QGraphicsView):
             self.pixmap_item = None
         self._scene.setSceneRect(0, 0, 0, 0)
         self.reset_zoom()
+        self._auto_fit_pending = False
+
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        self._fit_pending_image()
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        self._fit_pending_image()
+
+    def _fit_pending_image(self) -> None:
+        if self.pixmap_item is None or not self._auto_fit_pending or self._user_zoomed:
+            return
+        if self.viewport().width() <= 1 or self.viewport().height() <= 1:
+            return
+        self.fit_to_window()
 
     def wheelEvent(self, event: QWheelEvent) -> None:
         """Handle mouse wheel events for zooming.

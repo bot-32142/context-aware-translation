@@ -163,6 +163,8 @@ class ImageAssetState(ContractModel):
     status: SurfaceStatus
     source_id: int | None = None
     translated_text: str | None = None
+    original_image_bytes: bytes | None = None
+    reembedded_image_bytes: bytes | None = None
     output_path: str | None = None
     blocker: BlockerInfo | None = None
     can_run: bool = False

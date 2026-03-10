@@ -74,6 +74,7 @@ def _images_state(
     asset_blocker: BlockerInfo | None = None,
     toolbar_blocker: BlockerInfo | None = None,
     active_task_id: str | None = None,
+    include_reembedded: bool = True,
 ) -> DocumentImagesState:
     return DocumentImagesState(
         workspace=_workspace_state(),
@@ -84,6 +85,7 @@ def _images_state(
                 status=SurfaceStatus.READY,
                 source_id=101,
                 translated_text="Everyone, get down now!!!",
+                original_image_bytes=b"image-1",
                 can_run=asset_blocker is None and active_task_id is None,
                 run_blocker=asset_blocker,
             ),
@@ -93,6 +95,8 @@ def _images_state(
                 status=SurfaceStatus.DONE,
                 source_id=102,
                 translated_text="Luffy!",
+                original_image_bytes=b"image-2",
+                reembedded_image_bytes=b"reembedded-2" if include_reembedded else None,
                 can_run=asset_blocker is None and active_task_id is None,
                 run_blocker=asset_blocker,
             ),
@@ -126,12 +130,14 @@ def test_document_images_view_renders_backend_state_and_runs_actions():
         view.refresh()
 
         assert view.page_label.text() == "Image 1 of 2"
-        assert view.status_label.text() == "Ready"
+        assert view.status_label.text() == "Pending"
         assert view.text_panel.toPlainText() == "Everyone, get down now!!!"
         assert view.run_selected_button.isEnabled()
         assert view.run_pending_button.isEnabled()
         assert view.force_all_button.isEnabled()
-        assert not view.cancel_button.isEnabled()
+        assert not view.progress_widget.isVisible()
+        assert not view.toggle_button.isEnabled()
+        assert view.toggle_button.text() == "Show Image"
 
         view.run_selected_button.click()
         selected_request = next(payload for name, payload in service.calls if name == "run_image_reinsertion")
@@ -168,12 +174,36 @@ def test_document_images_view_cancels_active_task():
     try:
         view.refresh()
 
-        assert view.cancel_button.isEnabled()
-        assert "1/2" in view.progress_label.text()
+        assert not view.progress_widget.isHidden()
+        assert not view.progress_widget.cancel_button.isHidden()
+        assert view.progress_widget.message_label.text() == "apply"
         assert view.get_running_operations() == ["Put text back into images"]
 
-        view.cancel_button.click()
+        view.progress_widget.cancel_button.click()
         assert ("cancel_image_reinsertion", ("proj-1", "task-1")) in service.calls
+    finally:
+        view.deleteLater()
+
+
+def test_document_images_view_uses_embedded_bytes_and_shows_reembedded_first():
+    from context_aware_translation.ui.features.document_images_view import DocumentImagesView
+
+    state = _images_state()
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        images=state,
+        ocr_page_images={101: None, 102: None},
+    )
+    view = DocumentImagesView("proj-1", 4, service)
+    try:
+        view.refresh()
+        view._go_next()
+
+        assert view.status_label.text() == "Reembedded"
+        assert view.right_label.text() == "Reembedded"
+        assert view.toggle_button.isEnabled()
+        assert view.toggle_button.text() == "Show Text"
+        assert not any(name == "get_ocr_page_image" and payload[2] == 102 for name, payload in service.calls)
     finally:
         view.deleteLater()
 

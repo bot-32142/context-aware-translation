@@ -1069,6 +1069,8 @@ class DefaultDocumentService:
                     else SurfaceStatus.READY,
                     source_id=source_id,
                     translated_text=translated,
+                    original_image_bytes=source.get("binary_content"),
+                    reembedded_image_bytes=persisted.get(source_idx, (None, ""))[0] if is_done else None,
                     can_run=active_task is None,
                     run_blocker=None
                     if active_task is None
@@ -1116,6 +1118,8 @@ class DefaultDocumentService:
                     else SurfaceStatus.READY,
                     source_id=source_id,
                     translated_text=translated,
+                    original_image_bytes=source.get("binary_content"),
+                    reembedded_image_bytes=persisted.get(source_id, (None, ""))[0] if is_done else None,
                     can_run=active_task is None,
                     run_blocker=None
                     if active_task is None
@@ -1154,6 +1158,8 @@ class DefaultDocumentService:
                     if is_done
                     else SurfaceStatus.READY,
                     translated_text=translated,
+                    original_image_bytes=element.image_bytes,
+                    reembedded_image_bytes=element.reembedded_image_bytes,
                     can_run=False,
                     run_blocker=make_blocker(
                         BlockerCode.NOTHING_TO_DO,

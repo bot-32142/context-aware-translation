@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from context_aware_translation.application.contracts.common import NavigationTargetKind, SurfaceStatus
+from context_aware_translation.application.contracts.common import NavigationTargetKind
 from context_aware_translation.application.contracts.document import (
     DocumentImagesState,
     ImageAssetState,
@@ -26,16 +26,7 @@ from context_aware_translation.application.contracts.document import (
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.services.document import DocumentService
 from context_aware_translation.ui.utils import create_tip_label
-from context_aware_translation.ui.widgets import ImageViewer
-
-_STATUS_LABELS: dict[SurfaceStatus, str] = {
-    SurfaceStatus.READY: "Ready",
-    SurfaceStatus.RUNNING: "Running",
-    SurfaceStatus.BLOCKED: "Blocked",
-    SurfaceStatus.FAILED: "Failed",
-    SurfaceStatus.DONE: "Done",
-    SurfaceStatus.CANCELLED: "Cancelled",
-}
+from context_aware_translation.ui.widgets import ImageViewer, ProgressWidget
 
 
 class DocumentImagesView(QWidget):
@@ -83,10 +74,6 @@ class DocumentImagesView(QWidget):
         self.blocker_strip.hide()
         layout.addWidget(self.blocker_strip)
 
-        self.progress_label = QLabel()
-        self.progress_label.hide()
-        layout.addWidget(self.progress_label)
-
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
         left_panel = QWidget()
@@ -104,13 +91,14 @@ class DocumentImagesView(QWidget):
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
         header_layout = QHBoxLayout()
-        self.right_label = QLabel(self.tr("Translated Text"))
+        self.right_label = QLabel(self.tr("Reembedded"))
         self.right_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.right_label.setStyleSheet("font-weight: 600;")
         header_layout.addWidget(self.right_label, 1)
         self.toggle_button = QPushButton(self.tr("Show Text"))
+        self.toggle_button.setToolTip(self.tr("Toggle between reembedded image and translated text"))
         self.toggle_button.clicked.connect(self._toggle_right_panel)
-        self.toggle_button.hide()
+        self.toggle_button.setFixedWidth(100)
         header_layout.addWidget(self.toggle_button)
         right_layout.addLayout(header_layout)
 
@@ -121,7 +109,7 @@ class DocumentImagesView(QWidget):
         self.text_panel.setReadOnly(True)
         self.text_panel.setPlaceholderText(self.tr("Translated text for the selected image appears here."))
         self.right_stack.addWidget(self.text_panel)
-        self.right_stack.setCurrentWidget(self.text_panel)
+        self.right_stack.setCurrentWidget(self.reembedded_viewer)
         right_layout.addWidget(self.right_stack, 1)
         splitter.addWidget(right_panel)
         splitter.setSizes([500, 500])
@@ -129,9 +117,11 @@ class DocumentImagesView(QWidget):
 
         nav_layout = QHBoxLayout()
         self.first_button = QPushButton("|<")
+        self.first_button.setToolTip(self.tr("First image"))
         self.first_button.clicked.connect(self._go_first)
         nav_layout.addWidget(self.first_button)
         self.prev_button = QPushButton("<")
+        self.prev_button.setToolTip(self.tr("Previous image"))
         self.prev_button.clicked.connect(self._go_prev)
         nav_layout.addWidget(self.prev_button)
         self.page_label = QLabel(self.tr("Image 0 of 0"))
@@ -139,41 +129,50 @@ class DocumentImagesView(QWidget):
         self.status_label = QLabel()
         nav_layout.addWidget(self.status_label)
         self.next_button = QPushButton(">")
+        self.next_button.setToolTip(self.tr("Next image"))
         self.next_button.clicked.connect(self._go_next)
         nav_layout.addWidget(self.next_button)
         self.last_button = QPushButton(">|")
+        self.last_button.setToolTip(self.tr("Last image"))
         self.last_button.clicked.connect(self._go_last)
         nav_layout.addWidget(self.last_button)
+        nav_layout.addSpacing(8)
+        self.go_to_label = QLabel(self.tr("Go to:"))
+        nav_layout.addWidget(self.go_to_label)
         self.page_spinbox = QSpinBox()
         self.page_spinbox.setMinimum(1)
         self.page_spinbox.setMaximum(1)
         self.page_spinbox.setFixedWidth(64)
+        self.page_spinbox.setToolTip(self.tr("Enter image number"))
         nav_layout.addWidget(self.page_spinbox)
         self.go_button = QPushButton(self.tr("Go"))
+        self.go_button.setToolTip(self.tr("Jump to image"))
         self.go_button.clicked.connect(self._go_to_entered)
         nav_layout.addWidget(self.go_button)
         nav_layout.addStretch(1)
         layout.addLayout(nav_layout)
 
         actions = QHBoxLayout()
-        self.run_selected_button = QPushButton(self.tr("Reinsert This Image"))
+        self.run_selected_button = QPushButton(self.tr("Reembed This Image"))
         self.run_selected_button.clicked.connect(self._run_selected)
         actions.addWidget(self.run_selected_button)
-        self.run_pending_button = QPushButton(self.tr("Reinsert Pending"))
+        self.run_pending_button = QPushButton(self.tr("Reembed Pending"))
         self.run_pending_button.clicked.connect(self._run_pending)
         actions.addWidget(self.run_pending_button)
-        self.force_all_button = QPushButton(self.tr("Force Reinsert All"))
+        self.force_all_button = QPushButton(self.tr("Force Reembed All"))
         self.force_all_button.clicked.connect(self._force_all)
         actions.addWidget(self.force_all_button)
-        self.cancel_button = QPushButton(self.tr("Cancel"))
-        self.cancel_button.clicked.connect(self._cancel)
-        actions.addWidget(self.cancel_button)
         actions.addStretch(1)
         layout.addLayout(actions)
 
         self.message_label = QLabel()
         self.message_label.hide()
         layout.addWidget(self.message_label)
+
+        self.progress_widget = ProgressWidget(self)
+        self.progress_widget.setVisible(False)
+        self.progress_widget.cancelled.connect(self._cancel)
+        layout.addWidget(self.progress_widget)
 
         self.empty_label = create_tip_label(self.tr("No reembeddable images are available for this document."))
         self.empty_label.hide()
@@ -235,10 +234,20 @@ class DocumentImagesView(QWidget):
             self.empty_label.show()
             self.page_label.setText(self.tr("Image 0 of 0"))
             self.status_label.clear()
+            self.status_label.setStyleSheet("")
             self.image_viewer.clear_image()
             self.reembedded_viewer.clear_image()
             self.text_panel.clear()
-            self.toggle_button.hide()
+            self.right_label.setText(self.tr("Reembedded"))
+            self.toggle_button.setText(self.tr("Show Text"))
+            self.toggle_button.setEnabled(False)
+            self.go_to_label.setEnabled(False)
+            self.page_spinbox.setEnabled(False)
+            self.go_button.setEnabled(False)
+            self.first_button.setEnabled(False)
+            self.prev_button.setEnabled(False)
+            self.next_button.setEnabled(False)
+            self.last_button.setEnabled(False)
             return
 
         self.empty_label.hide()
@@ -246,14 +255,16 @@ class DocumentImagesView(QWidget):
         self.page_label.setText(
             self.tr("Image %1 of %2").replace("%1", str(self._current_index + 1)).replace("%2", str(len(self._assets)))
         )
-        self.status_label.setText(self.tr(_STATUS_LABELS[asset.status]))
+        self.go_to_label.setEnabled(True)
+        self.page_spinbox.setEnabled(True)
+        self.go_button.setEnabled(True)
         self.first_button.setEnabled(self._current_index > 0)
         self.prev_button.setEnabled(self._current_index > 0)
         self.next_button.setEnabled(self._current_index < len(self._assets) - 1)
         self.last_button.setEnabled(self._current_index < len(self._assets) - 1)
 
-        image_bytes = None
-        if asset.source_id is not None:
+        image_bytes = asset.original_image_bytes
+        if image_bytes is None and asset.source_id is not None:
             try:
                 image_bytes = self._service.get_ocr_page_image(self._project_id, self._document_id, asset.source_id)
             except ApplicationError:
@@ -266,21 +277,23 @@ class DocumentImagesView(QWidget):
         self.text_panel.setPlainText(asset.translated_text or "")
         self.text_panel.moveCursor(QTextCursor.MoveOperation.Start)
 
-        reembedded_bytes = self._load_reembedded_image(asset)
+        reembedded_bytes = asset.reembedded_image_bytes or self._load_reembedded_image(asset)
         if reembedded_bytes is not None:
             self.reembedded_viewer.set_image(reembedded_bytes)
-            self.toggle_button.show()
-            if self.right_stack.currentWidget() is self.text_panel:
-                self.right_label.setText(self.tr("Translated Text"))
-                self.toggle_button.setText(self.tr("Show Reembedded"))
-            else:
-                self.right_label.setText(self.tr("Reembedded"))
-                self.toggle_button.setText(self.tr("Show Text"))
+            self.right_stack.setCurrentWidget(self.reembedded_viewer)
+            self.right_label.setText(self.tr("Reembedded"))
+            self.toggle_button.setText(self.tr("Show Text"))
+            self.toggle_button.setEnabled(True)
+            self.status_label.setText(self.tr("Reembedded"))
+            self.status_label.setStyleSheet("color: green; font-weight: 600;")
         else:
             self.reembedded_viewer.clear_image()
             self.right_stack.setCurrentWidget(self.text_panel)
             self.right_label.setText(self.tr("Translated Text"))
-            self.toggle_button.hide()
+            self.toggle_button.setText(self.tr("Show Image"))
+            self.toggle_button.setEnabled(False)
+            self.status_label.setText(self.tr("Pending"))
+            self.status_label.setStyleSheet("color: #b54708; font-weight: 600;")
 
     def _load_reembedded_image(self, asset: ImageAssetState) -> bytes | None:
         if not asset.output_path:
@@ -305,19 +318,25 @@ class DocumentImagesView(QWidget):
 
     def _render_progress(self, state: DocumentImagesState) -> None:
         if state.active_task_id is None:
-            self.progress_label.hide()
-            self.progress_label.clear()
+            self.progress_widget.reset()
+            self.progress_widget.setVisible(False)
             return
-        if state.progress is None:
-            self.progress_label.setText(self.tr("Image reinsertion is running for this document."))
-        elif state.progress.current is not None and state.progress.total is not None:
-            label = state.progress.label or self.tr("Processing")
-            self.progress_label.setText(f"{label}: {state.progress.current}/{state.progress.total}")
-        else:
-            self.progress_label.setText(
-                state.progress.label or self.tr("Image reinsertion is running for this document.")
+        self.progress_widget.reset()
+        self.progress_widget.setVisible(True)
+        self.progress_widget.set_cancellable(state.toolbar.can_cancel)
+        if state.progress is None or state.progress.current is None or state.progress.total is None:
+            self.progress_widget.progress_bar.setMinimum(0)
+            self.progress_widget.progress_bar.setMaximum(0)
+            self.progress_widget.message_label.setText(
+                state.progress.label if state.progress is not None and state.progress.label else self.tr("Reembedding")
             )
-        self.progress_label.show()
+            self.progress_widget.eta_label.clear()
+        else:
+            self.progress_widget.set_progress(
+                state.progress.current,
+                state.progress.total,
+                state.progress.label or self.tr("Reembedding"),
+            )
 
     def _update_action_buttons(self) -> None:
         state = self._state
@@ -326,7 +345,6 @@ class DocumentImagesView(QWidget):
             self.run_selected_button.setEnabled(False)
             self.run_pending_button.setEnabled(False)
             self.force_all_button.setEnabled(False)
-            self.cancel_button.setEnabled(False)
             return
         self.run_selected_button.setEnabled(asset.can_run if asset is not None else False)
         self.run_selected_button.setToolTip(
@@ -341,8 +359,6 @@ class DocumentImagesView(QWidget):
         self.force_all_button.setToolTip(
             toolbar.force_all_blocker.message if toolbar.force_all_blocker is not None else ""
         )
-        self.cancel_button.setEnabled(toolbar.can_cancel)
-        self.cancel_button.setToolTip(toolbar.cancel_blocker.message if toolbar.cancel_blocker is not None else "")
 
     def _update_blocker_strip(self) -> None:
         blocker = None
