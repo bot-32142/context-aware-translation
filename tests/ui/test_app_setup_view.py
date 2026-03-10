@@ -516,8 +516,9 @@ def test_connection_editor_dialog_uses_scrollable_form_layout():
 
     scroll_areas = dialog.findChildren(QScrollArea)
     assert scroll_areas
+    assert dialog.form.tabs.count() == 2
     assert dialog.width() <= 520
-    assert dialog.height() <= 420
+    assert dialog.height() <= 360
 
 
 def test_connection_editor_dialog_tests_inside_dialog():
@@ -567,6 +568,7 @@ def test_connection_editor_dialog_resets_token_usage_inside_dialog():
         ),
     )
 
+    assert dialog.form.tabs.tabText(1) == "Token Meter"
     assert dialog.total_used_label.text() == "1,200"
     dialog._on_reset_tokens()
     assert dialog.total_used_label.text() == "0"

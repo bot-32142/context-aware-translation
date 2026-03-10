@@ -235,8 +235,8 @@ class WorkflowProfileEditorDialog(QDialog):
         self._allow_name_edit = allow_name_edit
         self._rows: list[RouteRow] = []
         self.setWindowTitle(self.tr("Workflow Profile"))
-        self.setMinimumSize(880, 620)
-        self.resize(980, 720)
+        self.setMinimumSize(1040, 660)
+        self.resize(1140, 760)
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -290,15 +290,17 @@ class WorkflowProfileEditorDialog(QDialog):
         self.routes_table = QTableWidget(0, 3)
         self.routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
         self.routes_table.verticalHeader().setVisible(False)
+        self.routes_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.routes_table.setAlternatingRowColors(True)
         self.routes_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.routes_table.verticalHeader().setDefaultSectionSize(38)
+        self.routes_table.setWordWrap(False)
+        self.routes_table.verticalHeader().setDefaultSectionSize(44)
         self.routes_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.routes_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
         self.routes_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
         self.routes_table.horizontalHeader().setStretchLastSection(True)
-        self.routes_table.setColumnWidth(1, 280)
-        self.routes_table.setColumnWidth(2, 300)
+        self.routes_table.setColumnWidth(1, 420)
+        self.routes_table.setColumnWidth(2, 380)
         self.routes_table.cellDoubleClicked.connect(self._open_step_advanced_dialog)
         self._populate_routes()
         routes_layout.addWidget(self.routes_table)
@@ -349,9 +351,10 @@ class WorkflowProfileEditorDialog(QDialog):
                 continue
 
             combo = QComboBox()
-            combo.setMinimumContentsLength(24)
-            combo.setMinimumWidth(280)
+            combo.setMinimumContentsLength(32)
+            combo.setMinimumWidth(400)
             combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            combo.setStyleSheet("QComboBox { font-size: 13px; padding: 4px 8px; }")
             combo.addItem(self.tr("Select connection"), "")
             for choice in self._connection_choices:
                 combo.addItem(choice.label, choice.connection_id)
@@ -360,7 +363,8 @@ class WorkflowProfileEditorDialog(QDialog):
                 if index >= 0:
                     combo.setCurrentIndex(index)
             model_edit = QLineEdit(route.model or "")
-            model_edit.setMinimumWidth(300)
+            model_edit.setMinimumWidth(360)
+            model_edit.setStyleSheet("QLineEdit { font-size: 13px; padding: 4px 6px; }")
             combo.currentIndexChanged.connect(lambda _i, c=combo, e=model_edit: self._sync_model_from_connection(c, e))
             self.routes_table.setCellWidget(row, 1, combo)
             self.routes_table.setCellWidget(row, 2, model_edit)

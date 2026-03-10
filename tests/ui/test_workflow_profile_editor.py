@@ -57,11 +57,12 @@ def test_workflow_profile_editor_uses_scrollable_dialog_layout():
     )
 
     assert dialog.findChildren(QScrollArea)
-    assert dialog.width() <= 980
+    assert dialog.width() <= 1140
+    assert dialog.routes_table.editTriggers() == dialog.routes_table.EditTrigger.NoEditTriggers
     route_row = dialog._rows[0]
     assert route_row.connection_combo is not None
-    assert route_row.connection_combo.minimumWidth() >= 280
-    assert route_row.model_edit.minimumWidth() >= 300
+    assert route_row.connection_combo.minimumWidth() >= 400
+    assert route_row.model_edit.minimumWidth() >= 360
 
 
 def test_step_advanced_config_dialog_updates_route_config():

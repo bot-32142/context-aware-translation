@@ -4,7 +4,7 @@ import json
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -129,6 +129,11 @@ class ConnectionDraftForm(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
+        self.tabs = QTabWidget()
+        layout.addWidget(self.tabs)
+
+        connection_tab = QWidget()
+        connection_layout = QVBoxLayout(connection_tab)
         form = QFormLayout()
         self.display_name_edit = QLineEdit()
         self.provider_combo = QComboBox()
@@ -141,7 +146,7 @@ class ConnectionDraftForm(QWidget):
         form.addRow(self.tr("Connection name"), self.display_name_edit)
         form.addRow(self.tr("Provider"), self.provider_combo)
         form.addRow(self.tr("API key"), self.api_key_edit)
-        layout.addLayout(form)
+        connection_layout.addLayout(form)
 
         self.advanced_section = CollapsibleSection(self.tr("Advanced"))
         advanced_widget = QWidget()
@@ -170,12 +175,29 @@ class ConnectionDraftForm(QWidget):
         advanced_form.addRow(self.tr("Temperature"), self.temperature_spin)
         advanced_form.addRow(self.tr("Custom parameters"), self.custom_parameters_edit)
         self._build_spin_fields(advanced_form)
-        self._build_token_limit_fields(advanced_form)
         advanced_form.addRow(self.advanced_note)
         self.advanced_section.set_content(advanced_widget)
-        layout.addWidget(self.advanced_section)
+        connection_layout.addWidget(self.advanced_section)
+        connection_layout.addStretch()
+        self.tabs.addTab(connection_tab, self.tr("Connection"))
+
+        token_tab = QWidget()
+        self.token_tab_layout = QVBoxLayout(token_tab)
+        token_form = QFormLayout()
+        self._build_token_limit_fields(token_form)
+        self.token_meter_note = create_tip_label(
+            self.tr("Token limits and usage tracking apply to this connection profile only.")
+        )
+        self.token_tab_layout.addLayout(token_form)
+        self.token_tab_layout.addWidget(self.token_meter_note)
+        self.token_tab_layout.addStretch()
+        self.tabs.addTab(token_tab, self.tr("Token Meter"))
 
         self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+
+    def add_token_meter_widget(self, widget: QWidget) -> None:
+        insert_at = max(self.token_tab_layout.count() - 1, 0)
+        self.token_tab_layout.insertWidget(insert_at, widget)
 
     def _build_spin_fields(self, form: QFormLayout) -> None:
         for spec in self._SPIN_FIELDS:
@@ -302,7 +324,7 @@ class ConnectionEditorDialog(QDialog):
         self._reset_tokens_callback = reset_tokens_callback
         self.setWindowTitle(self.tr("Connection"))
         self.setMinimumWidth(460)
-        self.resize(520, 420)
+        self.resize(520, 300)
         self.form = ConnectionDraftForm(self)
         if draft is not None:
             self.form.set_draft(draft)
@@ -331,7 +353,7 @@ class ConnectionEditorDialog(QDialog):
             self.reset_tokens_button = QPushButton(self.tr("Reset Usage"))
             self.reset_tokens_button.clicked.connect(self._on_reset_tokens)
             usage_layout.addRow(self.reset_tokens_button)
-            layout.addWidget(self.token_usage_group)
+            self.form.add_token_meter_widget(self.token_usage_group)
             self._set_token_usage(self._connection_summary)
         self.button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
@@ -341,6 +363,9 @@ class ConnectionEditorDialog(QDialog):
         self.button_box.rejected.connect(self.reject)
         self.test_button.clicked.connect(self._on_test)
         layout.addWidget(self.button_box)
+        self.form.advanced_section.toggled.connect(self._schedule_resize)
+        self.form.tabs.currentChanged.connect(lambda _index: self._schedule_resize())
+        self._schedule_resize()
 
     def request(self) -> SaveConnectionRequest:
         return SaveConnectionRequest(connection=self.form.to_draft(), connection_id=self._connection_id)
@@ -374,6 +399,14 @@ class ConnectionEditorDialog(QDialog):
         self.cached_input_label.setText(f"{summary.cached_input_tokens_used:,}")
         self.uncached_input_label.setText(f"{summary.uncached_input_tokens_used:,}")
         self.output_used_label.setText(f"{summary.output_tokens_used:,}")
+
+    def _schedule_resize(self, *_args: object) -> None:
+        QTimer.singleShot(0, self._resize_to_content)
+        QTimer.singleShot(220, self._resize_to_content)
+
+    def _resize_to_content(self) -> None:
+        target_height = min(max(self.sizeHint().height() + 24, 300), 620)
+        self.resize(self.width(), target_height)
 
 
 class SetupWizardDialog(QDialog):
