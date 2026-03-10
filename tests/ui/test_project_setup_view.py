@@ -13,7 +13,6 @@ from context_aware_translation.application.contracts.app_setup import (
 from context_aware_translation.application.contracts.common import (
     BlockerCode,
     BlockerInfo,
-    CapabilityCode,
     NavigationTarget,
     NavigationTargetKind,
     ProjectRef,
@@ -85,7 +84,6 @@ def _make_state(*, blocker: str | None = None, project_specific: bool = False) -
                 base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
                 default_model="gemini-3-flash-preview",
                 status=ConnectionStatus.READY,
-                capabilities=[CapabilityCode.TRANSLATION],
             ),
             ConnectionSummary(
                 connection_id="conn-openai",
@@ -94,7 +92,6 @@ def _make_state(*, blocker: str | None = None, project_specific: bool = False) -
                 base_url="https://api.openai.com/v1",
                 default_model="gpt-4.1-mini",
                 status=ConnectionStatus.READY,
-                capabilities=[CapabilityCode.TRANSLATION],
             ),
         ],
         shared_profiles=[shared],

@@ -26,8 +26,6 @@ from context_aware_translation.application.contracts.document import (
     DocumentImagesToolbarState,
     DocumentOCRActions,
     DocumentOCRState,
-    DocumentOverviewState,
-    DocumentSectionCard,
     DocumentTranslationState,
     DocumentWorkspaceState,
     ImageAssetState,
@@ -73,8 +71,6 @@ from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUS
 
 class DocumentService(Protocol):
     def get_workspace(self, project_id: str, document_id: int) -> DocumentWorkspaceState: ...
-
-    def get_overview(self, project_id: str, document_id: int) -> DocumentOverviewState: ...
 
     def get_ocr(self, project_id: str, document_id: int) -> DocumentOCRState: ...
 
@@ -122,9 +118,8 @@ class DefaultDocumentService:
         return DocumentWorkspaceState(
             project=project,
             document=make_document_ref(document_id, f"Document {document_id}", str(doc.get("document_type") or "")),
-            active_tab=DocumentSection.OVERVIEW,
+            active_tab=DocumentSection.OCR,
             available_tabs=[
-                DocumentSection.OVERVIEW,
                 DocumentSection.OCR,
                 DocumentSection.TERMS,
                 DocumentSection.TRANSLATION,
@@ -132,45 +127,6 @@ class DefaultDocumentService:
                 DocumentSection.EXPORT,
             ],
         )
-
-    def get_overview(self, project_id: str, document_id: int) -> DocumentOverviewState:
-        workspace = self.get_workspace(project_id, document_id)
-        with self._runtime.open_book_db(project_id) as dbx:
-            status_rows = {int(doc["document_id"]): doc for doc in dbx.document_repo.get_documents_with_status()}
-            status = status_rows.get(document_id)
-            if status is None:
-                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Document not found: {document_id}")
-            sections = [
-                DocumentSectionCard(
-                    section=DocumentSection.OCR,
-                    status=SurfaceStatus.READY if int(status.get("ocr_pending", 0) or 0) > 0 else SurfaceStatus.DONE,
-                    summary="OCR",
-                ),
-                DocumentSectionCard(
-                    section=DocumentSection.TERMS,
-                    status=SurfaceStatus.READY
-                    if int(status.get("chunks_extracted", 0) or 0) < int(status.get("total_chunks", 0) or 0)
-                    else SurfaceStatus.DONE,
-                    summary="Terms",
-                ),
-                DocumentSectionCard(
-                    section=DocumentSection.TRANSLATION,
-                    status=SurfaceStatus.READY
-                    if int(status.get("chunks_translated", 0) or 0) < int(status.get("total_chunks", 0) or 0)
-                    else SurfaceStatus.DONE,
-                    summary="Translation",
-                ),
-                DocumentSectionCard(section=DocumentSection.IMAGES, status=SurfaceStatus.READY, summary="Images"),
-                DocumentSectionCard(
-                    section=DocumentSection.EXPORT,
-                    status=SurfaceStatus.READY
-                    if int(status.get("chunks_translated", 0) or 0) >= int(status.get("total_chunks", 0) or 0)
-                    and int(status.get("total_chunks", 0) or 0) > 0
-                    else SurfaceStatus.BLOCKED,
-                    summary="Export",
-                ),
-            ]
-        return DocumentOverviewState(workspace=workspace, sections=sections)
 
     def get_ocr(self, project_id: str, document_id: int) -> DocumentOCRState:
         workspace = self.get_workspace(project_id, document_id).model_copy(update={"active_tab": DocumentSection.OCR})
@@ -274,7 +230,7 @@ class DefaultDocumentService:
         self._runtime.invalidate_document(
             request.project_id,
             request.document_id,
-            sections=[DocumentSection.OCR, DocumentSection.OVERVIEW, DocumentSection.TERMS],
+            sections=[DocumentSection.OCR, DocumentSection.TERMS],
         )
         self._runtime.invalidate_workboard(request.project_id)
         return self.get_ocr(request.project_id, request.document_id)
@@ -437,7 +393,6 @@ class DefaultDocumentService:
             request.document_id,
             sections=[
                 DocumentSection.TRANSLATION,
-                DocumentSection.OVERVIEW,
                 DocumentSection.IMAGES,
                 DocumentSection.EXPORT,
             ],

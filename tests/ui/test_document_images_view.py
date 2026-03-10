@@ -22,8 +22,6 @@ from context_aware_translation.application.contracts.document import (
     DocumentImagesToolbarState,
     DocumentOCRActions,
     DocumentOCRState,
-    DocumentOverviewState,
-    DocumentSectionCard,
     DocumentTranslationState,
     DocumentWorkspaceState,
     ImageAssetState,
@@ -59,7 +57,6 @@ def _workspace_state(active_tab: DocumentSection = DocumentSection.IMAGES) -> Do
         document=DocumentRef(document_id=4, order_index=4, label="04.png"),
         active_tab=active_tab,
         available_tabs=[
-            DocumentSection.OVERVIEW,
             DocumentSection.OCR,
             DocumentSection.TERMS,
             DocumentSection.TRANSLATION,
@@ -263,18 +260,7 @@ def test_document_images_view_routes_setup_blocker_and_document_workspace_forwar
         target=NavigationTarget(kind=NavigationTargetKind.APP_SETUP, project_id="proj-1"),
     )
     document_service = FakeDocumentService(
-        workspace=_workspace_state(active_tab=DocumentSection.OVERVIEW),
-        overview=DocumentOverviewState(
-            workspace=_workspace_state(active_tab=DocumentSection.OVERVIEW),
-            sections=[
-                DocumentSectionCard(
-                    section=DocumentSection.IMAGES,
-                    status=SurfaceStatus.BLOCKED,
-                    summary="Needs setup",
-                    blocker=blocker,
-                )
-            ],
-        ),
+        workspace=_workspace_state(active_tab=DocumentSection.OCR),
         images=_images_state(asset_blocker=blocker, toolbar_blocker=blocker),
         ocr=DocumentOCRState(
             workspace=_workspace_state(active_tab=DocumentSection.OCR),

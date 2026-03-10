@@ -46,8 +46,6 @@ class ProviderCard(ContractModel):
     provider: ProviderKind
     label: str
     helper_text: str | None = None
-    supports_custom_endpoint: bool = False
-    recommended_for: list[CapabilityCode] = Field(default_factory=list)
 
 
 class ConnectionSummary(ContractModel):
@@ -72,7 +70,6 @@ class ConnectionSummary(ContractModel):
     uncached_input_tokens_used: int = 0
     custom_parameters_json: str | None = None
     status: ConnectionStatus = ConnectionStatus.UNTESTED
-    capabilities: list[CapabilityCode] = Field(default_factory=list)
 
 
 class ConnectionDraft(ContractModel):

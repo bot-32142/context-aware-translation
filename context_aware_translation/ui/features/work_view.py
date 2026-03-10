@@ -539,10 +539,7 @@ class WorkView(QWidget):
     def _section_for_target(self, target: NavigationTarget) -> DocumentSection | None:
         if target.kind is NavigationTargetKind.DOCUMENT_OVERVIEW:
             workspace = self._document_service.get_workspace(self._project_id, target.document_id or 0)
-            for section in workspace.available_tabs:
-                if section is not DocumentSection.OVERVIEW:
-                    return section
-            return None
+            return workspace.available_tabs[0] if workspace.available_tabs else None
         return _TARGET_TO_SECTION.get(target.kind)
 
     def _open_export_dialog(self, document_id: int) -> None:

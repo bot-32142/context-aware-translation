@@ -444,7 +444,6 @@ def build_connection_summary(profile: EndpointProfile) -> ConnectionSummary:
         uncached_input_tokens_used=profile.uncached_input_tokens_used,
         custom_parameters_json=(json.dumps(kwargs_payload, indent=2, ensure_ascii=False) if kwargs_payload else None),
         status=infer_connection_status(profile),
-        capabilities=infer_capabilities(provider),
     )
 
 

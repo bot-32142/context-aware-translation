@@ -55,7 +55,6 @@ from context_aware_translation.ui.i18n import qarg
 from context_aware_translation.ui.utils import create_tip_label
 
 _SECTION_LABELS: dict[DocumentSection, str] = {
-    DocumentSection.OVERVIEW: "Overview",
     DocumentSection.OCR: "OCR",
     DocumentSection.TERMS: "Terms",
     DocumentSection.TRANSLATION: "Translation",
@@ -689,7 +688,7 @@ class DocumentWorkspaceView(QWidget):
     def _sync_tabs(self) -> None:
         if self._state is None:
             return
-        wanted_sections = [section for section in self._state.available_tabs if section is not DocumentSection.OVERVIEW]
+        wanted_sections = list(self._state.available_tabs)
         if list(self._tab_indexes.keys()) == wanted_sections:
             return
         while self.tab_widget.count():

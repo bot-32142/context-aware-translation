@@ -32,14 +32,12 @@ from context_aware_translation.ui.constants import (
     MIN_WINDOW_WIDTH,
     SIDEBAR_WIDTH,
 )
-from context_aware_translation.ui.features import (
-    AppSetupView,
-    ProjectSetupView,
-    ProjectShellView,
-    QueueDrawerView,
-    TermsView,
-    WorkView,
-)
+from context_aware_translation.ui.features.app_setup_view import AppSetupView
+from context_aware_translation.ui.features.project_setup_view import ProjectSetupView
+from context_aware_translation.ui.features.project_shell_view import ProjectShellView
+from context_aware_translation.ui.features.queue_drawer_view import QueueDrawerView
+from context_aware_translation.ui.features.terms_view import TermsView
+from context_aware_translation.ui.features.work_view import WorkView
 from context_aware_translation.ui.i18n import qarg
 from context_aware_translation.ui.sleep_inhibitor import SleepInhibitor
 from context_aware_translation.ui.views.library_view import LibraryView

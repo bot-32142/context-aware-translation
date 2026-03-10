@@ -20,8 +20,6 @@ from context_aware_translation.application.contracts.document import (
     DocumentImagesState,
     DocumentOCRActions,
     DocumentOCRState,
-    DocumentOverviewState,
-    DocumentSectionCard,
     DocumentTranslationState,
     DocumentWorkspaceState,
     ImageAssetState,
@@ -70,9 +68,8 @@ def _make_workspace_state() -> DocumentWorkspaceState:
     return DocumentWorkspaceState(
         project=ProjectRef(project_id="proj-1", name="One Piece"),
         document=DocumentRef(document_id=4, order_index=4, label="04.png"),
-        active_tab=DocumentSection.OVERVIEW,
+        active_tab=DocumentSection.OCR,
         available_tabs=[
-            DocumentSection.OVERVIEW,
             DocumentSection.OCR,
             DocumentSection.TERMS,
             DocumentSection.TRANSLATION,
@@ -191,16 +188,6 @@ def _make_view():
     bus = InMemoryApplicationEventBus()
     document_service = FakeDocumentService(
         workspace=_make_workspace_state(),
-        overview=DocumentOverviewState(
-            workspace=_make_workspace_state(),
-            sections=[
-                DocumentSectionCard(
-                    section=DocumentSection.TERMS,
-                    status=SurfaceStatus.READY,
-                    summary="Open Terms",
-                )
-            ],
-        ),
         ocr=_make_ocr_state(),
         ocr_page_images={101: None, 102: None},
         translation=_make_translation_state(),
@@ -371,16 +358,6 @@ def test_document_workspace_export_tab_runs_document_service():
     )
     document_service = FakeDocumentService(
         workspace=_make_workspace_state(),
-        overview=DocumentOverviewState(
-            workspace=_make_workspace_state(),
-            sections=[
-                DocumentSectionCard(
-                    section=DocumentSection.EXPORT,
-                    status=SurfaceStatus.READY,
-                    summary="Export",
-                )
-            ],
-        ),
         export=export_state,
         translation=_make_translation_state(),
         images=DocumentImagesState(

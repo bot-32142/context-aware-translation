@@ -18,12 +18,7 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowProfileDetail,
     WorkflowProfileKind,
 )
-from context_aware_translation.application.contracts.common import (
-    CapabilityCode,
-    ProviderKind,
-    UserMessage,
-    UserMessageSeverity,
-)
+from context_aware_translation.application.contracts.common import ProviderKind, UserMessage, UserMessageSeverity
 from context_aware_translation.application.errors import ApplicationErrorCode
 from context_aware_translation.application.runtime import (
     _DEFAULT_PROFILE_NAME,
@@ -90,33 +85,21 @@ class DefaultAppSetupService:
                     provider=ProviderKind.GEMINI,
                     label="Gemini",
                     helper_text="Good for image text reading and image editing.",
-                    recommended_for=[
-                        CapabilityCode.IMAGE_TEXT_READING,
-                        CapabilityCode.IMAGE_EDITING,
-                        CapabilityCode.TRANSLATION,
-                    ],
                 ),
                 ProviderCard(
                     provider=ProviderKind.OPENAI,
                     label="OpenAI",
                     helper_text="General-purpose text and image-capable provider.",
-                    recommended_for=[
-                        CapabilityCode.TRANSLATION,
-                        CapabilityCode.IMAGE_TEXT_READING,
-                        CapabilityCode.IMAGE_EDITING,
-                    ],
                 ),
                 ProviderCard(
                     provider=ProviderKind.DEEPSEEK,
                     label="DeepSeek",
                     helper_text="Low-cost text translation and context building.",
-                    recommended_for=[CapabilityCode.TRANSLATION],
                 ),
                 ProviderCard(
                     provider=ProviderKind.ANTHROPIC,
                     label="Anthropic",
                     helper_text="Text translation and image understanding.",
-                    recommended_for=[CapabilityCode.TRANSLATION, CapabilityCode.IMAGE_TEXT_READING],
                 ),
             ],
             profile_name="Recommended",

@@ -22,7 +22,6 @@ from context_aware_translation.application.contracts.document import (
     DocumentImagesState,
     DocumentOCRActions,
     DocumentOCRState,
-    DocumentOverviewState,
     DocumentTranslationState,
     DocumentWorkspaceState,
     RetranslateRequest,
@@ -292,7 +291,6 @@ class FakeTermsService:
 @dataclass
 class FakeDocumentService:
     workspace: DocumentWorkspaceState
-    overview: DocumentOverviewState | None = None
     ocr: DocumentOCRState | None = None
     translation: DocumentTranslationState | None = None
     images: DocumentImagesState | None = None
@@ -305,12 +303,6 @@ class FakeDocumentService:
     def get_workspace(self, project_id: str, document_id: int) -> DocumentWorkspaceState:
         self.calls.append(("get_workspace", (project_id, document_id)))
         return self.workspace
-
-    def get_overview(self, project_id: str, document_id: int) -> DocumentOverviewState:
-        self.calls.append(("get_overview", (project_id, document_id)))
-        if self.overview is not None:
-            return self.overview
-        return DocumentOverviewState(workspace=self.workspace, sections=[])
 
     def get_ocr(self, project_id: str, document_id: int) -> DocumentOCRState:
         self.calls.append(("get_ocr", (project_id, document_id)))

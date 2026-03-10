@@ -26,8 +26,6 @@ from context_aware_translation.application.contracts.document import (
     DocumentImagesState,
     DocumentOCRActions,
     DocumentOCRState,
-    DocumentOverviewState,
-    DocumentSectionCard,
     DocumentTranslationState,
     DocumentWorkspaceState,
     OCRPageState,
@@ -76,13 +74,12 @@ def _qapp():
     yield app
 
 
-def _make_workspace_state(active_tab: DocumentSection = DocumentSection.OVERVIEW) -> DocumentWorkspaceState:
+def _make_workspace_state(active_tab: DocumentSection = DocumentSection.OCR) -> DocumentWorkspaceState:
     return DocumentWorkspaceState(
         project=ProjectRef(project_id="proj-1", name="One Piece"),
         document=DocumentRef(document_id=4, order_index=4, label="04.png"),
         active_tab=active_tab,
         available_tabs=[
-            DocumentSection.OVERVIEW,
             DocumentSection.OCR,
             DocumentSection.TERMS,
             DocumentSection.TRANSLATION,
@@ -137,16 +134,6 @@ def _make_view(*, work_state: WorkboardState):
     )
     document_service = FakeDocumentService(
         workspace=_make_workspace_state(),
-        overview=DocumentOverviewState(
-            workspace=_make_workspace_state(),
-            sections=[
-                DocumentSectionCard(
-                    section=DocumentSection.TRANSLATION,
-                    status=SurfaceStatus.READY,
-                    summary="Open Translation",
-                )
-            ],
-        ),
         export=DocumentExportState(
             workspace=_make_workspace_state(active_tab=DocumentSection.EXPORT),
             can_export=True,

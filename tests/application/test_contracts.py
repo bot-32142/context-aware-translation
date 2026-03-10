@@ -15,7 +15,6 @@ from context_aware_translation.application.contracts.common import (
     AcceptedCommand,
     BlockerCode,
     BlockerInfo,
-    CapabilityCode,
     DocumentRef,
     DocumentRowActionKind,
     DocumentSection,
@@ -147,7 +146,6 @@ def test_setup_and_document_contracts_are_json_serializable() -> None:
                 base_url="https://generativelanguage.googleapis.com/v1beta/openai",
                 default_model="gemini-3-flash-preview",
                 status=ConnectionStatus.READY,
-                capabilities=[CapabilityCode.IMAGE_TEXT_READING, CapabilityCode.IMAGE_EDITING],
             )
         ],
         shared_profiles=[shared_profile],
@@ -238,10 +236,6 @@ def test_setup_wizard_state_serializes_for_provider_first_flow() -> None:
                 provider=ProviderKind.GEMINI,
                 label="Gemini",
                 helper_text="Good for image text reading and image editing.",
-                recommended_for=[
-                    CapabilityCode.IMAGE_TEXT_READING,
-                    CapabilityCode.IMAGE_EDITING,
-                ],
             )
         ],
         selected_providers=[ProviderKind.GEMINI],

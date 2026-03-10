@@ -27,18 +27,6 @@ class DocumentWorkspaceState(ContractModel):
     blocker: BlockerInfo | None = None
 
 
-class DocumentSectionCard(ContractModel):
-    section: DocumentSection
-    status: SurfaceStatus
-    summary: str
-    blocker: BlockerInfo | None = None
-
-
-class DocumentOverviewState(ContractModel):
-    workspace: DocumentWorkspaceState
-    sections: list[DocumentSectionCard] = Field(default_factory=list)
-
-
 class OCRBoundingBox(ContractModel):
     x: float
     y: float

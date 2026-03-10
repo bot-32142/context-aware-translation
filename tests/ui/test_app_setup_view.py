@@ -83,7 +83,6 @@ def _make_state(*, requires_wizard: bool = False) -> AppSetupState:
                 base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
                 default_model="gemini-3-flash-preview",
                 status=ConnectionStatus.READY,
-                capabilities=[CapabilityCode.TRANSLATION, CapabilityCode.IMAGE_TEXT_READING],
             )
         ]
         if not requires_wizard
@@ -236,7 +235,6 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
                 provider=ProviderKind.GEMINI,
                 label="Gemini",
                 helper_text="Good for image text reading and image editing.",
-                recommended_for=[CapabilityCode.TRANSLATION, CapabilityCode.IMAGE_TEXT_READING],
             )
         ],
     )
@@ -291,13 +289,11 @@ def test_setup_wizard_dialog_renders_provider_cards_on_first_page():
                 provider=ProviderKind.GEMINI,
                 label="Gemini",
                 helper_text="Good for image text reading and image editing.",
-                recommended_for=[CapabilityCode.TRANSLATION, CapabilityCode.IMAGE_TEXT_READING],
             ),
             ProviderCard(
                 provider=ProviderKind.DEEPSEEK,
                 label="DeepSeek",
                 helper_text="Good for text translation.",
-                recommended_for=[CapabilityCode.TRANSLATION],
             ),
         ],
         selected_providers=[ProviderKind.GEMINI],
@@ -321,7 +317,6 @@ def test_setup_wizard_dialog_collects_api_keys_on_provider_page():
                 provider=ProviderKind.GEMINI,
                 label="Gemini",
                 helper_text="Good for image text reading and image editing.",
-                recommended_for=[CapabilityCode.TRANSLATION, CapabilityCode.IMAGE_TEXT_READING],
             )
         ],
     )
@@ -345,7 +340,6 @@ def test_setup_wizard_dialog_preserves_draft_when_going_back():
                 provider=ProviderKind.GEMINI,
                 label="Gemini",
                 helper_text="Good for image text reading and image editing.",
-                recommended_for=[CapabilityCode.TRANSLATION, CapabilityCode.IMAGE_TEXT_READING],
             )
         ],
     )
@@ -374,8 +368,6 @@ def test_setup_wizard_dialog_excludes_custom_provider():
                 provider=ProviderKind.OPENAI_COMPATIBLE,
                 label="OpenAI-compatible / Custom",
                 helper_text="Use a custom base URL and model names.",
-                supports_custom_endpoint=True,
-                recommended_for=[CapabilityCode.TRANSLATION],
             )
         ],
     )
@@ -396,7 +388,6 @@ def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
                 provider=ProviderKind.GEMINI,
                 label="Gemini",
                 helper_text="Good for image text reading and image editing.",
-                recommended_for=[CapabilityCode.TRANSLATION, CapabilityCode.IMAGE_TEXT_READING],
             )
         ],
     )
