@@ -5,6 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from context_aware_translation.application.contracts.common import (
+    ActionState,
     BlockerCode,
     BlockerInfo,
     DocumentRef,
@@ -76,6 +77,9 @@ def _make_state() -> DocumentTranslationState:
                 blocker=BlockerInfo(code=BlockerCode.NOTHING_TO_DO, message="No OCR text detected on this page."),
             ),
         ],
+        run_action=ActionState(enabled=True),
+        batch_action=ActionState(enabled=True),
+        supports_batch=True,
         current_unit_id="1",
     )
 
@@ -90,6 +94,7 @@ def test_document_translation_view_renders_units_and_routes_actions():
         view.refresh()
         assert view.unit_list.count() == 2
         assert view.translate_button.isEnabled()
+        assert view.batch_translate_button.isEnabled()
         assert view.save_button.isEnabled()
         assert view.retranslate_button.isEnabled()
         assert "Line count must stay at 2" in view.line_hint.text()
@@ -97,6 +102,8 @@ def test_document_translation_view_renders_units_and_routes_actions():
         view.translation_text.setPlainText("One\nTwo updated")
         view.save_button.click()
         view.translate_button.click()
+        view.enable_polish_cb.setChecked(False)
+        view.batch_translate_button.click()
 
         with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
             view.retranslate_button.click()
@@ -105,6 +112,7 @@ def test_document_translation_view_renders_units_and_routes_actions():
         assert "run_translation" in call_names
         assert "save_translation" in call_names
         assert "retranslate" in call_names
+        assert any(name == "run_translation" and payload.batch for name, payload in service.calls if name == "run_translation")
     finally:
         view.deleteLater()
 

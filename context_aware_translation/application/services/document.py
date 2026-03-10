@@ -85,7 +85,9 @@ class DocumentService(Protocol):
 
     def get_terms(self, project_id: str, document_id: int) -> TermsTableState: ...
 
-    def get_translation(self, project_id: str, document_id: int) -> DocumentTranslationState: ...
+    def get_translation(
+        self, project_id: str, document_id: int, *, enable_polish: bool = True
+    ) -> DocumentTranslationState: ...
 
     def save_translation(self, request: SaveTranslationRequest) -> DocumentTranslationState: ...
 
@@ -285,7 +287,9 @@ class DefaultDocumentService:
 
         return DefaultTermsService(self._runtime).get_document_terms(project_id, document_id)
 
-    def get_translation(self, project_id: str, document_id: int) -> DocumentTranslationState:
+    def get_translation(
+        self, project_id: str, document_id: int, *, enable_polish: bool = True
+    ) -> DocumentTranslationState:
         workspace = self.get_workspace(project_id, document_id).model_copy(
             update={"active_tab": DocumentSection.TRANSLATION}
         )
@@ -293,10 +297,11 @@ class DefaultDocumentService:
             doc = dbx.document_repo.get_document_by_id(document_id)
             if doc is None:
                 raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Document not found: {document_id}")
+            document_type = str(doc.get("document_type") or "")
             units = self._build_translation_units(
                 project_id,
                 document_id,
-                document_type=str(doc.get("document_type") or ""),
+                document_type=document_type,
                 dbx=dbx,
             )
         active_task = self._active_translation_task(project_id, document_id)
@@ -310,9 +315,31 @@ class DefaultDocumentService:
                 label="Translated units",
             )
         current_unit = next((unit for unit in units if unit.blocker is None), units[0] if units else None)
+        run_allowed, run_blocker = self._translation_run_action_state(
+            project_id,
+            document_id=document_id,
+            document_type=document_type,
+            enable_polish=enable_polish,
+            batch=False,
+            has_work=bool(translatable_units),
+            active_task=active_task,
+        )
+        supports_batch = document_type != "manga"
+        batch_allowed, batch_blocker = self._translation_run_action_state(
+            project_id,
+            document_id=document_id,
+            document_type=document_type,
+            enable_polish=enable_polish,
+            batch=True,
+            has_work=bool(translatable_units),
+            active_task=active_task,
+        )
         return DocumentTranslationState(
             workspace=workspace,
             units=units,
+            run_action=ActionState(enabled=run_allowed, blocker=run_blocker),
+            batch_action=ActionState(enabled=batch_allowed, blocker=batch_blocker),
+            supports_batch=supports_batch,
             current_unit_id=current_unit.unit_id if current_unit is not None else None,
             progress=progress,
             active_task_id=active_task.task_id if active_task is not None else None,
@@ -433,16 +460,32 @@ class DefaultDocumentService:
             if doc is None:
                 raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Document not found: {request.document_id}")
             document_type = str(doc.get("document_type") or "")
+        if request.batch:
+            if document_type == "manga":
+                raise_application_error(
+                    ApplicationErrorCode.BLOCKED,
+                    "Async batch translation is only available for non-manga documents.",
+                    project_id=request.project_id,
+                    document_id=request.document_id,
+                )
+            return self._runtime.submit_task(
+                "batch_translation",
+                request.project_id,
+                document_ids=[request.document_id],
+                enable_polish=request.enable_polish,
+            )
         if document_type == "manga":
             return self._runtime.submit_task(
                 "translation_manga",
                 request.project_id,
                 document_ids=[request.document_id],
+                enable_polish=request.enable_polish,
             )
         return self._runtime.submit_task(
             "translation_text",
             request.project_id,
             document_ids=[request.document_id],
+            enable_polish=request.enable_polish,
         )
 
     def get_images(self, project_id: str, document_id: int) -> DocumentImagesState:
@@ -1430,6 +1473,50 @@ class DefaultDocumentService:
                 document_id=document_id,
             )
         return None
+
+    def _translation_run_action_state(
+        self,
+        project_id: str,
+        *,
+        document_id: int,
+        document_type: str,
+        enable_polish: bool,
+        batch: bool,
+        has_work: bool,
+        active_task: TaskRecord | None,
+    ) -> tuple[bool, BlockerInfo | None]:
+        if active_task is not None:
+            blocker = self._active_task_blocker(project_id=project_id, document_id=document_id)
+            return False, blocker
+        if not has_work:
+            return (
+                False,
+                make_blocker(
+                    BlockerCode.NOTHING_TO_DO,
+                    "No translatable units are ready in this document.",
+                    target_kind=NavigationTargetKind.DOCUMENT_TRANSLATION,
+                    project_id=project_id,
+                    document_id=document_id,
+                ),
+            )
+        if batch and document_type == "manga":
+            return False, None
+        task_type = "batch_translation" if batch else ("translation_manga" if document_type == "manga" else "translation_text")
+        decision = self._runtime.task_engine.preflight(
+            task_type,
+            project_id,
+            {"document_ids": [document_id], "enable_polish": enable_polish},
+            TaskAction.RUN,
+        )
+        if decision.allowed:
+            return True, None
+        return False, make_blocker(
+            blocker_code_for_decision_code(decision.code or ""),
+            decision.reason or ("Async batch translation is unavailable." if batch else "Translation is unavailable."),
+            target_kind=NavigationTargetKind.QUEUE,
+            project_id=project_id,
+            document_id=document_id,
+        )
 
     def _retranslate_action_state_for_chunk(
         self,

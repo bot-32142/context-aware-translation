@@ -151,6 +151,9 @@ def test_get_translation_builds_text_units_and_progress(tmp_path) -> None:
         assert state.units[0].unit_kind is TranslationUnitKind.CHUNK
         assert state.units[0].actions.can_save is True
         assert state.units[0].actions.can_retranslate is True
+        assert state.run_action.enabled is True
+        assert state.batch_action.enabled is True
+        assert state.supports_batch is True
         assert state.progress is not None
         assert state.progress.current == 1
         assert state.progress.total == 2
@@ -215,6 +218,8 @@ def test_get_translation_builds_manga_page_units_and_art_only_blockers(tmp_path)
         assert state.units[1].blocker is not None
         assert "No OCR text detected" in state.units[1].blocker.message
         assert state.units[2].translated_text is None
+        assert state.supports_batch is False
+        assert state.batch_action.enabled is False
         assert state.current_unit_id == str(source_1)
     finally:
         context.close()
@@ -281,6 +286,43 @@ def test_run_translation_submits_document_translation_task(tmp_path) -> None:
             "translation_text",
             project_id,
             document_ids=[document_id],
+            enable_polish=True,
+        )
+    finally:
+        context.close()
+
+
+def test_run_translation_submits_batch_translation_task_with_polish_flag(tmp_path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    try:
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Text Doc", target_language="English")
+        )
+        project_id = created.project.project_id
+        document_id = _create_text_document(context, project_id)
+
+        service = context.services.document
+        with patch.object(
+            type(context.runtime),
+            "submit_task",
+            return_value=AcceptedCommand(command_name="batch_translation", command_id="task-2"),
+        ) as mock_submit:
+            command = service.run_translation(
+                RunDocumentTranslationRequest(
+                    project_id=project_id,
+                    document_id=document_id,
+                    enable_polish=False,
+                    batch=True,
+                )
+            )
+
+        assert command.command_name == "batch_translation"
+        mock_submit.assert_called_once_with(
+            "batch_translation",
+            project_id,
+            document_ids=[document_id],
+            enable_polish=False,
         )
     finally:
         context.close()

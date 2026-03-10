@@ -3,6 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (
+    QCheckBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -79,9 +80,16 @@ class DocumentTranslationView(QWidget):
         layout.addWidget(self.progress_label)
 
         top_actions = QHBoxLayout()
+        self.enable_polish_cb = QCheckBox(self.tr("Enable polish pass"))
+        self.enable_polish_cb.setChecked(True)
+        self.enable_polish_cb.toggled.connect(self.refresh)
+        top_actions.addWidget(self.enable_polish_cb)
         self.translate_button = QPushButton(self.tr("Translate"))
         self.translate_button.clicked.connect(self._translate_document)
         top_actions.addWidget(self.translate_button)
+        self.batch_translate_button = QPushButton(self.tr("Submit Batch Task"))
+        self.batch_translate_button.clicked.connect(self._submit_batch_translation)
+        top_actions.addWidget(self.batch_translate_button)
         top_actions.addStretch()
         layout.addLayout(top_actions)
 
@@ -167,7 +175,12 @@ class DocumentTranslationView(QWidget):
     def refresh(self) -> None:
         previous_unit_id = self._selected_unit_id()
         self._apply_state(
-            self._service.get_translation(self._project_id, self._document_id), previous_unit_id=previous_unit_id
+            self._service.get_translation(
+                self._project_id,
+                self._document_id,
+                enable_polish=self.enable_polish_cb.isChecked(),
+            ),
+            previous_unit_id=previous_unit_id,
         )
 
     def get_running_operations(self) -> list[str]:
@@ -178,7 +191,11 @@ class DocumentTranslationView(QWidget):
     def _apply_state(self, state: DocumentTranslationState, *, previous_unit_id: str | None) -> None:
         self._state = state
         self.progress_label.setText(self._progress_text(state))
-        self.translate_button.setEnabled(state.active_task_id is None and bool(state.units))
+        self.translate_button.setEnabled(state.run_action.enabled)
+        self.translate_button.setToolTip(state.run_action.blocker.message if state.run_action.blocker else "")
+        self.batch_translate_button.setVisible(state.supports_batch)
+        self.batch_translate_button.setEnabled(state.batch_action.enabled)
+        self.batch_translate_button.setToolTip(state.batch_action.blocker.message if state.batch_action.blocker else "")
         self.unit_list.blockSignals(True)
         self.unit_list.clear()
         selected_row = 0
@@ -313,7 +330,11 @@ class DocumentTranslationView(QWidget):
     def _translate_document(self) -> None:
         try:
             command = self._service.run_translation(
-                RunDocumentTranslationRequest(project_id=self._project_id, document_id=self._document_id)
+                RunDocumentTranslationRequest(
+                    project_id=self._project_id,
+                    document_id=self._document_id,
+                    enable_polish=self.enable_polish_cb.isChecked(),
+                )
             )
         except BlockedOperationError as exc:
             QMessageBox.information(self, self.tr("Translate Unavailable"), exc.payload.message)
@@ -328,6 +349,30 @@ class DocumentTranslationView(QWidget):
             self._set_message(command.message.severity, command.message.text)
         else:
             self._set_message(UserMessageSeverity.INFO, self.tr("Translation queued."))
+
+    def _submit_batch_translation(self) -> None:
+        try:
+            command = self._service.run_translation(
+                RunDocumentTranslationRequest(
+                    project_id=self._project_id,
+                    document_id=self._document_id,
+                    enable_polish=self.enable_polish_cb.isChecked(),
+                    batch=True,
+                )
+            )
+        except BlockedOperationError as exc:
+            QMessageBox.information(self, self.tr("Batch Translation Unavailable"), exc.payload.message)
+            self.refresh()
+            return
+        except ApplicationError as exc:
+            QMessageBox.warning(self, self.tr("Batch Translation Failed"), exc.payload.message)
+            self.refresh()
+            return
+        self.refresh()
+        if command.message is not None:
+            self._set_message(command.message.severity, command.message.text)
+        else:
+            self._set_message(UserMessageSeverity.INFO, self.tr("Async batch translation queued."))
 
     def _set_message(self, severity: UserMessageSeverity, text: str) -> None:
         color = {

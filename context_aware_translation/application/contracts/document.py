@@ -123,6 +123,9 @@ class TranslationUnitState(ContractModel):
 class DocumentTranslationState(ContractModel):
     workspace: DocumentWorkspaceState
     units: list[TranslationUnitState] = Field(default_factory=list)
+    run_action: ActionState = Field(default_factory=ActionState)
+    batch_action: ActionState = Field(default_factory=ActionState)
+    supports_batch: bool = False
     current_unit_id: str | None = None
     progress: ProgressInfo | None = None
     active_task_id: str | None = None
@@ -145,6 +148,8 @@ class RetranslateRequest(ContractModel):
 class RunDocumentTranslationRequest(ContractModel):
     project_id: str
     document_id: int
+    enable_polish: bool = True
+    batch: bool = False
 
 
 class ImageAssetState(ContractModel):

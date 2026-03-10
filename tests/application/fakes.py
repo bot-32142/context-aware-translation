@@ -332,8 +332,8 @@ class FakeDocumentService:
     def get_terms(self, project_id: str, document_id: int) -> TermsTableState:
         raise NotImplementedError
 
-    def get_translation(self, project_id: str, document_id: int) -> DocumentTranslationState:
-        self.calls.append(("get_translation", (project_id, document_id)))
+    def get_translation(self, project_id: str, document_id: int, *, enable_polish: bool = True) -> DocumentTranslationState:
+        self.calls.append(("get_translation", (project_id, document_id, enable_polish)))
         if self.translation is None:
             raise NotImplementedError
         return self.translation
