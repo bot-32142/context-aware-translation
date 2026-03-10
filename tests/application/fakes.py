@@ -16,6 +16,7 @@ from context_aware_translation.application.contracts.app_setup import (
 )
 from context_aware_translation.application.contracts.common import AcceptedCommand, DocumentSection
 from context_aware_translation.application.contracts.document import (
+    CancelOCRRequest,
     DocumentExportResult,
     DocumentExportState,
     DocumentImagesState,
@@ -333,6 +334,10 @@ class FakeDocumentService:
     def run_ocr(self, request: RunOCRRequest) -> AcceptedCommand:
         self.calls.append(("run_ocr", request))
         return self.command_result or AcceptedCommand(command_name="run_ocr")
+
+    def cancel_ocr(self, request: CancelOCRRequest) -> AcceptedCommand:
+        self.calls.append(("cancel_ocr", request))
+        return self.command_result or AcceptedCommand(command_name="cancel_ocr")
 
     def get_terms(self, project_id: str, document_id: int) -> TermsTableState:
         raise NotImplementedError

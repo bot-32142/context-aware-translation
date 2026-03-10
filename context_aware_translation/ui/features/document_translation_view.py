@@ -165,6 +165,12 @@ class DocumentTranslationView(QWidget):
         self.retranslate_button = QPushButton(self.tr("Retranslate"))
         self.retranslate_button.clicked.connect(self._retranslate_current_unit)
         button_row.addWidget(self.retranslate_button)
+        self.previous_button = QPushButton("\u2190 " + self.tr("Previous"))
+        self.previous_button.clicked.connect(self._go_previous_unit)
+        button_row.addWidget(self.previous_button)
+        self.next_button = QPushButton(self.tr("Next") + " \u2192")
+        self.next_button.clicked.connect(self._go_next_unit)
+        button_row.addWidget(self.next_button)
         button_row.addStretch()
         right_layout.addLayout(button_row)
 
@@ -231,6 +237,8 @@ class DocumentTranslationView(QWidget):
             self.line_hint.hide()
             self.save_button.setEnabled(False)
             self.retranslate_button.setEnabled(False)
+            self.previous_button.setEnabled(False)
+            self.next_button.setEnabled(False)
             return
 
         self._find_pos = 0
@@ -255,6 +263,7 @@ class DocumentTranslationView(QWidget):
             self.line_hint.show()
         else:
             self.line_hint.hide()
+        self._update_navigation_buttons()
 
     def _selected_unit(self) -> TranslationUnitState | None:
         if self._state is None:
@@ -267,6 +276,24 @@ class DocumentTranslationView(QWidget):
     def _selected_unit_id(self) -> str | None:
         unit = self._selected_unit()
         return unit.unit_id if unit is not None else None
+
+    def _go_previous_unit(self) -> None:
+        row = self.unit_list.currentRow()
+        if row > 0:
+            self.unit_list.setCurrentRow(row - 1)
+
+    def _go_next_unit(self) -> None:
+        row = self.unit_list.currentRow()
+        if self._state is None:
+            return
+        if row < len(self._state.units) - 1:
+            self.unit_list.setCurrentRow(row + 1)
+
+    def _update_navigation_buttons(self) -> None:
+        row = self.unit_list.currentRow()
+        total = len(self._state.units) if self._state is not None else 0
+        self.previous_button.setEnabled(row > 0)
+        self.next_button.setEnabled(0 <= row < total - 1)
 
     def _save_current_unit(self) -> None:
         unit = self._selected_unit()

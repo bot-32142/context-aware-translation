@@ -95,6 +95,11 @@ class RunOCRRequest(ContractModel):
     pending_only: bool = False
 
 
+class CancelOCRRequest(ContractModel):
+    project_id: str
+    task_id: str
+
+
 class TranslationUnitActionState(ContractModel):
     can_save: bool = True
     can_retranslate: bool = False

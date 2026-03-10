@@ -97,6 +97,8 @@ def test_document_translation_view_renders_units_and_routes_actions():
         assert view.batch_translate_button.isEnabled()
         assert view.save_button.isEnabled()
         assert view.retranslate_button.isEnabled()
+        assert not view.previous_button.isEnabled()
+        assert view.next_button.isEnabled()
         assert "Line count must stay at 2" in view.line_hint.text()
 
         view.translation_text.setPlainText("One\nTwo updated")
@@ -113,6 +115,8 @@ def test_document_translation_view_renders_units_and_routes_actions():
         assert "save_translation" in call_names
         assert "retranslate" in call_names
         assert any(name == "run_translation" and payload.batch for name, payload in service.calls if name == "run_translation")
+        view.next_button.click()
+        assert view.unit_list.currentRow() == 1
     finally:
         view.deleteLater()
 

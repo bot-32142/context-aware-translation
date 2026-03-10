@@ -19,6 +19,7 @@ from context_aware_translation.application.contracts.common import (
     UserMessageSeverity,
 )
 from context_aware_translation.application.contracts.document import (
+    CancelOCRRequest,
     DocumentExportResult,
     DocumentExportState,
     DocumentImagesState,
@@ -82,6 +83,8 @@ class DocumentService(Protocol):
     def save_ocr(self, request: SaveOCRPageRequest) -> DocumentOCRState: ...
 
     def run_ocr(self, request: RunOCRRequest) -> AcceptedCommand: ...
+
+    def cancel_ocr(self, request: CancelOCRRequest) -> AcceptedCommand: ...
 
     def get_terms(self, project_id: str, document_id: int) -> TermsTableState: ...
 
@@ -281,6 +284,37 @@ class DefaultDocumentService:
         if request.source_id is not None:
             params["source_ids"] = [request.source_id]
         return self._runtime.submit_task("ocr", request.project_id, **params)
+
+    def cancel_ocr(self, request: CancelOCRRequest) -> AcceptedCommand:
+        record = self._runtime.task_store.get(request.task_id)
+        if record is None or record.book_id != request.project_id or record.task_type != "ocr":
+            raise_application_error(
+                ApplicationErrorCode.NOT_FOUND,
+                f"OCR task not found: {request.task_id}",
+                project_id=request.project_id,
+                task_id=request.task_id,
+            )
+        decision = self._runtime.task_engine.preflight_task(request.task_id, TaskAction.CANCEL)
+        if not decision.allowed:
+            document_ids = self._task_document_ids(record)
+            raise_application_error(
+                ApplicationErrorCode.BLOCKED,
+                decision.reason or "OCR cannot be cancelled.",
+                project_id=request.project_id,
+                task_id=request.task_id,
+                document_id=document_ids[0] if document_ids is not None and len(document_ids) == 1 else None,
+            )
+        self._runtime.task_engine.cancel(request.task_id)
+        self._runtime.invalidate_task_activity(request.project_id)
+        return AcceptedCommand(
+            command_name="cancel_ocr",
+            command_id=request.task_id,
+            queue_item_id=request.task_id,
+            message=UserMessage(
+                severity=UserMessageSeverity.INFO,
+                text="OCR cancellation requested.",
+            ),
+        )
 
     def get_terms(self, project_id: str, document_id: int) -> TermsTableState:
         from context_aware_translation.application.services.terms import DefaultTermsService

@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from context_aware_translation.application.contracts.document import (
+    CancelOCRRequest,
     DocumentOCRState,
     OCRBoundingBox,
     OCRPageState,
@@ -241,7 +242,7 @@ class DocumentOCRTab(QWidget):
 
         self.progress_widget = ProgressWidget(self)
         self.progress_widget.setVisible(False)
-        self.progress_widget.set_cancellable(False)
+        self.progress_widget.cancelled.connect(self._cancel_ocr)
         layout.addWidget(self.progress_widget)
 
         self.empty_label = create_tip_label(self.tr("No image pages are available for OCR in this document."))
@@ -260,8 +261,9 @@ class DocumentOCRTab(QWidget):
             return ["ocr"]
         return []
 
-    def request_cancel_running_operations(self, *, include_engine_tasks: bool = False) -> None:  # noqa: ARG002
-        return
+    def request_cancel_running_operations(self, *, include_engine_tasks: bool = False) -> None:
+        if include_engine_tasks and self._state is not None and self._state.active_task_id is not None:
+            self._cancel_ocr()
 
     @property
     def _current_page(self) -> OCRPageState | None:
@@ -406,7 +408,7 @@ class DocumentOCRTab(QWidget):
             return
 
         self.progress_widget.setVisible(True)
-        self.progress_widget.set_cancellable(False)
+        self.progress_widget.set_cancellable(True)
         progress = self._state.progress
         if progress is not None and progress.current is not None and progress.total is not None and progress.total > 0:
             self.progress_widget.progress_bar.setRange(0, 100)
@@ -526,6 +528,19 @@ class DocumentOCRTab(QWidget):
             self.refresh()
             return
         self._set_message(result.message.text if result.message is not None else self.tr("OCR queued."))
+
+    def _cancel_ocr(self) -> None:
+        if self._state is None or self._state.active_task_id is None:
+            return
+        try:
+            result = self._service.cancel_ocr(
+                CancelOCRRequest(project_id=self._project_id, task_id=self._state.active_task_id)
+            )
+        except ApplicationError as exc:
+            QMessageBox.warning(self, self.tr("OCR"), exc.payload.message)
+            self.refresh()
+            return
+        self._set_message(result.message.text if result.message is not None else self.tr("OCR cancellation requested."))
 
     def _set_message(self, text: str) -> None:
         if not text:

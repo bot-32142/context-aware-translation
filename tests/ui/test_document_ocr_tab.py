@@ -150,3 +150,44 @@ def test_document_ocr_tab_saves_structured_elements():
         assert save_request.extracted_text == "updated\ntwo"
     finally:
         view.deleteLater()
+
+
+def test_document_ocr_tab_can_cancel_active_task():
+    from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
+
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        ocr=DocumentOCRState(
+            workspace=_workspace_state(),
+            pages=[
+                OCRPageState(
+                    source_id=101,
+                    page_number=1,
+                    total_pages=1,
+                    status=SurfaceStatus.RUNNING,
+                    extracted_text="hello",
+                )
+            ],
+            current_page_index=0,
+            actions=DocumentOCRActions(
+                save={"enabled": False},
+                run_current={"enabled": False},
+                run_pending={"enabled": False},
+            ),
+            active_task_id="ocr-task-1",
+        ),
+        ocr_page_images={101: _png_1x1()},
+        command_result=AcceptedCommand(
+            command_name="cancel_ocr",
+            message=UserMessage(severity=UserMessageSeverity.INFO, text="Cancel requested."),
+        ),
+    )
+    view = DocumentOCRTab(service, "proj-1", 4)
+    try:
+        view.refresh()
+        assert view._state is not None and view._state.active_task_id == "ocr-task-1"
+        view.request_cancel_running_operations(include_engine_tasks=True)
+        cancel_request = next(payload for name, payload in service.calls if name == "cancel_ocr")
+        assert cancel_request.task_id == "ocr-task-1"
+    finally:
+        view.deleteLater()
