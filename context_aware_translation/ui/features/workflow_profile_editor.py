@@ -265,7 +265,8 @@ class WorkflowRoutesEditor(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
-        layout.addWidget(create_tip_label(hint_text))
+        self._hint_label = create_tip_label(hint_text)
+        layout.addWidget(self._hint_label)
 
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(
@@ -296,8 +297,9 @@ class WorkflowRoutesEditor(QWidget):
         self.table.setColumnWidth(1, self._CONNECTION_COLUMN_WIDTH)
         self.table.setColumnWidth(2, self._MODEL_COLUMN_WIDTH)
         self.table.setColumnWidth(3, self._ADVANCED_COLUMN_WIDTH)
-        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
-        layout.addWidget(self.table, 0, Qt.AlignmentFlag.AlignLeft)
+        self.table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+        layout.addWidget(self.table)
         self.set_routes(routes)
 
     def set_routes(self, routes: list[WorkflowStepRoute]) -> None:
@@ -463,7 +465,15 @@ class WorkflowRoutesEditor(QWidget):
             + 4
         )
         self.table.setMinimumWidth(total_width)
-        self.table.setMaximumWidth(total_width)
+        editor_height = (
+            self.layout().contentsMargins().top()
+            + self._hint_label.sizeHint().height()
+            + self.layout().spacing()
+            + self.table.height()
+            + self.layout().contentsMargins().bottom()
+        )
+        self.setMinimumHeight(editor_height)
+        self.updateGeometry()
 
     def _item(self, text: str) -> QTableWidgetItem:
         return QTableWidgetItem(text)
@@ -486,7 +496,7 @@ class WorkflowProfileEditorDialog(QDialog):
         self._allow_name_edit = allow_name_edit
         self.setWindowTitle(self.tr("Workflow Profile"))
         self.setMinimumWidth(980)
-        self.resize(980, 620)
+        self.resize(980, 520)
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -543,6 +553,7 @@ class WorkflowProfileEditorDialog(QDialog):
         self._rows = self.routes_editor.rows
         self.routes_section.set_content(self.routes_editor)
         self.routes_section.set_expanded(True)
+        self.routes_section.refresh_content_height()
         self.routes_section.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         layout.addWidget(self.routes_section)
 

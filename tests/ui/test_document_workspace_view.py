@@ -141,6 +141,9 @@ def _make_translation_state() -> DocumentTranslationState:
     workspace = _make_workspace_state().model_copy(update={"active_tab": DocumentSection.TRANSLATION})
     return DocumentTranslationState(
         workspace=workspace,
+        run_action=ActionState(enabled=True),
+        batch_action=ActionState(enabled=True),
+        supports_batch=True,
         units=[
             TranslationUnitState(
                 unit_id="1",

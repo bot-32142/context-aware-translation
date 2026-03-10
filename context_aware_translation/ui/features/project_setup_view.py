@@ -81,7 +81,7 @@ class ProjectSetupView(QWidget):
         layout.addWidget(self.blocker_label)
 
         selector_group = QGroupBox(self.tr("Workflow profile"))
-        selector_group.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
+        selector_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         selector_layout = QVBoxLayout(selector_group)
         row = QHBoxLayout()
         self.shared_profile_combo = QComboBox()
@@ -89,12 +89,11 @@ class ProjectSetupView(QWidget):
         self.shared_profile_combo.setMaximumWidth(560)
         self.shared_profile_combo.currentIndexChanged.connect(self._on_shared_profile_changed)
         row.addWidget(self.shared_profile_combo)
-        row.addStretch()
         selector_layout.addLayout(row)
-        layout.addWidget(selector_group, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(selector_group, 0, Qt.AlignmentFlag.AlignTop)
 
         self.custom_profile_group = QGroupBox(self.tr("Custom profile"))
-        self.custom_profile_group.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
+        self.custom_profile_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         custom_layout = QVBoxLayout(self.custom_profile_group)
         self.custom_profile_label = create_tip_label("")
         custom_layout.addWidget(self.custom_profile_label)
@@ -103,15 +102,15 @@ class ProjectSetupView(QWidget):
             [],
             advanced_step_ids=ADVANCED_STEP_IDS,
             hint_text=self.tr("Use the Advanced column to edit step-specific settings."),
-            max_visible_rows=5,
+            max_visible_rows=6,
             parent=self,
         )
-        self.routes_editor.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
+        self.routes_editor.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         self.routes_editor.hide()
         self.routes_table = self.routes_editor.table
         self._custom_rows = self.routes_editor.rows
-        custom_layout.addWidget(self.routes_editor, 0, Qt.AlignmentFlag.AlignLeft)
-        layout.addWidget(self.custom_profile_group, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        custom_layout.addWidget(self.routes_editor)
+        layout.addWidget(self.custom_profile_group, 0, Qt.AlignmentFlag.AlignTop)
 
         actions_layout = QHBoxLayout()
         self.open_app_setup_button = QPushButton(self.tr("Open App Setup"))
@@ -122,7 +121,6 @@ class ProjectSetupView(QWidget):
         actions_layout.addWidget(self.save_button)
         actions_layout.addStretch()
         layout.addLayout(actions_layout)
-        layout.addStretch()
 
     def refresh(self) -> None:
         self._apply_state(self._service.get_state(self.project_id))
@@ -201,9 +199,11 @@ class ProjectSetupView(QWidget):
         profile = self._effective_profile()
         if profile is None:
             self.custom_profile_group.hide()
+            self.custom_profile_group.setMinimumHeight(0)
             return
         if not self._is_custom_selected():
             self.custom_profile_group.hide()
+            self.custom_profile_group.setMinimumHeight(0)
             return
         self.custom_profile_group.show()
         base_name = self._base_profile_name()
@@ -213,6 +213,9 @@ class ProjectSetupView(QWidget):
         self.routes_editor.show()
         self.routes_editor.set_connection_choices(self._connection_choices())
         self.routes_editor.set_routes(profile.routes)
+        self.routes_editor.adjustSize()
+        self.custom_profile_group.adjustSize()
+        self.custom_profile_group.setMinimumHeight(self.custom_profile_group.sizeHint().height())
 
     def _save(self) -> None:
         shared_profile_id = self._current_shared_profile_id()

@@ -135,6 +135,7 @@ class ConnectionDraftForm(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         self.tabs = QTabWidget()
+        self.tabs.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         layout.addWidget(self.tabs)
 
         connection_tab = QWidget()
@@ -334,7 +335,7 @@ class ConnectionEditorDialog(QDialog):
         self._reset_tokens_callback = reset_tokens_callback
         self.setWindowTitle(self.tr("Connection"))
         self.setMinimumWidth(620)
-        self.resize(700, 300)
+        self.resize(700, 220)
         self.form = ConnectionDraftForm(self)
         if draft is not None:
             self.form.set_draft(draft)
@@ -345,8 +346,9 @@ class ConnectionEditorDialog(QDialog):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll_area.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         scroll_area.setWidget(self.form)
-        layout.addWidget(scroll_area, 1)
+        layout.addWidget(scroll_area)
         if self._connection_summary is not None:
             self.token_usage_group = QGroupBox(self.tr("Token usage"))
             usage_layout = QFormLayout(self.token_usage_group)
@@ -418,7 +420,7 @@ class ConnectionEditorDialog(QDialog):
         is_advanced = self.form.tabs.currentIndex() == 0 and self.form.advanced_section.is_expanded()
         target_width = 860 if is_advanced else 700
         self.resize(max(self.width(), target_width), self.height())
-        target_height = min(max(self.sizeHint().height() + 24, 300), 620)
+        target_height = min(max(self.sizeHint().height() + 24, 220), 620)
         self.resize(self.width(), target_height)
 
 
@@ -703,7 +705,7 @@ class AppSetupView(QWidget):
         connections_tab_layout.addLayout(connections_toolbar)
 
         self.connections_group = QGroupBox(self.tr("Connections"))
-        self.connections_group.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
+        self.connections_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         connections_layout = QVBoxLayout(self.connections_group)
         self.connections_table = QTableWidget(0, 5)
         self.connections_table.setHorizontalHeaderLabels(
@@ -713,7 +715,7 @@ class AppSetupView(QWidget):
         self.connections_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.connections_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.connections_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.connections_table.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        self.connections_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.connections_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.connections_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.connections_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
@@ -724,11 +726,11 @@ class AppSetupView(QWidget):
         self.connections_table.itemSelectionChanged.connect(self._update_connection_buttons)
         self.connections_table.cellDoubleClicked.connect(self._on_connection_double_clicked)
         connections_layout.addWidget(self.connections_table)
-        connections_tab_layout.addWidget(self.connections_group, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        connections_tab_layout.addWidget(self.connections_group, 0, Qt.AlignmentFlag.AlignTop)
         connections_tab_layout.addStretch()
 
         self.profiles_group = QGroupBox(self.tr("Shared workflow profiles"))
-        self.profiles_group.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
+        self.profiles_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         profiles_layout = QVBoxLayout(self.profiles_group)
         profiles_toolbar = QHBoxLayout()
         self.add_profile_button = QPushButton(self.tr("Add Profile"))
@@ -751,7 +753,7 @@ class AppSetupView(QWidget):
         self.profiles_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.profiles_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.profiles_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.profiles_table.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        self.profiles_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.profiles_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
         self.profiles_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
         self.profiles_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
@@ -763,7 +765,7 @@ class AppSetupView(QWidget):
 
         self.profiles_tab = QWidget()
         profiles_tab_layout = QVBoxLayout(self.profiles_tab)
-        profiles_tab_layout.addWidget(self.profiles_group, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        profiles_tab_layout.addWidget(self.profiles_group, 0, Qt.AlignmentFlag.AlignTop)
         profiles_tab_layout.addStretch()
 
         self.setup_tabs.addTab(self.connections_tab, self.tr("Connections"))
@@ -830,7 +832,7 @@ class AppSetupView(QWidget):
         self.connections_table.resizeColumnsToContents()
         self.connections_table.resizeRowsToContents()
         self._fit_table_height(self.connections_table)
-        self._fit_table_width(self.connections_table)
+        self._fit_table_min_width(self.connections_table)
 
     def _populate_profiles(self, state: AppSetupState) -> None:
         self.profiles_table.setRowCount(0)
@@ -843,7 +845,7 @@ class AppSetupView(QWidget):
         self.profiles_table.resizeColumnsToContents()
         self.profiles_table.resizeRowsToContents()
         self._fit_table_height(self.profiles_table)
-        self._fit_table_width(self.profiles_table)
+        self._fit_table_min_width(self.profiles_table)
 
         selected_id = self._preferred_profile_id(state)
         if selected_id:
@@ -1177,9 +1179,8 @@ class AppSetupView(QWidget):
         )
         table.setFixedHeight(header_height + visible_height + frame_height + 8)
 
-    def _fit_table_width(self, table: QTableWidget) -> None:
+    def _fit_table_min_width(self, table: QTableWidget) -> None:
         total_width = table.verticalHeader().width() + table.frameWidth() * 2 + 6
         for column in range(table.columnCount()):
             total_width += table.columnWidth(column)
         table.setMinimumWidth(total_width)
-        table.setMaximumWidth(total_width)

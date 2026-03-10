@@ -71,9 +71,21 @@ class CollapsibleSection(QWidget):
 
         # Update animation end value based on content size
         if self._is_expanded:
-            content_height = widget.sizeHint().height()
-            self.content_area.setMinimumHeight(content_height)
-            self.content_area.setMaximumHeight(content_height)
+            self.refresh_content_height()
+
+    def refresh_content_height(self) -> None:
+        """Refresh content height for dynamic widgets after they change size."""
+        if not self._is_expanded:
+            return
+        content_widget = self.content_area.widget()
+        if content_widget is None:
+            self.content_area.setMinimumHeight(0)
+            self.content_area.setMaximumHeight(0)
+            return
+        content_widget.adjustSize()
+        content_height = max(content_widget.sizeHint().height(), content_widget.minimumSizeHint().height())
+        self.content_area.setMinimumHeight(content_height)
+        self.content_area.setMaximumHeight(content_height)
 
     def set_expanded(self, expanded: bool) -> None:
         """Programmatically expand or collapse the section.
@@ -107,7 +119,13 @@ class CollapsibleSection(QWidget):
 
         # Calculate content height
         content_widget = self.content_area.widget()
-        content_height = content_widget.sizeHint().height() if content_widget else 0
+        if content_widget is not None:
+            content_widget.adjustSize()
+        content_height = (
+            max(content_widget.sizeHint().height(), content_widget.minimumSizeHint().height())
+            if content_widget
+            else 0
+        )
 
         # Set animation start and end values
         if checked:

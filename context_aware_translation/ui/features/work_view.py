@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -66,6 +67,8 @@ _TARGET_TO_SECTION: dict[NavigationTargetKind, DocumentSection] = {
 
 
 class WorkView(QWidget):
+    _TABLE_MAX_VISIBLE_ROWS = 10
+
     open_app_setup_requested = Signal()
     open_project_setup_requested = Signal()
 
@@ -180,9 +183,10 @@ class WorkView(QWidget):
         self.rows_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.rows_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.rows_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.rows_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.rows_table.itemSelectionChanged.connect(self._on_selection_changed)
         self.rows_table.cellDoubleClicked.connect(self._on_cell_double_clicked)
-        home_layout.addWidget(self.rows_table, 1)
+        home_layout.addWidget(self.rows_table)
 
         row_actions = QHBoxLayout()
         self.reset_document_button = QPushButton(self.tr("Reset Document"))
@@ -199,6 +203,7 @@ class WorkView(QWidget):
         self.empty_label = create_tip_label(self.tr("No documents imported yet."))
         self.empty_label.hide()
         home_layout.addWidget(self.empty_label)
+        home_layout.addStretch()
 
         self.stack.addWidget(self.home_page)
         layout.addWidget(self.stack)
@@ -287,6 +292,7 @@ class WorkView(QWidget):
         self.rows_table.horizontalHeader().setStretchLastSection(False)
         self.rows_table.horizontalHeader().resizeSection(1, 260)
         self.rows_table.horizontalHeader().resizeSection(6, 260)
+        self._fit_table_height()
         self._on_selection_changed()
 
     def _append_row(self, row_state: WorkDocumentRow) -> None:
@@ -311,6 +317,24 @@ class WorkView(QWidget):
         button.setEnabled(row_state.primary_action.kind is not DocumentRowActionKind.BLOCKED)
         button.clicked.connect(lambda _checked=False, item=row_state: self._handle_row_action(item))
         self.rows_table.setCellWidget(row, 7, button)
+
+    def _fit_table_height(self) -> None:
+        header_height = self.rows_table.horizontalHeader().height()
+        frame_height = self.rows_table.frameWidth() * 2
+        row_count = self.rows_table.rowCount()
+        if row_count == 0:
+            self.rows_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            self.rows_table.setFixedHeight(header_height + frame_height + 8)
+            return
+        row_heights = [self.rows_table.rowHeight(index) for index in range(row_count)]
+        visible_rows = min(row_count, self._TABLE_MAX_VISIBLE_ROWS)
+        visible_height = sum(row_heights[:visible_rows])
+        self.rows_table.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            if row_count <= self._TABLE_MAX_VISIBLE_ROWS
+            else Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self.rows_table.setFixedHeight(header_height + visible_height + frame_height + 8)
 
     def _select_files(self) -> None:
         file_paths, _selected = QFileDialog.getOpenFileNames(
