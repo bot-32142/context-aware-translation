@@ -71,6 +71,9 @@ class ImageViewer(QGraphicsView):
         self._zoom_step = 1.1  # 10% per step for smoother zooming
         self._auto_fit_pending = False
         self._user_zoomed = False
+        self._fit_timer = QTimer(self)
+        self._fit_timer.setSingleShot(True)
+        self._fit_timer.timeout.connect(self._fit_pending_image)
 
         # Configure view
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
@@ -118,7 +121,7 @@ class ImageViewer(QGraphicsView):
         self._auto_fit_pending = True
         self._user_zoomed = False
         self.fit_to_window()
-        QTimer.singleShot(0, self._fit_pending_image)
+        self._queue_fit(75)
 
     def zoom_in(self) -> None:
         """Zoom in by the zoom step factor."""
@@ -248,11 +251,16 @@ class ImageViewer(QGraphicsView):
 
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)
-        self._fit_pending_image()
+        self._queue_fit()
 
     def showEvent(self, event) -> None:  # type: ignore[override]
         super().showEvent(event)
-        self._fit_pending_image()
+        self._queue_fit()
+
+    def _queue_fit(self, delay_ms: int = 0) -> None:
+        if self.pixmap_item is None or self._user_zoomed:
+            return
+        self._fit_timer.start(delay_ms)
 
     def _fit_pending_image(self) -> None:
         if self.pixmap_item is None or not self._auto_fit_pending or self._user_zoomed:
