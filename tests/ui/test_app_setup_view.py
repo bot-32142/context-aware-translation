@@ -170,15 +170,21 @@ def test_app_setup_view_add_delete_test_and_edit_profile_calls_service():
     ):
         view._on_add_connection()
         view.connections_table.selectRow(0)
+        view._on_duplicate_connection()
+        view.connections_table.selectRow(0)
         view._on_delete_connection()
         view.profiles_table.selectRow(0)
         view._on_edit_profile()
         view.profiles_table.selectRow(0)
+        view._on_duplicate_profile()
+        view.profiles_table.selectRow(0)
         view._on_delete_profile()
 
     assert any(call[0] == "save_connection" for call in service.calls)
+    assert any(call[0] == "duplicate_connection" for call in service.calls)
     assert any(call[0] == "delete_connection" for call in service.calls)
     assert any(call[0] == "save_workflow_profile" for call in service.calls)
+    assert any(call[0] == "duplicate_workflow_profile" for call in service.calls)
     assert any(call[0] == "delete_workflow_profile" for call in service.calls)
 
 

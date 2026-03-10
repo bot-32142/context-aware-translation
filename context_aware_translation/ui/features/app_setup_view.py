@@ -622,12 +622,15 @@ class AppSetupView(QWidget):
         self.run_wizard_button.clicked.connect(self._on_run_wizard)
         self.add_connection_button = QPushButton(self.tr("Add Connection"))
         self.add_connection_button.clicked.connect(self._on_add_connection)
+        self.duplicate_connection_button = QPushButton(self.tr("Duplicate"))
+        self.duplicate_connection_button.clicked.connect(self._on_duplicate_connection)
         self.delete_connection_button = QPushButton(self.tr("Delete"))
         self.delete_connection_button.clicked.connect(self._on_delete_connection)
         self.refresh_button = QPushButton(self.tr("Refresh"))
         self.refresh_button.clicked.connect(self.refresh)
         connections_toolbar.addWidget(self.run_wizard_button)
         connections_toolbar.addWidget(self.add_connection_button)
+        connections_toolbar.addWidget(self.duplicate_connection_button)
         connections_toolbar.addWidget(self.delete_connection_button)
         connections_toolbar.addWidget(self.refresh_button)
         connections_toolbar.addStretch()
@@ -651,6 +654,9 @@ class AppSetupView(QWidget):
         self.profiles_group = QGroupBox(self.tr("Shared workflow profiles"))
         profiles_layout = QVBoxLayout(self.profiles_group)
         profiles_toolbar = QHBoxLayout()
+        self.duplicate_profile_button = QPushButton(self.tr("Duplicate"))
+        self.duplicate_profile_button.clicked.connect(self._on_duplicate_profile)
+        profiles_toolbar.addWidget(self.duplicate_profile_button)
         self.delete_profile_button = QPushButton(self.tr("Delete"))
         self.delete_profile_button.clicked.connect(self._on_delete_profile)
         profiles_toolbar.addWidget(self.delete_profile_button)
@@ -701,6 +707,7 @@ class AppSetupView(QWidget):
             self.tr("Run Setup Wizard") if self._state and self._state.requires_wizard else self.tr("Open Setup Wizard")
         )
         self.add_connection_button.setText(self.tr("Add Connection"))
+        self.duplicate_connection_button.setText(self.tr("Duplicate"))
         self.refresh_button.setText(self.tr("Refresh"))
         self.setup_tabs.setTabText(self.setup_tabs.indexOf(self.connections_tab), self.tr("Connections"))
         self.setup_tabs.setTabText(self.setup_tabs.indexOf(self.profiles_tab), self.tr("Workflow Profiles"))
@@ -710,6 +717,7 @@ class AppSetupView(QWidget):
         )
         self.delete_connection_button.setText(self.tr("Delete"))
         self.profiles_group.setTitle(self.tr("Shared workflow profiles"))
+        self.duplicate_profile_button.setText(self.tr("Duplicate"))
         self.delete_profile_button.setText(self.tr("Delete"))
         self.profiles_table.setHorizontalHeaderLabels(
             [self.tr("Name"), self.tr("Target language"), self.tr("Default")]
@@ -783,10 +791,13 @@ class AppSetupView(QWidget):
 
     def _update_connection_buttons(self) -> None:
         selected = self._selected_connection() is not None
+        self.duplicate_connection_button.setEnabled(selected)
         self.delete_connection_button.setEnabled(selected)
 
     def _update_profile_buttons(self) -> None:
-        self.delete_profile_button.setEnabled(self._selected_profile() is not None)
+        selected = self._selected_profile() is not None
+        self.duplicate_profile_button.setEnabled(selected)
+        self.delete_profile_button.setEnabled(selected)
 
     def _on_run_wizard(self) -> None:
         dialog = SetupWizardDialog(self._service, self._service.get_wizard_state(), self)
@@ -845,6 +856,13 @@ class AppSetupView(QWidget):
         self._service.delete_connection(connection.connection_id)
         self.refresh()
 
+    def _on_duplicate_connection(self) -> None:
+        connection = self._selected_connection()
+        if connection is None:
+            return
+        self._service.duplicate_connection(connection.connection_id)
+        self.refresh()
+
     def _on_edit_profile(self) -> None:
         profile = self._selected_profile()
         if profile is None or self._state is None:
@@ -891,6 +909,13 @@ class AppSetupView(QWidget):
         except Exception as exc:
             QMessageBox.warning(self, self.tr("App Setup"), str(exc))
             return
+        self.refresh()
+
+    def _on_duplicate_profile(self) -> None:
+        profile = self._selected_profile()
+        if profile is None:
+            return
+        self._service.duplicate_workflow_profile(profile.profile_id)
         self.refresh()
 
     def _on_profile_double_clicked(self, _row: int, _column: int) -> None:

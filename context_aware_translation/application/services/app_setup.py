@@ -48,6 +48,8 @@ class AppSetupService(Protocol):
 
     def delete_connection(self, connection_id: str) -> AppSetupState: ...
 
+    def duplicate_connection(self, connection_id: str) -> AppSetupState: ...
+
     def reset_connection_tokens(self, connection_id: str) -> ConnectionSummary: ...
 
     def test_connection(self, request: ConnectionTestRequest) -> ConnectionTestResult: ...
@@ -55,6 +57,8 @@ class AppSetupService(Protocol):
     def run_setup_wizard(self, request: SetupWizardRequest) -> AppSetupState: ...
 
     def save_workflow_profile(self, request: SaveWorkflowProfileRequest) -> AppSetupState: ...
+
+    def duplicate_workflow_profile(self, profile_id: str) -> AppSetupState: ...
 
     def delete_workflow_profile(self, profile_id: str) -> AppSetupState: ...
 
@@ -201,6 +205,28 @@ class DefaultAppSetupService:
         self._runtime.invalidate_setup()
         return self.get_state()
 
+    def duplicate_connection(self, connection_id: str) -> AppSetupState:
+        existing = self._runtime.book_manager.get_endpoint_profile(connection_id)
+        if existing is None:
+            raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
+        self._runtime.book_manager.create_endpoint_profile(
+            name=self._next_connection_copy_name(existing.name),
+            api_key=existing.api_key,
+            base_url=existing.base_url,
+            model=existing.model,
+            temperature=existing.temperature,
+            kwargs=dict(existing.kwargs or {}),
+            timeout=existing.timeout,
+            max_retries=existing.max_retries,
+            concurrency=existing.concurrency,
+            description=existing.description,
+            token_limit=existing.token_limit,
+            input_token_limit=existing.input_token_limit,
+            output_token_limit=existing.output_token_limit,
+        )
+        self._runtime.invalidate_setup()
+        return self.get_state()
+
     def reset_connection_tokens(self, connection_id: str) -> ConnectionSummary:
         updated = self._runtime.book_manager.reset_endpoint_tokens(connection_id)
         if updated is None:
@@ -272,6 +298,21 @@ class DefaultAppSetupService:
         if request.set_as_default:
             self._runtime.book_manager.set_default_profile(profile_id)
 
+        self._runtime.invalidate_setup()
+        self._runtime.invalidate_projects()
+        self._runtime.invalidate_workboard()
+        return self.get_state()
+
+    def duplicate_workflow_profile(self, profile_id: str) -> AppSetupState:
+        existing = self._runtime.book_manager.get_profile(profile_id)
+        if existing is None:
+            raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Workflow profile not found: {profile_id}")
+        self._runtime.book_manager.create_profile(
+            name=self._next_profile_copy_name(existing.name),
+            config=dict(existing.config),
+            description=existing.description,
+            is_default=False,
+        )
         self._runtime.invalidate_setup()
         self._runtime.invalidate_projects()
         self._runtime.invalidate_workboard()
@@ -355,3 +396,22 @@ class DefaultAppSetupService:
             )
         payload.update({str(key): value for key, value in parsed.items()})
         return payload
+
+    def _next_connection_copy_name(self, base_name: str) -> str:
+        existing = {profile.name for profile in self._runtime.book_manager.list_endpoint_profiles()}
+        return self._next_copy_name(base_name, existing)
+
+    def _next_profile_copy_name(self, base_name: str) -> str:
+        existing = {profile.name for profile in self._runtime.book_manager.list_profiles()}
+        return self._next_copy_name(base_name, existing)
+
+    def _next_copy_name(self, base_name: str, existing_names: set[str]) -> str:
+        stem = f"{base_name} Copy"
+        if stem not in existing_names:
+            return stem
+        index = 2
+        while True:
+            candidate = f"{stem} {index}"
+            if candidate not in existing_names:
+                return candidate
+            index += 1
