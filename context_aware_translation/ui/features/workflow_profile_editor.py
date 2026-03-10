@@ -282,7 +282,9 @@ class WorkflowProfileEditorDialog(QDialog):
         routes_widget = QWidget()
         routes_layout = QVBoxLayout(routes_widget)
         routes_layout.setContentsMargins(0, 0, 0, 0)
-        routes_layout.addWidget(create_tip_label(self.tr("Double-click a step to edit advanced step settings.")))
+        routes_layout.addWidget(
+            create_tip_label(self.tr("Steps marked [advanced] can be double-clicked to edit advanced step settings."))
+        )
         self.routes_table = QTableWidget(0, 3)
         self.routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
         self.routes_table.verticalHeader().setVisible(False)
@@ -330,10 +332,7 @@ class WorkflowProfileEditorDialog(QDialog):
         for route in self._original_profile.routes:
             row = self.routes_table.rowCount()
             self.routes_table.insertRow(row)
-            step_item = self._item(route.step_label)
-            if route.step_id in self._ADVANCED_STEP_IDS:
-                step_item.setToolTip(self.tr("Double-click to edit advanced settings."))
-                step_item.setData(Qt.ItemDataRole.UserRole + 1, True)
+            step_item = self._step_item(route.step_label, route.step_id in self._ADVANCED_STEP_IDS)
             self.routes_table.setItem(row, 0, step_item)
 
             if route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
@@ -437,6 +436,15 @@ class WorkflowProfileEditorDialog(QDialog):
 
     def _item(self, text: str) -> QTableWidgetItem:
         return QTableWidgetItem(text)
+
+    def _step_item(self, step_label: str, is_advanced: bool) -> QTableWidgetItem:
+        item = self._item(f"{step_label} [advanced]" if is_advanced else step_label)
+        item.setToolTip(
+            self.tr("Double-click to edit advanced settings.")
+            if is_advanced
+            else self.tr("This step has no additional settings beyond connection and model.")
+        )
+        return item
 
     def _open_step_advanced_dialog(self, row: int, _column: int) -> None:
         if _column != 0 or row < 0 or row >= len(self._rows):

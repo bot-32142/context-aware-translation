@@ -64,6 +64,8 @@ def test_workflow_profile_editor_uses_scrollable_dialog_layout():
     assert dialog.routes_table.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
     assert dialog.routes_table.columnWidth(1) >= 480
     assert dialog.routes_table.columnWidth(2) >= 440
+    assert dialog.routes_table.item(0, 0).text().endswith("[advanced]")
+    assert dialog.routes_table.item(0, 0).toolTip()
     route_row = dialog._rows[0]
     assert route_row.connection_combo is not None
     assert route_row.connection_combo.minimumWidth() >= 400
@@ -193,3 +195,4 @@ def test_workflow_profile_editor_infers_image_backend_from_connection():
     built = dialog.profile()
 
     assert built.routes[0].step_config["backend"] == "openai"
+    assert dialog.routes_table.item(0, 0).text() == "Image reembedding"

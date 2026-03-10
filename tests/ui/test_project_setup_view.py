@@ -163,6 +163,8 @@ def test_project_setup_view_can_select_custom_profile():
 
         assert not view.custom_profile_group.isHidden()
         assert view.routes_table.rowCount() == 2
+        assert view.routes_table.item(0, 0).text().endswith("[advanced]")
+        assert view.routes_table.item(1, 0).text().endswith("[advanced]")
 
         translator_row = next(
             index for index, row in enumerate(view._custom_rows) if row.step_id is WorkflowStepId.TRANSLATOR

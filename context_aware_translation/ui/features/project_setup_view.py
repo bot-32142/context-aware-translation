@@ -112,6 +112,9 @@ class ProjectSetupView(QWidget):
         custom_layout = QVBoxLayout(self.custom_profile_group)
         self.custom_profile_label = create_tip_label("")
         custom_layout.addWidget(self.custom_profile_label)
+        custom_layout.addWidget(
+            create_tip_label(self.tr("Steps marked [advanced] can be double-clicked to edit advanced step settings."))
+        )
         self.routes_table = QTableWidget(0, 3)
         self.routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
         self.routes_table.verticalHeader().setVisible(False)
@@ -229,9 +232,7 @@ class ProjectSetupView(QWidget):
         for route in profile.routes:
             row = self.routes_table.rowCount()
             self.routes_table.insertRow(row)
-            step_item = QTableWidgetItem(route.step_label)
-            if route.step_id in self._ADVANCED_STEP_IDS:
-                step_item.setToolTip(self.tr("Double-click to edit advanced settings."))
+            step_item = self._step_item(route.step_label, route.step_id in self._ADVANCED_STEP_IDS)
             self.routes_table.setItem(row, 0, step_item)
             combo = QComboBox()
             combo.addItem(self.tr("Select connection"), "")
@@ -433,6 +434,15 @@ class ProjectSetupView(QWidget):
     def _current_combo_connection_id(self, combo: QComboBox) -> str | None:
         current = combo.currentData()
         return str(current) if isinstance(current, str) and current else None
+
+    def _step_item(self, step_label: str, is_advanced: bool) -> QTableWidgetItem:
+        item = QTableWidgetItem(f"{step_label} [advanced]" if is_advanced else step_label)
+        item.setToolTip(
+            self.tr("Double-click to edit advanced settings.")
+            if is_advanced
+            else self.tr("This step has no additional settings beyond connection and model.")
+        )
+        return item
 
     def _infer_image_backend(self, connection_id: str | None, model: str | None) -> str | None:
         if self._state is None or not connection_id:
