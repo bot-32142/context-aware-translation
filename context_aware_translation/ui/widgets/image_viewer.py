@@ -153,7 +153,6 @@ class ImageViewer(QGraphicsView):
             self.fitInView(self.pixmap_item, Qt.AspectRatioMode.KeepAspectRatio)
             # Update zoom factor based on current transform
             self._zoom_factor = self.transform().m11()
-            self._auto_fit_pending = False
 
     def reset_zoom(self) -> None:
         """Reset zoom to 100%."""
@@ -258,7 +257,7 @@ class ImageViewer(QGraphicsView):
         self._queue_fit()
 
     def _queue_fit(self, delay_ms: int = 0) -> None:
-        if self.pixmap_item is None or self._user_zoomed:
+        if self.pixmap_item is None or self._user_zoomed or not self._auto_fit_pending:
             return
         self._fit_timer.start(delay_ms)
 
@@ -268,6 +267,7 @@ class ImageViewer(QGraphicsView):
         if self.viewport().width() <= 1 or self.viewport().height() <= 1:
             return
         self.fit_to_window()
+        self._auto_fit_pending = False
 
     def wheelEvent(self, event: QWheelEvent) -> None:
         """Handle mouse wheel events for zooming.
