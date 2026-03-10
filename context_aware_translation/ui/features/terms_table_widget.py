@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from PySide6.QtCore import QEvent, QSortFilterProxyModel, Qt, Signal
+from PySide6.QtCore import QEvent, QSize, QSortFilterProxyModel, Qt, Signal
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -10,7 +10,9 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QStyledItemDelegate,
     QTableView,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -32,6 +34,30 @@ _COLUMN_OCCURRENCES = 3
 _COLUMN_VOTES = 4
 _COLUMN_IGNORED = 5
 _COLUMN_REVIEWED = 6
+
+
+class _TranslationDelegate(QStyledItemDelegate):
+    _EDITOR_MIN_HEIGHT = 80
+
+    def createEditor(self, parent, _option, _index):  # noqa: ANN001
+        editor = QTextEdit(parent)
+        editor.setAcceptRichText(False)
+        editor.setMinimumHeight(self._EDITOR_MIN_HEIGHT)
+        return editor
+
+    def setEditorData(self, editor, index):  # noqa: ANN001
+        editor.setPlainText(index.data(Qt.ItemDataRole.EditRole) or "")
+
+    def setModelData(self, editor, model, index):  # noqa: ANN001
+        model.setData(index, editor.toPlainText(), Qt.ItemDataRole.EditRole)
+
+    def sizeHint(self, option, index):  # noqa: ANN001
+        size = super().sizeHint(option, index)
+        return size.expandedTo(QSize(size.width(), self._EDITOR_MIN_HEIGHT))
+
+    def updateEditorGeometry(self, editor, option, _index):  # noqa: ANN001
+        rect = option.rect
+        editor.setGeometry(rect.x(), rect.y(), rect.width(), max(rect.height(), self._EDITOR_MIN_HEIGHT))
 
 
 class _TermsFilterProxyModel(QSortFilterProxyModel):
@@ -135,6 +161,7 @@ class TermsTableWidget(QWidget):
         self.table_view.horizontalHeader().setSectionResizeMode(
             _COLUMN_REVIEWED, QHeaderView.ResizeMode.ResizeToContents
         )
+        self.table_view.setItemDelegateForColumn(_COLUMN_TRANSLATION, _TranslationDelegate(self.table_view))
         layout.addWidget(self.table_view, 1)
 
         self.retranslateUi()

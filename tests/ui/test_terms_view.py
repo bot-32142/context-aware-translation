@@ -110,6 +110,7 @@ def test_terms_view_renders_backend_state_and_local_filters():
         assert not view.export_button.isEnabled()
         assert view.review_button.toolTip() == "Review config missing."
         assert not view.bulk_button.isEnabled()
+        assert view.table_view.itemDelegateForColumn(1).__class__.__name__ == "_TranslationDelegate"
 
         view.search_input.setText("luffy")
         assert view.proxy_model.rowCount() == 1
