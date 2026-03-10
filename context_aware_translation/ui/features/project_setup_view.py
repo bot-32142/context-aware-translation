@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -121,12 +122,16 @@ class ProjectSetupView(QWidget):
         self.routes_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.routes_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.routes_table.setWordWrap(False)
-        self.routes_table.verticalHeader().setDefaultSectionSize(34)
+        self.routes_table.verticalHeader().setDefaultSectionSize(40)
+        self.routes_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.routes_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.routes_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.routes_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.routes_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
         self.routes_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
-        self.routes_table.setColumnWidth(1, 360)
-        self.routes_table.setColumnWidth(2, 320)
+        self.routes_table.horizontalHeader().setStretchLastSection(True)
+        self.routes_table.setColumnWidth(1, 480)
+        self.routes_table.setColumnWidth(2, 440)
         self.routes_table.cellDoubleClicked.connect(self._on_custom_step_double_clicked)
         custom_layout.addWidget(self.routes_table)
         layout.addWidget(self.custom_profile_group)
@@ -238,14 +243,14 @@ class ProjectSetupView(QWidget):
             combo.addItem(self.tr("Select connection"), "")
             for connection in self._state.available_connections if self._state is not None else []:
                 combo.addItem(connection.display_name, connection.connection_id)
-            combo.setMinimumWidth(340)
+            combo.setMinimumWidth(400)
             combo.setStyleSheet("QComboBox { font-size: 13px; padding: 4px 8px; }")
             if route.connection_id:
                 index = combo.findData(route.connection_id)
                 if index >= 0:
                     combo.setCurrentIndex(index)
             model_edit = QLineEdit(route.model or "")
-            model_edit.setMinimumWidth(300)
+            model_edit.setMinimumWidth(360)
             model_edit.setStyleSheet("QLineEdit { font-size: 13px; padding: 4px 6px; }")
             combo.currentIndexChanged.connect(lambda _i, c=combo, e=model_edit: self._sync_model_from_connection(c, e))
             self.routes_table.setCellWidget(row, 1, combo)
@@ -259,6 +264,7 @@ class ProjectSetupView(QWidget):
                     step_config=dict(route.step_config),
                 )
             )
+        self._update_routes_table_height()
 
     def _save(self) -> None:
         shared_profile_id = self._current_shared_profile_id()
@@ -434,6 +440,12 @@ class ProjectSetupView(QWidget):
     def _current_combo_connection_id(self, combo: QComboBox) -> str | None:
         current = combo.currentData()
         return str(current) if isinstance(current, str) and current else None
+
+    def _update_routes_table_height(self) -> None:
+        header_height = self.routes_table.horizontalHeader().height()
+        frame_height = self.routes_table.frameWidth() * 2
+        row_height = sum(self.routes_table.rowHeight(index) for index in range(self.routes_table.rowCount()))
+        self.routes_table.setFixedHeight(header_height + row_height + frame_height + 4)
 
     def _step_item(self, step_label: str, is_advanced: bool) -> QTableWidgetItem:
         item = QTableWidgetItem(f"{step_label} [advanced]" if is_advanced else step_label)

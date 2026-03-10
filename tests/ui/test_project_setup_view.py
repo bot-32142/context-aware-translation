@@ -163,6 +163,9 @@ def test_project_setup_view_can_select_custom_profile():
 
         assert not view.custom_profile_group.isHidden()
         assert view.routes_table.rowCount() == 2
+        assert view.routes_table.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        assert view.routes_table.columnWidth(1) >= 480
+        assert view.routes_table.columnWidth(2) >= 440
         assert view.routes_table.item(0, 0).text().endswith("[advanced]")
         assert view.routes_table.item(1, 0).text().endswith("[advanced]")
 
@@ -170,6 +173,8 @@ def test_project_setup_view_can_select_custom_profile():
             index for index, row in enumerate(view._custom_rows) if row.step_id is WorkflowStepId.TRANSLATOR
         )
         translator = view._custom_rows[translator_row]
+        assert translator.connection_combo.minimumWidth() >= 400
+        assert translator.model_edit.minimumWidth() >= 360
         translator.connection_combo.setCurrentIndex(translator.connection_combo.findData("conn-openai"))
         translator.model_edit.setText("gpt-4.1-mini")
         view.save_button.click()
