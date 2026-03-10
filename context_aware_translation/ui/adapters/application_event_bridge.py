@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, Qt, Signal, Slot
+from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
 
 from context_aware_translation.application.events import (
     ApplicationEventKind,
@@ -44,6 +44,9 @@ class QtApplicationEventBridge(QObject):
         self.close()
 
     def _on_event_from_any_thread(self, event: ApplicationEventPayload) -> None:
+        if QThread.currentThread() is self.thread():
+            self._dispatch_event(event)
+            return
         self._enqueue_event.emit(event)
 
     @Slot(object)

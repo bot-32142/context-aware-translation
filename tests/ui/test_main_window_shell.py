@@ -296,7 +296,6 @@ def test_main_window_routes_projects_into_project_shell():
         assert "Project setup saved" in window.statusBar().currentMessage()
     finally:
         window.close()
-        QApplication.processEvents()
         patch_stack.close()
 
 
@@ -305,13 +304,11 @@ def test_main_window_refreshes_shell_roots_from_application_events():
     try:
         context.events.publish(ProjectsInvalidatedEvent())
         context.events.publish(SetupInvalidatedEvent())
-        QApplication.processEvents()
 
         assert window.projects_view.refresh_calls == 1
         assert window.app_setup_view.refresh_calls == 1
     finally:
         window.close()
-        QApplication.processEvents()
         patch_stack.close()
 
 
@@ -349,7 +346,6 @@ def test_main_window_routes_queue_targets_into_current_shell():
         assert shell.tab_widget.currentWidget() is shell.terms_tab
     finally:
         window.close()
-        QApplication.processEvents()
         patch_stack.close()
 
 
@@ -359,12 +355,10 @@ def test_main_window_queue_drawer_refreshes_from_queue_events():
         window.open_project("project-1", "One Piece")
         window._open_queue_drawer(project_id="project-1", project_name="One Piece")
         context.events.publish(QueueChangedEvent(project_id="project-1"))
-        QApplication.processEvents()
 
         assert ("get_queue", "project-1") in context.services.queue.calls
     finally:
         window.close()
-        QApplication.processEvents()
         patch_stack.close()
 
 

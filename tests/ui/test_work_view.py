@@ -302,7 +302,6 @@ def test_work_view_refreshes_on_invalidation():
     try:
         work_service.state_by_project["proj-1"] = _make_workboard(action=second_action, summary="Open Terms")
         bus.publish(WorkboardInvalidatedEvent(project_id="proj-1"))
-        QApplication.processEvents()
 
         assert view.rows_table.cellWidget(0, 7).text() == "Open Terms"
         assert work_service.calls == [("get_workboard", "proj-1"), ("get_workboard", "proj-1")]

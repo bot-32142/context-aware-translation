@@ -266,7 +266,6 @@ def test_project_setup_view_refreshes_on_setup_invalidation():
     try:
         service.state = _make_state(project_specific=True)
         bus.publish(SetupInvalidatedEvent(project_id="proj-1"))
-        QApplication.processEvents()
 
         assert "project-specific workflow profile" in view.summary_label.text().lower()
         assert not view.custom_profile_group.isHidden()

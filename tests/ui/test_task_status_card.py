@@ -21,6 +21,9 @@ from context_aware_translation.workflow.tasks.models import Decision, TaskAction
 pytestmark = pytest.mark.skipif(not HAS_PYSIDE6, reason="PySide6 not available")
 
 
+_WIDGETS: list[object] = []
+
+
 # ---------------------------------------------------------------------------
 # Fixtures & helpers
 # ---------------------------------------------------------------------------
@@ -32,6 +35,19 @@ def _qapp():
     if app is None:
         app = QApplication([])
     yield app
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_widgets():
+    yield
+    while _WIDGETS:
+        widget = _WIDGETS.pop()
+        cleanup = getattr(widget, "cleanup", None)
+        if callable(cleanup):
+            cleanup()
+        close = getattr(widget, "close", None)
+        if callable(close):
+            close()
 
 
 class _SignalHolder(QObject):
@@ -80,7 +96,9 @@ def _make_card(engine=None, book_id="book-1", task_types=None, display_label="Ex
         engine = _make_engine()
     if task_types is None:
         task_types = ["batch_translation"]
-    return TaskStatusCard(engine, book_id, task_types, display_label)
+    card = TaskStatusCard(engine, book_id, task_types, display_label)
+    _WIDGETS.append(card)
+    return card
 
 
 def _make_strip(engine=None, book_id="book-1", task_types=None):
@@ -90,7 +108,9 @@ def _make_strip(engine=None, book_id="book-1", task_types=None):
         engine = _make_engine()
     if task_types is None:
         task_types = ["batch_translation"]
-    return TaskStatusStrip(engine, book_id, task_types)
+    strip = TaskStatusStrip(engine, book_id, task_types)
+    _WIDGETS.append(strip)
+    return strip
 
 
 # ---------------------------------------------------------------------------
@@ -314,7 +334,6 @@ def test_card_ignores_tasks_changed_for_other_book():
     initial_count = engine.get_tasks.call_count
 
     engine.tasks_changed.emit("book-99")
-    QApplication.processEvents()
 
     assert engine.get_tasks.call_count == initial_count
 
@@ -437,7 +456,6 @@ def test_strip_ignores_tasks_changed_for_other_book():
     initial = engine.get_tasks.call_count
 
     engine.tasks_changed.emit("book-99")
-    QApplication.processEvents()
 
     assert engine.get_tasks.call_count == initial
 

@@ -286,7 +286,6 @@ def test_document_workspace_refreshes_on_invalidations():
         bus.publish(DocumentInvalidatedEvent(project_id="proj-1", document_id=4))
         bus.publish(TermsInvalidatedEvent(project_id="proj-1", document_id=4))
         bus.publish(SetupInvalidatedEvent(project_id="proj-1"))
-        QApplication.processEvents()
 
         workspace_calls = [name for name, _payload in document_service.calls if name == "get_workspace"]
         ocr_calls = [name for name, _payload in document_service.calls if name == "get_ocr"]

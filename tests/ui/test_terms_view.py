@@ -167,7 +167,6 @@ def test_terms_view_refreshes_on_terms_and_setup_invalidations():
     try:
         bus.publish(TermsInvalidatedEvent(project_id="proj-1"))
         bus.publish(SetupInvalidatedEvent(project_id="proj-1"))
-        QApplication.processEvents()
 
         get_state_calls = [name for name, _payload in service.calls if name == "get_project_terms"]
         assert len(get_state_calls) == 3

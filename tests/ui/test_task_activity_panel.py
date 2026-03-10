@@ -46,10 +46,6 @@ def _cleanup_panels():
         close = getattr(panel, "close", None)
         if callable(close):
             close()
-        delete_later = getattr(panel, "deleteLater", None)
-        if callable(delete_later):
-            delete_later()
-    QApplication.processEvents()
 
 
 class _SignalHolder(QObject):
@@ -330,7 +326,6 @@ def test_tasks_changed_ignores_different_book_id():
 
     initial_count = engine.get_tasks.call_count
     engine.tasks_changed.emit("book-99")
-    QApplication.processEvents()
 
     assert engine.get_tasks.call_count == initial_count
     panel.cleanup()

@@ -87,7 +87,6 @@ def test_queue_drawer_view_refreshes_on_matching_queue_event():
         view.set_scope("proj-1", project_name="One Piece")
         service.state = _make_state(status=QueueStatus.DONE)
         bus.publish(QueueChangedEvent(project_id="proj-1"))
-        QApplication.processEvents()
 
         assert service.calls == [("get_queue", None), ("get_queue", "proj-1"), ("get_queue", "proj-1")]
         assert view._rows["task-1"].status_label.text() == "Done"
@@ -163,7 +162,6 @@ def test_queue_drawer_view_emits_completion_notification_after_refresh():
             ]
         )
         bus.publish(QueueChangedEvent(project_id="proj-1"))
-        QApplication.processEvents()
 
         assert notices[-1].severity is UserMessageSeverity.SUCCESS
         assert notices[-1].text == "Read text from images finished."
