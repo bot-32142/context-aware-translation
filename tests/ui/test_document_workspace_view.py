@@ -107,7 +107,19 @@ def _make_terms_state() -> TermsTableState:
                 reviewed=False,
                 ignored=False,
                 status=TermStatus.NEEDS_REVIEW,
-            )
+            ),
+            TermTableRow(
+                term_id=2,
+                term_key="ニカ",
+                term="ニカ",
+                translation="Nika",
+                description="Sun god",
+                occurrences=2,
+                votes=1,
+                reviewed=False,
+                ignored=False,
+                status=TermStatus.NEEDS_REVIEW,
+            ),
         ],
     )
 
@@ -232,7 +244,7 @@ def test_document_workspace_terms_tab_uses_shared_terms_component():
         terms_tab = view.tab_widget.currentWidget()
         assert terms_tab is not None
         assert hasattr(terms_tab, "table_panel")
-        assert terms_tab.table_panel.proxy_model.rowCount() == 1
+        assert terms_tab.table_panel.proxy_model.rowCount() == 2
 
         terms_tab.build_button.click()
         terms_tab.translate_button.click()
@@ -249,6 +261,37 @@ def test_document_workspace_terms_tab_uses_shared_terms_component():
         assert "review_terms" in call_names
         assert "filter_noise" in call_names
         assert "update_term" in call_names
+    finally:
+        view.cleanup()
+
+
+def test_document_workspace_terms_context_menu_preserves_multi_selection_and_opens_editors():
+    view, _bus, _document_service, terms_service = _make_view()
+    try:
+        view.show()
+        QApplication.processEvents()
+        view.show_section(DocumentSection.TERMS)
+        terms_tab = view.tab_widget.currentWidget()
+        assert terms_tab is not None
+
+        second_rect = terms_tab.table_panel.table_view.visualRect(terms_tab.table_panel.proxy_model.index(1, 0))
+
+        terms_tab.table_panel._toggle_row_selection(0)
+        terms_tab.table_panel._toggle_row_selection(1)
+        QApplication.processEvents()
+
+        assert len(terms_tab.table_panel.selected_rows()) == 2
+        terms_tab._show_context_menu(second_rect.center())
+        assert len(terms_tab.table_panel.selected_rows()) == 2
+
+        terms_tab.edit_selected_action.trigger()
+        QApplication.processEvents()
+        assert terms_tab.table_panel.table_view.isPersistentEditorOpen(terms_tab.table_panel.proxy_model.index(0, 1))
+        assert terms_tab.table_panel.table_view.isPersistentEditorOpen(terms_tab.table_panel.proxy_model.index(1, 1))
+
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
+            terms_tab.mark_reviewed_action.trigger()
+        assert any(name == "bulk_update_terms" for name, _payload in terms_service.calls)
     finally:
         view.cleanup()
 

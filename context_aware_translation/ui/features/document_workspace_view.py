@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
     QMessageBox,
     QPushButton,
     QTabWidget,
@@ -27,6 +28,7 @@ from context_aware_translation.application.contracts.document import (
 )
 from context_aware_translation.application.contracts.terms import (
     BuildTermsRequest,
+    BulkUpdateTermsRequest,
     FilterNoiseRequest,
     ReviewTermsRequest,
     TermsTableState,
@@ -327,8 +329,28 @@ class _DocumentTermsTab(QWidget):
         layout.addLayout(toolbar)
 
         self.table_panel = TermsTableWidget(parent=self)
+        self.table_panel.table_view.selectionModel().selectionChanged.connect(lambda *_args: self._update_bulk_action_state())
+        self.table_panel.table_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table_panel.table_view.customContextMenuRequested.connect(self._show_context_menu)
         layout.addWidget(self.table_panel, 1)
         self.table_panel.term_update_requested.connect(self._on_term_update_requested)
+        self._context_menu = QMenu(self)
+        self.edit_selected_action = self._context_menu.addAction(self.tr("Edit Selected"), self._edit_selected_terms)
+        self._context_menu.addSeparator()
+        self.mark_reviewed_action = self._context_menu.addAction(
+            self.tr("Mark Reviewed"), lambda: self._run_bulk_update(reviewed=True)
+        )
+        self.unmark_reviewed_action = self._context_menu.addAction(
+            self.tr("Unmark Reviewed"), lambda: self._run_bulk_update(reviewed=False)
+        )
+        self.mark_ignored_action = self._context_menu.addAction(
+            self.tr("Mark Ignored"), lambda: self._run_bulk_update(ignored=True)
+        )
+        self.unmark_ignored_action = self._context_menu.addAction(
+            self.tr("Unmark Ignored"), lambda: self._run_bulk_update(ignored=False)
+        )
+        self.delete_selected_action = self._context_menu.addAction(self.tr("Delete Selected"), self._delete_selected_terms)
+        self._update_bulk_action_state()
 
     def refresh(self) -> None:
         self._apply_state(self._service.get_document_terms(self._project_id, self._document_id))
@@ -427,6 +449,77 @@ class _DocumentTermsTab(QWidget):
             self.refresh()
             return
         self._apply_state(state)
+
+    def _show_context_menu(self, pos) -> None:  # noqa: ANN001
+        if not self.table_panel.prepare_context_selection(pos):
+            return
+        self._update_bulk_action_state()
+        self._context_menu.popup(self.table_panel.table_view.viewport().mapToGlobal(pos))
+
+    def _edit_selected_terms(self) -> None:
+        self.table_panel.open_editors_for_selection()
+
+    def _run_bulk_update(self, *, ignored: bool | None = None, reviewed: bool | None = None) -> None:
+        if self._state is None:
+            return
+        selected = self.table_panel.selected_rows()
+        if not selected:
+            return
+        try:
+            state = self._service.bulk_update_terms(
+                BulkUpdateTermsRequest(
+                    scope=self._state.scope,
+                    term_keys=[row.term_key for row in selected],
+                    ignored=ignored,
+                    reviewed=reviewed,
+                )
+            )
+        except BlockedOperationError as exc:
+            QMessageBox.warning(self, self.tr("Terms"), exc.payload.message)
+            return
+        except ApplicationError as exc:
+            QMessageBox.warning(self, self.tr("Terms"), exc.payload.message)
+            return
+        self._apply_state(state)
+
+    def _delete_selected_terms(self) -> None:
+        if self._state is None:
+            return
+        selected = self.table_panel.selected_rows()
+        if not selected:
+            return
+        if (
+            QMessageBox.question(
+                self,
+                self.tr("Delete Terms"),
+                self.tr("Delete the selected terms from this document?"),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+        try:
+            state = self._service.bulk_update_terms(
+                BulkUpdateTermsRequest(scope=self._state.scope, term_keys=[row.term_key for row in selected], delete=True)
+            )
+        except BlockedOperationError as exc:
+            QMessageBox.warning(self, self.tr("Delete Terms"), exc.payload.message)
+            return
+        except ApplicationError as exc:
+            QMessageBox.warning(self, self.tr("Delete Terms"), exc.payload.message)
+            return
+        self._apply_state(state)
+        self.table_panel.set_message(UserMessageSeverity.SUCCESS, self.tr("Selected terms were deleted."))
+
+    def _update_bulk_action_state(self) -> None:
+        has_selection = bool(self.table_panel.selected_rows())
+        self.edit_selected_action.setEnabled(has_selection)
+        self.mark_reviewed_action.setEnabled(has_selection)
+        self.unmark_reviewed_action.setEnabled(has_selection)
+        self.mark_ignored_action.setEnabled(has_selection)
+        self.unmark_ignored_action.setEnabled(has_selection)
+        self.delete_selected_action.setEnabled(has_selection)
 
 
 class _UnavailableDocumentTab(QWidget):

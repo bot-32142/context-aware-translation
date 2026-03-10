@@ -110,7 +110,7 @@ def test_terms_view_renders_backend_state_and_local_filters():
         assert not view.review_button.isEnabled()
         assert not view.export_button.isEnabled()
         assert view.review_button.toolTip() == "Review config missing."
-        assert not view.bulk_button.isEnabled()
+        assert not view.edit_selected_action.isEnabled()
         assert view.table_view.itemDelegateForColumn(1).__class__.__name__ == "_TranslationDelegate"
 
         view.search_input.setText("luffy")
@@ -156,7 +156,7 @@ def test_terms_view_routes_edits_and_toolbar_actions_through_service():
             reviewed_item = view.table_model.item(0, 6)
             reviewed_item.setCheckState(Qt.CheckState.Checked)
             view.table_view.selectRow(0)
-            assert view.bulk_button.isEnabled()
+            assert view.edit_selected_action.isEnabled()
             view.bulk_mark_reviewed_action.trigger()
 
         call_names = [name for name, _payload in service.calls]
@@ -292,12 +292,41 @@ def test_terms_view_context_menu_selects_row_and_copies_description():
         expected_term = view.proxy_model.index(0, 0).data()
         with patch.object(QApplication.clipboard(), "setText") as set_text:
             view._show_context_menu(first_rect.center())
-            assert view.bulk_button.isEnabled()
+            assert view.edit_selected_action.isEnabled()
             assert view.table_panel.selected_rows()[0].term == expected_term
-            actions = view._context_menu.actions()
-            assert actions[0].text() == "Copy Description"
-            actions[0].trigger()
+            actions = {action.text(): action for action in view._context_menu.actions() if action.text()}
+            assert "Edit Selected" in actions
+            assert "Copy Description" in actions
+            actions["Copy Description"].trigger()
         expected_description = view.proxy_model.index(0, 2).data(Qt.ItemDataRole.ToolTipRole)
         set_text.assert_called_once_with(expected_description)
+    finally:
+        view.cleanup()
+
+
+def test_terms_view_context_menu_preserves_multi_selection_and_edit_selected_opens_editors():
+    from context_aware_translation.ui.features.terms_view import TermsView
+
+    service = FakeTermsService(project_state=_make_state())
+    bus = InMemoryApplicationEventBus()
+    view = TermsView("proj-1", service, bus)
+    try:
+        view.show()
+        QApplication.processEvents()
+        second_rect = view.table_view.visualRect(view.proxy_model.index(1, 0))
+
+        view.table_panel._toggle_row_selection(0)
+        view.table_panel._toggle_row_selection(1)
+        QApplication.processEvents()
+
+        assert len(view.table_panel.selected_rows()) == 2
+
+        view._show_context_menu(second_rect.center())
+        assert len(view.table_panel.selected_rows()) == 2
+
+        view.edit_selected_action.trigger()
+        QApplication.processEvents()
+        assert view.table_view.isPersistentEditorOpen(view.proxy_model.index(0, 1))
+        assert view.table_view.isPersistentEditorOpen(view.proxy_model.index(1, 1))
     finally:
         view.cleanup()

@@ -97,6 +97,11 @@ class TermsView(QWidget):
         toolbar_layout.addWidget(self.filter_noise_button)
 
         self.bulk_menu = QMenu(self)
+        self.edit_selected_action = self.bulk_menu.addAction(
+            self.tr("Edit Selected"),
+            self._edit_selected_terms,
+        )
+        self.bulk_menu.addSeparator()
         self.bulk_mark_reviewed_action = self.bulk_menu.addAction(
             self.tr("Mark Reviewed"),
             lambda: self._run_bulk_update(reviewed=True),
@@ -117,9 +122,6 @@ class TermsView(QWidget):
             self.tr("Delete Selected"),
             self._delete_selected_terms,
         )
-        self.bulk_button = QPushButton(self.tr("Bulk Actions"))
-        self.bulk_button.setMenu(self.bulk_menu)
-        toolbar_layout.addWidget(self.bulk_button)
 
         self.import_button = QPushButton(self.tr("Import Terms"))
         self.import_button.clicked.connect(self._on_import_terms)
@@ -149,7 +151,7 @@ class TermsView(QWidget):
         self.translate_button.setText(self.tr("Translate Untranslated"))
         self.review_button.setText(self.tr("Review Terms"))
         self.filter_noise_button.setText(self.tr("Filter Rare"))
-        self.bulk_button.setText(self.tr("Bulk Actions"))
+        self.edit_selected_action.setText(self.tr("Edit Selected"))
         self.bulk_mark_reviewed_action.setText(self.tr("Mark Reviewed"))
         self.bulk_unmark_reviewed_action.setText(self.tr("Unmark Reviewed"))
         self.bulk_mark_ignored_action.setText(self.tr("Mark Ignored"))
@@ -361,25 +363,27 @@ class TermsView(QWidget):
         self._apply_state(state)
         self._show_message(UserMessageSeverity.SUCCESS, self.tr("Selected terms were deleted."))
 
+    def _edit_selected_terms(self) -> None:
+        self.table_panel.open_editors_for_selection()
+
     def _update_bulk_button_state(self) -> None:
-        self.bulk_button.setEnabled(bool(self.table_panel.selected_rows()))
+        has_selection = bool(self.table_panel.selected_rows())
+        self.edit_selected_action.setEnabled(has_selection)
+        self.bulk_mark_reviewed_action.setEnabled(has_selection)
+        self.bulk_unmark_reviewed_action.setEnabled(has_selection)
+        self.bulk_mark_ignored_action.setEnabled(has_selection)
+        self.bulk_unmark_ignored_action.setEnabled(has_selection)
+        self.bulk_delete_action.setEnabled(has_selection)
 
     def _show_context_menu(self, pos: QPoint) -> None:
-        index = self.table_view.indexAt(pos)
-        row = index.row() if index.isValid() else self.table_view.rowAt(pos.y())
-        if row < 0:
-            viewport_pos = self.table_view.viewport().mapFrom(self.table_view, pos)
-            row = self.table_view.rowAt(viewport_pos.y())
-        if row < 0:
+        if not self.table_panel.prepare_context_selection(pos):
             return
-
-        proxy_index = self.proxy_model.index(row, 0)
-        if proxy_index.isValid():
-            self.table_view.setCurrentIndex(proxy_index)
-        self.table_view.selectRow(row)
         self._update_bulk_button_state()
 
         menu = QMenu(self)
+        menu.addAction(self.edit_selected_action)
+        menu.addSeparator()
+        proxy_index = self.table_view.currentIndex()
         source_index = self.proxy_model.mapToSource(proxy_index)
         description = self.table_model.data(self.table_model.index(source_index.row(), 2), Qt.ItemDataRole.ToolTipRole)
         if isinstance(description, str) and description.strip():

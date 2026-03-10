@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from PySide6.QtCore import QEvent, QSize, QSortFilterProxyModel, Qt, Signal
+from PySide6.QtCore import QEvent, QItemSelectionModel, QPoint, QSize, QSortFilterProxyModel, Qt, Signal
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -241,6 +241,7 @@ class TermsTableWidget(QWidget):
             _COLUMN_REVIEWED, QHeaderView.ResizeMode.ResizeToContents
         )
         self.table_view.setItemDelegateForColumn(_COLUMN_TRANSLATION, _TranslationDelegate(self.table_view))
+        self.table_view.viewport().installEventFilter(self)
         layout.addWidget(self.table_view, 1)
 
         self.retranslateUi()
@@ -412,6 +413,77 @@ class TermsTableWidget(QWidget):
             seen_keys.add(row.term_key)
             rows.append(row)
         return rows
+
+    def eventFilter(self, watched, event):  # noqa: ANN001
+        if (
+            watched is self.table_view.viewport()
+            and event.type() == QEvent.Type.MouseButtonPress
+            and event.button() == Qt.MouseButton.LeftButton
+            and bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
+        ):
+            row = self._row_at_pos(event.position().toPoint())
+            if row >= 0:
+                self._toggle_row_selection(row)
+                return True
+        return super().eventFilter(watched, event)
+
+    def prepare_context_selection(self, pos: QPoint) -> bool:
+        row = self._row_at_pos(pos)
+        if row < 0:
+            return False
+        proxy_index = self.proxy_model.index(row, 0)
+        if not proxy_index.isValid():
+            return False
+        if not self.table_view.selectionModel().isRowSelected(row, self.table_view.rootIndex()):
+            self.table_view.selectionModel().select(
+                proxy_index,
+                QItemSelectionModel.SelectionFlag.ClearAndSelect
+                | QItemSelectionModel.SelectionFlag.Rows
+                | QItemSelectionModel.SelectionFlag.Current,
+            )
+        self.table_view.selectionModel().setCurrentIndex(
+            proxy_index,
+            QItemSelectionModel.SelectionFlag.NoUpdate,
+        )
+        return True
+
+    def open_editors_for_selection(self) -> None:
+        selected = list(self.table_view.selectionModel().selectedRows())
+        if not selected:
+            return
+        for index in selected:
+            for column in (_COLUMN_TRANSLATION, _COLUMN_DESCRIPTION):
+                self.table_view.openPersistentEditor(self.proxy_model.index(index.row(), column))
+        first = self.proxy_model.index(selected[0].row(), _COLUMN_TRANSLATION)
+        self.table_view.setCurrentIndex(first)
+        self.table_view.scrollTo(first)
+        self.table_view.edit(first)
+
+    def _row_at_pos(self, pos: QPoint) -> int:
+        index = self.table_view.indexAt(pos)
+        row = index.row() if index.isValid() else self.table_view.rowAt(pos.y())
+        if row < 0:
+            viewport_pos = self.table_view.viewport().mapFrom(self.table_view, pos)
+            row = self.table_view.rowAt(viewport_pos.y())
+        return row
+
+    def _toggle_row_selection(self, row: int) -> None:
+        proxy_index = self.proxy_model.index(row, 0)
+        if not proxy_index.isValid():
+            return
+        flags = (
+            QItemSelectionModel.SelectionFlag.Deselect
+            if self.table_view.selectionModel().isRowSelected(row, self.table_view.rootIndex())
+            else QItemSelectionModel.SelectionFlag.Select
+        )
+        self.table_view.selectionModel().select(
+            proxy_index,
+            flags | QItemSelectionModel.SelectionFlag.Rows,
+        )
+        self.table_view.selectionModel().setCurrentIndex(
+            proxy_index,
+            QItemSelectionModel.SelectionFlag.NoUpdate,
+        )
 
 
 __all__ = ["TermsTableWidget"]
