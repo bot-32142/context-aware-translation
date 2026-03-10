@@ -485,6 +485,10 @@ def _build_standard_step_payload(route: WorkflowStepRoute) -> dict[str, bool | i
         payload["endpoint_profile"] = route.connection_id
     if route.model:
         payload["model"] = route.model
+    if route.step_id is WorkflowStepId.IMAGE_REEMBEDDING:
+        backend = _infer_image_backend(route)
+        if backend is not None:
+            payload["backend"] = backend
     return payload
 
 
@@ -495,6 +499,21 @@ def _build_batch_step_payload(route: WorkflowStepRoute) -> dict[str, bool | int 
     if route.model:
         payload["model"] = route.model
     return payload
+
+
+def _infer_image_backend(route: WorkflowStepRoute) -> str | None:
+    configured = route.step_config.get("backend")
+    if isinstance(configured, str) and configured.strip():
+        return configured
+    model_name = (route.model or "").lower()
+    connection_name = (route.connection_label or route.connection_id or "").lower()
+    if model_name.startswith("gemini") or "gemini" in connection_name:
+        return "gemini"
+    if model_name.startswith("qwen") or "qwen" in connection_name or "dashscope" in connection_name:
+        return "qwen"
+    if model_name:
+        return "openai"
+    return None
 
 
 def build_workflow_profile_detail(

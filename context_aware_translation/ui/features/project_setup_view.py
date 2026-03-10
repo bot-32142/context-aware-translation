@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -100,10 +101,11 @@ class ProjectSetupView(QWidget):
             max_visible_rows=5,
             parent=self,
         )
+        self.routes_editor.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
         self.routes_editor.hide()
         self.routes_table = self.routes_editor.table
         self._custom_rows = self.routes_editor.rows
-        custom_layout.addWidget(self.routes_editor)
+        custom_layout.addWidget(self.routes_editor, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.custom_profile_group)
 
         actions_layout = QHBoxLayout()

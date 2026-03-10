@@ -11,6 +11,7 @@ from context_aware_translation.application.contracts.common import (
     NavigationTarget,
     ProjectRef,
     SurfaceStatus,
+    UserMessage,
 )
 
 
@@ -30,9 +31,25 @@ class ContextFrontierState(ContractModel):
 class WorkDocumentRow(ContractModel):
     document: DocumentRef
     status: SurfaceStatus
+    source_count: int = 0
+    ocr_status: str = ""
+    terms_status: str = ""
+    translation_status: str = ""
     state_summary: str
     blocker: BlockerInfo | None = None
     primary_action: DocumentRowAction
+
+
+class ImportDocumentTypeOption(ContractModel):
+    document_type: str
+    label: str
+
+
+class ImportInspectionState(ContractModel):
+    selected_paths: list[str] = Field(default_factory=list)
+    available_types: list[ImportDocumentTypeOption] = Field(default_factory=list)
+    summary: str = ""
+    error_message: str | None = None
 
 
 class WorkboardState(ContractModel):
@@ -45,6 +62,22 @@ class WorkboardState(ContractModel):
 class ImportDocumentsRequest(ContractModel):
     project_id: str
     paths: list[str]
+    document_type: str | None = None
+
+
+class InspectImportPathsRequest(ContractModel):
+    project_id: str
+    paths: list[str]
+
+
+class ResetDocumentStackRequest(ContractModel):
+    project_id: str
+    document_id: int
+
+
+class DeleteDocumentStackRequest(ContractModel):
+    project_id: str
+    document_id: int
 
 
 class PrepareExportRequest(ContractModel):
@@ -69,3 +102,7 @@ class RunExportRequest(ContractModel):
     format_id: str
     output_path: str
     options: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
+
+
+class WorkMutationResult(ContractModel):
+    message: UserMessage

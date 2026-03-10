@@ -39,10 +39,19 @@ class DocumentOverviewState(ContractModel):
     sections: list[DocumentSectionCard] = Field(default_factory=list)
 
 
+class OCRBoundingBox(ContractModel):
+    x: float
+    y: float
+    width: float
+    height: float
+
+
 class OCRTextElement(ContractModel):
     element_id: int | None = None
     text: str
     bbox_id: int | None = None
+    bbox: OCRBoundingBox | None = None
+    kind: str | None = None
 
 
 class OCRPageState(ContractModel):

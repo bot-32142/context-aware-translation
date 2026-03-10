@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtWidgets import (
+    QComboBox,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -22,8 +26,15 @@ from context_aware_translation.application.contracts.common import (
     NavigationTargetKind,
     SurfaceStatus,
 )
-from context_aware_translation.application.contracts.work import WorkboardState, WorkDocumentRow
-from context_aware_translation.application.errors import ApplicationError
+from context_aware_translation.application.contracts.work import (
+    DeleteDocumentStackRequest,
+    ImportDocumentsRequest,
+    InspectImportPathsRequest,
+    ResetDocumentStackRequest,
+    WorkboardState,
+    WorkDocumentRow,
+)
+from context_aware_translation.application.errors import ApplicationError, BlockedOperationError
 from context_aware_translation.application.events import (
     ApplicationEventSubscriber,
     SetupInvalidatedEvent,
@@ -75,7 +86,9 @@ class WorkView(QWidget):
         self._terms_service = terms_service
         self._events = events
         self._state: WorkboardState | None = None
+        self._row_states: list[WorkDocumentRow] = []
         self._document_view: DocumentWorkspaceView | None = None
+        self._selected_import_paths: list[str] = []
         self._event_bridge = QtApplicationEventBridge(events, parent=self)
         self._event_bridge.workboard_invalidated.connect(self._on_workboard_invalidated)
         self._event_bridge.setup_invalidated.connect(self._on_setup_invalidated)
@@ -88,12 +101,40 @@ class WorkView(QWidget):
 
         self.home_page = QWidget()
         home_layout = QVBoxLayout(self.home_page)
+
         self.tip_label = create_tip_label(
             self.tr(
-                "Work shows the ordered document stack, the current context frontier, and the next action for each document."
-            ),
+                "Import documents here, review project-wide progress, and open the next document tool directly from the table."
+            )
         )
         home_layout.addWidget(self.tip_label)
+
+        self.import_strip = QFrame()
+        self.import_strip.setFrameShape(QFrame.Shape.StyledPanel)
+        import_layout = QVBoxLayout(self.import_strip)
+        import_buttons = QHBoxLayout()
+        self.select_files_button = QPushButton(self.tr("Select Files"))
+        self.select_files_button.clicked.connect(self._select_files)
+        import_buttons.addWidget(self.select_files_button)
+        self.select_folder_button = QPushButton(self.tr("Select Folder"))
+        self.select_folder_button.clicked.connect(self._select_folder)
+        import_buttons.addWidget(self.select_folder_button)
+        self.import_type_combo = QComboBox()
+        self.import_type_combo.setEnabled(False)
+        import_buttons.addWidget(self.import_type_combo, 1)
+        self.import_button = QPushButton(self.tr("Import"))
+        self.import_button.setEnabled(False)
+        self.import_button.clicked.connect(self._run_import)
+        import_buttons.addWidget(self.import_button)
+        import_layout.addLayout(import_buttons)
+        self.import_summary_label = QLabel(self.tr("No file or folder selected"))
+        self.import_summary_label.setWordWrap(True)
+        import_layout.addWidget(self.import_summary_label)
+        self.import_message_label = QLabel()
+        self.import_message_label.setWordWrap(True)
+        self.import_message_label.hide()
+        import_layout.addWidget(self.import_message_label)
+        home_layout.addWidget(self.import_strip)
 
         self.context_strip = QFrame()
         self.context_strip.setFrameShape(QFrame.Shape.StyledPanel)
@@ -122,14 +163,38 @@ class WorkView(QWidget):
         setup_layout.addWidget(self.setup_action_button)
         home_layout.addWidget(self.setup_strip)
 
-        self.rows_table = QTableWidget(0, 5)
+        self.rows_table = QTableWidget(0, 8)
         self.rows_table.setHorizontalHeaderLabels(
-            [self.tr("#"), self.tr("Document"), self.tr("Status"), self.tr("State"), self.tr("Action")]
+            [
+                self.tr("#"),
+                self.tr("Document"),
+                self.tr("Sources"),
+                self.tr("OCR"),
+                self.tr("Terms"),
+                self.tr("Translation"),
+                self.tr("State"),
+                self.tr("Action"),
+            ]
         )
         self.rows_table.verticalHeader().setVisible(False)
         self.rows_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.rows_table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        self.rows_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.rows_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.rows_table.itemSelectionChanged.connect(self._on_selection_changed)
+        self.rows_table.cellDoubleClicked.connect(self._on_cell_double_clicked)
         home_layout.addWidget(self.rows_table, 1)
+
+        row_actions = QHBoxLayout()
+        self.reset_document_button = QPushButton(self.tr("Reset Document"))
+        self.reset_document_button.setEnabled(False)
+        self.reset_document_button.clicked.connect(self._reset_selected_document)
+        row_actions.addWidget(self.reset_document_button)
+        self.delete_document_button = QPushButton(self.tr("Delete Document"))
+        self.delete_document_button.setEnabled(False)
+        self.delete_document_button.clicked.connect(self._delete_selected_document)
+        row_actions.addWidget(self.delete_document_button)
+        row_actions.addStretch()
+        home_layout.addLayout(row_actions)
 
         self.empty_label = create_tip_label(self.tr("No documents imported yet."))
         self.empty_label.hide()
@@ -163,12 +228,27 @@ class WorkView(QWidget):
     def retranslateUi(self) -> None:
         self.tip_label.setText(
             self.tr(
-                "Work shows the ordered document stack, the current context frontier, and the next action for each document."
-            ),
+                "Import documents here, review project-wide progress, and open the next document tool directly from the table."
+            )
         )
+        self.select_files_button.setText(self.tr("Select Files"))
+        self.select_folder_button.setText(self.tr("Select Folder"))
+        self.import_button.setText(self.tr("Import"))
+        self.import_summary_label.setText(self.tr("No file or folder selected") if not self._selected_import_paths else self.import_summary_label.text())
         self.rows_table.setHorizontalHeaderLabels(
-            [self.tr("#"), self.tr("Document"), self.tr("Status"), self.tr("State"), self.tr("Action")]
+            [
+                self.tr("#"),
+                self.tr("Document"),
+                self.tr("Sources"),
+                self.tr("OCR"),
+                self.tr("Terms"),
+                self.tr("Translation"),
+                self.tr("State"),
+                self.tr("Action"),
+            ]
         )
+        self.reset_document_button.setText(self.tr("Reset Document"))
+        self.delete_document_button.setText(self.tr("Delete Document"))
         self.empty_label.setText(self.tr("No documents imported yet."))
         if self._document_view is not None:
             self._document_view.back_button.setText("\u2190 " + self.tr("Back to Work"))
@@ -195,30 +275,177 @@ class WorkView(QWidget):
             self.setup_strip.hide()
 
         self.rows_table.setRowCount(0)
+        self._row_states = list(state.rows)
         self.empty_label.setVisible(not state.rows)
         for row_state in state.rows:
             self._append_row(row_state)
         self.rows_table.resizeColumnsToContents()
+        self.rows_table.horizontalHeader().setStretchLastSection(False)
+        self.rows_table.horizontalHeader().resizeSection(1, 260)
+        self.rows_table.horizontalHeader().resizeSection(6, 260)
+        self._on_selection_changed()
 
     def _append_row(self, row_state: WorkDocumentRow) -> None:
         row = self.rows_table.rowCount()
         self.rows_table.insertRow(row)
+        document_item = QTableWidgetItem(row_state.document.label)
+        document_item.setData(Qt.ItemDataRole.UserRole, row_state.document.document_id)
         self.rows_table.setItem(row, 0, QTableWidgetItem(str(row_state.document.order_index)))
-        self.rows_table.setItem(row, 1, QTableWidgetItem(row_state.document.label))
-        status_item = QTableWidgetItem(self.tr(_STATUS_LABELS[row_state.status]))
-        status_item.setForeground(Qt.GlobalColor.black)
-        self.rows_table.setItem(row, 2, status_item)
+        self.rows_table.setItem(row, 1, document_item)
+        self.rows_table.setItem(row, 2, QTableWidgetItem(str(row_state.source_count)))
+        self.rows_table.setItem(row, 3, QTableWidgetItem(row_state.ocr_status))
+        self.rows_table.setItem(row, 4, QTableWidgetItem(row_state.terms_status))
+        self.rows_table.setItem(row, 5, QTableWidgetItem(row_state.translation_status))
         summary_text = row_state.state_summary
         if row_state.blocker is not None and row_state.blocker.message not in summary_text:
             summary_text = f"{summary_text}\n{row_state.blocker.message}"
         summary_item = QTableWidgetItem(summary_text)
         summary_item.setToolTip(row_state.blocker.message if row_state.blocker is not None else row_state.state_summary)
-        self.rows_table.setItem(row, 3, summary_item)
+        self.rows_table.setItem(row, 6, summary_item)
 
         button = QPushButton(row_state.primary_action.label)
         button.setEnabled(row_state.primary_action.kind is not DocumentRowActionKind.BLOCKED)
         button.clicked.connect(lambda _checked=False, item=row_state: self._handle_row_action(item))
-        self.rows_table.setCellWidget(row, 4, button)
+        self.rows_table.setCellWidget(row, 7, button)
+
+    def _select_files(self) -> None:
+        file_paths, _selected = QFileDialog.getOpenFileNames(
+            self,
+            self.tr("Select Document File(s)"),
+            str(Path.home()),
+            self.tr("All Files (*.*)"),
+        )
+        if file_paths:
+            self._inspect_import_paths(file_paths)
+
+    def _select_folder(self) -> None:
+        folder_path = QFileDialog.getExistingDirectory(
+            self,
+            self.tr("Select Document Folder"),
+            str(Path.home()),
+        )
+        if folder_path:
+            self._inspect_import_paths([folder_path])
+
+    def _inspect_import_paths(self, paths: list[str]) -> None:
+        self._selected_import_paths = list(paths)
+        state = self._work_service.inspect_import_paths(InspectImportPathsRequest(project_id=self._project_id, paths=paths))
+        self.import_type_combo.clear()
+        for option in state.available_types:
+            self.import_type_combo.addItem(option.label, option.document_type)
+        self.import_type_combo.setEnabled(bool(state.available_types))
+        self.import_button.setEnabled(bool(state.available_types))
+        self.import_summary_label.setText(state.summary or self.tr("No file or folder selected"))
+        if state.error_message:
+            self._set_import_message(state.error_message, is_error=True)
+        else:
+            self._set_import_message("", is_error=False)
+
+    def _run_import(self) -> None:
+        if not self._selected_import_paths:
+            return
+        document_type = self.import_type_combo.currentData()
+        try:
+            result = self._work_service.import_documents(
+                ImportDocumentsRequest(
+                    project_id=self._project_id,
+                    paths=self._selected_import_paths,
+                    document_type=str(document_type) if document_type else None,
+                )
+            )
+        except BlockedOperationError as exc:
+            self._set_import_message(exc.payload.message, is_error=True)
+            return
+        except ApplicationError as exc:
+            self._set_import_message(exc.payload.message, is_error=True)
+            return
+        self._set_import_message(
+            result.message.text if result.message is not None else self.tr("Import complete."),
+            is_error=False,
+        )
+        self._selected_import_paths = []
+        self.import_type_combo.clear()
+        self.import_type_combo.setEnabled(False)
+        self.import_button.setEnabled(False)
+        self.import_summary_label.setText(self.tr("No file or folder selected"))
+        self.refresh()
+
+    def _set_import_message(self, text: str, *, is_error: bool) -> None:
+        if not text:
+            self.import_message_label.hide()
+            self.import_message_label.clear()
+            return
+        color = "#b42318" if is_error else "#027a48"
+        self.import_message_label.setStyleSheet(f"QLabel {{ color: {color}; font-weight: 600; }}")
+        self.import_message_label.setText(text)
+        self.import_message_label.show()
+
+    def _selected_row_state(self) -> WorkDocumentRow | None:
+        row = self.rows_table.currentRow()
+        if row < 0 or row >= len(self._row_states):
+            return None
+        return self._row_states[row]
+
+    def _on_selection_changed(self) -> None:
+        selected = self._selected_row_state()
+        enabled = selected is not None
+        self.reset_document_button.setEnabled(enabled)
+        self.delete_document_button.setEnabled(enabled)
+
+    def _reset_selected_document(self) -> None:
+        selected = self._selected_row_state()
+        if selected is None:
+            return
+        reply = QMessageBox.warning(
+            self,
+            self.tr("Reset Document"),
+            self.tr(
+                "This will reset the selected document and all documents added after it. Glossary data, translations, and OCR state for affected documents will be cleared. Continue?"
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            result = self._work_service.reset_document_stack(
+                ResetDocumentStackRequest(project_id=self._project_id, document_id=selected.document.document_id)
+            )
+        except ApplicationError as exc:
+            QMessageBox.warning(self, self.tr("Reset Document"), exc.payload.message)
+            return
+        QMessageBox.information(self, self.tr("Reset Complete"), result.message.text)
+        self.refresh()
+
+    def _delete_selected_document(self) -> None:
+        selected = self._selected_row_state()
+        if selected is None:
+            return
+        reply = QMessageBox.warning(
+            self,
+            self.tr("Delete Document"),
+            self.tr(
+                "This will permanently delete the selected document and all documents added after it. This cannot be undone. Continue?"
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            result = self._work_service.delete_document_stack(
+                DeleteDocumentStackRequest(project_id=self._project_id, document_id=selected.document.document_id)
+            )
+        except ApplicationError as exc:
+            QMessageBox.warning(self, self.tr("Delete Document"), exc.payload.message)
+            return
+        QMessageBox.information(self, self.tr("Delete Complete"), result.message.text)
+        self.refresh()
+
+    def _on_cell_double_clicked(self, row: int, _column: int) -> None:
+        if row < 0 or row >= len(self._row_states):
+            return
+        self._handle_row_action(self._row_states[row])
 
     def _handle_row_action(self, row_state: WorkDocumentRow) -> None:
         action = row_state.primary_action
@@ -230,9 +457,7 @@ class WorkView(QWidget):
         if action.kind is DocumentRowActionKind.FIX_SETUP:
             self._route_setup_target(action.target)
             return
-        if action.target is None:
-            return
-        if action.target.document_id is None:
+        if action.target is None or action.target.document_id is None:
             return
         section = self._section_for_target(action.target)
         if section is None:

@@ -28,6 +28,7 @@ class LibraryView(QWidget):
     def __init__(self, book_manager: BookManager, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.book_manager = book_manager
+        self._context_menu: QMenu | None = None
         self._setup_ui()
         self._connect_signals()
 
@@ -190,16 +191,13 @@ class LibraryView(QWidget):
         edit_action = menu.addAction(self.tr("Edit"))
         menu.addSeparator()
         delete_action = menu.addAction(self.tr("Delete"))
-
-        # Execute menu
-        action = menu.exec(self.table_view.viewport().mapToGlobal(position))
-
-        if action == open_action:
-            self._on_open_book()
-        elif action == edit_action:
-            self._on_edit_book()
-        elif action == delete_action:
-            self._on_delete_book()
+        open_action.triggered.connect(self._on_open_book)
+        edit_action.triggered.connect(self._on_edit_book)
+        delete_action.triggered.connect(self._on_delete_book)
+        menu.aboutToHide.connect(menu.deleteLater)
+        menu.aboutToHide.connect(lambda: setattr(self, "_context_menu", None))
+        self._context_menu = menu
+        menu.popup(self.table_view.viewport().mapToGlobal(position))
 
     def refresh(self) -> None:
         """Refresh the book list."""

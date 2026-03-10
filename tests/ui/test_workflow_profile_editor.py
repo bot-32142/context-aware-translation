@@ -8,11 +8,12 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowStepId,
     WorkflowStepRoute,
 )
+from context_aware_translation.application.runtime import build_workflow_profile_payload
 from context_aware_translation.ui.features.workflow_profile_editor import ConnectionChoice, WorkflowProfileEditorDialog
 
 try:
     from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QApplication, QDialog, QScrollArea
+    from PySide6.QtWidgets import QApplication, QDialog, QPushButton, QScrollArea
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -154,7 +155,9 @@ def test_workflow_profile_editor_only_shows_advanced_button_for_configurable_ste
     original = editor_module.StepAdvancedConfigDialog
     editor_module.StepAdvancedConfigDialog = _FakeStepDialog
     try:
-        advanced_button = dialog.routes_table.cellWidget(0, 3)
+        advanced_cell = dialog.routes_table.cellWidget(0, 3)
+        assert advanced_cell is not None
+        advanced_button = advanced_cell.findChild(QPushButton)
         assert advanced_button is not None
         advanced_button.click()
     finally:
@@ -164,7 +167,7 @@ def test_workflow_profile_editor_only_shows_advanced_button_for_configurable_ste
     assert dialog.routes_table.item(1, 3).text() == "—"
 
 
-def test_workflow_profile_editor_infers_image_backend_from_connection():
+def test_image_reembedding_backend_is_inferred_when_profile_payload_is_built():
     profile = WorkflowProfileDetail(
         profile_id="profile:recommended",
         name="Recommended",
@@ -195,7 +198,8 @@ def test_workflow_profile_editor_infers_image_backend_from_connection():
     )
 
     built = dialog.profile()
+    payload = build_workflow_profile_payload(base_config={}, profile=built)
 
-    assert built.routes[0].step_config["backend"] == "openai"
+    assert payload["image_reembedding_config"]["backend"] == "openai"
     assert dialog.routes_table.item(0, 0).text() == "Image reembedding"
     assert dialog.routes_table.item(0, 3).text() == "—"

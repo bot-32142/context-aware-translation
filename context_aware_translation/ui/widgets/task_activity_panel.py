@@ -228,14 +228,15 @@ class TaskActivityPanel(QWidget):
         self._refresh_scheduled: bool = False
         self._last_preflight_signature: tuple[tuple[str, str], ...] = ()
         self._next_preflight_refresh_monotonic: float = 0.0
+        self._signals_connected = False
 
         self._init_ui()
         self.retranslate_ui()
         self._engine.tasks_changed.connect(self._on_tasks_changed)
+        self._signals_connected = True
         self._auto_timer = QTimer(self)
         self._auto_timer.setInterval(_AUTO_REFRESH_INTERVAL_MS)
         self._auto_timer.timeout.connect(self._on_auto_refresh)
-        self._auto_timer.start()
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setSingleShot(True)
         self._refresh_timer.setInterval(_TASKS_CHANGED_COALESCE_MS)
@@ -267,8 +268,10 @@ class TaskActivityPanel(QWidget):
         """Disconnect engine signal."""
         self._auto_timer.stop()
         self._refresh_timer.stop()
-        with suppress(TypeError, RuntimeError):
-            self._engine.tasks_changed.disconnect(self._on_tasks_changed)
+        if self._signals_connected:
+            with suppress(TypeError, RuntimeError):
+                self._engine.tasks_changed.disconnect(self._on_tasks_changed)
+            self._signals_connected = False
 
     # ------------------------------------------------------------------
     # i18n
@@ -396,9 +399,20 @@ class TaskActivityPanel(QWidget):
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
+        if not self._auto_timer.isActive():
+            self._auto_timer.start()
         if getattr(self, "_dirty", False):
             self._dirty = False
             self.refresh(recompute_preflight=True)
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        self._auto_timer.stop()
+        self._refresh_timer.stop()
+        super().hideEvent(event)
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        self.cleanup()
+        super().closeEvent(event)
 
     def _should_defer_hidden_refresh(self) -> bool:
         """Return True when refresh should wait until this panel is shown."""

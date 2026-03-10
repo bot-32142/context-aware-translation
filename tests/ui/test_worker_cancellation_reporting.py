@@ -89,7 +89,7 @@ def test_import_worker_late_interrupt_still_emits_success(monkeypatch: pytest.Mo
         "context_aware_translation.ui.workers.import_worker.DocumentRepository",
         lambda *_a, **_k: fake_repo,
     )
-    monkeypatch.setattr("context_aware_translation.ui.workers.import_worker.get_document_classes", lambda: [_TextDoc])
+    monkeypatch.setattr("context_aware_translation.workflow.ops.import_support.get_document_classes", lambda: [_TextDoc])
 
     success, cancelled, errors = _capture_signals(worker)
     worker.run()
@@ -137,7 +137,7 @@ def test_import_worker_multiple_files_imports_as_staged_folder(monkeypatch: pyte
         "context_aware_translation.ui.workers.import_worker.DocumentRepository",
         lambda *_a, **_k: fake_repo,
     )
-    monkeypatch.setattr("context_aware_translation.ui.workers.import_worker.get_document_classes", lambda: [_FolderDoc])
+    monkeypatch.setattr("context_aware_translation.workflow.ops.import_support.get_document_classes", lambda: [_FolderDoc])
 
     success, cancelled, errors = _capture_signals(worker)
     worker.run()
@@ -148,7 +148,7 @@ def test_import_worker_multiple_files_imports_as_staged_folder(monkeypatch: pyte
 
 
 def test_stage_selected_files_as_folder_falls_back_to_copy(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    from context_aware_translation.ui.workers import import_worker
+    from context_aware_translation.workflow.ops import import_support
 
     source = tmp_path / "sample.txt"
     source.write_text("hello", encoding="utf-8")
@@ -159,10 +159,10 @@ def test_stage_selected_files_as_folder_falls_back_to_copy(monkeypatch: pytest.M
     def _fail_symlink(*_args, **_kwargs):  # noqa: ANN002, ANN003
         raise OSError("symlink unavailable")
 
-    monkeypatch.setattr(import_worker.os, "link", _fail_link)
-    monkeypatch.setattr(import_worker.os, "symlink", _fail_symlink)
+    monkeypatch.setattr(import_support.os, "link", _fail_link)
+    monkeypatch.setattr(import_support.os, "symlink", _fail_symlink)
 
-    with import_worker.stage_selected_files_as_folder([source]) as staged_root:
+    with import_support.stage_selected_files_as_folder([source]) as staged_root:
         staged_files = [entry for entry in staged_root.rglob("*") if entry.is_file()]
         assert len(staged_files) == 1
         assert staged_files[0].read_text(encoding="utf-8") == "hello"
@@ -231,7 +231,7 @@ def test_import_worker_does_not_emit_success_when_import_fails(monkeypatch: pyte
         "context_aware_translation.ui.workers.import_worker.DocumentRepository",
         lambda *_a, **_k: fake_repo,
     )
-    monkeypatch.setattr("context_aware_translation.ui.workers.import_worker.get_document_classes", lambda: [_TextDoc])
+    monkeypatch.setattr("context_aware_translation.workflow.ops.import_support.get_document_classes", lambda: [_TextDoc])
 
     success, cancelled, errors = _capture_signals(worker)
     worker.run()
@@ -275,7 +275,7 @@ def test_import_worker_forwards_progress_callback_when_supported(monkeypatch: py
         "context_aware_translation.ui.workers.import_worker.DocumentRepository",
         lambda *_a, **_k: fake_repo,
     )
-    monkeypatch.setattr("context_aware_translation.ui.workers.import_worker.get_document_classes", lambda: [_PDFDoc])
+    monkeypatch.setattr("context_aware_translation.workflow.ops.import_support.get_document_classes", lambda: [_PDFDoc])
 
     progress_events: list[tuple[int, int, str]] = []
     worker.progress.connect(lambda c, t, m: progress_events.append((c, t, m)))

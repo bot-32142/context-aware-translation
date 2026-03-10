@@ -179,8 +179,8 @@ class ConnectionDraftForm(QWidget):
         self._build_spin_fields(advanced_form)
         advanced_form.addRow(self.advanced_note)
         self.advanced_section.set_content(advanced_widget)
+        self.advanced_section.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         connection_layout.addWidget(self.advanced_section)
-        connection_layout.addStretch()
         self.tabs.addTab(connection_tab, self.tr("Connection"))
 
         token_tab = QWidget()
@@ -192,7 +192,6 @@ class ConnectionDraftForm(QWidget):
         )
         self.token_tab_layout.addLayout(token_form)
         self.token_tab_layout.addWidget(self.token_meter_note)
-        self.token_tab_layout.addStretch()
         self.tabs.addTab(token_tab, self.tr("Token Meter"))
 
         self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)

@@ -19,6 +19,7 @@ from context_aware_translation.storage.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.models import Decision, TaskAction
 
 pytestmark = pytest.mark.skipif(not HAS_PYSIDE6, reason="PySide6 not available")
+_PANELS: list[object] = []
 
 
 # ---------------------------------------------------------------------------
@@ -32,6 +33,23 @@ def _qapp():
     if app is None:
         app = QApplication([])
     yield app
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_panels():
+    yield
+    while _PANELS:
+        panel = _PANELS.pop()
+        cleanup = getattr(panel, "cleanup", None)
+        if callable(cleanup):
+            cleanup()
+        close = getattr(panel, "close", None)
+        if callable(close):
+            close()
+        delete_later = getattr(panel, "deleteLater", None)
+        if callable(delete_later):
+            delete_later()
+    QApplication.processEvents()
 
 
 class _SignalHolder(QObject):
@@ -78,7 +96,9 @@ def _make_panel(engine=None, book_id="book-1"):
 
     if engine is None:
         engine = _make_engine()
-    return TaskActivityPanel(engine, book_id)
+    panel = TaskActivityPanel(engine, book_id)
+    _PANELS.append(panel)
+    return panel
 
 
 # ---------------------------------------------------------------------------
@@ -288,8 +308,8 @@ def test_tasks_changed_refreshes_for_matching_book_id():
     r = _make_record()
     engine = _make_engine(records=[r])
     panel = _make_panel(engine=engine, book_id="book-1")
-    panel.show()
-    QApplication.processEvents()
+    panel._should_defer_hidden_refresh = lambda: False  # type: ignore[method-assign]
+    panel.isVisible = lambda: True  # type: ignore[method-assign]
 
     initial_count = engine.get_tasks.call_count
     engine.tasks_changed.emit("book-1")
@@ -307,8 +327,6 @@ def test_tasks_changed_refreshes_for_matching_book_id():
 def test_tasks_changed_ignores_different_book_id():
     engine = _make_engine(records=[])
     panel = _make_panel(engine=engine, book_id="book-1")
-    panel.show()
-    QApplication.processEvents()
 
     initial_count = engine.get_tasks.call_count
     engine.tasks_changed.emit("book-99")

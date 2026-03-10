@@ -28,7 +28,6 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowStepId,
     WorkflowStepRoute,
 )
-from context_aware_translation.llm.image_generator import ImageBackend
 from context_aware_translation.ui.constants import LANGUAGES
 from context_aware_translation.ui.utils import create_tip_label
 from context_aware_translation.ui.widgets.collapsible_section import CollapsibleSection
@@ -241,9 +240,10 @@ ADVANCED_STEP_IDS = frozenset(
 
 
 class WorkflowRoutesEditor(QWidget):
-    _ADVANCED_COLUMN_WIDTH = 120
+    _STEP_COLUMN_WIDTH = 180
+    _ADVANCED_COLUMN_WIDTH = 110
     _CONNECTION_COLUMN_WIDTH = 300
-    _MODEL_COLUMN_WIDTH = 280
+    _MODEL_COLUMN_WIDTH = 340
 
     def __init__(
         self,
@@ -281,18 +281,22 @@ class WorkflowRoutesEditor(QWidget):
         self.table.verticalHeader().setDefaultSectionSize(40)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.table.setStyleSheet(
-            "QTableWidget { background: palette(base); selection-background-color: transparent; selection-color: palette(text); }"
-            " QTableWidget::item:selected, QTableWidget::item:selected:active, QTableWidget::item:selected:!active { background-color: transparent; color: palette(text); }"
-            " QTableWidget::item:hover { background-color: transparent; color: palette(text); }"
-            " QTableWidget QLineEdit, QTableWidget QComboBox { selection-background-color: transparent; }"
+            "QTableWidget, QTableView { background: palette(base); selection-background-color: transparent; selection-color: palette(text); }"
+            " QTableWidget::item, QTableView::item { background-color: transparent; color: palette(text); }"
+            " QTableWidget::item:selected, QTableWidget::item:selected:active, QTableWidget::item:selected:!active,"
+            " QTableView::item:selected, QTableView::item:selected:active, QTableView::item:selected:!active { background-color: transparent; color: palette(text); }"
+            " QTableWidget::item:hover, QTableView::item:hover { background-color: transparent; color: palette(text); }"
+            " QTableWidget QLineEdit, QTableWidget QComboBox, QTableWidget QPushButton { selection-background-color: transparent; }"
         )
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
         self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(0, self._STEP_COLUMN_WIDTH)
         self.table.setColumnWidth(1, self._CONNECTION_COLUMN_WIDTH)
         self.table.setColumnWidth(2, self._MODEL_COLUMN_WIDTH)
         self.table.setColumnWidth(3, self._ADVANCED_COLUMN_WIDTH)
+        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
         layout.addWidget(self.table, 0, Qt.AlignmentFlag.AlignLeft)
         self.set_routes(routes)
 
@@ -308,15 +312,15 @@ class WorkflowRoutesEditor(QWidget):
             if route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
                 self.table.setItem(row_index, 1, self._item(route.connection_label or self.tr("Direct batch config")))
                 model_edit = self._build_model_edit(route.model or "", readonly=True)
-                self.table.setCellWidget(row_index, 2, model_edit)
+                self.table.setCellWidget(row_index, 2, self._cell_widget(model_edit))
                 self.rows.append(RouteRow(route=route, connection_combo=None, model_edit=model_edit))
                 continue
 
             combo = self._build_connection_combo(route.connection_id)
             model_edit = self._build_model_edit(route.model or "")
             combo.currentIndexChanged.connect(lambda _i, c=combo, e=model_edit: self._sync_model_from_connection(c, e))
-            self.table.setCellWidget(row_index, 1, combo)
-            self.table.setCellWidget(row_index, 2, model_edit)
+            self.table.setCellWidget(row_index, 1, self._cell_widget(combo))
+            self.table.setCellWidget(row_index, 2, self._cell_widget(model_edit))
             self.rows.append(RouteRow(route=route, connection_combo=combo, model_edit=model_edit))
 
         self._update_table_geometry()
@@ -336,18 +340,13 @@ class WorkflowRoutesEditor(QWidget):
             connection_label = None
             if row.connection_combo is not None and connection_id_str is not None:
                 connection_label = row.connection_combo.currentText().strip() or None
-            step_config = dict(row.route.step_config)
-            if row.route.step_id is WorkflowStepId.IMAGE_REEMBEDDING:
-                inferred_backend = self._infer_image_backend(connection_id_str, row.model_edit.text().strip() or None)
-                if inferred_backend is not None:
-                    step_config["backend"] = inferred_backend
             routes.append(
                 row.route.model_copy(
                     update={
                         "connection_id": connection_id_str,
                         "connection_label": connection_label,
                         "model": row.model_edit.text().strip() or None,
-                        "step_config": step_config,
+                        "step_config": dict(row.route.step_config),
                     }
                 )
             )
@@ -365,8 +364,8 @@ class WorkflowRoutesEditor(QWidget):
 
     def _build_connection_combo(self, connection_id: str | None) -> QComboBox:
         combo = QComboBox()
-        combo.setMinimumWidth(self._CONNECTION_COLUMN_WIDTH - 20)
-        combo.setMaximumWidth(self._CONNECTION_COLUMN_WIDTH - 12)
+        combo.setMinimumWidth(self._CONNECTION_COLUMN_WIDTH - 24)
+        combo.setMaximumWidth(self._CONNECTION_COLUMN_WIDTH - 24)
         combo.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         combo.setStyleSheet("QComboBox { font-size: 13px; padding: 4px 8px; }")
@@ -382,11 +381,20 @@ class WorkflowRoutesEditor(QWidget):
     def _build_model_edit(self, value: str, *, readonly: bool = False) -> QLineEdit:
         model_edit = QLineEdit(value)
         model_edit.setReadOnly(readonly)
-        model_edit.setMinimumWidth(self._MODEL_COLUMN_WIDTH - 20)
-        model_edit.setMaximumWidth(self._MODEL_COLUMN_WIDTH - 12)
+        model_edit.setMinimumWidth(self._MODEL_COLUMN_WIDTH - 24)
+        model_edit.setMaximumWidth(self._MODEL_COLUMN_WIDTH - 24)
         model_edit.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         model_edit.setStyleSheet("QLineEdit { font-size: 13px; padding: 4px 6px; }")
         return model_edit
+
+    def _cell_widget(self, widget: QWidget) -> QWidget:
+        container = QWidget()
+        container.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(6, 2, 6, 2)
+        layout.setSpacing(0)
+        layout.addWidget(widget, 0, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+        return container
 
     def _sync_model_from_connection(self, combo: QComboBox, model_edit: QLineEdit) -> None:
         connection_id = combo.currentData()
@@ -407,9 +415,9 @@ class WorkflowRoutesEditor(QWidget):
     def _set_advanced_widget(self, row: int, route: WorkflowStepRoute) -> None:
         if route.step_id in self._advanced_step_ids:
             button = QPushButton(self.tr("Advanced"))
-            button.setMinimumWidth(96)
+            button.setFixedWidth(self._ADVANCED_COLUMN_WIDTH - 16)
             button.clicked.connect(lambda _checked=False, r=row: self._open_step_advanced_dialog(r))
-            self.table.setCellWidget(row, 3, button)
+            self.table.setCellWidget(row, 3, self._cell_widget(button))
             return
         item = self._item("—")
         item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -455,19 +463,6 @@ class WorkflowRoutesEditor(QWidget):
         self.table.setMinimumWidth(total_width)
         self.table.setMaximumWidth(total_width)
 
-    def _infer_image_backend(self, connection_id: str | None, model: str | None) -> str | None:
-        if not connection_id:
-            return None
-        choice = self._connection_choice_by_id.get(connection_id)
-        provider = (choice.provider or "").lower() if choice is not None else ""
-        base_url = (choice.base_url or "").lower() if choice is not None and choice.base_url else ""
-        model_name = (model or (choice.default_model if choice is not None else "") or "").lower()
-        if provider == "gemini" or model_name.startswith("gemini") or "generativelanguage.googleapis.com" in base_url:
-            return ImageBackend.GEMINI.value
-        if model_name.startswith("qwen") or "dashscope" in base_url:
-            return ImageBackend.QWEN.value
-        return ImageBackend.OPENAI.value
-
     def _item(self, text: str) -> QTableWidgetItem:
         return QTableWidgetItem(text)
 
@@ -488,14 +483,15 @@ class WorkflowProfileEditorDialog(QDialog):
         self._connection_choices = connection_choices
         self._allow_name_edit = allow_name_edit
         self.setWindowTitle(self.tr("Workflow Profile"))
-        self.setMinimumWidth(880)
-        self.resize(940, 620)
+        self.setMinimumWidth(980)
+        self.resize(980, 620)
         self._init_ui()
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(6)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         header = create_tip_label(
             self.tr(
@@ -530,6 +526,7 @@ class WorkflowProfileEditorDialog(QDialog):
         basics_layout.addRow(self.tr("Target language"), self.target_language_combo)
         self.general_section.set_content(general_widget)
         self.general_section.set_expanded(False)
+        self.general_section.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         layout.addWidget(self.general_section)
 
         self.routes_section = CollapsibleSection(self.tr("Workflow Routing"))
@@ -544,6 +541,7 @@ class WorkflowProfileEditorDialog(QDialog):
         self._rows = self.routes_editor.rows
         self.routes_section.set_content(self.routes_editor)
         self.routes_section.set_expanded(True)
+        self.routes_section.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         layout.addWidget(self.routes_section)
 
         footer = QDialogButtonBox(

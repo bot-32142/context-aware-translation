@@ -5,6 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from context_aware_translation.application.contracts.common import (
+    AcceptedCommand,
     ActionState,
     BlockerCode,
     BlockerInfo,
@@ -42,16 +43,23 @@ from context_aware_translation.application.contracts.terms import (
 )
 from context_aware_translation.application.contracts.work import (
     ContextFrontierState,
+    DeleteDocumentStackRequest,
     DocumentRowAction,
     ExportDialogState,
+    ImportDocumentsRequest,
+    ImportDocumentTypeOption,
+    ImportInspectionState,
+    InspectImportPathsRequest,
+    ResetDocumentStackRequest,
     WorkboardState,
     WorkDocumentRow,
+    WorkMutationResult,
 )
 from context_aware_translation.application.events import InMemoryApplicationEventBus, WorkboardInvalidatedEvent
 from tests.application.fakes import FakeDocumentService, FakeTermsService, FakeWorkService
 
 try:
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication, QMessageBox
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -94,6 +102,10 @@ def _make_workboard(
             WorkDocumentRow(
                 document=DocumentRef(document_id=4, order_index=4, label="04.png"),
                 status=SurfaceStatus.READY,
+                source_count=2,
+                ocr_status="Complete",
+                terms_status="In progress (1/2)",
+                translation_status="In progress (1/2)",
                 state_summary=summary,
                 blocker=None,
                 primary_action=action,
@@ -108,6 +120,21 @@ def _make_view(*, work_state: WorkboardState):
 
     bus = InMemoryApplicationEventBus()
     work_service = FakeWorkService(state_by_project={"proj-1": work_state})
+    work_service.import_inspection_state = ImportInspectionState(
+        selected_paths=["/tmp/04.png"],
+        available_types=[ImportDocumentTypeOption(document_type="manga", label="Manga")],
+        summary="04.png",
+    )
+    work_service.import_result = AcceptedCommand(
+        command_name="import_documents",
+        message=UserMessage(severity=UserMessageSeverity.SUCCESS, text="Import complete."),
+    )
+    work_service.reset_result = WorkMutationResult(
+        message=UserMessage(severity=UserMessageSeverity.SUCCESS, text="Reset complete.")
+    )
+    work_service.delete_result = WorkMutationResult(
+        message=UserMessage(severity=UserMessageSeverity.SUCCESS, text="Delete complete.")
+    )
     document_service = FakeDocumentService(
         workspace=_make_workspace_state(),
         overview=DocumentOverviewState(
@@ -187,7 +214,11 @@ def test_work_view_renders_workboard_from_service():
         assert view.context_label.text() == "Context ready through 03"
         assert view.rows_table.rowCount() == 1
         assert view.rows_table.item(0, 1).text() == "04.png"
-        assert view.rows_table.cellWidget(0, 4).text() == "Open Translation"
+        assert view.rows_table.item(0, 2).text() == "2"
+        assert view.rows_table.item(0, 3).text() == "Complete"
+        assert view.rows_table.item(0, 4).text() == "In progress (1/2)"
+        assert view.rows_table.item(0, 5).text() == "In progress (1/2)"
+        assert view.rows_table.cellWidget(0, 7).text() == "Open Translation"
         assert work_service.calls == [("get_workboard", "proj-1")]
     finally:
         view.cleanup()
@@ -229,7 +260,7 @@ def test_work_view_opens_document_workspace_for_row_target():
     )
     view, _bus, _work_service, _document_service, _terms_service = _make_view(work_state=_make_workboard(action=action))
     try:
-        view.rows_table.cellWidget(0, 4).click()
+        view.rows_table.cellWidget(0, 7).click()
         assert view._document_view is not None
         assert view.stack.currentWidget() is view._document_view
         assert view._document_view.tab_widget.tabText(view._document_view.tab_widget.currentIndex()) == "Translation"
@@ -247,7 +278,7 @@ def test_work_view_routes_document_overview_to_first_real_document_tab():
         work_state=_make_workboard(action=action, summary="Open")
     )
     try:
-        view.rows_table.cellWidget(0, 4).click()
+        view.rows_table.cellWidget(0, 7).click()
         assert view._document_view is not None
         assert view._document_view.tab_widget.tabText(view._document_view.tab_widget.currentIndex()) == "OCR"
     finally:
@@ -273,7 +304,7 @@ def test_work_view_refreshes_on_invalidation():
         bus.publish(WorkboardInvalidatedEvent(project_id="proj-1"))
         QApplication.processEvents()
 
-        assert view.rows_table.cellWidget(0, 4).text() == "Open Terms"
+        assert view.rows_table.cellWidget(0, 7).text() == "Open Terms"
         assert work_service.calls == [("get_workboard", "proj-1"), ("get_workboard", "proj-1")]
     finally:
         view.cleanup()
@@ -297,8 +328,60 @@ def test_work_view_export_action_prepares_dialog():
     )
     try:
         with patch.object(view, "_open_export_dialog") as mock_open_export_dialog:
-            view.rows_table.cellWidget(0, 4).click()
+            view.rows_table.cellWidget(0, 7).click()
         mock_open_export_dialog.assert_called_once_with(4)
+    finally:
+        view.cleanup()
+
+
+def test_work_view_inspects_paths_and_imports_document():
+    action = DocumentRowAction(
+        kind=DocumentRowActionKind.OPEN_TRANSLATION,
+        label="Open Translation",
+        target=NavigationTarget(
+            kind=NavigationTargetKind.DOCUMENT_TRANSLATION,
+            project_id="proj-1",
+            document_id=4,
+        ),
+    )
+    view, _bus, work_service, _document_service, _terms_service = _make_view(work_state=_make_workboard(action=action))
+    try:
+        view._inspect_import_paths(["/tmp/04.png"])
+        assert view.import_type_combo.count() == 1
+        assert view.import_button.isEnabled()
+
+        view.import_button.click()
+
+        assert ("inspect_import_paths", InspectImportPathsRequest(project_id="proj-1", paths=["/tmp/04.png"])) in work_service.calls
+        assert ("import_documents", ImportDocumentsRequest(project_id="proj-1", paths=["/tmp/04.png"], document_type="manga")) in work_service.calls
+        assert view.import_summary_label.text() == "No file or folder selected"
+    finally:
+        view.cleanup()
+
+
+def test_work_view_reset_and_delete_selected_document():
+    action = DocumentRowAction(
+        kind=DocumentRowActionKind.OPEN_TRANSLATION,
+        label="Open Translation",
+        target=NavigationTarget(
+            kind=NavigationTargetKind.DOCUMENT_TRANSLATION,
+            project_id="proj-1",
+            document_id=4,
+        ),
+    )
+    view, _bus, work_service, _document_service, _terms_service = _make_view(work_state=_make_workboard(action=action))
+    try:
+        view.rows_table.selectRow(0)
+        with (
+            patch("context_aware_translation.ui.features.work_view.QMessageBox.warning", return_value=QMessageBox.StandardButton.Yes),
+            patch("context_aware_translation.ui.features.work_view.QMessageBox.information"),
+        ):
+            view.reset_document_button.click()
+            view.rows_table.selectRow(0)
+            view.delete_document_button.click()
+
+        assert ("reset_document_stack", ResetDocumentStackRequest(project_id="proj-1", document_id=4)) in work_service.calls
+        assert ("delete_document_stack", DeleteDocumentStackRequest(project_id="proj-1", document_id=4)) in work_service.calls
     finally:
         view.cleanup()
 

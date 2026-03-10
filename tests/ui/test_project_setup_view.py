@@ -25,7 +25,7 @@ from tests.application.fakes import FakeProjectSetupService
 
 try:
     from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QApplication, QDialog
+    from PySide6.QtWidgets import QApplication, QDialog, QPushButton
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -226,7 +226,9 @@ def test_project_setup_view_custom_step_advanced_button_opens_advanced_dialog():
         original = editor_module.StepAdvancedConfigDialog
         editor_module.StepAdvancedConfigDialog = _FakeStepDialog
         try:
-            translator_button = view.routes_table.cellWidget(translator_row, 3)
+            translator_cell = view.routes_table.cellWidget(translator_row, 3)
+            assert translator_cell is not None
+            translator_button = translator_cell.findChild(QPushButton)
             assert translator_button is not None
             translator_button.click()
         finally:

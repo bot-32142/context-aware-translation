@@ -30,6 +30,7 @@ from context_aware_translation.application.contracts.document import (
     DocumentTranslationState,
     DocumentWorkspaceState,
     ImageAssetState,
+    OCRBoundingBox,
     OCRPageState,
     OCRTextElement,
     RetranslateRequest,
@@ -790,9 +791,7 @@ class DefaultDocumentService:
                 payload = None
             if isinstance(payload, list):
                 content = SinglePageOCRContent.from_ocr_json(payload)
-                elements = [
-                    OCRTextElement(element_id=index, text=text) for index, text in enumerate(content.get_texts())
-                ]
+                elements = self._elements_from_single_page_content(content)
                 extracted_text = "\n".join(element.text for element in elements)
             elif isinstance(payload, dict):
                 if isinstance(payload.get("text"), str):
@@ -802,7 +801,13 @@ class DefaultDocumentService:
                 boxes = payload.get("boxes")
                 if isinstance(boxes, list):
                     elements = [
-                        OCRTextElement(element_id=index, text=str(box.get("text") or ""))
+                        OCRTextElement(
+                            element_id=index,
+                            text=str(box.get("text") or ""),
+                            bbox_id=index,
+                            bbox=self._bbox_from_payload(box),
+                            kind=str(box.get("type") or "text"),
+                        )
                         for index, box in enumerate(boxes)
                         if isinstance(box, dict)
                     ]
@@ -824,6 +829,39 @@ class DefaultDocumentService:
             extracted_text=extracted_text,
             elements=elements,
         )
+
+    @staticmethod
+    def _bbox_from_payload(payload: dict[str, Any]) -> OCRBoundingBox | None:
+        bbox_payload = payload.get("bbox") if isinstance(payload.get("bbox"), dict) else payload
+        if not isinstance(bbox_payload, dict):
+            return None
+        try:
+            x = float(bbox_payload["x"])
+            y = float(bbox_payload["y"])
+            width = float(bbox_payload["width"])
+            height = float(bbox_payload["height"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        return OCRBoundingBox(x=x, y=y, width=width, height=height)
+
+    @classmethod
+    def _elements_from_single_page_content(cls, content: SinglePageOCRContent) -> list[OCRTextElement]:
+        elements: list[OCRTextElement] = []
+        for item in content.items:
+            kind = type(item).__name__.removesuffix("Item").lower() or "text"
+            bbox = cls._bbox_from_payload({"bbox": getattr(item, "bbox", None)})
+            bbox_id = len(elements) if bbox is not None else None
+            for text in item.get_texts():
+                elements.append(
+                    OCRTextElement(
+                        element_id=len(elements),
+                        text=text,
+                        bbox_id=bbox_id,
+                        bbox=bbox,
+                        kind=kind,
+                    )
+                )
+        return elements
 
     def _build_translation_units(
         self,

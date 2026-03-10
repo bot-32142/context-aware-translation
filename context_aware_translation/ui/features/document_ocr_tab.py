@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QSplitter,
+    QStackedWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -16,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from context_aware_translation.application.contracts.document import (
     DocumentOCRState,
+    OCRBoundingBox,
     OCRPageState,
     OCRTextElement,
     RunOCRRequest,
@@ -25,6 +29,116 @@ from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.services.document import DocumentService
 from context_aware_translation.ui.utils import create_tip_label
 from context_aware_translation.ui.widgets import ImageViewer, ProgressWidget
+
+
+class _SelectableTextEdit(QTextEdit):
+    focused = Signal()
+
+    def focusInEvent(self, event) -> None:  # type: ignore[override]
+        self.focused.emit()
+        super().focusInEvent(event)
+
+
+class _StructuredElementCard(QFrame):
+    selected = Signal(int)
+
+    def __init__(self, index: int, element: OCRTextElement, *, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._index = index
+        self._selected = False
+        self._editor = _SelectableTextEdit(self)
+        self._editor.setPlainText(element.text)
+        self._editor.setMinimumHeight(64)
+        self._editor.focused.connect(lambda: self.selected.emit(self._index))
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(4)
+        title = QLabel(self._title_text(element), self)
+        title.setStyleSheet("font-weight: 600;")
+        layout.addWidget(title)
+        if element.bbox is not None:
+            bbox_label = QLabel(self._bbox_text(element.bbox), self)
+            bbox_label.setStyleSheet("color: #667085; font-size: 11px;")
+            layout.addWidget(bbox_label)
+        layout.addWidget(self._editor)
+        self._apply_style()
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        self.selected.emit(self._index)
+        super().mousePressEvent(event)
+
+    def text(self) -> str:
+        return self._editor.toPlainText()
+
+    def set_selected(self, selected: bool) -> None:
+        self._selected = selected
+        self._apply_style()
+
+    def _apply_style(self) -> None:
+        border = "#f79009" if self._selected else "#d0d5dd"
+        background = "#fff7ed" if self._selected else "#ffffff"
+        self.setStyleSheet(
+            f"QFrame {{ border: 2px solid {border}; border-radius: 6px; background: {background}; }}"
+        )
+
+    @staticmethod
+    def _title_text(element: OCRTextElement) -> str:
+        kind = (element.kind or "Text").replace("_", " ").title()
+        return f"{kind}"
+
+    @staticmethod
+    def _bbox_text(bbox: OCRBoundingBox) -> str:
+        return f"x={bbox.x:.3f}, y={bbox.y:.3f}, w={bbox.width:.3f}, h={bbox.height:.3f}"
+
+
+class _StructuredElementList(QScrollArea):
+    element_selected = Signal(int)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._cards: list[_StructuredElementCard] = []
+        self._selected_index = -1
+        self._container = QWidget(self)
+        self._layout = QVBoxLayout(self._container)
+        self._layout.setContentsMargins(4, 4, 4, 4)
+        self._layout.setSpacing(8)
+        self.setWidget(self._container)
+        self.setWidgetResizable(True)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+    def set_elements(self, elements: list[OCRTextElement]) -> None:
+        self.clear()
+        for index, element in enumerate(elements):
+            card = _StructuredElementCard(index, element, parent=self._container)
+            card.selected.connect(self._on_selected)
+            self._cards.append(card)
+            self._layout.addWidget(card)
+        self._layout.addStretch()
+
+    def clear(self) -> None:
+        self._selected_index = -1
+        self._cards.clear()
+        while self._layout.count():
+            item = self._layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+    def texts(self) -> list[str]:
+        return [card.text() for card in self._cards]
+
+    def select_element(self, index: int) -> None:
+        if 0 <= self._selected_index < len(self._cards):
+            self._cards[self._selected_index].set_selected(False)
+        self._selected_index = index
+        if 0 <= index < len(self._cards):
+            self._cards[index].set_selected(True)
+            self.ensureWidgetVisible(self._cards[index])
+
+    def _on_selected(self, index: int) -> None:
+        self.select_element(index)
+        self.element_selected.emit(index)
 
 
 class DocumentOCRTab(QWidget):
@@ -42,6 +156,8 @@ class DocumentOCRTab(QWidget):
         self._document_id = document_id
         self._state: DocumentOCRState | None = None
         self._current_page_index: int | None = None
+        self._element_to_bbox: dict[int, int] = {}
+        self._bbox_to_element: dict[int, int] = {}
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -54,11 +170,17 @@ class DocumentOCRTab(QWidget):
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         self.image_viewer = ImageViewer(self)
+        self.image_viewer.bbox_clicked.connect(self._on_bbox_clicked)
         splitter.addWidget(self.image_viewer)
 
+        self._right_stack = QStackedWidget(self)
         self.text_edit = QTextEdit(self)
         self.text_edit.setPlaceholderText(self.tr("OCR text will appear here."))
-        splitter.addWidget(self.text_edit)
+        self.structured_list = _StructuredElementList(self)
+        self.structured_list.element_selected.connect(self._on_element_selected)
+        self._right_stack.addWidget(self.text_edit)
+        self._right_stack.addWidget(self.structured_list)
+        splitter.addWidget(self._right_stack)
         splitter.setSizes([480, 480])
         layout.addWidget(splitter, 1)
 
@@ -163,7 +285,10 @@ class DocumentOCRTab(QWidget):
         if not pages:
             self._current_page_index = None
             self.image_viewer.clear_image()
+            self.image_viewer.clear_bboxes()
             self.text_edit.clear()
+            self.structured_list.clear()
+            self._right_stack.setCurrentWidget(self.text_edit)
             self.page_label.setText(self.tr("Page 0 of 0"))
             self.page_status_label.clear()
             self.page_spinbox.setMaximum(1)
@@ -214,9 +339,41 @@ class DocumentOCRTab(QWidget):
             self.image_viewer.clear_image()
 
         if page.elements:
-            self.text_edit.setPlainText("\n".join(element.text for element in page.elements))
+            self._set_structured_page(page)
         else:
+            self.image_viewer.clear_bboxes()
+            self.structured_list.clear()
             self.text_edit.setPlainText(page.extracted_text or "")
+            self._right_stack.setCurrentWidget(self.text_edit)
+
+    def _set_structured_page(self, page: OCRPageState) -> None:
+        self.structured_list.set_elements(page.elements)
+        self._right_stack.setCurrentWidget(self.structured_list)
+        self._element_to_bbox = {}
+        self._bbox_to_element = {}
+        bboxes: list[OCRBoundingBox] = []
+        for index, element in enumerate(page.elements):
+            if element.bbox is None:
+                continue
+            bbox_index = len(bboxes)
+            bboxes.append(element.bbox)
+            self._element_to_bbox[index] = bbox_index
+            self._bbox_to_element.setdefault(bbox_index, index)
+        if bboxes:
+            self.image_viewer.set_bboxes(bboxes)
+        else:
+            self.image_viewer.clear_bboxes()
+
+    def _on_bbox_clicked(self, bbox_index: int) -> None:
+        element_index = self._bbox_to_element.get(bbox_index)
+        if element_index is None:
+            return
+        self.structured_list.select_element(element_index)
+        self.image_viewer.highlight_bbox(bbox_index)
+
+    def _on_element_selected(self, element_index: int) -> None:
+        bbox_index = self._element_to_bbox.get(element_index, -1)
+        self.image_viewer.highlight_bbox(bbox_index)
 
     def _apply_actions(self) -> None:
         if self._state is None:
@@ -300,7 +457,7 @@ class DocumentOCRTab(QWidget):
             return
 
         if page.elements:
-            edited_lines = self.text_edit.toPlainText().split("\n")
+            edited_lines = self.structured_list.texts()
             if len(edited_lines) != len(page.elements):
                 QMessageBox.warning(
                     self,

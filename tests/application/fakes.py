@@ -51,13 +51,35 @@ from context_aware_translation.application.contracts.terms import (
     UpdateTermRequest,
 )
 from context_aware_translation.application.contracts.work import (
+    DeleteDocumentStackRequest,
     ExportDialogState,
     ImportDocumentsRequest,
+    ImportInspectionState,
+    InspectImportPathsRequest,
     PrepareExportRequest,
+    ResetDocumentStackRequest,
     RunExportRequest,
     WorkboardState,
+    WorkMutationResult,
 )
 from context_aware_translation.application.events import InMemoryApplicationEventBus
+
+
+@dataclass
+class FakeApplicationServices:
+    work: Any = None
+    projects: Any = None
+    app_setup: Any = None
+    project_setup: Any = None
+    terms: Any = None
+    document: Any = None
+    queue: Any = None
+
+
+@dataclass
+class FakeApplicationContext:
+    services: FakeApplicationServices
+    events: InMemoryApplicationEventBus = field(default_factory=InMemoryApplicationEventBus)
 
 
 @dataclass
@@ -166,15 +188,39 @@ class FakeWorkService:
     state_by_project: dict[str, WorkboardState]
     export_state: ExportDialogState | None = None
     export_result: Any | None = None
+    import_inspection_state: ImportInspectionState | None = None
+    import_result: AcceptedCommand | None = None
+    reset_result: WorkMutationResult | None = None
+    delete_result: WorkMutationResult | None = None
     calls: list[tuple[str, Any]] = field(default_factory=list)
 
     def get_workboard(self, project_id: str) -> WorkboardState:
         self.calls.append(("get_workboard", project_id))
         return self.state_by_project[project_id]
 
+    def inspect_import_paths(self, request: InspectImportPathsRequest) -> ImportInspectionState:
+        self.calls.append(("inspect_import_paths", request))
+        if self.import_inspection_state is None:
+            raise NotImplementedError
+        return self.import_inspection_state
+
     def import_documents(self, request: ImportDocumentsRequest) -> AcceptedCommand:
         self.calls.append(("import_documents", request))
-        raise NotImplementedError
+        if self.import_result is None:
+            raise NotImplementedError
+        return self.import_result
+
+    def reset_document_stack(self, request: ResetDocumentStackRequest) -> WorkMutationResult:
+        self.calls.append(("reset_document_stack", request))
+        if self.reset_result is None:
+            raise NotImplementedError
+        return self.reset_result
+
+    def delete_document_stack(self, request: DeleteDocumentStackRequest) -> WorkMutationResult:
+        self.calls.append(("delete_document_stack", request))
+        if self.delete_result is None:
+            raise NotImplementedError
+        return self.delete_result
 
     def prepare_export(self, request: PrepareExportRequest) -> ExportDialogState:
         self.calls.append(("prepare_export", request))
