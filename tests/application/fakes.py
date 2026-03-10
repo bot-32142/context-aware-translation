@@ -326,12 +326,12 @@ class FakeQueueService:
     command_result: AcceptedCommand | None = None
     calls: list[tuple[str, Any]] = field(default_factory=list)
 
-    def get_state(self, project_id: str | None = None) -> QueueState:
-        self.calls.append(("get_state", project_id))
+    def get_queue(self, *, project_id: str | None = None) -> QueueState:
+        self.calls.append(("get_queue", project_id))
         return self.state
 
-    def run_action(self, request: QueueActionRequest) -> AcceptedCommand:
-        self.calls.append(("run_action", request))
+    def apply_action(self, request: QueueActionRequest) -> AcceptedCommand:
+        self.calls.append(("apply_action", request))
         return self.command_result or AcceptedCommand(command_name="queue_action")
 
 
