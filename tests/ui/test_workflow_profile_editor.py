@@ -11,6 +11,7 @@ from context_aware_translation.application.contracts.app_setup import (
 from context_aware_translation.ui.features.workflow_profile_editor import ConnectionChoice, WorkflowProfileEditorDialog
 
 try:
+    from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication, QDialog, QScrollArea
 
     HAS_PYSIDE6 = True
@@ -57,8 +58,12 @@ def test_workflow_profile_editor_uses_scrollable_dialog_layout():
     )
 
     assert dialog.findChildren(QScrollArea)
-    assert dialog.width() <= 1140
+    assert not dialog.general_section.is_expanded()
+    assert dialog.width() <= 1240
     assert dialog.routes_table.editTriggers() == dialog.routes_table.EditTrigger.NoEditTriggers
+    assert dialog.routes_table.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    assert dialog.routes_table.columnWidth(1) >= 480
+    assert dialog.routes_table.columnWidth(2) >= 440
     route_row = dialog._rows[0]
     assert route_row.connection_combo is not None
     assert route_row.connection_combo.minimumWidth() >= 400

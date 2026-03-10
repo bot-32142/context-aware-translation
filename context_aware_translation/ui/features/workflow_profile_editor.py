@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
@@ -235,8 +236,8 @@ class WorkflowProfileEditorDialog(QDialog):
         self._allow_name_edit = allow_name_edit
         self._rows: list[RouteRow] = []
         self.setWindowTitle(self.tr("Workflow Profile"))
-        self.setMinimumSize(1040, 660)
-        self.resize(1140, 760)
+        self.setMinimumSize(1120, 760)
+        self.resize(1240, 860)
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -248,12 +249,6 @@ class WorkflowProfileEditorDialog(QDialog):
             )
         )
         layout.addWidget(header)
-
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroll_content = QWidget()
-        scroll_layout = QVBoxLayout(scroll_content)
 
         self.general_section = CollapsibleSection(self.tr("General"))
         general_widget = QWidget()
@@ -280,12 +275,13 @@ class WorkflowProfileEditorDialog(QDialog):
         basics_layout.addRow(self.tr("Profile name"), self.name_edit)
         basics_layout.addRow(self.tr("Target language"), self.target_language_combo)
         self.general_section.set_content(general_widget)
-        self.general_section.set_expanded(True)
-        scroll_layout.addWidget(self.general_section)
+        self.general_section.set_expanded(False)
+        layout.addWidget(self.general_section)
 
         self.routes_section = CollapsibleSection(self.tr("Workflow Routing"))
         routes_widget = QWidget()
         routes_layout = QVBoxLayout(routes_widget)
+        routes_layout.setContentsMargins(0, 0, 0, 0)
         routes_layout.addWidget(create_tip_label(self.tr("Double-click a step to edit advanced step settings.")))
         self.routes_table = QTableWidget(0, 3)
         self.routes_table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
@@ -295,22 +291,21 @@ class WorkflowProfileEditorDialog(QDialog):
         self.routes_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.routes_table.setWordWrap(False)
         self.routes_table.verticalHeader().setDefaultSectionSize(44)
+        self.routes_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.routes_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.routes_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.routes_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.routes_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
         self.routes_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
         self.routes_table.horizontalHeader().setStretchLastSection(True)
-        self.routes_table.setColumnWidth(1, 420)
-        self.routes_table.setColumnWidth(2, 380)
+        self.routes_table.setColumnWidth(1, 480)
+        self.routes_table.setColumnWidth(2, 440)
         self.routes_table.cellDoubleClicked.connect(self._open_step_advanced_dialog)
         self._populate_routes()
-        routes_layout.addWidget(self.routes_table)
+        routes_layout.addWidget(self.routes_table, 1)
         self.routes_section.set_content(routes_widget)
         self.routes_section.set_expanded(True)
-        scroll_layout.addWidget(self.routes_section)
-        scroll_layout.addStretch()
-
-        scroll_area.setWidget(scroll_content)
-        layout.addWidget(scroll_area, 1)
+        layout.addWidget(self.routes_section, 1)
 
         footer = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
@@ -369,6 +364,13 @@ class WorkflowProfileEditorDialog(QDialog):
             self.routes_table.setCellWidget(row, 1, combo)
             self.routes_table.setCellWidget(row, 2, model_edit)
             self._rows.append(RouteRow(route=route, connection_combo=combo, model_edit=model_edit))
+        self._update_routes_table_height()
+
+    def _update_routes_table_height(self) -> None:
+        header_height = self.routes_table.horizontalHeader().height()
+        frame_height = self.routes_table.frameWidth() * 2
+        row_height = sum(self.routes_table.rowHeight(index) for index in range(self.routes_table.rowCount()))
+        self.routes_table.setFixedHeight(header_height + row_height + frame_height + 4)
 
     def _build_routes(self) -> list[WorkflowStepRoute]:
         routes: list[WorkflowStepRoute] = []
