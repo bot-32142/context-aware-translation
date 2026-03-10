@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QRect, Qt, Signal
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QRect, Qt, QTimer, Signal
 from PySide6.QtGui import QImage, QTextCursor
 from PySide6.QtWidgets import (
     QFrame,
@@ -48,6 +48,9 @@ class DocumentImagesView(QWidget):
         self._state: DocumentImagesState | None = None
         self._assets: list[ImageAssetState] = []
         self._current_index: int | None = None
+        self._refit_timer = QTimer(self)
+        self._refit_timer.setSingleShot(True)
+        self._refit_timer.timeout.connect(self._refit_viewers)
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -193,6 +196,12 @@ class DocumentImagesView(QWidget):
         if include_engine_tasks and self._state is not None and self._state.active_task_id is not None:
             self._cancel()
 
+    def activate_view(self) -> None:
+        self._render_current_asset()
+        self._update_action_buttons()
+        self._update_blocker_strip()
+        self._schedule_refit()
+
     def _apply_state(self, state: DocumentImagesState, *, previous_asset_id: str | None) -> None:
         self._state = state
         self._assets = list(state.assets)
@@ -294,6 +303,7 @@ class DocumentImagesView(QWidget):
             self.toggle_button.setEnabled(False)
             self.status_label.setText(self.tr("Pending"))
             self.status_label.setStyleSheet("color: #b54708; font-weight: 600;")
+        self._schedule_refit()
 
     def _load_reembedded_image(self, asset: ImageAssetState) -> bytes | None:
         if not asset.output_path:
@@ -344,6 +354,7 @@ class DocumentImagesView(QWidget):
             self.right_stack.setCurrentWidget(self.text_panel)
             self.right_label.setText(self.tr("Translated Text"))
             self.toggle_button.setText(self.tr("Show Reembedded"))
+        self._schedule_refit()
 
     def _render_progress(self, state: DocumentImagesState) -> None:
         if state.active_task_id is None:
@@ -551,6 +562,27 @@ class DocumentImagesView(QWidget):
             return
         self._set_message(result.message.text if result.message is not None else self.tr("Cancellation requested."))
         self.refresh()
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        self._schedule_refit()
+
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        self._schedule_refit()
+
+    def _schedule_refit(self) -> None:
+        if self.isVisible():
+            self._refit_viewers()
+        self._refit_timer.start(75)
+
+    def _refit_viewers(self) -> None:
+        if not self.isVisible():
+            return
+        if self.image_viewer.pixmap_item is not None:
+            self.image_viewer.fit_to_window()
+        if self.right_stack.currentWidget() is self.reembedded_viewer and self.reembedded_viewer.pixmap_item is not None:
+            self.reembedded_viewer.fit_to_window()
 
 
 __all__ = ["DocumentImagesView"]

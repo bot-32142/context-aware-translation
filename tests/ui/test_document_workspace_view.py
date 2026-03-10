@@ -24,6 +24,7 @@ from context_aware_translation.application.contracts.document import (
     DocumentSectionCard,
     DocumentTranslationState,
     DocumentWorkspaceState,
+    ImageAssetState,
     OCRPageState,
     TranslationUnitActionState,
     TranslationUnitKind,
@@ -46,6 +47,8 @@ from context_aware_translation.application.events import (
 from tests.application.fakes import FakeDocumentService, FakeTermsService, FakeWorkService
 
 try:
+    from PySide6.QtCore import QBuffer, QByteArray, QIODevice
+    from PySide6.QtGui import QColor, QImage
     from PySide6.QtWidgets import QApplication, QMessageBox
 
     HAS_PYSIDE6 = True
@@ -135,6 +138,16 @@ def _make_ocr_state() -> DocumentOCRState:
             run_pending=ActionState(enabled=True),
         ),
     )
+
+
+def _png(width: int = 200, height: int = 200) -> bytes:
+    image = QImage(width, height, QImage.Format.Format_RGBA8888)
+    image.fill(QColor("white"))
+    payload = QByteArray()
+    buffer = QBuffer(payload)
+    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    image.save(buffer, "PNG")
+    return bytes(payload)
 
 
 def _make_translation_state() -> DocumentTranslationState:
@@ -359,5 +372,42 @@ def test_document_workspace_export_tab_runs_document_service():
         assert request.options["preserve_structure"] is True
         assert not export_tab.result_label.isHidden()
         assert export_tab.result_label.text() == "Export complete."
+    finally:
+        view.cleanup()
+
+
+def test_document_workspace_images_tab_refits_when_activated():
+    view, _bus, document_service, _terms_service = _make_view()
+    image_bytes = _png()
+    document_service.images = DocumentImagesState(
+        workspace=_make_workspace_state().model_copy(update={"active_tab": DocumentSection.IMAGES}),
+        assets=[
+            document_service.images.assets[0].model_copy(update={"source_id": 101})
+            if document_service.images.assets
+            else ImageAssetState(
+                asset_id="asset-1",
+                label="Image 1",
+                status=SurfaceStatus.READY,
+                source_id=101,
+                translated_text="hello",
+                can_run=True,
+            )
+        ],
+    )
+    document_service.ocr_page_images = {101: image_bytes}
+    try:
+        view.resize(1400, 900)
+        view.show()
+        QApplication.processEvents()
+        view.refresh()
+        QApplication.processEvents()
+
+        view.show_section(DocumentSection.IMAGES)
+        QApplication.processEvents()
+        QApplication.processEvents()
+
+        images_tab = view.tab_widget.currentWidget()
+        assert images_tab is not None
+        assert images_tab.image_viewer.transform().m11() > 1.0
     finally:
         view.cleanup()

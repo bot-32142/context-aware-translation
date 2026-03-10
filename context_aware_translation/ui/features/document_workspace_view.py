@@ -578,6 +578,7 @@ class DocumentWorkspaceView(QWidget):
         layout.addWidget(self.tip_label)
 
         self.tab_widget = QTabWidget()
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(self.tab_widget, 1)
 
     def refresh(self) -> None:
@@ -641,6 +642,7 @@ class DocumentWorkspaceView(QWidget):
         index = self._tab_indexes.get(section)
         if index is not None:
             self.tab_widget.setCurrentIndex(index)
+            self._activate_current_tab()
 
     def cleanup(self) -> None:
         self._event_bridge.close()
@@ -664,6 +666,14 @@ class DocumentWorkspaceView(QWidget):
         current_widget = self.tab_widget.currentWidget()
         if current_widget is not None and hasattr(current_widget, "request_cancel_running_operations"):
             current_widget.request_cancel_running_operations(include_engine_tasks=include_engine_tasks)
+
+    def _on_tab_changed(self, _index: int) -> None:
+        self._activate_current_tab()
+
+    def _activate_current_tab(self) -> None:
+        current_widget = self.tab_widget.currentWidget()
+        if current_widget is not None and hasattr(current_widget, "activate_view"):
+            current_widget.activate_view()
 
     def _on_document_invalidated(self, event: DocumentInvalidatedEvent) -> None:
         if event.project_id not in {None, self._project_id}:
