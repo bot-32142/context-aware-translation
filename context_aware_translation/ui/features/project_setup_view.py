@@ -81,15 +81,20 @@ class ProjectSetupView(QWidget):
         layout.addWidget(self.blocker_label)
 
         selector_group = QGroupBox(self.tr("Workflow profile"))
+        selector_group.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
         selector_layout = QVBoxLayout(selector_group)
         row = QHBoxLayout()
         self.shared_profile_combo = QComboBox()
+        self.shared_profile_combo.setMinimumWidth(420)
+        self.shared_profile_combo.setMaximumWidth(560)
         self.shared_profile_combo.currentIndexChanged.connect(self._on_shared_profile_changed)
-        row.addWidget(self.shared_profile_combo, 1)
+        row.addWidget(self.shared_profile_combo)
+        row.addStretch()
         selector_layout.addLayout(row)
-        layout.addWidget(selector_group)
+        layout.addWidget(selector_group, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
 
         self.custom_profile_group = QGroupBox(self.tr("Custom profile"))
+        self.custom_profile_group.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
         custom_layout = QVBoxLayout(self.custom_profile_group)
         self.custom_profile_label = create_tip_label("")
         custom_layout.addWidget(self.custom_profile_label)
@@ -106,7 +111,7 @@ class ProjectSetupView(QWidget):
         self.routes_table = self.routes_editor.table
         self._custom_rows = self.routes_editor.rows
         custom_layout.addWidget(self.routes_editor, 0, Qt.AlignmentFlag.AlignLeft)
-        layout.addWidget(self.custom_profile_group)
+        layout.addWidget(self.custom_profile_group, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
 
         actions_layout = QHBoxLayout()
         self.open_app_setup_button = QPushButton(self.tr("Open App Setup"))
@@ -114,8 +119,8 @@ class ProjectSetupView(QWidget):
         self.save_button = QPushButton(self.tr("Save"))
         self.save_button.clicked.connect(self._save)
         actions_layout.addWidget(self.open_app_setup_button)
-        actions_layout.addStretch()
         actions_layout.addWidget(self.save_button)
+        actions_layout.addStretch()
         layout.addLayout(actions_layout)
         layout.addStretch()
 

@@ -42,6 +42,9 @@ from context_aware_translation.application.contracts.app_setup import (
     SetupWizardRequest,
     SetupWizardState,
     WorkflowProfileDetail,
+    WorkflowProfileKind,
+    WorkflowStepId,
+    WorkflowStepRoute,
 )
 from context_aware_translation.application.contracts.common import (
     CapabilityCode,
@@ -155,16 +158,20 @@ class ConnectionDraftForm(QWidget):
         advanced_form = QFormLayout(advanced_widget)
         self.description_edit = QTextEdit()
         self.description_edit.setMaximumHeight(60)
+        self.description_edit.setMinimumWidth(440)
         self.base_url_edit = QLineEdit()
         self.base_url_edit.setPlaceholderText(self.tr("Base URL"))
+        self.base_url_edit.setMinimumWidth(440)
         self.default_model_edit = QLineEdit()
         self.default_model_edit.setPlaceholderText(self.tr("Default model"))
+        self.default_model_edit.setMinimumWidth(440)
         self.temperature_spin = QDoubleSpinBox()
         self.temperature_spin.setRange(0.0, 2.0)
         self.temperature_spin.setSingleStep(0.1)
         self.temperature_spin.setValue(0.0)
         self.custom_parameters_edit = QTextEdit()
         self.custom_parameters_edit.setMaximumHeight(90)
+        self.custom_parameters_edit.setMinimumWidth(440)
         self.custom_parameters_edit.setPlaceholderText('{"reasoning_effort": "none"}')
         self.advanced_note = create_tip_label(
             self.tr(
@@ -326,8 +333,8 @@ class ConnectionEditorDialog(QDialog):
         self._test_callback = test_callback
         self._reset_tokens_callback = reset_tokens_callback
         self.setWindowTitle(self.tr("Connection"))
-        self.setMinimumWidth(460)
-        self.resize(520, 300)
+        self.setMinimumWidth(620)
+        self.resize(700, 300)
         self.form = ConnectionDraftForm(self)
         if draft is not None:
             self.form.set_draft(draft)
@@ -408,6 +415,9 @@ class ConnectionEditorDialog(QDialog):
         QTimer.singleShot(220, self._resize_to_content)
 
     def _resize_to_content(self) -> None:
+        is_advanced = self.form.tabs.currentIndex() == 0 and self.form.advanced_section.is_expanded()
+        target_width = 860 if is_advanced else 700
+        self.resize(max(self.width(), target_width), self.height())
         target_height = min(max(self.sizeHint().height() + 24, 300), 620)
         self.resize(self.width(), target_height)
 
@@ -654,6 +664,8 @@ class SetupWizardDialog(QDialog):
 
 
 class AppSetupView(QWidget):
+    _TABLE_MAX_VISIBLE_ROWS = 8
+
     def __init__(self, service: AppSetupService, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._service = service
@@ -691,6 +703,7 @@ class AppSetupView(QWidget):
         connections_tab_layout.addLayout(connections_toolbar)
 
         self.connections_group = QGroupBox(self.tr("Connections"))
+        self.connections_group.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
         connections_layout = QVBoxLayout(self.connections_group)
         self.connections_table = QTableWidget(0, 5)
         self.connections_table.setHorizontalHeaderLabels(
@@ -700,7 +713,7 @@ class AppSetupView(QWidget):
         self.connections_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.connections_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.connections_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.connections_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.connections_table.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         self.connections_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.connections_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.connections_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
@@ -711,14 +724,22 @@ class AppSetupView(QWidget):
         self.connections_table.itemSelectionChanged.connect(self._update_connection_buttons)
         self.connections_table.cellDoubleClicked.connect(self._on_connection_double_clicked)
         connections_layout.addWidget(self.connections_table)
-        connections_tab_layout.addWidget(self.connections_group, 1)
+        connections_tab_layout.addWidget(self.connections_group, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        connections_tab_layout.addStretch()
 
         self.profiles_group = QGroupBox(self.tr("Shared workflow profiles"))
+        self.profiles_group.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
         profiles_layout = QVBoxLayout(self.profiles_group)
         profiles_toolbar = QHBoxLayout()
+        self.add_profile_button = QPushButton(self.tr("Add Profile"))
+        self.add_profile_button.clicked.connect(self._on_add_profile)
+        profiles_toolbar.addWidget(self.add_profile_button)
         self.duplicate_profile_button = QPushButton(self.tr("Duplicate"))
         self.duplicate_profile_button.clicked.connect(self._on_duplicate_profile)
         profiles_toolbar.addWidget(self.duplicate_profile_button)
+        self.set_default_profile_button = QPushButton(self.tr("Set Default"))
+        self.set_default_profile_button.clicked.connect(self._on_set_default_profile)
+        profiles_toolbar.addWidget(self.set_default_profile_button)
         self.delete_profile_button = QPushButton(self.tr("Delete"))
         self.delete_profile_button.clicked.connect(self._on_delete_profile)
         profiles_toolbar.addWidget(self.delete_profile_button)
@@ -730,7 +751,7 @@ class AppSetupView(QWidget):
         self.profiles_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.profiles_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.profiles_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.profiles_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.profiles_table.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         self.profiles_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
         self.profiles_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
         self.profiles_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
@@ -742,7 +763,8 @@ class AppSetupView(QWidget):
 
         self.profiles_tab = QWidget()
         profiles_tab_layout = QVBoxLayout(self.profiles_tab)
-        profiles_tab_layout.addWidget(self.profiles_group, 1)
+        profiles_tab_layout.addWidget(self.profiles_group, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        profiles_tab_layout.addStretch()
 
         self.setup_tabs.addTab(self.connections_tab, self.tr("Connections"))
         self.setup_tabs.addTab(self.profiles_tab, self.tr("Workflow Profiles"))
@@ -779,7 +801,9 @@ class AppSetupView(QWidget):
         )
         self.delete_connection_button.setText(self.tr("Delete"))
         self.profiles_group.setTitle(self.tr("Shared workflow profiles"))
+        self.add_profile_button.setText(self.tr("Add Profile"))
         self.duplicate_profile_button.setText(self.tr("Duplicate"))
+        self.set_default_profile_button.setText(self.tr("Set Default"))
         self.delete_profile_button.setText(self.tr("Delete"))
         self.profiles_table.setHorizontalHeaderLabels([self.tr("Name"), self.tr("Target language"), self.tr("Default")])
         if self._state is not None:
@@ -803,7 +827,10 @@ class AppSetupView(QWidget):
             self._set_table_item(self.connections_table, row, 2, connection.status.value.replace("_", " ").title())
             self._set_table_item(self.connections_table, row, 3, connection.default_model or "")
             self._set_table_item(self.connections_table, row, 4, connection.base_url or "")
+        self.connections_table.resizeColumnsToContents()
         self.connections_table.resizeRowsToContents()
+        self._fit_table_height(self.connections_table)
+        self._fit_table_width(self.connections_table)
 
     def _populate_profiles(self, state: AppSetupState) -> None:
         self.profiles_table.setRowCount(0)
@@ -813,7 +840,10 @@ class AppSetupView(QWidget):
             self._set_table_item(self.profiles_table, row, 0, profile.name, profile.profile_id)
             self._set_table_item(self.profiles_table, row, 1, profile.target_language)
             self._set_table_item(self.profiles_table, row, 2, self.tr("Yes") if profile.is_default else "")
+        self.profiles_table.resizeColumnsToContents()
         self.profiles_table.resizeRowsToContents()
+        self._fit_table_height(self.profiles_table)
+        self._fit_table_width(self.profiles_table)
 
         selected_id = self._preferred_profile_id(state)
         if selected_id:
@@ -862,8 +892,12 @@ class AppSetupView(QWidget):
         self.delete_connection_button.setEnabled(selected and not managed)
 
     def _update_profile_buttons(self) -> None:
-        selected = self._selected_profile() is not None
+        has_connections = bool(self._state and self._state.connections)
+        selected_profile = self._selected_profile()
+        selected = selected_profile is not None
+        self.add_profile_button.setEnabled(has_connections)
         self.duplicate_profile_button.setEnabled(selected)
+        self.set_default_profile_button.setEnabled(selected and not bool(selected_profile and selected_profile.is_default))
         self.delete_profile_button.setEnabled(selected)
 
     def _on_run_wizard(self) -> None:
@@ -932,22 +966,27 @@ class AppSetupView(QWidget):
         self._service.duplicate_connection(connection.connection_id)
         self.refresh()
 
+    def _on_add_profile(self) -> None:
+        if self._state is None or not self._state.connections:
+            return
+        dialog = WorkflowProfileEditorDialog(
+            profile=self._new_profile_template(),
+            connection_choices=self._connection_choices(),
+            allow_name_edit=True,
+            parent=self,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self._service.save_workflow_profile(SaveWorkflowProfileRequest(profile=dialog.profile()))
+        self.refresh()
+
     def _on_edit_profile(self) -> None:
         profile = self._selected_profile()
         if profile is None or self._state is None:
             return
         dialog = WorkflowProfileEditorDialog(
             profile=profile,
-            connection_choices=[
-                ConnectionChoice(
-                    connection_id=connection.connection_id,
-                    label=connection.display_name,
-                    default_model=connection.default_model,
-                    provider=connection.provider.value,
-                    base_url=connection.base_url,
-                )
-                for connection in self._state.connections
-            ],
+            connection_choices=self._connection_choices(),
             allow_name_edit=True,
             parent=self,
         )
@@ -987,6 +1026,18 @@ class AppSetupView(QWidget):
         self._service.duplicate_workflow_profile(profile.profile_id)
         self.refresh()
 
+    def _on_set_default_profile(self) -> None:
+        profile = self._selected_profile()
+        if profile is None:
+            return
+        self._service.save_workflow_profile(
+            SaveWorkflowProfileRequest(
+                profile=profile.model_copy(update={"is_default": True}),
+                set_as_default=True,
+            )
+        )
+        self.refresh()
+
     def _on_profile_double_clicked(self, _row: int, _column: int) -> None:
         self._on_edit_profile()
 
@@ -1005,6 +1056,65 @@ class AppSetupView(QWidget):
         updated = self._service.reset_connection_tokens(connection_id)
         self.refresh()
         return updated
+
+    def _connection_choices(self) -> list[ConnectionChoice]:
+        if self._state is None:
+            return []
+        return [
+            ConnectionChoice(
+                connection_id=connection.connection_id,
+                label=connection.display_name,
+                default_model=connection.default_model,
+                provider=connection.provider.value,
+                base_url=connection.base_url,
+            )
+            for connection in self._state.connections
+        ]
+
+    def _new_profile_template(self) -> WorkflowProfileDetail:
+        assert self._state is not None
+        base_profile = self._selected_profile() or (self._state.shared_profiles[0] if self._state.shared_profiles else None)
+        if base_profile is not None:
+            return base_profile.model_copy(
+                update={
+                    "profile_id": "__new__",
+                    "name": self.tr("New Workflow Profile"),
+                    "kind": WorkflowProfileKind.SHARED,
+                    "is_default": False,
+                }
+            )
+
+        first_connection = self._state.connections[0]
+        route_specs = (
+            (WorkflowStepId.EXTRACTOR, "Extractor"),
+            (WorkflowStepId.SUMMARIZER, "Summarizer"),
+            (WorkflowStepId.GLOSSARY_TRANSLATOR, "Glossary translator"),
+            (WorkflowStepId.TRANSLATOR, "Translator"),
+            (WorkflowStepId.REVIEWER, "Reviewer"),
+            (WorkflowStepId.OCR, "OCR"),
+            (WorkflowStepId.IMAGE_REEMBEDDING, "Image reembedding"),
+            (WorkflowStepId.MANGA_TRANSLATOR, "Manga translator"),
+            (WorkflowStepId.TRANSLATOR_BATCH, "Translator batch"),
+        )
+        routes = [
+            WorkflowStepRoute(
+                step_id=step_id,
+                step_label=label,
+                connection_id=(first_connection.connection_id if step_id is not WorkflowStepId.TRANSLATOR_BATCH else None),
+                connection_label=(first_connection.display_name if step_id is not WorkflowStepId.TRANSLATOR_BATCH else None),
+                model=(first_connection.default_model if step_id is not WorkflowStepId.TRANSLATOR_BATCH else None),
+                step_config={},
+            )
+            for step_id, label in route_specs
+        ]
+        return WorkflowProfileDetail(
+            profile_id="__new__",
+            name=self.tr("New Workflow Profile"),
+            kind=WorkflowProfileKind.SHARED,
+            target_language="English",
+            routes=routes,
+            is_default=False,
+        )
 
     def _show_test_result(self, result: ConnectionTestResult) -> None:
         lines = [result.connection_label]
@@ -1048,3 +1158,28 @@ class AppSetupView(QWidget):
         return self.tr(
             "App Setup manages reusable connections and shared workflow profiles. The wizard creates a concrete shared workflow profile using the existing step-based config system."
         )
+
+    def _fit_table_height(self, table: QTableWidget) -> None:
+        header_height = table.horizontalHeader().height()
+        frame_height = table.frameWidth() * 2
+        row_count = table.rowCount()
+        if row_count == 0:
+            table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            table.setFixedHeight(header_height + frame_height + 8)
+            return
+        row_heights = [table.rowHeight(index) for index in range(row_count)]
+        visible_rows = min(row_count, self._TABLE_MAX_VISIBLE_ROWS)
+        visible_height = sum(row_heights[:visible_rows])
+        table.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            if row_count <= self._TABLE_MAX_VISIBLE_ROWS
+            else Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        table.setFixedHeight(header_height + visible_height + frame_height + 8)
+
+    def _fit_table_width(self, table: QTableWidget) -> None:
+        total_width = table.verticalHeader().width() + table.frameWidth() * 2 + 6
+        for column in range(table.columnCount()):
+            total_width += table.columnWidth(column)
+        table.setMinimumWidth(total_width)
+        table.setMaximumWidth(total_width)

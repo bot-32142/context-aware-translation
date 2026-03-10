@@ -520,7 +520,7 @@ def test_connection_editor_dialog_uses_scrollable_form_layout():
     scroll_areas = dialog.findChildren(QScrollArea)
     assert scroll_areas
     assert dialog.form.tabs.count() == 2
-    assert dialog.width() <= 520
+    assert 620 <= dialog.width() <= 860
     assert dialog.height() <= 360
 
 
