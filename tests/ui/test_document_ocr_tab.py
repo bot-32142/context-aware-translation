@@ -191,3 +191,74 @@ def test_document_ocr_tab_can_cancel_active_task():
         assert cancel_request.task_id == "ocr-task-1"
     finally:
         view.deleteLater()
+
+
+def test_document_ocr_tab_uses_old_compact_navigation_and_boundary_enablement():
+    from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
+
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        ocr=DocumentOCRState(
+            workspace=_workspace_state(),
+            pages=[
+                OCRPageState(source_id=101, page_number=1, total_pages=2, status=SurfaceStatus.DONE),
+                OCRPageState(source_id=102, page_number=2, total_pages=2, status=SurfaceStatus.READY),
+            ],
+            current_page_index=0,
+            actions=DocumentOCRActions(
+                save={"enabled": True}, run_current={"enabled": True}, run_pending={"enabled": True}
+            ),
+        ),
+        ocr_page_images={101: _png_1x1(), 102: _png_1x1()},
+    )
+    view = DocumentOCRTab(service, "proj-1", 4)
+    try:
+        view.refresh()
+        assert view.prev_button.text() == "<"
+        assert view.next_button.text() == ">"
+        assert view.first_button.isEnabled() is False
+        assert view.prev_button.isEnabled() is False
+        assert view.next_button.isEnabled() is True
+        assert view.last_button.isEnabled() is True
+        assert view.page_status_label.text() == "OCR Done"
+
+        view._go_last()
+        assert view.first_button.isEnabled() is True
+        assert view.prev_button.isEnabled() is True
+        assert view.next_button.isEnabled() is False
+        assert view.last_button.isEnabled() is False
+        assert view.page_status_label.text() == "Pending OCR"
+    finally:
+        view.deleteLater()
+
+
+def test_document_ocr_tab_disables_navigation_and_actions_when_no_pages():
+    from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
+
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        ocr=DocumentOCRState(
+            workspace=_workspace_state(),
+            pages=[],
+            current_page_index=None,
+            actions=DocumentOCRActions(
+                save={"enabled": True}, run_current={"enabled": True}, run_pending={"enabled": True}
+            ),
+        ),
+    )
+    view = DocumentOCRTab(service, "proj-1", 4)
+    try:
+        view.refresh()
+        assert view.empty_label.isHidden() is False
+        assert view.first_button.isEnabled() is False
+        assert view.prev_button.isEnabled() is False
+        assert view.next_button.isEnabled() is False
+        assert view.last_button.isEnabled() is False
+        assert view.go_to_label.isEnabled() is False
+        assert view.page_spinbox.isEnabled() is False
+        assert view.go_button.isEnabled() is False
+        assert view.save_button.isEnabled() is False
+        assert view.run_current_button.isEnabled() is False
+        assert view.run_pending_button.isEnabled() is False
+    finally:
+        view.deleteLater()

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -17,6 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from context_aware_translation.application.contracts.common import SurfaceStatus
 from context_aware_translation.application.contracts.document import (
     CancelOCRRequest,
     DocumentOCRState,
@@ -183,58 +183,63 @@ class DocumentOCRTab(QWidget):
         splitter.setSizes([480, 480])
         layout.addWidget(splitter, 1)
 
-        nav_row = QHBoxLayout()
+        toolbar_row = QHBoxLayout()
         self.first_button = QPushButton(self.tr("|<"), self)
+        self.first_button.setToolTip(self.tr("First page"))
         self.first_button.clicked.connect(self._go_first)
-        nav_row.addWidget(self.first_button)
+        toolbar_row.addWidget(self.first_button)
 
-        self.prev_button = QPushButton(self.tr("Previous"), self)
+        self.prev_button = QPushButton(self.tr("<"), self)
+        self.prev_button.setToolTip(self.tr("Previous page"))
         self.prev_button.clicked.connect(self._go_previous)
-        nav_row.addWidget(self.prev_button)
+        toolbar_row.addWidget(self.prev_button)
 
         self.page_label = QLabel(self.tr("Page 0 of 0"), self)
-        nav_row.addWidget(self.page_label)
+        toolbar_row.addWidget(self.page_label)
 
         self.page_status_label = QLabel(self)
-        nav_row.addWidget(self.page_status_label)
+        toolbar_row.addWidget(self.page_status_label)
 
-        self.next_button = QPushButton(self.tr("Next"), self)
+        self.next_button = QPushButton(self.tr(">"), self)
+        self.next_button.setToolTip(self.tr("Next page"))
         self.next_button.clicked.connect(self._go_next)
-        nav_row.addWidget(self.next_button)
+        toolbar_row.addWidget(self.next_button)
 
         self.last_button = QPushButton(self.tr(">|"), self)
+        self.last_button.setToolTip(self.tr("Last page"))
         self.last_button.clicked.connect(self._go_last)
-        nav_row.addWidget(self.last_button)
+        toolbar_row.addWidget(self.last_button)
 
-        self.page_combo = QComboBox(self)
-        self.page_combo.hide()
-        self.page_combo.currentIndexChanged.connect(self._on_page_changed)
-
+        self.go_to_label = QLabel(self.tr("Go to:"), self)
+        toolbar_row.addWidget(self.go_to_label)
         self.page_spinbox = QSpinBox(self)
         self.page_spinbox.setMinimum(1)
         self.page_spinbox.setMaximum(1)
         self.page_spinbox.setFixedWidth(64)
-        nav_row.addWidget(self.page_spinbox)
+        self.page_spinbox.setToolTip(self.tr("Enter page number"))
+        toolbar_row.addWidget(self.page_spinbox)
 
         self.go_button = QPushButton(self.tr("Go"), self)
+        self.go_button.setToolTip(self.tr("Jump to page"))
         self.go_button.clicked.connect(self._go_to_entered_page)
-        nav_row.addWidget(self.go_button)
-        layout.addLayout(nav_row)
+        toolbar_row.addWidget(self.go_button)
+        toolbar_row.addStretch(1)
 
-        action_row = QHBoxLayout()
-        self.save_button = QPushButton(self.tr("Save"), self)
-        self.save_button.clicked.connect(self._save_current)
-        action_row.addWidget(self.save_button)
-
-        self.run_current_button = QPushButton(self.tr("Run OCR for This Page"), self)
+        self.run_current_button = QPushButton(self.tr("(Re)run OCR (Current Page)"), self)
+        self.run_current_button.setToolTip(self.tr("Run or re-run OCR on the current page"))
         self.run_current_button.clicked.connect(self._run_current)
-        action_row.addWidget(self.run_current_button)
+        toolbar_row.addWidget(self.run_current_button)
 
         self.run_pending_button = QPushButton(self.tr("Run OCR for Pending Pages"), self)
+        self.run_pending_button.setToolTip(self.tr("Run OCR on all pending pages in this document"))
         self.run_pending_button.clicked.connect(self._run_pending)
-        action_row.addWidget(self.run_pending_button)
-        action_row.addStretch(1)
-        layout.addLayout(action_row)
+        toolbar_row.addWidget(self.run_pending_button)
+
+        self.save_button = QPushButton(self.tr("Save"), self)
+        self.save_button.setToolTip(self.tr("Save edited OCR text"))
+        self.save_button.clicked.connect(self._save_current)
+        toolbar_row.addWidget(self.save_button)
+        layout.addLayout(toolbar_row)
 
         self.message_label = QLabel(self)
         self.message_label.hide()
@@ -252,7 +257,7 @@ class DocumentOCRTab(QWidget):
     def refresh(self) -> None:
         current_source_id = self._current_page.source_id if self._current_page is not None else None
         self._state = self._service.get_ocr(self._project_id, self._document_id)
-        self._sync_page_combo(current_source_id=current_source_id)
+        self._sync_pages(current_source_id=current_source_id)
         self._apply_actions()
         self._apply_progress()
 
@@ -273,29 +278,20 @@ class DocumentOCRTab(QWidget):
             return None
         return self._state.pages[self._current_page_index]
 
-    def _sync_page_combo(self, *, current_source_id: int | None) -> None:
+    def _sync_pages(self, *, current_source_id: int | None) -> None:
         assert self._state is not None
         pages = self._state.pages
-        self.page_combo.blockSignals(True)
-        self.page_combo.clear()
-        for page in pages:
-            self.page_combo.addItem(self.tr("Page %1").replace("%1", str(page.page_number)), page.source_id)
-        self.page_combo.blockSignals(False)
-
         if not pages:
-            self._current_page_index = None
-            self.image_viewer.clear_image()
-            self.image_viewer.clear_bboxes()
-            self.text_edit.clear()
-            self.structured_list.clear()
-            self._right_stack.setCurrentWidget(self.text_edit)
-            self.page_label.setText(self.tr("Page 0 of 0"))
-            self.page_status_label.clear()
-            self.page_spinbox.setMaximum(1)
-            self.empty_label.show()
+            self._apply_empty_state()
             return
 
         self.empty_label.hide()
+        self.image_viewer.setEnabled(True)
+        self.text_edit.setEnabled(True)
+        self.structured_list.setEnabled(True)
+        self.go_to_label.setEnabled(True)
+        self.page_spinbox.setEnabled(True)
+        self.go_button.setEnabled(True)
         selected_index = 0
         if current_source_id is not None:
             for index, page in enumerate(pages):
@@ -307,6 +303,30 @@ class DocumentOCRTab(QWidget):
 
         self._set_current_page(selected_index)
 
+    def _apply_empty_state(self) -> None:
+        self._current_page_index = None
+        self.image_viewer.clear_image()
+        self.image_viewer.clear_bboxes()
+        self.image_viewer.setEnabled(False)
+        self.text_edit.clear()
+        self.text_edit.setEnabled(False)
+        self.structured_list.clear()
+        self.structured_list.setEnabled(False)
+        self._right_stack.setCurrentWidget(self.text_edit)
+        self.page_label.setText(self.tr("Page 0 of 0"))
+        self.page_status_label.clear()
+        self.page_status_label.setStyleSheet("")
+        self.page_spinbox.setMaximum(1)
+        self.page_spinbox.setValue(1)
+        self.go_to_label.setEnabled(False)
+        self.page_spinbox.setEnabled(False)
+        self.go_button.setEnabled(False)
+        self.first_button.setEnabled(False)
+        self.prev_button.setEnabled(False)
+        self.next_button.setEnabled(False)
+        self.last_button.setEnabled(False)
+        self.empty_label.show()
+
     def _set_current_page(self, index: int) -> None:
         if self._state is None or not self._state.pages:
             self._current_page_index = None
@@ -314,9 +334,6 @@ class DocumentOCRTab(QWidget):
         if index < 0 or index >= len(self._state.pages):
             index = 0
         self._current_page_index = index
-        self.page_combo.blockSignals(True)
-        self.page_combo.setCurrentIndex(index)
-        self.page_combo.blockSignals(False)
 
         page = self._state.pages[index]
         total_pages = len(self._state.pages)
@@ -327,7 +344,7 @@ class DocumentOCRTab(QWidget):
         self.prev_button.setEnabled(index > 0)
         self.next_button.setEnabled(index < len(self._state.pages) - 1)
         self.last_button.setEnabled(index < len(self._state.pages) - 1)
-        self.page_status_label.setText(page.status.value.replace("_", " ").title())
+        self._apply_page_status(page)
 
         try:
             image_bytes = self._service.get_ocr_page_image(self._project_id, self._document_id, page.source_id)
@@ -345,6 +362,21 @@ class DocumentOCRTab(QWidget):
             self.structured_list.clear()
             self.text_edit.setPlainText(page.extracted_text or "")
             self._right_stack.setCurrentWidget(self.text_edit)
+        self._apply_actions()
+
+    def _apply_page_status(self, page: OCRPageState) -> None:
+        if page.status is SurfaceStatus.DONE:
+            self.page_status_label.setText(self.tr("OCR Done"))
+            self.page_status_label.setStyleSheet("color: green; font-weight: bold;")
+        elif page.status is SurfaceStatus.RUNNING:
+            self.page_status_label.setText(self.tr("OCR Running"))
+            self.page_status_label.setStyleSheet("color: #2563eb; font-weight: bold;")
+        elif page.status is SurfaceStatus.FAILED:
+            self.page_status_label.setText(self.tr("OCR Failed"))
+            self.page_status_label.setStyleSheet("color: #d92d20; font-weight: bold;")
+        else:
+            self.page_status_label.setText(self.tr("Pending OCR"))
+            self.page_status_label.setStyleSheet("color: orange; font-weight: bold;")
 
     def _set_structured_page(self, page: OCRPageState) -> None:
         self.structured_list.set_elements(page.elements)
@@ -376,29 +408,33 @@ class DocumentOCRTab(QWidget):
         self.image_viewer.highlight_bbox(bbox_index)
 
     def _apply_actions(self) -> None:
-        if self._state is None:
+        page = self._current_page
+        has_pages = self._state is not None and bool(self._state.pages)
+        if self._state is None or not has_pages:
             self.save_button.setEnabled(False)
             self.run_current_button.setEnabled(False)
             self.run_pending_button.setEnabled(False)
             return
 
-        self.save_button.setEnabled(self._state.actions.save.enabled)
+        self.save_button.setEnabled(page is not None and self._state.actions.save.enabled)
         self.save_button.setToolTip(
-            self._state.actions.save.blocker.message if self._state.actions.save.blocker is not None else ""
+            self._state.actions.save.blocker.message
+            if self._state.actions.save.blocker is not None
+            else self.tr("Save edited OCR text")
         )
 
-        self.run_current_button.setEnabled(self._state.actions.run_current.enabled)
+        self.run_current_button.setEnabled(page is not None and self._state.actions.run_current.enabled)
         self.run_current_button.setToolTip(
             self._state.actions.run_current.blocker.message
             if self._state.actions.run_current.blocker is not None
-            else ""
+            else self.tr("Run or re-run OCR on the current page")
         )
 
         self.run_pending_button.setEnabled(self._state.actions.run_pending.enabled)
         self.run_pending_button.setToolTip(
             self._state.actions.run_pending.blocker.message
             if self._state.actions.run_pending.blocker is not None
-            else ""
+            else self.tr("Run OCR on all pending pages in this document")
         )
 
     def _apply_progress(self) -> None:
@@ -440,11 +476,6 @@ class DocumentOCRTab(QWidget):
         if self._state is None or not self._state.pages:
             return
         self._set_current_page(len(self._state.pages) - 1)
-
-    def _on_page_changed(self, index: int) -> None:
-        if self._state is None or not self._state.pages:
-            return
-        self._set_current_page(index)
 
     def _go_to_entered_page(self) -> None:
         if self._state is None or not self._state.pages:
@@ -500,7 +531,7 @@ class DocumentOCRTab(QWidget):
             return
 
         self._set_message(self.tr("OCR text saved."))
-        self._sync_page_combo(current_source_id=page.source_id)
+        self._sync_pages(current_source_id=page.source_id)
         self._apply_actions()
         self._apply_progress()
 

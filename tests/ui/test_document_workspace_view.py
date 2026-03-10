@@ -247,7 +247,7 @@ def test_document_workspace_ocr_tab_routes_save_and_run_actions():
         ocr_tab = view.tab_widget.currentWidget()
         assert ocr_tab is not None
         assert hasattr(ocr_tab, "save_button")
-        assert ocr_tab.page_combo.count() == 2
+        assert ocr_tab.page_spinbox.maximum() == 2
 
         ocr_tab.text_edit.setPlainText("edited\npage")
         ocr_tab.save_button.click()
