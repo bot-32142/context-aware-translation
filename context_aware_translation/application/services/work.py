@@ -215,7 +215,7 @@ class DefaultWorkService:
                     kind=DocumentRowActionKind.OPEN,
                     label="Open",
                     target=NavigationTarget(
-                        kind=NavigationTargetKind.DOCUMENT_OVERVIEW,
+                        kind=NavigationTargetKind.DOCUMENT_OCR,
                         project_id=project_id,
                         document_id=document_id,
                     ),

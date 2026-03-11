@@ -165,7 +165,7 @@ def test_setup_and_document_contracts_are_json_serializable() -> None:
             project=ProjectRef(project_id="proj-1", name="One Piece"),
             document=DocumentRef(document_id=4, order_index=4, label="04.png"),
             active_tab="translation",
-            available_tabs=["overview", "ocr", "terms", "translation", "images", "export"],
+            available_tabs=["ocr", "terms", "translation", "images", "export"],
         ),
         units=[
             TranslationUnitState(

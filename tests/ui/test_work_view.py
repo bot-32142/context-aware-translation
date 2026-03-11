@@ -261,11 +261,11 @@ def test_work_view_opens_document_workspace_for_row_target():
         view.cleanup()
 
 
-def test_work_view_routes_document_overview_to_first_real_document_tab():
+def test_work_view_routes_open_target_to_ocr_tab():
     action = DocumentRowAction(
         kind=DocumentRowActionKind.OPEN,
         label="Open",
-        target=NavigationTarget(kind=NavigationTargetKind.DOCUMENT_OVERVIEW, project_id="proj-1", document_id=4),
+        target=NavigationTarget(kind=NavigationTargetKind.DOCUMENT_OCR, project_id="proj-1", document_id=4),
     )
     view, _bus, _work_service, _document_service, _terms_service = _make_view(
         work_state=_make_workboard(action=action, summary="Open")
@@ -282,7 +282,7 @@ def test_work_view_refreshes_on_invalidation():
     first_action = DocumentRowAction(
         kind=DocumentRowActionKind.OPEN,
         label="Open",
-        target=NavigationTarget(kind=NavigationTargetKind.DOCUMENT_OVERVIEW, project_id="proj-1", document_id=4),
+        target=NavigationTarget(kind=NavigationTargetKind.DOCUMENT_OCR, project_id="proj-1", document_id=4),
     )
     second_action = DocumentRowAction(
         kind=DocumentRowActionKind.OPEN_TERMS,

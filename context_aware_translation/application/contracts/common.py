@@ -68,7 +68,6 @@ class NavigationTargetKind(StrEnum):
     WORK = "work"
     TERMS = "terms"
     QUEUE = "queue"
-    DOCUMENT_OVERVIEW = "document_overview"
     DOCUMENT_OCR = "document_ocr"
     DOCUMENT_TERMS = "document_terms"
     DOCUMENT_TRANSLATION = "document_translation"
@@ -77,7 +76,6 @@ class NavigationTargetKind(StrEnum):
 
 
 class DocumentSection(StrEnum):
-    OVERVIEW = "overview"
     OCR = "ocr"
     TERMS = "terms"
     TRANSLATION = "translation"

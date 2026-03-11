@@ -498,7 +498,6 @@ class MainWindow(QMainWindow):
                 shell.show_terms()
         elif target.kind in {
             NavigationTargetKind.WORK,
-            NavigationTargetKind.DOCUMENT_OVERVIEW,
             NavigationTargetKind.DOCUMENT_OCR,
             NavigationTargetKind.DOCUMENT_TERMS,
             NavigationTargetKind.DOCUMENT_TRANSLATION,
