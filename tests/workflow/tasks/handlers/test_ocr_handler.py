@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from context_aware_translation.storage.task_store import TaskRecord
+from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import (
     ClaimMode,
     NoDocuments,
@@ -345,9 +345,9 @@ def _make_deps_for_submit(
     fake_repo.get_document_sources_metadata.return_value = all_sources or []
 
     deps._patches = (
-        patch("context_aware_translation.storage.book_db.SQLiteBookDB", return_value=fake_db),
+        patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
         patch(
-            "context_aware_translation.storage.document_repository.DocumentRepository",
+            "context_aware_translation.storage.repositories.document_repository.DocumentRepository",
             return_value=fake_repo,
         ),
     )
@@ -544,9 +544,9 @@ def _make_deps_for_run(
     fake_repo.get_document_sources_metadata.return_value = all_sources or []
 
     deps._patches = (
-        patch("context_aware_translation.storage.book_db.SQLiteBookDB", return_value=fake_db),
+        patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
         patch(
-            "context_aware_translation.storage.document_repository.DocumentRepository",
+            "context_aware_translation.storage.repositories.document_repository.DocumentRepository",
             return_value=fake_repo,
         ),
     )

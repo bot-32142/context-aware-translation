@@ -12,7 +12,7 @@ from context_aware_translation.llm.session_trace import llm_session_scope
 from context_aware_translation.utils.llm_json_cleaner import clean_llm_response
 
 if TYPE_CHECKING:
-    from context_aware_translation.storage.book_db import TermRecord
+    from context_aware_translation.storage.schema.book_db import TermRecord
 
 logger = logging.getLogger(__name__)
 

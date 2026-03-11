@@ -11,7 +11,7 @@ from context_aware_translation.llm.image_generator import ImageBackend
 
 if TYPE_CHECKING:
     from context_aware_translation.storage.book import Book
-    from context_aware_translation.storage.registry_db import RegistryDB
+    from context_aware_translation.storage.schema.registry_db import RegistryDB
 
 T = TypeVar("T", bound="LLMConfig")
 

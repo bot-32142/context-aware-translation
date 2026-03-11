@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from unittest.mock import MagicMock, patch
 
-from context_aware_translation.storage.task_store import TaskRecord
+from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.handlers.glossary_translation import GlossaryTranslationHandler
 
 
@@ -48,8 +48,8 @@ def test_validate_submit_denied_when_only_ignored_terms(tmp_path):
     fake_term_repo.get_terms_to_translate.return_value = [ignored_term]
 
     with (
-        patch("context_aware_translation.storage.book_db.SQLiteBookDB", return_value=fake_db),
-        patch("context_aware_translation.storage.term_repository.TermRepository", return_value=fake_term_repo),
+        patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
+        patch("context_aware_translation.storage.repositories.term_repository.TermRepository", return_value=fake_term_repo),
     ):
         decision = handler.validate_submit("book-1", {}, deps)
 
@@ -70,8 +70,8 @@ def test_validate_submit_allowed_when_non_ignored_term_exists(tmp_path):
     fake_term_repo.get_terms_to_translate.return_value = [pending_term]
 
     with (
-        patch("context_aware_translation.storage.book_db.SQLiteBookDB", return_value=fake_db),
-        patch("context_aware_translation.storage.term_repository.TermRepository", return_value=fake_term_repo),
+        patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
+        patch("context_aware_translation.storage.repositories.term_repository.TermRepository", return_value=fake_term_repo),
     ):
         decision = handler.validate_submit("book-1", {}, deps)
 
@@ -92,8 +92,8 @@ def test_validate_run_denied_when_only_ignored_terms(tmp_path):
     fake_term_repo.get_terms_to_translate.return_value = [ignored_term]
 
     with (
-        patch("context_aware_translation.storage.book_db.SQLiteBookDB", return_value=fake_db),
-        patch("context_aware_translation.storage.term_repository.TermRepository", return_value=fake_term_repo),
+        patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
+        patch("context_aware_translation.storage.repositories.term_repository.TermRepository", return_value=fake_term_repo),
     ):
         decision = handler.validate_run(record, {}, deps)
 
@@ -115,8 +115,8 @@ def test_validate_run_allowed_when_non_ignored_term_exists(tmp_path):
     fake_term_repo.get_terms_to_translate.return_value = [pending_term]
 
     with (
-        patch("context_aware_translation.storage.book_db.SQLiteBookDB", return_value=fake_db),
-        patch("context_aware_translation.storage.term_repository.TermRepository", return_value=fake_term_repo),
+        patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
+        patch("context_aware_translation.storage.repositories.term_repository.TermRepository", return_value=fake_term_repo),
     ):
         decision = handler.validate_run(record, {}, deps)
 

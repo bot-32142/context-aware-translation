@@ -1,5 +1,5 @@
 from context_aware_translation.documents.manga_alignment import extract_ocr_text, list_nonempty_ocr_source_ids
-from context_aware_translation.storage.document_repository import DocumentRepository
+from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 
 
 class RepoImageFetcher:

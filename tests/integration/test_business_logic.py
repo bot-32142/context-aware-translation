@@ -14,9 +14,9 @@ from context_aware_translation.core.progress import (
     ProgressUpdate,
     WorkflowStep,
 )
-from context_aware_translation.storage.book_db import SQLiteBookDB, TermRecord
 from context_aware_translation.storage.config_profile import ConfigProfile
-from context_aware_translation.storage.term_repository import TermRepository
+from context_aware_translation.storage.repositories.term_repository import TermRepository
+from context_aware_translation.storage.schema.book_db import SQLiteBookDB, TermRecord
 
 
 class TestConfigSerialization:

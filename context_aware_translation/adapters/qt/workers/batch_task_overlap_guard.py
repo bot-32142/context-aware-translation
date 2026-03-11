@@ -7,7 +7,7 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from context_aware_translation.storage.task_store import TaskStore
+    from context_aware_translation.storage.repositories.task_store import TaskStore
 
 logger = logging.getLogger(__name__)
 

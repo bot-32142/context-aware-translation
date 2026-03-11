@@ -11,8 +11,8 @@ import pytest
 from context_aware_translation.config import TranslatorBatchConfig, TranslatorConfig
 from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.llm.batch_jobs.base import POLL_STATUS_COMPLETED, BatchPollResult, BatchSubmitResult
-from context_aware_translation.storage.llm_batch_store import LLMBatchStore
-from context_aware_translation.storage.task_store import TaskStore
+from context_aware_translation.storage.repositories.llm_batch_store import LLMBatchStore
+from context_aware_translation.storage.repositories.task_store import TaskStore
 from context_aware_translation.workflow.tasks.execution.batch_translation_executor import (
     BatchTranslationExecutor,
     prepare_payload_for_rerun,
@@ -731,7 +731,7 @@ async def test_run_task_marks_failed_on_non_transient_error(tmp_path):
 
 @pytest.mark.asyncio
 async def test_ensure_payload_prepared_uses_batch_model_with_fixed_temperature():
-    from context_aware_translation.storage.task_store import TaskRecord
+    from context_aware_translation.storage.repositories.task_store import TaskRecord
 
     task = TaskRecord(
         task_id="task-1",

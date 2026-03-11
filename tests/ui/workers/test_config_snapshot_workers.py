@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from context_aware_translation.storage.task_store import TaskRecord
+from context_aware_translation.storage.repositories.task_store import TaskRecord
 
 _VALID_SNAPSHOT = json.dumps({"snapshot_version": 1, "config": {"key": "value"}})
 

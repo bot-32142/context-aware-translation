@@ -19,7 +19,7 @@ from context_aware_translation.llm.batch_jobs.base import (
     BatchPollResult,
     BatchSubmitResult,
 )
-from context_aware_translation.storage.llm_batch_store import LLMBatchStore
+from context_aware_translation.storage.repositories.llm_batch_store import LLMBatchStore
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ from context_aware_translation.config import ExtractorConfig
 from context_aware_translation.core.models import KeyedContext, Term
 from context_aware_translation.llm.client import LLMClient
 from context_aware_translation.llm.extractor import extract_terms as llm_extract_terms
-from context_aware_translation.storage.book_db import ChunkRecord
+from context_aware_translation.storage.schema.book_db import ChunkRecord
 
 logger = logging.getLogger(__name__)
 

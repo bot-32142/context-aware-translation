@@ -12,15 +12,15 @@ from pathlib import Path
 import pytest
 
 from context_aware_translation.core.models import Term
-from context_aware_translation.storage.book_db import (
+from context_aware_translation.storage.repositories.term_repository import (
+    BatchUpdate,
+    TermRepository,
+)
+from context_aware_translation.storage.schema.book_db import (
     ChunkRecord,
     SQLiteBookDB,
     TermRecord,
     TranslationChunkRecord,
-)
-from context_aware_translation.storage.term_repository import (
-    BatchUpdate,
-    TermRepository,
 )
 
 # ============================================================================

@@ -145,7 +145,7 @@ if scopes_overlap(all_docs, some_docs):
 ### Key Dependencies
 
 **Internal:**
-- `context_aware_translation.storage.task_store` - TaskStore, TaskRecord persistence
+- `context_aware_translation.storage.repositories.task_store` - TaskStore, TaskRecord persistence
 - `context_aware_translation.storage.book_manager` - BookManager for config snapshots and document metadata
 - `context_aware_translation.workflow.ops` - Workflow operation modules for domain operations
 - `context_aware_translation.core.progress` - ProgressCallback, ProgressUpdate for progress reporting

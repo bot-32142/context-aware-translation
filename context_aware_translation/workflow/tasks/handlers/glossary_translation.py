@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import context_aware_translation.storage.book_db as book_db
-import context_aware_translation.storage.term_repository as term_repository
+import context_aware_translation.storage.repositories.term_repository as term_repository
+import context_aware_translation.storage.schema.book_db as book_db
 from context_aware_translation.adapters.qt.workers.glossary_translation_task_worker import GlossaryTranslationTaskWorker
 from context_aware_translation.workflow.tasks.claims import (
     ClaimArbiter,
@@ -30,7 +30,7 @@ from context_aware_translation.workflow.tasks.models import (
 )
 
 if TYPE_CHECKING:
-    from context_aware_translation.storage.task_store import TaskRecord
+    from context_aware_translation.storage.repositories.task_store import TaskRecord
     from context_aware_translation.workflow.tasks.models import ActionSnapshot
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 

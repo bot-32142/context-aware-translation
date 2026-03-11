@@ -9,7 +9,7 @@ from context_aware_translation.application.composition import build_application_
 from context_aware_translation.application.contracts.document import RunDocumentExportRequest
 from context_aware_translation.application.contracts.projects import CreateProjectRequest
 from context_aware_translation.application.contracts.work import PrepareExportRequest, RunExportRequest
-from context_aware_translation.storage.book_db import TranslationChunkRecord
+from context_aware_translation.storage.schema.book_db import TranslationChunkRecord
 
 
 def _ensure_qt_app() -> QCoreApplication:

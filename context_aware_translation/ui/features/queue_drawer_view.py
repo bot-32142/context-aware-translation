@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.application.contracts.common import (
     QueueActionKind,
     QueueStatus,
@@ -21,7 +22,6 @@ from context_aware_translation.application.contracts.queue import QueueActionReq
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.events import ApplicationEventSubscriber, QueueChangedEvent
 from context_aware_translation.application.services.queue import QueueService
-from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.ui.tips import create_tip_label
 
 _STATUS_LABELS: dict[QueueStatus, str] = {

@@ -120,7 +120,7 @@ if doc.requires_ocr_config:
 ### Internal
 - `context_aware_translation.documents.base` - abstract Document class
 - `context_aware_translation.documents.content.*` - OCR content models
-- `context_aware_translation.storage.document_repository` - document CRUD
+- `context_aware_translation.storage.repositories.document_repository` - document CRUD
 - `context_aware_translation.llm.ocr` - LLM-based OCR
 - `context_aware_translation.llm.manga_ocr` - special OCR for manga
 - `context_aware_translation.utils.chunking` - text chunking

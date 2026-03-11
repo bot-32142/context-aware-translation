@@ -157,9 +157,9 @@ Each handler implements `TaskTypeHandler` protocol:
 - `context_aware_translation.core.cancellation` - cancellation token pattern
 - `context_aware_translation.documents` - document type loading and exporting
 - `context_aware_translation.llm.client` - LLM operations
-- `context_aware_translation.storage.book_db` - chunk and term persistence
-- `context_aware_translation.storage.document_repository` - document metadata and sources
-- `context_aware_translation.storage.term_repository` - term deduplication and lookup
+- `context_aware_translation.storage.schema.book_db` - chunk and term persistence
+- `context_aware_translation.storage.repositories.document_repository` - document metadata and sources
+- `context_aware_translation.storage.repositories.term_repository` - term deduplication and lookup
 - `context_aware_translation.config` - configuration models
 
 ### External

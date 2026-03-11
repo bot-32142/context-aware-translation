@@ -12,7 +12,7 @@ from context_aware_translation.workflow.tasks.handlers.base import TaskTypeHandl
 from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, ActionSnapshot, Decision, TaskAction
 
 if TYPE_CHECKING:
-    from context_aware_translation.storage.task_store import TaskRecord, TaskStore
+    from context_aware_translation.storage.repositories.task_store import TaskRecord, TaskStore
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
 # TTL in seconds for the config snapshot viability probe cache (per book)
@@ -176,7 +176,7 @@ class EngineCore:
         document_ids_json: str | None,
         payload_json: str | None,
     ) -> TaskRecord:
-        from context_aware_translation.storage.task_store import TaskRecord
+        from context_aware_translation.storage.repositories.task_store import TaskRecord
 
         now = time.time()
         return TaskRecord(

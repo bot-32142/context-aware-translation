@@ -8,7 +8,7 @@ from typing import Any
 
 from context_aware_translation.core.cancellation import raise_if_cancelled
 from context_aware_translation.core.translation_strategies import DescriptionSummarizer
-from context_aware_translation.storage.context_tree_db import ContextTreeDB
+from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 
 
 class SummaryNode:

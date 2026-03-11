@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Protocol
 # field type annotations are evaluated eagerly by dataclasses and must
 # resolve to real classes at import time.
 from context_aware_translation.storage.book_manager import BookManager
-from context_aware_translation.storage.task_store import TaskStore
+from context_aware_translation.storage.repositories.task_store import TaskStore
 
 if TYPE_CHECKING:
     from context_aware_translation.workflow.runtime import WorkflowContext

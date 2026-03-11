@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 
-from context_aware_translation.storage.task_store import TaskRecord
+from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import (
     AllDocuments,
     ClaimMode,

@@ -223,8 +223,8 @@ def _make_epub_with_inline_toc_nav_label(tmp_path: Path) -> Path:
 
 def _setup_repo(tmp_path: Path):
     """Create a DocumentRepository backed by a temporary SQLite DB."""
-    from context_aware_translation.storage.book_db import SQLiteBookDB
-    from context_aware_translation.storage.document_repository import DocumentRepository
+    from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+    from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
     db = SQLiteBookDB(tmp_path / "book.db")
     return DocumentRepository(db)

@@ -11,7 +11,7 @@ from typing import Any
 
 from context_aware_translation.core.cancellation import raise_if_cancelled
 from context_aware_translation.documents.base import get_document_classes
-from context_aware_translation.storage.document_repository import DocumentRepository
+from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 
 
 def deduplicate_paths(paths: list[Path]) -> list[Path]:

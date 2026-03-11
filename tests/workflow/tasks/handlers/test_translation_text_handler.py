@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 
-from context_aware_translation.storage.task_store import TaskRecord
+from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import (
     AllDocuments,
     ClaimMode,
@@ -247,9 +247,9 @@ def _deps_with_documents(tmp_path, documents, ocr_sources_by_doc_id: dict | None
         (d for d in documents if d["document_id"] == doc_id), None
     )
     deps._patches = (
-        patch("context_aware_translation.storage.book_db.SQLiteBookDB", return_value=fake_db),
+        patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
         patch(
-            "context_aware_translation.storage.document_repository.DocumentRepository",
+            "context_aware_translation.storage.repositories.document_repository.DocumentRepository",
             return_value=fake_repo,
         ),
     )

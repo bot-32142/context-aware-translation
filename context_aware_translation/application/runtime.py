@@ -52,13 +52,13 @@ from context_aware_translation.application.events import (
 )
 from context_aware_translation.config import Config
 from context_aware_translation.storage.book import Book
-from context_aware_translation.storage.book_db import SQLiteBookDB
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.config_profile import ConfigProfile
-from context_aware_translation.storage.document_repository import DocumentRepository
 from context_aware_translation.storage.endpoint_profile import EndpointProfile
-from context_aware_translation.storage.task_store import TaskRecord, TaskStore
-from context_aware_translation.storage.term_repository import TermRepository
+from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+from context_aware_translation.storage.repositories.task_store import TaskRecord, TaskStore
+from context_aware_translation.storage.repositories.term_repository import TermRepository
+from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 from context_aware_translation.workflow.tasks.models import TaskAction
 
 if TYPE_CHECKING:

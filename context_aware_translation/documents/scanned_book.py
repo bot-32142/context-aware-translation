@@ -22,7 +22,7 @@ from context_aware_translation.utils.pandoc_export import export_pandoc
 if TYPE_CHECKING:
     from context_aware_translation.config import ImageReembeddingConfig, OCRConfig
     from context_aware_translation.llm.client import LLMClient
-    from context_aware_translation.storage.document_repository import DocumentRepository
+    from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 
 
 class ScannedBookDocument(Document):

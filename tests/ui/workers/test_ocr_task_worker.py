@@ -328,8 +328,8 @@ def test_run_ocr_for_manga_uses_manga_ocr_pipeline(monkeypatch: pytest.MonkeyPat
     """A manga OCR task must execute MangaDocument.process_ocr -> two-pass manga OCR."""
     from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
     from context_aware_translation.config import OCRConfig
-    from context_aware_translation.storage.book_db import SQLiteBookDB
-    from context_aware_translation.storage.document_repository import DocumentRepository
+    from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+    from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
     db = SQLiteBookDB(tmp_path / "book.db")
     repo = DocumentRepository(db)

@@ -823,7 +823,7 @@ def test_database_rollback_on_failure(tmp_path: Path):
     sqlite_path = tmp_path / "test.db"
 
     # Create a mock database that fails on commit
-    from context_aware_translation.storage.context_tree_db import ContextTreeDB
+    from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 
     class FailingDB(ContextTreeDB):
         def commit(self):
@@ -1122,7 +1122,7 @@ def test_initialization_empty_database(tmp_path: Path):
     sqlite_path = tmp_path / "test.db"
 
     # Create an empty database file
-    from context_aware_translation.storage.context_tree_db import ContextTreeDB
+    from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 
     db = ContextTreeDB(sqlite_path)
     db.close()

@@ -137,7 +137,7 @@ except Exception as e:
 
 ### Internal
 - `context_aware_translation.config` - `TranslatorBatchConfig` for batch parameters
-- `context_aware_translation.storage.llm_batch_store` - `LLMBatchStore` for persistence
+- `context_aware_translation.storage.repositories.llm_batch_store` - `LLMBatchStore` for persistence
 
 ### External
 - `google-genai` (for Gemini gateway) - Google Gemini batch API client

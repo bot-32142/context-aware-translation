@@ -13,16 +13,16 @@ from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.core.progress import ProgressCallback
 from context_aware_translation.llm.batch_jobs import GeminiBatchJobGateway
 from context_aware_translation.llm.batch_jobs.base import POLL_STATUS_COMPLETED
-from context_aware_translation.storage.llm_batch_store import (
+from context_aware_translation.storage.repositories.llm_batch_store import (
     STATUS_COMPLETED as LLM_BATCH_STATUS_COMPLETED,
 )
-from context_aware_translation.storage.llm_batch_store import (
+from context_aware_translation.storage.repositories.llm_batch_store import (
     STATUS_FAILED as LLM_BATCH_STATUS_FAILED,
 )
-from context_aware_translation.storage.llm_batch_store import (
+from context_aware_translation.storage.repositories.llm_batch_store import (
     LLMBatchStore,
 )
-from context_aware_translation.storage.task_store import TaskRecord, TaskStore
+from context_aware_translation.storage.repositories.task_store import TaskRecord, TaskStore
 from context_aware_translation.workflow.runtime import WorkflowContext
 from context_aware_translation.workflow.tasks.execution.batch_translation_ops import (
     StageItemState,

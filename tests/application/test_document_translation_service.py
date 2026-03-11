@@ -18,7 +18,7 @@ from context_aware_translation.application.contracts.document import (
 from context_aware_translation.application.contracts.projects import CreateProjectRequest
 from context_aware_translation.application.contracts.terms import TermsScope, TermsScopeKind, TermsTableState
 from context_aware_translation.application.errors import ApplicationError, ApplicationErrorCode
-from context_aware_translation.storage.book_db import TranslationChunkRecord
+from context_aware_translation.storage.schema.book_db import TranslationChunkRecord
 from context_aware_translation.workflow.tasks.models import Decision
 
 

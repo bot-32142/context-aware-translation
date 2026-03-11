@@ -12,7 +12,7 @@ from context_aware_translation.workflow.tasks.exceptions import CancelDispatchRa
 from context_aware_translation.workflow.tasks.models import TaskAction
 
 if TYPE_CHECKING:
-    from context_aware_translation.storage.task_store import TaskRecord, TaskStore
+    from context_aware_translation.storage.repositories.task_store import TaskRecord, TaskStore
     from context_aware_translation.workflow.tasks.handlers.base import TaskTypeHandler
     from context_aware_translation.workflow.tasks.models import Decision
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps

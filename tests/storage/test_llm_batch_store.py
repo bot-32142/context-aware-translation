@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from context_aware_translation.storage.llm_batch_store import (
+from context_aware_translation.storage.repositories.llm_batch_store import (
     STATUS_COMPLETED,
     STATUS_FAILED,
     STATUS_SUBMITTED,

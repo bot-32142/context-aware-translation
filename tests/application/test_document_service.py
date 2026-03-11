@@ -9,8 +9,8 @@ from PySide6.QtWidgets import QApplication
 from context_aware_translation.application.composition import build_application_context
 from context_aware_translation.application.contracts.document import OCRTextElement, SaveOCRPageRequest
 from context_aware_translation.application.contracts.projects import CreateProjectRequest
-from context_aware_translation.storage.book_db import SQLiteBookDB
-from context_aware_translation.storage.document_repository import DocumentRepository
+from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
 
 def _ensure_qt_app() -> QApplication:

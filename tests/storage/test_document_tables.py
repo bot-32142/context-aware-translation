@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from context_aware_translation.storage.book_db import SQLiteBookDB
+from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
 
 @pytest.fixture

@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from context_aware_translation.storage.task_store import TaskRecord, TaskStore
+from context_aware_translation.storage.repositories.task_store import TaskRecord, TaskStore
 
 
 def test_create_returns_valid_record(tmp_path):

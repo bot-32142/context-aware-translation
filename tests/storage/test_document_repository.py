@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from context_aware_translation.storage.document_repository import DocumentRepository
+from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 
 # ============================================================================
 # Fixtures

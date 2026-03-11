@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from context_aware_translation.storage.book_db import (
+from context_aware_translation.storage.schema.book_db import (
     ChunkRecord,
     SQLiteBookDB,
     TermRecord,

@@ -85,8 +85,8 @@ async def test_process_ocr_persists_regions_payload() -> None:
 
 
 def test_do_import_rejects_invalid_folder_images(tmp_path: Path, temp_config):
-    from context_aware_translation.storage.book_db import SQLiteBookDB
-    from context_aware_translation.storage.document_repository import DocumentRepository
+    from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+    from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
     folder = tmp_path / "manga_folder"
     folder.mkdir()
@@ -102,8 +102,8 @@ def test_do_import_rejects_invalid_folder_images(tmp_path: Path, temp_config):
 
 
 def test_do_import_rejects_invalid_cbz_images(tmp_path: Path, temp_config):
-    from context_aware_translation.storage.book_db import SQLiteBookDB
-    from context_aware_translation.storage.document_repository import DocumentRepository
+    from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+    from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
     cbz_path = tmp_path / "broken.cbz"
     with zipfile.ZipFile(cbz_path, "w") as zf:

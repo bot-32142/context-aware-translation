@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.application.composition import build_application_context
 from context_aware_translation.application.contracts.common import (
     NavigationTarget,
@@ -23,7 +24,6 @@ from context_aware_translation.application.contracts.common import (
     UserMessageSeverity,
 )
 from context_aware_translation.ui import i18n
-from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.ui.constants import (
     APP_VERSION,
     DEFAULT_WINDOW_HEIGHT,

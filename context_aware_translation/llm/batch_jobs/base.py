@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from context_aware_translation.config import TranslatorBatchConfig
-from context_aware_translation.storage.llm_batch_store import LLMBatchStore
+from context_aware_translation.storage.repositories.llm_batch_store import LLMBatchStore
 
 POLL_STATUS_PENDING = "pending"
 POLL_STATUS_COMPLETED = "completed"

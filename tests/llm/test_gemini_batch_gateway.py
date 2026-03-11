@@ -10,7 +10,11 @@ import pytest
 from context_aware_translation.config import TranslatorBatchConfig
 from context_aware_translation.llm.batch_jobs.base import POLL_STATUS_CANCELLED, POLL_STATUS_COMPLETED
 from context_aware_translation.llm.batch_jobs.gemini_gateway import GeminiBatchJobGateway
-from context_aware_translation.storage.llm_batch_store import STATUS_COMPLETED, STATUS_FAILED, LLMBatchStore
+from context_aware_translation.storage.repositories.llm_batch_store import (
+    STATUS_COMPLETED,
+    STATUS_FAILED,
+    LLMBatchStore,
+)
 
 
 def _messages() -> list[dict[str, str]]:

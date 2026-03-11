@@ -63,8 +63,8 @@ from context_aware_translation.documents.base import Document
 from context_aware_translation.documents.content.ocr_content import SinglePageOCRContent
 from context_aware_translation.documents.content.ocr_items import ImageItem
 from context_aware_translation.documents.manga_alignment import align_sources_to_chunks, extract_ocr_text
-from context_aware_translation.storage.document_repository import DocumentRepository
-from context_aware_translation.storage.task_store import TaskRecord
+from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, TaskAction
 

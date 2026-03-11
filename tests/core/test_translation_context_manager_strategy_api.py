@@ -9,7 +9,7 @@ import pytest
 
 from context_aware_translation.core.context_manager import TranslationContextManager, TranslationContextManagerAdapter
 from context_aware_translation.core.models import Term
-from context_aware_translation.storage.book_db import TermRecord, TranslationChunkRecord
+from context_aware_translation.storage.schema.book_db import TermRecord, TranslationChunkRecord
 
 
 class DummyTokenizer:
