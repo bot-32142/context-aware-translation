@@ -49,6 +49,7 @@ class RouteRow:
     route: WorkflowStepRoute
     connection_combo: QComboBox | None
     model_edit: QLineEdit
+    connection_label_widget: QLabel | None = None
     row_widget: QWidget | None = None
     step_label_widget: QLabel | None = None
     advanced_widget: QWidget | None = None
@@ -186,7 +187,6 @@ class StepAdvancedConfigDialog(QDialog):
         self._select_combo_value(provider_combo, str(config.get("provider") or ""))
 
         api_key_edit = QLineEdit(str(config.get("api_key") or ""))
-        model_edit = QLineEdit(self._route.model or "")
         batch_size_spin = self._spin(1, 5000, int(config.get("batch_size", 100) or 100))
         thinking_combo = QComboBox()
         for label, value in self._BATCH_THINKING_OPTIONS:
@@ -195,17 +195,16 @@ class StepAdvancedConfigDialog(QDialog):
 
         self._form_layout.addRow(self.tr("Provider"), provider_combo)
         self._form_layout.addRow(self.tr("API key"), api_key_edit)
-        self._form_layout.addRow(self.tr("Model"), model_edit)
         self._form_layout.addRow(self.tr("Batch size"), batch_size_spin)
         self._form_layout.addRow(self.tr("Thinking mode"), thinking_combo)
 
         def _serialize_batch() -> WorkflowStepRoute:
             provider = str(provider_combo.currentData() or "")
             if not provider:
-                return self._route.model_copy(update={"model": None, "step_config": {}})
+                return self._route.model_copy(update={"connection_label": None, "model": None, "step_config": {}})
             return self._route.model_copy(
                 update={
-                    "model": model_edit.text().strip() or None,
+                    "connection_label": provider_combo.currentText().strip() or None,
                     "step_config": {
                         "provider": provider,
                         "api_key": api_key_edit.text().strip(),
@@ -343,7 +342,10 @@ class WorkflowRoutesEditor(QWidget):
 
             if route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
                 connection_label = self._body_label(route.connection_label or self.tr("Direct batch config"))
-                model_edit = self._build_model_edit(route.model or "", readonly=True)
+                batch_enabled = isinstance(route.step_config.get("provider"), str) and bool(
+                    str(route.step_config.get("provider") or "").strip()
+                )
+                model_edit = self._build_model_edit(route.model or "", readonly=not batch_enabled)
                 advanced_widget, advanced_item = self._build_advanced_cell(route, row_index)
                 columns = self._build_columns(
                     row_frame,
@@ -358,6 +360,7 @@ class WorkflowRoutesEditor(QWidget):
                     route=route,
                     connection_combo=None,
                     model_edit=model_edit,
+                    connection_label_widget=connection_label,
                     row_widget=row_frame,
                     step_label_widget=step_label,
                     advanced_widget=advanced_widget,
@@ -412,7 +415,19 @@ class WorkflowRoutesEditor(QWidget):
         routes: list[WorkflowStepRoute] = []
         for row in self.rows:
             if row.route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
-                routes.append(row.route)
+                provider = row.route.step_config.get("provider")
+                has_provider = isinstance(provider, str) and bool(provider.strip())
+                routes.append(
+                    row.route.model_copy(
+                        update={
+                            "connection_label": (
+                                row.connection_label_widget.text().strip() if row.connection_label_widget is not None and has_provider else None
+                            ),
+                            "model": (row.model_edit.text().strip() or None) if has_provider else None,
+                            "step_config": dict(row.route.step_config),
+                        }
+                    )
+                )
                 continue
             connection_id = row.connection_combo.currentData() if row.connection_combo is not None else None
             connection_id_str = str(connection_id) if isinstance(connection_id, str) and connection_id else None
@@ -533,7 +548,13 @@ class WorkflowRoutesEditor(QWidget):
         updated_route = dialog.route()
         route_row.route = updated_route
         if updated_route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
-            route_row.model_edit.setText(updated_route.model or "")
+            if route_row.connection_label_widget is not None:
+                route_row.connection_label_widget.setText(updated_route.connection_label or self.tr("Direct batch config"))
+            if updated_route.step_config.get("provider"):
+                route_row.model_edit.setReadOnly(False)
+            else:
+                route_row.model_edit.setReadOnly(True)
+                route_row.model_edit.clear()
 
     def _build_frame(self, object_name: str) -> QFrame:
         frame = QFrame()
