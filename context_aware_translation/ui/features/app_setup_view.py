@@ -814,7 +814,7 @@ class AppSetupView(QWidget):
         self._populate_connections(self._state.connections)
         self._populate_profiles(self._state)
         self.run_wizard_button.setText(
-            self.tr("Run Setup Wizard") if self._state.requires_wizard else self.tr("Open Setup Wizard")
+            self.tr("Run Setup Wizard") if not self._state.connections else self.tr("Open Setup Wizard")
         )
         self._update_connection_buttons()
         self._update_profile_buttons()
@@ -827,7 +827,7 @@ class AppSetupView(QWidget):
     def retranslateUi(self) -> None:
         self.tip_label.setText(self._tip_text())
         self.run_wizard_button.setText(
-            self.tr("Run Setup Wizard") if self._state and self._state.requires_wizard else self.tr("Open Setup Wizard")
+            self.tr("Run Setup Wizard") if self._state and not self._state.connections else self.tr("Open Setup Wizard")
         )
         self.add_connection_button.setText(self.tr("Add Connection"))
         self.duplicate_connection_button.setText(self.tr("Duplicate"))
@@ -1010,7 +1010,7 @@ class AppSetupView(QWidget):
         self._service.save_workflow_profile(
             SaveWorkflowProfileRequest(
                 profile=dialog.profile(),
-                set_as_default=(current_profile.profile_id == self._state.default_profile_id),
+                set_as_default=bool(current_profile.is_default),
             )
         )
         self.refresh()

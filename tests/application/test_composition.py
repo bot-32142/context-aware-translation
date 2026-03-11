@@ -31,7 +31,7 @@ def test_build_application_context_exposes_services(tmp_path: Path) -> None:
         setup_state = context.services.app_setup.get_state()
         assert setup_state.connections
         assert setup_state.shared_profiles
-        assert setup_state.default_profile_id is not None
+        assert any(profile.is_default for profile in setup_state.shared_profiles)
     finally:
         context.close()
 

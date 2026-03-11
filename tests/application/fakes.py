@@ -12,7 +12,6 @@ from context_aware_translation.application.contracts.app_setup import (
     SaveWorkflowProfileRequest,
     SetupWizardRequest,
     SetupWizardState,
-    SetupWizardStep,
 )
 from context_aware_translation.application.contracts.common import AcceptedCommand, DocumentSection
 from context_aware_translation.application.contracts.document import (
@@ -128,11 +127,7 @@ class FakeAppSetupService:
 
     def get_wizard_state(self) -> SetupWizardState:
         self.calls.append(("get_wizard_state", None))
-        return (
-            self.wizard_state
-            if self.wizard_state is not None
-            else SetupWizardState(step=SetupWizardStep.CHOOSE_PROVIDERS)
-        )
+        return self.wizard_state if self.wizard_state is not None else SetupWizardState()
 
     def preview_setup_wizard(self, request: SetupWizardRequest) -> SetupWizardState:
         self.calls.append(("preview_setup_wizard", request))

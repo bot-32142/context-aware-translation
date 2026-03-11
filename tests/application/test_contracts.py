@@ -5,7 +5,6 @@ from context_aware_translation.application.contracts.app_setup import (
     ConnectionSummary,
     ProviderCard,
     SetupWizardState,
-    SetupWizardStep,
     WorkflowProfileDetail,
     WorkflowProfileKind,
     WorkflowStepId,
@@ -149,8 +148,6 @@ def test_setup_and_document_contracts_are_json_serializable() -> None:
             )
         ],
         shared_profiles=[shared_profile],
-        default_profile_id=shared_profile.profile_id,
-        requires_wizard=False,
     )
     project_setup = ProjectSetupState(
         project=ProjectRef(project_id="proj-1", name="One Piece"),
@@ -229,7 +226,6 @@ def test_managed_connection_names_are_hidden_from_display() -> None:
 
 def test_setup_wizard_state_serializes_for_provider_first_flow() -> None:
     wizard = SetupWizardState(
-        step=SetupWizardStep.CHOOSE_PROVIDERS,
         available_providers=[
             ProviderCard(
                 provider=ProviderKind.GEMINI,
@@ -244,7 +240,6 @@ def test_setup_wizard_state_serializes_for_provider_first_flow() -> None:
 
     payload = wizard.to_payload()
 
-    assert payload["step"] == "choose_providers"
     assert payload["profile_name"] == "Team Default"
     assert payload["available_providers"][0]["provider"] == "gemini"
     assert payload["recommendation"]["routes"][0]["step_id"] == "translator"

@@ -19,12 +19,6 @@ class ConnectionStatus(StrEnum):
     FAILED = "failed"
 
 
-class SetupWizardStep(StrEnum):
-    CHOOSE_PROVIDERS = "choose_providers"
-    ENTER_KEYS = "enter_keys"
-    REVIEW_PROFILE = "review_profile"
-
-
 class WorkflowProfileKind(StrEnum):
     SHARED = "shared"
     PROJECT_SPECIFIC = "project_specific"
@@ -134,7 +128,6 @@ class SetupWizardRequest(ContractModel):
 
 
 class SetupWizardState(ContractModel):
-    step: SetupWizardStep
     available_providers: list[ProviderCard] = Field(default_factory=list)
     selected_providers: list[ProviderKind] = Field(default_factory=list)
     drafts: list[ConnectionDraft] = Field(default_factory=list)
@@ -146,6 +139,3 @@ class SetupWizardState(ContractModel):
 class AppSetupState(ContractModel):
     connections: list[ConnectionSummary]
     shared_profiles: list[WorkflowProfileDetail] = Field(default_factory=list)
-    default_profile_id: str | None = None
-    requires_wizard: bool = False
-    wizard: SetupWizardState | None = None

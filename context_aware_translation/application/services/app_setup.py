@@ -14,7 +14,6 @@ from context_aware_translation.application.contracts.app_setup import (
     SaveWorkflowProfileRequest,
     SetupWizardRequest,
     SetupWizardState,
-    SetupWizardStep,
     WorkflowProfileDetail,
     WorkflowProfileKind,
 )
@@ -70,18 +69,13 @@ class DefaultAppSetupService:
     def get_state(self) -> AppSetupState:
         connections = self._connection_summaries()
         shared_profiles = self._shared_profile_details()
-        default_profile = next((profile for profile in shared_profiles if profile.is_default), None)
         return AppSetupState(
             connections=connections,
             shared_profiles=shared_profiles,
-            default_profile_id=(default_profile.profile_id if default_profile is not None else None),
-            requires_wizard=not bool(connections),
-            wizard=self.get_wizard_state() if not connections else None,
         )
 
     def get_wizard_state(self) -> SetupWizardState:
         return SetupWizardState(
-            step=SetupWizardStep.CHOOSE_PROVIDERS,
             available_providers=[
                 ProviderCard(
                     provider=ProviderKind.GEMINI,
@@ -125,7 +119,6 @@ class DefaultAppSetupService:
             target_language=target_language,
         )
         return SetupWizardState(
-            step=SetupWizardStep.REVIEW_PROFILE,
             available_providers=self.get_wizard_state().available_providers,
             selected_providers=request.providers,
             drafts=request.connections,

@@ -14,7 +14,6 @@ from context_aware_translation.application.contracts.app_setup import (
     ProviderCard,
     SaveConnectionRequest,
     SetupWizardState,
-    SetupWizardStep,
     WorkflowProfileDetail,
     WorkflowProfileKind,
     WorkflowStepId,
@@ -72,7 +71,7 @@ def _profile(*, profile_id: str = "profile:recommended", name: str = "Recommende
     )
 
 
-def _make_state(*, requires_wizard: bool = False) -> AppSetupState:
+def _make_state(*, needs_wizard: bool = False) -> AppSetupState:
     profile = _profile()
     return AppSetupState(
         connections=[
@@ -85,11 +84,9 @@ def _make_state(*, requires_wizard: bool = False) -> AppSetupState:
                 status=ConnectionStatus.READY,
             )
         ]
-        if not requires_wizard
+        if not needs_wizard
         else [],
-        shared_profiles=[profile] if not requires_wizard else [],
-        default_profile_id=(profile.profile_id if not requires_wizard else None),
-        requires_wizard=requires_wizard,
+        shared_profiles=[profile] if not needs_wizard else [],
     )
 
 
@@ -228,7 +225,6 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
     from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
 
     wizard_state = SetupWizardState(
-        step=SetupWizardStep.CHOOSE_PROVIDERS,
         available_providers=[
             ProviderCard(
                 provider=ProviderKind.GEMINI,
@@ -238,7 +234,6 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
         ],
     )
     preview_state = SetupWizardState(
-        step=SetupWizardStep.REVIEW_PROFILE,
         available_providers=wizard_state.available_providers,
         selected_providers=[ProviderKind.GEMINI],
         drafts=[
@@ -282,7 +277,6 @@ def test_setup_wizard_dialog_renders_provider_cards_on_first_page():
     from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
 
     wizard_state = SetupWizardState(
-        step=SetupWizardStep.CHOOSE_PROVIDERS,
         available_providers=[
             ProviderCard(
                 provider=ProviderKind.GEMINI,
@@ -297,7 +291,7 @@ def test_setup_wizard_dialog_renders_provider_cards_on_first_page():
         ],
         selected_providers=[ProviderKind.GEMINI],
     )
-    service = FakeAppSetupService(state=_make_state(requires_wizard=True), wizard_state=wizard_state)
+    service = FakeAppSetupService(state=_make_state(needs_wizard=True), wizard_state=wizard_state)
 
     dialog = SetupWizardDialog(service, wizard_state)
 
@@ -310,7 +304,6 @@ def test_setup_wizard_dialog_collects_api_keys_on_provider_page():
     from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
 
     wizard_state = SetupWizardState(
-        step=SetupWizardStep.CHOOSE_PROVIDERS,
         available_providers=[
             ProviderCard(
                 provider=ProviderKind.GEMINI,
@@ -319,7 +312,7 @@ def test_setup_wizard_dialog_collects_api_keys_on_provider_page():
             )
         ],
     )
-    service = FakeAppSetupService(state=_make_state(requires_wizard=True), wizard_state=wizard_state)
+    service = FakeAppSetupService(state=_make_state(needs_wizard=True), wizard_state=wizard_state)
     dialog = SetupWizardDialog(service, wizard_state)
 
     assert ProviderKind.GEMINI in dialog._provider_api_key_edits
@@ -333,7 +326,6 @@ def test_setup_wizard_dialog_preserves_draft_when_going_back():
     from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
 
     wizard_state = SetupWizardState(
-        step=SetupWizardStep.CHOOSE_PROVIDERS,
         available_providers=[
             ProviderCard(
                 provider=ProviderKind.GEMINI,
@@ -342,7 +334,7 @@ def test_setup_wizard_dialog_preserves_draft_when_going_back():
             )
         ],
     )
-    service = FakeAppSetupService(state=_make_state(requires_wizard=True), wizard_state=wizard_state)
+    service = FakeAppSetupService(state=_make_state(needs_wizard=True), wizard_state=wizard_state)
     dialog = SetupWizardDialog(service, wizard_state)
 
     dialog._provider_checks[ProviderKind.GEMINI].setChecked(True)
@@ -361,7 +353,6 @@ def test_setup_wizard_dialog_excludes_custom_provider():
     from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
 
     wizard_state = SetupWizardState(
-        step=SetupWizardStep.CHOOSE_PROVIDERS,
         available_providers=[
             ProviderCard(
                 provider=ProviderKind.OPENAI_COMPATIBLE,
@@ -370,7 +361,7 @@ def test_setup_wizard_dialog_excludes_custom_provider():
             )
         ],
     )
-    service = FakeAppSetupService(state=_make_state(requires_wizard=True), wizard_state=wizard_state)
+    service = FakeAppSetupService(state=_make_state(needs_wizard=True), wizard_state=wizard_state)
     dialog = SetupWizardDialog(service, wizard_state)
 
     assert dialog._provider_checks == {}
@@ -381,7 +372,6 @@ def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
     from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
 
     wizard_state = SetupWizardState(
-        step=SetupWizardStep.CHOOSE_PROVIDERS,
         available_providers=[
             ProviderCard(
                 provider=ProviderKind.GEMINI,
@@ -391,7 +381,6 @@ def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
         ],
     )
     preview_state = SetupWizardState(
-        step=SetupWizardStep.REVIEW_PROFILE,
         available_providers=wizard_state.available_providers,
         selected_providers=[ProviderKind.GEMINI],
         drafts=[
@@ -436,7 +425,7 @@ def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
 def test_app_setup_view_refreshes_wizard_prompt_state():
     from context_aware_translation.ui.features.app_setup_view import AppSetupView
 
-    service = FakeAppSetupService(state=_make_state(requires_wizard=True))
+    service = FakeAppSetupService(state=_make_state(needs_wizard=True))
     view = AppSetupView(service)
 
     assert view.run_wizard_button.text() == view.tr("Run Setup Wizard")
