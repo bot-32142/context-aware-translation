@@ -49,7 +49,6 @@ class ProjectSetupView(QWidget):
         self._state: ProjectSetupState | None = None
         self._draft_project_profile: WorkflowProfileDetail | None = None
         self._custom_base_profile_id: str | None = None
-        self._last_shared_profile_id: str | None = None
         self._event_bridge = QtApplicationEventBridge(events, parent=self)
         self._event_bridge.setup_invalidated.connect(self._on_setup_invalidated)
         self._init_ui()
@@ -160,7 +159,6 @@ class ProjectSetupView(QWidget):
             index = self.shared_profile_combo.findData(state.selected_shared_profile_id)
             if index >= 0:
                 self.shared_profile_combo.setCurrentIndex(index)
-                self._last_shared_profile_id = state.selected_shared_profile_id
         self.shared_profile_combo.blockSignals(False)
 
         self.open_app_setup_button.setVisible(state.blocker is not None)
@@ -185,7 +183,7 @@ class ProjectSetupView(QWidget):
     def _effective_profile(self) -> WorkflowProfileDetail | None:
         if self._is_custom_selected():
             return self._draft_project_profile or (self._state.project_profile if self._state is not None else None)
-        return self._current_shared_profile() or (self._state.selected_shared_profile if self._state is not None else None)
+        return self._current_shared_profile()
 
     def _render_effective_profile(self) -> None:
         profile = self._effective_profile()
@@ -248,7 +246,7 @@ class ProjectSetupView(QWidget):
         if profile_id == "__custom__":
             self._ensure_custom_profile()
         elif profile_id is not None:
-            self._last_shared_profile_id = profile_id
+            self._custom_base_profile_id = profile_id
             self._draft_project_profile = None
         self._render_effective_profile()
 
@@ -286,7 +284,7 @@ class ProjectSetupView(QWidget):
                 (
                     profile
                     for profile in self._state.shared_profiles
-                    if profile.profile_id == self._last_shared_profile_id
+                    if profile.profile_id == self._custom_base_profile_id
                 ),
                 (self._state.shared_profiles[0] if self._state.shared_profiles else None),
             )

@@ -37,14 +37,12 @@ class DefaultProjectSetupService:
         shared_by_id = {profile.profile_id: profile for profile in shared_profiles}
 
         selected_shared_profile_id: str | None = None
-        selected_shared_profile: WorkflowProfileDetail | None = None
         project_profile: WorkflowProfileDetail | None = None
         blocker = None
 
         if book.profile_id is not None:
             selected_shared_profile_id = book.profile_id
-            selected_shared_profile = shared_by_id.get(book.profile_id)
-            if selected_shared_profile is None:
+            if shared_by_id.get(book.profile_id) is None:
                 blocker = make_blocker(
                     BlockerCode.NEEDS_SETUP,
                     "The selected shared workflow profile no longer exists. Open App Setup.",
@@ -54,8 +52,7 @@ class DefaultProjectSetupService:
             config = self._runtime.get_effective_config_payload(project_id)
             source_profile_id = read_source_profile_id(config)
             if source_profile_id is not None:
-                selected_shared_profile = shared_by_id.get(source_profile_id)
-                selected_shared_profile_id = source_profile_id if selected_shared_profile is not None else None
+                selected_shared_profile_id = source_profile_id if source_profile_id in shared_by_id else None
             project_profile = self._profile_detail_from_payload(
                 profile_id=f"project:{project_id}",
                 name=f"{project.name} project profile",
@@ -76,7 +73,6 @@ class DefaultProjectSetupService:
             available_connections=available_connections,
             shared_profiles=shared_profiles,
             selected_shared_profile_id=selected_shared_profile_id,
-            selected_shared_profile=selected_shared_profile,
             project_profile=project_profile,
             blocker=blocker,
         )

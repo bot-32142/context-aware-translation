@@ -9,7 +9,6 @@ class ProjectSetupState(ContractModel):
     available_connections: list[ConnectionSummary]
     shared_profiles: list[WorkflowProfileDetail]
     selected_shared_profile_id: str | None = None
-    selected_shared_profile: WorkflowProfileDetail | None = None
     project_profile: WorkflowProfileDetail | None = None
     blocker: BlockerInfo | None = None
 

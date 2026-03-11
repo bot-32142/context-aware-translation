@@ -98,7 +98,6 @@ class DefaultAppSetupService:
                     helper_text="Text translation and image understanding.",
                 ),
             ],
-            profile_name="Recommended",
         )
 
     def preview_setup_wizard(self, request: SetupWizardRequest) -> SetupWizardState:
@@ -124,7 +123,6 @@ class DefaultAppSetupService:
             drafts=request.connections,
             test_results=[self._test_connection_result(draft) for draft in request.connections],
             recommendation=recommendation,
-            profile_name=recommendation.name,
         )
 
     def save_connection(self, request: SaveConnectionRequest) -> AppSetupState:

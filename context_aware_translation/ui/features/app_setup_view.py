@@ -464,7 +464,9 @@ class SetupWizardDialog(QDialog):
         self.setWindowTitle(self.tr("Setup Wizard"))
         self.resize(780, 680)
         self._init_ui()
-        self._populate_provider_cards(initial_state.available_providers)
+        self._available_providers = [
+            provider for provider in initial_state.available_providers if provider.provider is not ProviderKind.OPENAI_COMPATIBLE
+        ]
         self._build_page()
         self._update_buttons()
 
@@ -501,8 +503,7 @@ class SetupWizardDialog(QDialog):
 
         self._page_index = 0
         self._available_providers: list[ProviderCard] = []
-        self._provider_checks: dict[ProviderKind, QCheckBox] = {}
-        self._provider_api_key_edits: dict[ProviderKind, QLineEdit] = {}
+        self._provider_inputs: dict[ProviderKind, tuple[QCheckBox, QLineEdit]] = {}
         self._profile_name_edit: QLineEdit | None = None
 
     def _build_page(self) -> None:
@@ -510,8 +511,7 @@ class SetupWizardDialog(QDialog):
 
         if self._page_index == 0:
             self.step_title.setText(self.tr("Choose providers"))
-            self._provider_checks = {}
-            self._provider_api_key_edits = {}
+            self._provider_inputs = {}
             host = QWidget()
             host_layout = QVBoxLayout(host)
             host_layout.setSpacing(12)
@@ -532,8 +532,7 @@ class SetupWizardDialog(QDialog):
                 if provider.helper_text:
                     group_layout.addRow(create_tip_label(provider.helper_text))
                 group_layout.addRow(self.tr("API key"), api_key_edit)
-                self._provider_checks[provider.provider] = checkbox
-                self._provider_api_key_edits[provider.provider] = api_key_edit
+                self._provider_inputs[provider.provider] = (checkbox, api_key_edit)
                 host_layout.addWidget(group)
             host_layout.addStretch()
             self.page_layout.addWidget(host)
@@ -545,7 +544,8 @@ class SetupWizardDialog(QDialog):
                 return
             profile_name_group = QGroupBox(self.tr("Workflow profile"))
             profile_name_layout = QFormLayout(profile_name_group)
-            self._profile_name_edit = QLineEdit(preview.profile_name or "Recommended")
+            suggested_name = preview.recommendation.name if preview.recommendation is not None else "Recommended"
+            self._profile_name_edit = QLineEdit(suggested_name)
             profile_name_layout.addRow(self.tr("Profile name"), self._profile_name_edit)
             self.page_layout.addWidget(profile_name_group)
             for result in preview.test_results:
@@ -590,7 +590,7 @@ class SetupWizardDialog(QDialog):
         QTimer.singleShot(120, self._resize_to_page)
 
     def selected_providers(self) -> list[ProviderKind]:
-        checked = [provider for provider, checkbox in self._provider_checks.items() if checkbox.isChecked()]
+        checked = [provider for provider, (checkbox, _) in self._provider_inputs.items() if checkbox.isChecked()]
         return checked if checked else list(self._wizard_state.selected_providers)
 
     def _draft_for_provider(self, provider: ProviderKind) -> ConnectionDraft:
@@ -610,11 +610,11 @@ class SetupWizardDialog(QDialog):
         )
 
     def _persist_drafts(self) -> None:
-        if not self._provider_api_key_edits:
+        if not self._provider_inputs:
             return
         drafts = [
             self._draft_for_provider(provider).model_copy(update={"api_key": api_key_edit.text().strip() or None})
-            for provider, api_key_edit in self._provider_api_key_edits.items()
+            for provider, (_, api_key_edit) in self._provider_inputs.items()
             if provider in self.selected_providers()
         ]
         self._wizard_state = self._wizard_state.model_copy(update={"drafts": drafts})
@@ -627,11 +627,6 @@ class SetupWizardDialog(QDialog):
             connections=list(self._wizard_state.drafts),
             profile_name=(self._profile_name_edit.text().strip() if self._profile_name_edit is not None else None),
         )
-
-    def _populate_provider_cards(self, providers: Sequence[ProviderCard]) -> None:
-        self._available_providers = [
-            provider for provider in providers if provider.provider is not ProviderKind.OPENAI_COMPATIBLE
-        ]
 
     def _go_back(self) -> None:
         if self._page_index == 0:
@@ -928,65 +923,53 @@ class AppSetupView(QWidget):
 
     def _edit_connection(self, connection: ConnectionSummary | None = None) -> None:
         connection = connection or self._selected_connection()
-        draft = None
-        connection_id = None
-        summary = None
+        dialog_kwargs: dict[str, object] = {
+            "test_callback": self._test_connection_draft,
+            "parent": self,
+        }
         if connection is None:
-            dialog = ConnectionEditorDialog(test_callback=self._test_connection_draft, parent=self)
+            dialog = ConnectionEditorDialog(**dialog_kwargs)
         else:
-            draft = ConnectionDraft(
-                display_name=connection.display_name,
-                provider=connection.provider,
-                description=connection.description,
-                base_url=connection.base_url,
-                default_model=connection.default_model,
-                temperature=connection.temperature,
-                timeout=connection.timeout,
-                max_retries=connection.max_retries,
-                concurrency=connection.concurrency,
-                token_limit=connection.token_limit,
-                input_token_limit=connection.input_token_limit,
-                output_token_limit=connection.output_token_limit,
-                custom_parameters_json=connection.custom_parameters_json,
+            dialog_kwargs.update(
+                draft=ConnectionDraft(
+                    display_name=connection.display_name,
+                    provider=connection.provider,
+                    description=connection.description,
+                    base_url=connection.base_url,
+                    default_model=connection.default_model,
+                    temperature=connection.temperature,
+                    timeout=connection.timeout,
+                    max_retries=connection.max_retries,
+                    concurrency=connection.concurrency,
+                    token_limit=connection.token_limit,
+                    input_token_limit=connection.input_token_limit,
+                    output_token_limit=connection.output_token_limit,
+                    custom_parameters_json=connection.custom_parameters_json,
+                ),
+                connection_id=connection.connection_id,
+                connection_summary=connection,
+                reset_tokens_callback=self._reset_connection_tokens,
             )
-            connection_id = connection.connection_id
-            summary = connection
-        dialog = ConnectionEditorDialog(
-            draft=draft,
-            connection_id=connection_id,
-            connection_summary=summary,
-            test_callback=self._test_connection_draft,
-            reset_tokens_callback=self._reset_connection_tokens,
-            parent=self,
-        )
+            dialog = ConnectionEditorDialog(**dialog_kwargs)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._service.save_connection(dialog.request())
-            self.refresh()
+            self._mutate(lambda: self._service.save_connection(dialog.request()))
 
     def _on_delete_connection(self) -> None:
         connection = self._selected_connection()
         if connection is None:
             return
-        result = QMessageBox.question(
-            self,
+        if not self._confirm(
             self.tr("Delete Connection"),
-            self.tr(
-                "Delete the selected connection? Existing profiles or projects may stop working until setup is fixed."
-            ),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if result != QMessageBox.StandardButton.Yes:
+            self.tr("Delete the selected connection? Existing profiles or projects may stop working until setup is fixed."),
+        ):
             return
-        self._service.delete_connection(connection.connection_id)
-        self.refresh()
+        self._mutate(lambda: self._service.delete_connection(connection.connection_id))
 
     def _on_duplicate_connection(self) -> None:
         connection = self._selected_connection()
         if connection is None:
             return
-        self._service.duplicate_connection(connection.connection_id)
-        self.refresh()
+        self._mutate(lambda: self._service.duplicate_connection(connection.connection_id))
 
     def _on_add_profile(self) -> None:
         if self._state is None or not self._state.connections:
@@ -1007,52 +990,48 @@ class AppSetupView(QWidget):
         )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        self._service.save_workflow_profile(
-            SaveWorkflowProfileRequest(
-                profile=dialog.profile(),
-                set_as_default=bool(current_profile.is_default),
+        self._mutate(
+            lambda: self._service.save_workflow_profile(
+                SaveWorkflowProfileRequest(
+                    profile=dialog.profile(),
+                    set_as_default=bool(current_profile.is_default),
+                )
             )
         )
-        self.refresh()
 
     def _on_delete_profile(self) -> None:
         profile = self._selected_profile()
         if profile is None:
             return
-        result = QMessageBox.question(
-            self,
+        if not self._confirm(
             self.tr("Delete Workflow Profile"),
             self.tr("Delete the selected workflow profile? Projects using it will need setup first."),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if result != QMessageBox.StandardButton.Yes:
+        ):
             return
         try:
-            self._service.delete_workflow_profile(profile.profile_id)
+            self._mutate(lambda: self._service.delete_workflow_profile(profile.profile_id))
         except Exception as exc:
             QMessageBox.warning(self, self.tr("App Setup"), str(exc))
             return
-        self.refresh()
 
     def _on_duplicate_profile(self) -> None:
         profile = self._selected_profile()
         if profile is None:
             return
-        self._service.duplicate_workflow_profile(profile.profile_id)
-        self.refresh()
+        self._mutate(lambda: self._service.duplicate_workflow_profile(profile.profile_id))
 
     def _on_set_default_profile(self) -> None:
         profile = self._selected_profile()
         if profile is None:
             return
-        self._service.save_workflow_profile(
-            SaveWorkflowProfileRequest(
-                profile=profile.model_copy(update={"is_default": True}),
-                set_as_default=True,
+        self._mutate(
+            lambda: self._service.save_workflow_profile(
+                SaveWorkflowProfileRequest(
+                    profile=profile.model_copy(update={"is_default": True}),
+                    set_as_default=True,
+                )
             )
         )
-        self.refresh()
 
     def _on_profile_double_clicked(self, _row: int, _column: int) -> None:
         self._edit_profile()
@@ -1137,6 +1116,22 @@ class AppSetupView(QWidget):
             QMessageBox.warning(self, self.tr("App Setup"), text)
         else:
             QMessageBox.information(self, self.tr("App Setup"), text)
+
+    def _confirm(self, title: str, text: str) -> bool:
+        return (
+            QMessageBox.question(
+                self,
+                title,
+                text,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            == QMessageBox.StandardButton.Yes
+        )
+
+    def _mutate(self, callback: Callable[[], object]) -> None:
+        callback()
+        self.refresh()
 
     def _set_table_item(
         self, table: QTableWidget, row: int, column: int, text: str, user_data: str | None = None

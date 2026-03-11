@@ -96,7 +96,6 @@ def _make_state(*, blocker: str | None = None, project_specific: bool = False) -
         ],
         shared_profiles=[shared],
         selected_shared_profile_id=shared.profile_id,
-        selected_shared_profile=shared,
         project_profile=project_profile,
         blocker=(
             None

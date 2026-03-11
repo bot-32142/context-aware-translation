@@ -64,7 +64,7 @@ def test_project_setup_and_work_queries_use_service_boundary(tmp_path: Path) -> 
         workboard = context.services.work.get_workboard(project_id)
 
         assert project_setup.project.project_id == project_id
-        assert project_setup.selected_shared_profile is not None or project_setup.project_profile is not None
+        assert project_setup.selected_shared_profile_id is not None or project_setup.project_profile is not None
         assert workboard.project.project_id == project_id
         assert workboard.rows == []
     finally:

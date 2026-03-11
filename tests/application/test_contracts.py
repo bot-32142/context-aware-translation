@@ -154,7 +154,6 @@ def test_setup_and_document_contracts_are_json_serializable() -> None:
         available_connections=app_setup.connections,
         shared_profiles=[shared_profile],
         selected_shared_profile_id=shared_profile.profile_id,
-        selected_shared_profile=shared_profile,
         project_profile=project_profile,
     )
     translation = DocumentTranslationState(
@@ -234,13 +233,11 @@ def test_setup_wizard_state_serializes_for_provider_first_flow() -> None:
             )
         ],
         selected_providers=[ProviderKind.GEMINI],
-        profile_name="Team Default",
         recommendation=_profile(profile_id="recommended", name="Recommended", kind=WorkflowProfileKind.SHARED),
     )
 
     payload = wizard.to_payload()
 
-    assert payload["profile_name"] == "Team Default"
     assert payload["available_providers"][0]["provider"] == "gemini"
     assert payload["recommendation"]["routes"][0]["step_id"] == "translator"
 

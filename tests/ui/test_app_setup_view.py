@@ -90,6 +90,14 @@ def _make_state(*, needs_wizard: bool = False) -> AppSetupState:
     )
 
 
+def _provider_checkbox(dialog, provider: ProviderKind):
+    return dialog._provider_inputs[provider][0]
+
+
+def _provider_api_key_edit(dialog, provider: ProviderKind):
+    return dialog._provider_inputs[provider][1]
+
+
 class _FakeConnectionDialog:
     def __init__(self, *args, **kwargs):
         self._request = SaveConnectionRequest(
@@ -257,8 +265,8 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
     service = FakeAppSetupService(state=_make_state(), wizard_state=wizard_state, preview_state=preview_state)
     dialog = SetupWizardDialog(service, wizard_state)
 
-    dialog._provider_checks[ProviderKind.GEMINI].setChecked(True)
-    dialog._provider_api_key_edits[ProviderKind.GEMINI].setText("secret")
+    _provider_checkbox(dialog, ProviderKind.GEMINI).setChecked(True)
+    _provider_api_key_edit(dialog, ProviderKind.GEMINI).setText("secret")
     dialog._go_next()
 
     assert dialog._page_index == 1
@@ -295,9 +303,9 @@ def test_setup_wizard_dialog_renders_provider_cards_on_first_page():
 
     dialog = SetupWizardDialog(service, wizard_state)
 
-    provider_checkboxes = dialog.page_content.findChildren(type(dialog._provider_checks[ProviderKind.GEMINI]))
+    provider_checkboxes = dialog.page_content.findChildren(type(_provider_checkbox(dialog, ProviderKind.GEMINI)))
     assert len(provider_checkboxes) == 2
-    assert dialog._provider_checks[ProviderKind.GEMINI].isChecked() is True
+    assert _provider_checkbox(dialog, ProviderKind.GEMINI).isChecked() is True
 
 
 def test_setup_wizard_dialog_collects_api_keys_on_provider_page():
@@ -315,11 +323,11 @@ def test_setup_wizard_dialog_collects_api_keys_on_provider_page():
     service = FakeAppSetupService(state=_make_state(needs_wizard=True), wizard_state=wizard_state)
     dialog = SetupWizardDialog(service, wizard_state)
 
-    assert ProviderKind.GEMINI in dialog._provider_api_key_edits
-    assert dialog._provider_api_key_edits[ProviderKind.GEMINI].isEnabled() is False
+    assert ProviderKind.GEMINI in dialog._provider_inputs
+    assert _provider_api_key_edit(dialog, ProviderKind.GEMINI).isEnabled() is False
 
-    dialog._provider_checks[ProviderKind.GEMINI].setChecked(True)
-    assert dialog._provider_api_key_edits[ProviderKind.GEMINI].isEnabled() is True
+    _provider_checkbox(dialog, ProviderKind.GEMINI).setChecked(True)
+    assert _provider_api_key_edit(dialog, ProviderKind.GEMINI).isEnabled() is True
 
 
 def test_setup_wizard_dialog_preserves_draft_when_going_back():
@@ -337,16 +345,16 @@ def test_setup_wizard_dialog_preserves_draft_when_going_back():
     service = FakeAppSetupService(state=_make_state(needs_wizard=True), wizard_state=wizard_state)
     dialog = SetupWizardDialog(service, wizard_state)
 
-    dialog._provider_checks[ProviderKind.GEMINI].setChecked(True)
-    dialog._provider_api_key_edits[ProviderKind.GEMINI].setText("secret")
+    _provider_checkbox(dialog, ProviderKind.GEMINI).setChecked(True)
+    _provider_api_key_edit(dialog, ProviderKind.GEMINI).setText("secret")
 
     dialog._go_next()
     assert dialog._page_index == 1
     dialog._go_back()
 
     assert dialog._page_index == 0
-    assert dialog._provider_checks[ProviderKind.GEMINI].isChecked() is True
-    assert dialog._provider_api_key_edits[ProviderKind.GEMINI].text() == "secret"
+    assert _provider_checkbox(dialog, ProviderKind.GEMINI).isChecked() is True
+    assert _provider_api_key_edit(dialog, ProviderKind.GEMINI).text() == "secret"
 
 
 def test_setup_wizard_dialog_excludes_custom_provider():
@@ -364,8 +372,7 @@ def test_setup_wizard_dialog_excludes_custom_provider():
     service = FakeAppSetupService(state=_make_state(needs_wizard=True), wizard_state=wizard_state)
     dialog = SetupWizardDialog(service, wizard_state)
 
-    assert dialog._provider_checks == {}
-    assert dialog._provider_api_key_edits == {}
+    assert dialog._provider_inputs == {}
 
 
 def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
@@ -404,8 +411,8 @@ def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
     service = FakeAppSetupService(state=_make_state(), wizard_state=wizard_state, preview_state=preview_state)
     dialog = SetupWizardDialog(service, wizard_state)
 
-    dialog._provider_checks[ProviderKind.GEMINI].setChecked(True)
-    dialog._provider_api_key_edits[ProviderKind.GEMINI].setText("secret")
+    _provider_checkbox(dialog, ProviderKind.GEMINI).setChecked(True)
+    _provider_api_key_edit(dialog, ProviderKind.GEMINI).setText("secret")
     dialog._go_next()
     assert dialog._page_index == 1
 
@@ -418,8 +425,8 @@ def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
     assert card_host.layout().count() >= 1
     first_item_widget = card_host.layout().itemAt(0).widget()
     assert first_item_widget is not None
-    assert dialog._provider_checks[ProviderKind.GEMINI].isChecked() is True
-    assert dialog._provider_api_key_edits[ProviderKind.GEMINI].text() == "secret"
+    assert _provider_checkbox(dialog, ProviderKind.GEMINI).isChecked() is True
+    assert _provider_api_key_edit(dialog, ProviderKind.GEMINI).text() == "secret"
 
 
 def test_app_setup_view_refreshes_wizard_prompt_state():

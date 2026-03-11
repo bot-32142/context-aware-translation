@@ -133,7 +133,6 @@ class SetupWizardState(ContractModel):
     drafts: list[ConnectionDraft] = Field(default_factory=list)
     test_results: list[ConnectionTestResult] = Field(default_factory=list)
     recommendation: WorkflowProfileDetail | None = None
-    profile_name: str = "Recommended"
 
 
 class AppSetupState(ContractModel):
