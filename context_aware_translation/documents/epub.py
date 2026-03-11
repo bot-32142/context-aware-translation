@@ -794,7 +794,7 @@ class EPUBDocument(Document):
             repo.insert_document_source(
                 document_id,
                 seq,
-                "image",
+                "asset",
                 relative_path=ORIGINAL_ARCHIVE_PATH,
                 binary_content=original_epub_bytes,
                 mime_type="application/epub+zip",
@@ -863,7 +863,7 @@ class EPUBDocument(Document):
                     repo.insert_document_source(
                         document_id,
                         seq,
-                        "image",
+                        "asset",
                         relative_path=item.file_name,
                         binary_content=item.content,
                         mime_type=item.media_type,
@@ -953,11 +953,11 @@ class EPUBDocument(Document):
                         "application/x-font-ttf",
                     }
                 ):
-                    # Font file: store as image, skip everything
+                    # Font file: preserve as binary asset, skip OCR/translation
                     repo.insert_document_source(
                         document_id,
                         seq,
-                        "image",
+                        "asset",
                         relative_path=rp,
                         binary_content=item.content,
                         mime_type=mt,
@@ -978,7 +978,7 @@ class EPUBDocument(Document):
                         auto_commit=False,
                     )
                 else:
-                    # Other binary resource
+                    # Other binary resource: preserve, but do not expose as OCR image
                     logger.info(
                         "Skipping OCR for unknown image format: %s (extension: %s)",
                         rp,
@@ -987,7 +987,7 @@ class EPUBDocument(Document):
                     repo.insert_document_source(
                         document_id,
                         seq,
-                        "image",
+                        "asset",
                         relative_path=rp,
                         binary_content=item.content,
                         mime_type=mt,

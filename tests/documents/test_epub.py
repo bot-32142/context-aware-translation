@@ -368,7 +368,7 @@ class TestDoImport:
         assert css["is_ocr_completed"] == 1
 
         font = next(s for s in sources if s.get("relative_path") == "OEBPS/fonts/book.otf")
-        assert font["source_type"] == "image"
+        assert font["source_type"] == "asset"
         assert font["is_ocr_completed"] == 1
 
         image = next(s for s in sources if s.get("relative_path") == "OEBPS/images/fig.png")

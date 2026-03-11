@@ -131,7 +131,7 @@ class SQLiteBookDB:
 
     def __init__(self, sqlite_path: Path) -> None:
         self.db_path = Path(sqlite_path)
-        self.schema_version = 2
+        self.schema_version = 3
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
         self._configure_connection()
@@ -154,6 +154,39 @@ class SQLiteBookDB:
                     "UPDATE chunks SET normalized_text = ? WHERE chunk_id = ?",
                     (normalize_for_matching(row["text"]), row["chunk_id"]),
                 )
+        if from_version < 3:
+            cur.execute(
+                """
+                UPDATE document_sources
+                SET source_type = 'asset'
+                WHERE source_id IN (
+                    SELECT ds.source_id
+                    FROM document_sources ds
+                    INNER JOIN document d ON d.document_id = ds.document_id
+                    WHERE d.document_type = 'epub'
+                      AND ds.source_type = 'image'
+                      AND NOT (
+                        (
+                            LOWER(COALESCE(ds.mime_type, '')) LIKE 'image/%'
+                            AND LOWER(COALESCE(ds.mime_type, '')) != 'image/svg+xml'
+                        )
+                        OR LOWER(COALESCE(ds.relative_path, '')) LIKE '%.png'
+                        OR LOWER(COALESCE(ds.relative_path, '')) LIKE '%.jpg'
+                        OR LOWER(COALESCE(ds.relative_path, '')) LIKE '%.jpeg'
+                        OR LOWER(COALESCE(ds.relative_path, '')) LIKE '%.gif'
+                        OR LOWER(COALESCE(ds.relative_path, '')) LIKE '%.webp'
+                        OR LOWER(COALESCE(ds.relative_path, '')) LIKE '%.bmp'
+                        OR LOWER(COALESCE(ds.relative_path, '')) LIKE '%.tiff'
+                        OR LOWER(COALESCE(ds.relative_path, '')) LIKE '%.tif'
+                        OR LOWER(COALESCE(ds.relative_path, '')) LIKE '%.jp2'
+                        OR LOWER(COALESCE(ds.relative_path, '')) LIKE '%.j2k'
+                        OR LOWER(COALESCE(ds.relative_path, '')) LIKE '%.jpf'
+                        OR LOWER(COALESCE(ds.relative_path, '')) LIKE '%.jpx'
+                        OR LOWER(COALESCE(ds.relative_path, '')) LIKE '%.jpm'
+                      )
+                )
+                """
+            )
         cur.execute(
             "UPDATE meta SET schema_version = ?, updated_at = ?",
             (self.schema_version, time.time()),
@@ -891,7 +924,7 @@ class SQLiteBookDB:
         Returns list of dicts with:
         - document_id, document_type, created_at
         - total_sources: Total number of sources
-        - ocr_completed: Number of sources with OCR completed
+        - ocr_completed: Number of image sources with OCR completed
         - ocr_pending: Number of sources needing OCR (image sources with is_ocr_completed=0)
         - total_chunks: Total number of chunks
         - chunks_extracted: Number of chunks with is_extracted=1
@@ -916,7 +949,7 @@ class SQLiteBookDB:
                 SELECT
                     document_id,
                     COUNT(*) as total_sources,
-                    SUM(CASE WHEN is_ocr_completed = 1 THEN 1 ELSE 0 END) as ocr_completed,
+                    SUM(CASE WHEN source_type = 'image' AND is_ocr_completed = 1 THEN 1 ELSE 0 END) as ocr_completed,
                     SUM(CASE WHEN source_type = 'image' AND is_ocr_completed = 0 THEN 1 ELSE 0 END) as ocr_pending
                 FROM document_sources
                 GROUP BY document_id
