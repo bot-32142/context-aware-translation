@@ -4,7 +4,7 @@ import threading
 
 import pytest
 
-from context_aware_translation.ui.workers.operation_tracker import DocumentOperationTracker
+from context_aware_translation.adapters.qt.workers.operation_tracker import DocumentOperationTracker
 
 
 @pytest.fixture(autouse=True)

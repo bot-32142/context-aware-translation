@@ -2,11 +2,11 @@
 
 from pathlib import Path
 
+from context_aware_translation.adapters.qt.workers.base_worker import BaseWorker
 from context_aware_translation.core.progress import ProgressUpdate, WorkflowStep
 from context_aware_translation.storage.book_db import SQLiteBookDB
 from context_aware_translation.storage.book_manager import BookManager
 from context_aware_translation.storage.document_repository import DocumentRepository
-from context_aware_translation.ui.workers.base_worker import BaseWorker
 from context_aware_translation.workflow.ops.import_support import (
     import_via_repository,
     normalize_import_paths,

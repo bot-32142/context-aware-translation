@@ -4,7 +4,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 import context_aware_translation.storage.book_db as book_db
-from context_aware_translation.ui.workers.chunk_retranslation_task_worker import ChunkRetranslationTaskWorker
+from context_aware_translation.adapters.qt.workers.chunk_retranslation_task_worker import ChunkRetranslationTaskWorker
 from context_aware_translation.workflow.tasks.claims import (
     AllDocuments,
     ClaimMode,

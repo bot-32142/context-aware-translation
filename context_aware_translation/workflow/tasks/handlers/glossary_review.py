@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 import context_aware_translation.config as config_module
 import context_aware_translation.storage.book_db as book_db
 import context_aware_translation.storage.term_repository as term_repository
-from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
+from context_aware_translation.adapters.qt.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 from context_aware_translation.workflow.tasks.claims import (
     ClaimArbiter,
     ClaimMode,

@@ -334,7 +334,7 @@ def test_build_worker_run_returns_chunk_retranslation_task_worker():
     )
     payload = handler.decode_payload(record)
     worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
-    from context_aware_translation.ui.workers.chunk_retranslation_task_worker import ChunkRetranslationTaskWorker
+    from context_aware_translation.adapters.qt.workers.chunk_retranslation_task_worker import ChunkRetranslationTaskWorker
 
     assert isinstance(worker, ChunkRetranslationTaskWorker)
 
@@ -349,7 +349,7 @@ def test_build_worker_cancel_returns_chunk_retranslation_task_worker():
     )
     payload = handler.decode_payload(record)
     worker = handler.build_worker(TaskAction.CANCEL, record, payload, deps)
-    from context_aware_translation.ui.workers.chunk_retranslation_task_worker import ChunkRetranslationTaskWorker
+    from context_aware_translation.adapters.qt.workers.chunk_retranslation_task_worker import ChunkRetranslationTaskWorker
 
     assert isinstance(worker, ChunkRetranslationTaskWorker)
 

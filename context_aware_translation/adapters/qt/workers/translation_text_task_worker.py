@@ -1,4 +1,4 @@
-"""Worker for async chunk retranslation task run/cancel operations."""
+"""Worker for async translation-text task run/cancel operations."""
 
 from __future__ import annotations
 
@@ -6,18 +6,23 @@ import asyncio
 import logging
 from collections.abc import Callable
 
+from context_aware_translation.adapters.qt.workers.base_worker import BaseWorker
 from context_aware_translation.core.cancellation import OperationCancelledError
+from context_aware_translation.core.progress import ProgressUpdate
+from context_aware_translation.storage.book_db import SQLiteBookDB
 from context_aware_translation.storage.book_manager import BookManager
+from context_aware_translation.storage.document_repository import DocumentRepository
 from context_aware_translation.storage.task_store import TaskStore
-from context_aware_translation.ui.workers.base_worker import BaseWorker
 from context_aware_translation.workflow.ops import translation_ops
 from context_aware_translation.workflow.session import WorkflowSession
 
 logger = logging.getLogger(__name__)
 
+_MANGA_DOCUMENT_TYPE = "manga"
 
-class ChunkRetranslationTaskWorker(BaseWorker):
-    """Worker to run/cancel persistent chunk retranslation tasks."""
+
+class TranslationTextTaskWorker(BaseWorker):
+    """Worker to run/cancel persistent translation-text tasks (non-manga documents only)."""
 
     def __init__(
         self,
@@ -26,39 +31,65 @@ class ChunkRetranslationTaskWorker(BaseWorker):
         *,
         action: str,
         task_id: str | None = None,
-        chunk_id: int,
-        document_id: int,
+        document_ids: list[int] | None = None,
+        force: bool = False,
         enable_polish: bool = True,
         task_store: TaskStore | None = None,
         notify_task_changed: Callable[[str], None] | None = None,
         config_snapshot_json: str | None = None,
+        enqueue_followup: Callable[..., None] | None = None,
     ) -> None:
         super().__init__()
         self._book_manager = book_manager
         self._book_id = book_id
         self._action = action
         self._task_id = task_id
-        self._chunk_id = chunk_id
-        self._document_id = document_id
+        self._document_ids = document_ids
+        self._force = force
         self._enable_polish = enable_polish
         self._task_store = task_store
         self._notify_task_changed = notify_task_changed
         self._config_snapshot_json = config_snapshot_json
+        self._enqueue_followup = enqueue_followup
 
     def _execute(self) -> None:
         if self._action == "run":
-            self._run_retranslation()
+            self._run_translation()
             return
         if self._action == "cancel":
             self._run_cancel()
             return
         raise ValueError(f"Unknown action: {self._action!r}")
 
-    def _run_retranslation(self) -> None:
+    def _filter_non_manga_ids(self, doc_ids: list[int]) -> list[int]:
+        """Return only non-manga document IDs from the given list."""
+        try:
+            db_path = self._book_manager.get_book_db_path(self._book_id)
+            db = SQLiteBookDB(db_path)
+            try:
+                repo = DocumentRepository(db)
+                result = []
+                for doc_id in doc_ids:
+                    row = repo.get_document_by_id(doc_id)
+                    if row and row.get("document_type") != _MANGA_DOCUMENT_TYPE:
+                        result.append(doc_id)
+                return result
+            finally:
+                db.close()
+        except Exception:
+            logger.warning("Could not filter manga document IDs; using all IDs as-is", exc_info=True)
+            return doc_ids
+
+    def _run_translation(self) -> None:
         if self._task_store is not None and self._task_id is not None:
             self._task_store.update(self._task_id, status="running")
         self._notify()
         try:
+            # Filter out manga documents when specific IDs are provided
+            effective_doc_ids = self._document_ids
+            if effective_doc_ids is not None:
+                effective_doc_ids = self._filter_non_manga_ids(effective_doc_ids)
+
             if self._config_snapshot_json:
                 session_ctx = WorkflowSession.from_snapshot(self._config_snapshot_json, self._book_id)
             else:
@@ -67,25 +98,19 @@ class ChunkRetranslationTaskWorker(BaseWorker):
                 translator_config = context.config.translator_config
                 if translator_config is not None:
                     translator_config.enable_polish = self._enable_polish
-                new_translation = asyncio.run(
-                    translation_ops.retranslate_chunk(
+                asyncio.run(
+                    translation_ops.translate(
                         context,
-                        chunk_id=self._chunk_id,
-                        document_id=self._document_id,
+                        document_ids=effective_doc_ids,
+                        progress_callback=self._on_progress,
+                        force=self._force,
                         cancel_check=self._is_cancelled,
                     )
                 )
             if self._task_store is not None and self._task_id is not None:
                 self._task_store.update(self._task_id, status="completed")
-            self.finished_success.emit(
-                {
-                    "action": "run",
-                    "task_id": self._task_id,
-                    "chunk_id": self._chunk_id,
-                    "document_id": self._document_id,
-                    "new_translation": new_translation,
-                }
-            )
+                self._task_store.update(self._task_id, last_error=None)
+            self.finished_success.emit({"action": "run", "task_id": self._task_id})
         except OperationCancelledError:
             if self._task_store is not None and self._task_id is not None:
                 self._task_store.update(self._task_id, status="cancelled", cancel_requested=False)
@@ -100,6 +125,16 @@ class ChunkRetranslationTaskWorker(BaseWorker):
     def _run_cancel(self) -> None:
         if self._task_store is not None and self._task_id is not None:
             self._task_store.update(self._task_id, status="cancelled", cancel_requested=False)
+        self._notify()
+
+    def _on_progress(self, update: ProgressUpdate) -> None:
+        self._raise_if_cancelled()
+        if self._task_store is not None and self._task_id is not None:
+            self._task_store.update(
+                self._task_id,
+                completed_items=update.current,
+                total_items=update.total,
+            )
         self._notify()
 
     def _notify(self) -> None:

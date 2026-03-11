@@ -346,7 +346,7 @@ def test_build_worker_run_returns_translation_text_task_worker():
     )
     payload = handler.decode_payload(record)
     worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
-    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
+    from context_aware_translation.adapters.qt.workers.translation_text_task_worker import TranslationTextTaskWorker
 
     assert isinstance(worker, TranslationTextTaskWorker)
 
@@ -373,7 +373,7 @@ def test_build_worker_cancel_returns_translation_text_task_worker():
     deps = MagicMock()
     record = _make_record(status=STATUS_RUNNING)
     worker = handler.build_worker(TaskAction.CANCEL, record, {}, deps)
-    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
+    from context_aware_translation.adapters.qt.workers.translation_text_task_worker import TranslationTextTaskWorker
 
     assert isinstance(worker, TranslationTextTaskWorker)
 
@@ -400,7 +400,7 @@ def test_build_worker_run_passes_config_snapshot_to_worker():
     payload = handler.decode_payload(record)
     worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
 
-    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
+    from context_aware_translation.adapters.qt.workers.translation_text_task_worker import TranslationTextTaskWorker
 
     assert isinstance(worker, TranslationTextTaskWorker)
     assert worker._config_snapshot_json == snapshot

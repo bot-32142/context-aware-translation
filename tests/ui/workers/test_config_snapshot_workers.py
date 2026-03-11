@@ -46,7 +46,9 @@ def _make_record(
 
 class TestChunkRetranslationTaskWorkerSnapshot:
     def _make_worker(self, snapshot: str | None = None):
-        from context_aware_translation.ui.workers.chunk_retranslation_task_worker import ChunkRetranslationTaskWorker
+        from context_aware_translation.adapters.qt.workers.chunk_retranslation_task_worker import (
+            ChunkRetranslationTaskWorker,
+        )
 
         book_manager = MagicMock()
         return ChunkRetranslationTaskWorker(
@@ -66,11 +68,11 @@ class TestChunkRetranslationTaskWorkerSnapshot:
 
         with (
             patch(
-                "context_aware_translation.ui.workers.chunk_retranslation_task_worker.WorkflowSession.from_snapshot",
+                "context_aware_translation.adapters.qt.workers.chunk_retranslation_task_worker.WorkflowSession.from_snapshot",
                 return_value=mock_session,
             ) as mock_from_snapshot,
             patch(
-                "context_aware_translation.ui.workers.chunk_retranslation_task_worker.WorkflowSession.from_book",
+                "context_aware_translation.adapters.qt.workers.chunk_retranslation_task_worker.WorkflowSession.from_book",
             ) as mock_from_book,
             patch("asyncio.run", return_value="translation"),
         ):
@@ -87,11 +89,11 @@ class TestChunkRetranslationTaskWorkerSnapshot:
 
         with (
             patch(
-                "context_aware_translation.ui.workers.chunk_retranslation_task_worker.WorkflowSession.from_book",
+                "context_aware_translation.adapters.qt.workers.chunk_retranslation_task_worker.WorkflowSession.from_book",
                 return_value=mock_session,
             ) as mock_from_book,
             patch(
-                "context_aware_translation.ui.workers.chunk_retranslation_task_worker.WorkflowSession.from_snapshot",
+                "context_aware_translation.adapters.qt.workers.chunk_retranslation_task_worker.WorkflowSession.from_snapshot",
             ) as mock_from_snapshot,
             patch("asyncio.run", return_value="translation"),
         ):
@@ -108,7 +110,9 @@ class TestChunkRetranslationTaskWorkerSnapshot:
 
 class TestGlossaryExtractionTaskWorkerSnapshot:
     def _make_worker(self, snapshot: str | None = None):
-        from context_aware_translation.ui.workers.glossary_extraction_task_worker import GlossaryExtractionTaskWorker
+        from context_aware_translation.adapters.qt.workers.glossary_extraction_task_worker import (
+            GlossaryExtractionTaskWorker,
+        )
 
         book_manager = MagicMock()
         return GlossaryExtractionTaskWorker(
@@ -126,11 +130,11 @@ class TestGlossaryExtractionTaskWorkerSnapshot:
 
         with (
             patch(
-                "context_aware_translation.ui.workers.glossary_extraction_task_worker.WorkflowSession.from_snapshot",
+                "context_aware_translation.adapters.qt.workers.glossary_extraction_task_worker.WorkflowSession.from_snapshot",
                 return_value=mock_session,
             ) as mock_from_snapshot,
             patch(
-                "context_aware_translation.ui.workers.glossary_extraction_task_worker.WorkflowSession.from_book",
+                "context_aware_translation.adapters.qt.workers.glossary_extraction_task_worker.WorkflowSession.from_book",
             ) as mock_from_book,
             patch("asyncio.run"),
         ):
@@ -147,11 +151,11 @@ class TestGlossaryExtractionTaskWorkerSnapshot:
 
         with (
             patch(
-                "context_aware_translation.ui.workers.glossary_extraction_task_worker.WorkflowSession.from_book",
+                "context_aware_translation.adapters.qt.workers.glossary_extraction_task_worker.WorkflowSession.from_book",
                 return_value=mock_session,
             ) as mock_from_book,
             patch(
-                "context_aware_translation.ui.workers.glossary_extraction_task_worker.WorkflowSession.from_snapshot",
+                "context_aware_translation.adapters.qt.workers.glossary_extraction_task_worker.WorkflowSession.from_snapshot",
             ) as mock_from_snapshot,
             patch("asyncio.run"),
         ):
@@ -168,7 +172,9 @@ class TestGlossaryExtractionTaskWorkerSnapshot:
 
 class TestBatchTranslationTaskWorkerSnapshot:
     def _make_worker(self, snapshot: str | None = None, action: str = "run"):
-        from context_aware_translation.ui.workers.batch_translation_task_worker import BatchTranslationTaskWorker
+        from context_aware_translation.adapters.qt.workers.batch_translation_task_worker import (
+            BatchTranslationTaskWorker,
+        )
 
         book_manager = MagicMock()
         task_store = MagicMock()
@@ -191,14 +197,14 @@ class TestBatchTranslationTaskWorkerSnapshot:
 
         with (
             patch(
-                "context_aware_translation.ui.workers.batch_translation_task_worker.WorkflowSession.from_snapshot",
+                "context_aware_translation.adapters.qt.workers.batch_translation_task_worker.WorkflowSession.from_snapshot",
                 return_value=mock_session,
             ) as mock_from_snapshot,
             patch(
-                "context_aware_translation.ui.workers.batch_translation_task_worker.WorkflowSession.from_book",
+                "context_aware_translation.adapters.qt.workers.batch_translation_task_worker.WorkflowSession.from_book",
             ) as mock_from_book,
             patch(
-                "context_aware_translation.ui.workers.batch_translation_task_worker.BatchTranslationExecutor.from_workflow",
+                "context_aware_translation.adapters.qt.workers.batch_translation_task_worker.BatchTranslationExecutor.from_workflow",
                 return_value=mock_executor,
             ),
             patch("asyncio.run", return_value=MagicMock()),
@@ -213,7 +219,7 @@ class TestBatchTranslationTaskWorkerSnapshot:
 
         with (
             patch(
-                "context_aware_translation.ui.workers.batch_translation_task_worker.WorkflowSession.from_snapshot",
+                "context_aware_translation.adapters.qt.workers.batch_translation_task_worker.WorkflowSession.from_snapshot",
                 side_effect=ValueError("bad snapshot"),
             ),
             pytest.raises(ValueError, match="bad snapshot"),
@@ -240,15 +246,15 @@ class TestBatchTranslationTaskWorkerSnapshot:
 
         with (
             patch(
-                "context_aware_translation.ui.workers.batch_translation_task_worker.WorkflowSession.from_snapshot",
+                "context_aware_translation.adapters.qt.workers.batch_translation_task_worker.WorkflowSession.from_snapshot",
                 side_effect=ValueError("corrupt snapshot"),
             ),
             patch(
-                "context_aware_translation.ui.workers.batch_translation_task_worker.WorkflowSession.from_book",
+                "context_aware_translation.adapters.qt.workers.batch_translation_task_worker.WorkflowSession.from_book",
                 return_value=mock_book_session,
             ) as mock_from_book,
             patch(
-                "context_aware_translation.ui.workers.batch_translation_task_worker.BatchTranslationExecutor.from_workflow",
+                "context_aware_translation.adapters.qt.workers.batch_translation_task_worker.BatchTranslationExecutor.from_workflow",
                 return_value=mock_executor,
             ),
             patch("asyncio.run", return_value=MagicMock()),
@@ -267,14 +273,14 @@ class TestBatchTranslationTaskWorkerSnapshot:
 
         with (
             patch(
-                "context_aware_translation.ui.workers.batch_translation_task_worker.WorkflowSession.from_book",
+                "context_aware_translation.adapters.qt.workers.batch_translation_task_worker.WorkflowSession.from_book",
                 return_value=mock_session,
             ) as mock_from_book,
             patch(
-                "context_aware_translation.ui.workers.batch_translation_task_worker.WorkflowSession.from_snapshot",
+                "context_aware_translation.adapters.qt.workers.batch_translation_task_worker.WorkflowSession.from_snapshot",
             ) as mock_from_snapshot,
             patch(
-                "context_aware_translation.ui.workers.batch_translation_task_worker.BatchTranslationExecutor.from_workflow",
+                "context_aware_translation.adapters.qt.workers.batch_translation_task_worker.BatchTranslationExecutor.from_workflow",
                 return_value=mock_executor,
             ),
             patch("asyncio.run", return_value=MagicMock()),

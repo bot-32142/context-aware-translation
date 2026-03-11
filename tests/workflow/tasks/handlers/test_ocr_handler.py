@@ -647,7 +647,7 @@ def test_build_worker_run_returns_ocr_task_worker():
     payload = handler.decode_payload(record)
     try:
         worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
-        from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+        from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
 
         assert isinstance(worker, OCRTaskWorker)
     except ImportError:
@@ -661,7 +661,7 @@ def test_build_worker_cancel_returns_ocr_task_worker():
     record = _make_record(status=STATUS_RUNNING, document_ids_json=json.dumps([1]))
     try:
         worker = handler.build_worker(TaskAction.CANCEL, record, {}, deps)
-        from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+        from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
 
         assert isinstance(worker, OCRTaskWorker)
     except ImportError:

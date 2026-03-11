@@ -438,7 +438,7 @@ def test_validate_run_allowed_when_pending_terms_exist(tmp_path):
 
 
 def test_build_worker_run_returns_glossary_review_task_worker():
-    from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 
     deps = MagicMock()
     record = _make_record(status=STATUS_QUEUED)
@@ -448,7 +448,7 @@ def test_build_worker_run_returns_glossary_review_task_worker():
 
 
 def test_build_worker_cancel_returns_glossary_review_task_worker():
-    from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 
     deps = MagicMock()
     record = _make_record(status=STATUS_RUNNING)
@@ -458,7 +458,7 @@ def test_build_worker_cancel_returns_glossary_review_task_worker():
 
 
 def test_build_worker_run_uses_config_snapshot_when_present():
-    from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 
     deps = MagicMock()
     record = _make_record(status=STATUS_QUEUED, config_snapshot_json='{"snapshot": true}')

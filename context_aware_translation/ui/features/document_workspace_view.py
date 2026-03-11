@@ -36,7 +36,7 @@ from context_aware_translation.application.events import (
 from context_aware_translation.application.services.document import DocumentService
 from context_aware_translation.application.services.terms import TermsService
 from context_aware_translation.application.services.work import WorkService
-from context_aware_translation.ui.adapters.application_event_bridge import QtApplicationEventBridge
+from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.ui.features.document_images_view import DocumentImagesView
 from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
 from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView

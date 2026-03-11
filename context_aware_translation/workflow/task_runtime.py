@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from context_aware_translation.ui.tasks.qt_task_engine import TaskEngine
+from context_aware_translation.adapters.qt.task_engine import TaskEngine
 from context_aware_translation.workflow.session import WorkflowSession
 from context_aware_translation.workflow.tasks.handlers.batch_translation import BatchTranslationHandler
 from context_aware_translation.workflow.tasks.handlers.chunk_retranslation import ChunkRetranslationHandler

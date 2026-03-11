@@ -62,7 +62,7 @@ from context_aware_translation.storage.term_repository import TermRepository
 from context_aware_translation.workflow.tasks.models import TaskAction
 
 if TYPE_CHECKING:
-    from context_aware_translation.ui.tasks.qt_task_engine import TaskEngine
+    from context_aware_translation.adapters.qt.task_engine import TaskEngine
     from context_aware_translation.workflow.tasks.models import Decision
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 

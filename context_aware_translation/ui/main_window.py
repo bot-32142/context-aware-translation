@@ -23,7 +23,7 @@ from context_aware_translation.application.contracts.common import (
     UserMessageSeverity,
 )
 from context_aware_translation.ui import i18n
-from context_aware_translation.ui.adapters.application_event_bridge import QtApplicationEventBridge
+from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.ui.constants import (
     APP_VERSION,
     DEFAULT_WINDOW_HEIGHT,

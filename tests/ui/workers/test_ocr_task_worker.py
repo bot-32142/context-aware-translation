@@ -73,7 +73,7 @@ def _tiny_png_bytes() -> bytes:
 
 def test_run_ocr_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """run action calls ocr ops and updates task status to completed."""
-    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+    from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
 
     task_store = MagicMock()
     worker = OCRTaskWorker(
@@ -89,11 +89,11 @@ def test_run_ocr_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     mock_repo.get_document_sources_needing_ocr.return_value = _make_pending_sources(1, 2, 3)
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.SQLiteBookDB",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.SQLiteBookDB",
         lambda *_args, **_kwargs: MagicMock(),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.DocumentRepository",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.DocumentRepository",
         lambda *_args, **_kwargs: mock_repo,
     )
 
@@ -103,11 +103,11 @@ def test_run_ocr_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         return None
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.ocr_ops.run_ocr",
         _run_ocr,
     )
 
@@ -124,7 +124,7 @@ def test_run_ocr_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 
 def test_run_ocr_with_source_ids_none_resolves_all_pending(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """When source_ids=None, resolves to all pending IDs for the document."""
-    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+    from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
 
     task_store = MagicMock()
     worker = OCRTaskWorker(
@@ -141,11 +141,11 @@ def test_run_ocr_with_source_ids_none_resolves_all_pending(monkeypatch: pytest.M
     mock_repo.get_document_sources_needing_ocr.return_value = _make_pending_sources(5, 6, 7)
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.SQLiteBookDB",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.SQLiteBookDB",
         lambda *_args, **_kwargs: MagicMock(),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.DocumentRepository",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.DocumentRepository",
         lambda *_args, **_kwargs: mock_repo,
     )
 
@@ -157,11 +157,11 @@ def test_run_ocr_with_source_ids_none_resolves_all_pending(monkeypatch: pytest.M
         captured_source_ids.extend(ids or [])
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.ocr_ops.run_ocr",
         _capture_run_ocr,
     )
 
@@ -172,7 +172,7 @@ def test_run_ocr_with_source_ids_none_resolves_all_pending(monkeypatch: pytest.M
 
 def test_run_ocr_filters_cross_document_source_ids(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Explicit source_ids from a different document are filtered out."""
-    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+    from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
 
     task_store = MagicMock()
     # Provide source_ids 10, 20, 30 but only 10 and 20 belong to this document
@@ -193,11 +193,11 @@ def test_run_ocr_filters_cross_document_source_ids(monkeypatch: pytest.MonkeyPat
     ]
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.SQLiteBookDB",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.SQLiteBookDB",
         lambda *_args, **_kwargs: MagicMock(),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.DocumentRepository",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.DocumentRepository",
         lambda *_args, **_kwargs: mock_repo,
     )
 
@@ -209,11 +209,11 @@ def test_run_ocr_filters_cross_document_source_ids(monkeypatch: pytest.MonkeyPat
         captured_source_ids.extend(ids or [])
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.ocr_ops.run_ocr",
         _capture_run_ocr,
     )
 
@@ -226,7 +226,7 @@ def test_run_ocr_filters_cross_document_source_ids(monkeypatch: pytest.MonkeyPat
 
 def test_run_ocr_explicit_source_ids_allow_completed_pages(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Explicit source_ids keep completed pages instead of intersecting pending-only rows."""
-    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+    from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
 
     task_store = MagicMock()
     worker = OCRTaskWorker(
@@ -243,11 +243,11 @@ def test_run_ocr_explicit_source_ids_allow_completed_pages(monkeypatch: pytest.M
     mock_repo.get_document_sources_metadata.return_value = [{"source_id": 10, "source_type": "image"}]
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.SQLiteBookDB",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.SQLiteBookDB",
         lambda *_args, **_kwargs: MagicMock(),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.DocumentRepository",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.DocumentRepository",
         lambda *_args, **_kwargs: mock_repo,
     )
 
@@ -259,11 +259,11 @@ def test_run_ocr_explicit_source_ids_allow_completed_pages(monkeypatch: pytest.M
         captured_source_ids.extend(ids or [])
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.ocr_ops.run_ocr",
         _capture_run_ocr,
     )
 
@@ -274,7 +274,7 @@ def test_run_ocr_explicit_source_ids_allow_completed_pages(monkeypatch: pytest.M
 
 def test_run_ocr_loader_targets_selected_document_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """OCR worker should load only the selected document, not all book documents."""
-    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+    from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
 
     task_store = MagicMock()
     worker = OCRTaskWorker(
@@ -296,7 +296,7 @@ def test_run_ocr_loader_targets_selected_document_only(monkeypatch: pytest.Monke
         return fake_loaded_doc
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.Document.load_by_id",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.Document.load_by_id",
         _load_by_id,
     )
 
@@ -309,11 +309,11 @@ def test_run_ocr_loader_targets_selected_document_only(monkeypatch: pytest.Monke
         return 0
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.ocr_ops.run_ocr",
         _capture_run_ocr,
     )
 
@@ -326,10 +326,10 @@ def test_run_ocr_loader_targets_selected_document_only(monkeypatch: pytest.Monke
 
 def test_run_ocr_for_manga_uses_manga_ocr_pipeline(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """A manga OCR task must execute MangaDocument.process_ocr -> two-pass manga OCR."""
+    from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
     from context_aware_translation.config import OCRConfig
     from context_aware_translation.storage.book_db import SQLiteBookDB
     from context_aware_translation.storage.document_repository import DocumentRepository
-    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
 
     db = SQLiteBookDB(tmp_path / "book.db")
     repo = DocumentRepository(db)
@@ -371,7 +371,7 @@ def test_run_ocr_for_manga_uses_manga_ocr_pipeline(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr("context_aware_translation.llm.manga_ocr.ocr_manga_image_with_regions", mock_manga_ocr)
     monkeypatch.setattr("context_aware_translation.llm.epub_ocr.ocr_epub_images", mock_epub_ocr)
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
     )
 
@@ -389,8 +389,8 @@ def test_run_ocr_for_manga_uses_manga_ocr_pipeline(monkeypatch: pytest.MonkeyPat
 
 def test_run_ocr_cancellation_marks_cancelled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Cancellation during run catches OperationCancelledError and marks cancelled."""
+    from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
     from context_aware_translation.core.cancellation import OperationCancelledError
-    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
 
     task_store = MagicMock()
     worker = OCRTaskWorker(
@@ -406,11 +406,11 @@ def test_run_ocr_cancellation_marks_cancelled(monkeypatch: pytest.MonkeyPatch, t
     mock_repo.get_document_sources_needing_ocr.return_value = _make_pending_sources(1)
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.SQLiteBookDB",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.SQLiteBookDB",
         lambda *_args, **_kwargs: MagicMock(),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.DocumentRepository",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.DocumentRepository",
         lambda *_args, **_kwargs: mock_repo,
     )
 
@@ -420,11 +420,11 @@ def test_run_ocr_cancellation_marks_cancelled(monkeypatch: pytest.MonkeyPatch, t
         raise OperationCancelledError("cancelled")
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.ocr_ops.run_ocr",
         _run_ocr,
     )
 
@@ -439,7 +439,7 @@ def test_run_ocr_cancellation_marks_cancelled(monkeypatch: pytest.MonkeyPatch, t
 
 def test_run_ocr_failure_marks_failed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Exception during run marks task as failed with error message."""
-    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+    from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
 
     task_store = MagicMock()
     worker = OCRTaskWorker(
@@ -455,11 +455,11 @@ def test_run_ocr_failure_marks_failed(monkeypatch: pytest.MonkeyPatch, tmp_path:
     mock_repo.get_document_sources_needing_ocr.return_value = _make_pending_sources(1)
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.SQLiteBookDB",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.SQLiteBookDB",
         lambda *_args, **_kwargs: MagicMock(),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.DocumentRepository",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.DocumentRepository",
         lambda *_args, **_kwargs: mock_repo,
     )
 
@@ -469,11 +469,11 @@ def test_run_ocr_failure_marks_failed(monkeypatch: pytest.MonkeyPatch, tmp_path:
         raise RuntimeError("ocr failed")
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.ocr_ops.run_ocr",
         _run_ocr,
     )
 
@@ -492,7 +492,7 @@ def test_run_ocr_failure_marks_failed(monkeypatch: pytest.MonkeyPatch, tmp_path:
 
 def test_cancel_action_marks_cancelled(tmp_path: Path):
     """cancel action sets cancelled status in task store immediately."""
-    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+    from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
 
     task_store = MagicMock()
     worker = OCRTaskWorker(
@@ -511,7 +511,7 @@ def test_cancel_action_marks_cancelled(tmp_path: Path):
 
 def test_cancel_action_calls_notify_task_changed(tmp_path: Path):
     """cancel action calls notify_task_changed callback."""
-    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+    from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
 
     task_store = MagicMock()
     notify = MagicMock()
@@ -535,8 +535,8 @@ def test_cancel_action_calls_notify_task_changed(tmp_path: Path):
 
 def test_progress_callback_updates_task_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Progress callback updates task_store with completed/total items."""
+    from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
     from context_aware_translation.core.progress import ProgressUpdate
-    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
 
     task_store = MagicMock()
     worker = OCRTaskWorker(
@@ -552,11 +552,11 @@ def test_progress_callback_updates_task_store(monkeypatch: pytest.MonkeyPatch, t
     mock_repo.get_document_sources_needing_ocr.return_value = _make_pending_sources(1)
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.SQLiteBookDB",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.SQLiteBookDB",
         lambda *_args, **_kwargs: MagicMock(),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.DocumentRepository",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.DocumentRepository",
         lambda *_args, **_kwargs: mock_repo,
     )
 
@@ -568,11 +568,11 @@ def test_progress_callback_updates_task_store(monkeypatch: pytest.MonkeyPatch, t
             cb(ProgressUpdate(step="ocr", current=1, total=5))
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.ocr_ops.run_ocr",
         _emit_progress_then_done,
     )
 
@@ -583,8 +583,8 @@ def test_progress_callback_updates_task_store(monkeypatch: pytest.MonkeyPatch, t
 
 def test_run_ocr_reports_incremental_item_progress(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """run action should report item count during OCR, not only at completion."""
+    from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
     from context_aware_translation.core.progress import ProgressUpdate
-    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
 
     task_store = MagicMock()
     worker = OCRTaskWorker(
@@ -610,11 +610,11 @@ def test_run_ocr_reports_incremental_item_progress(monkeypatch: pytest.MonkeyPat
         return 3
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.ocr_ops.run_ocr",
         _run_ocr,
     )
 
@@ -636,7 +636,7 @@ def test_run_uses_config_snapshot_when_provided(monkeypatch: pytest.MonkeyPatch,
     """When config_snapshot_json is set, WorkflowSession.from_snapshot is used."""
     import json as _json
 
-    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+    from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
 
     snapshot = _json.dumps({"snapshot_version": 1})
     task_store = MagicMock()
@@ -654,11 +654,11 @@ def test_run_uses_config_snapshot_when_provided(monkeypatch: pytest.MonkeyPatch,
     mock_repo.get_document_sources_needing_ocr.return_value = _make_pending_sources(1)
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.SQLiteBookDB",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.SQLiteBookDB",
         lambda *_args, **_kwargs: MagicMock(),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.DocumentRepository",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.DocumentRepository",
         lambda *_args, **_kwargs: mock_repo,
     )
 
@@ -669,11 +669,11 @@ def test_run_uses_config_snapshot_when_provided(monkeypatch: pytest.MonkeyPatch,
         return None
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.WorkflowSession.from_snapshot",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.WorkflowSession.from_snapshot",
         lambda snap, book_id: (from_snapshot_calls.append((snap, book_id)) or _WorkflowSessionContext(mock_context)),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.ocr_task_worker.ocr_ops.run_ocr",
+        "context_aware_translation.adapters.qt.workers.ocr_task_worker.ocr_ops.run_ocr",
         _run_ocr,
     )
 
@@ -689,7 +689,7 @@ def test_run_uses_config_snapshot_when_provided(monkeypatch: pytest.MonkeyPatch,
 
 def test_unknown_action_raises(tmp_path: Path):
     """Unknown action raises an error signal."""
-    from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+    from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
 
     worker = OCRTaskWorker(
         _book_manager_with_db(tmp_path),

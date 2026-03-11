@@ -59,7 +59,7 @@ def _book_manager_with_db(tmp_path: Path) -> MagicMock:
 
 
 def test_run_emits_success_on_completion(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 
     task_store = MagicMock()
     worker = GlossaryReviewTaskWorker(
@@ -76,11 +76,11 @@ def test_run_emits_success_on_completion(monkeypatch: pytest.MonkeyPatch, tmp_pa
         return None
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_review_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.glossary_review_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_review_task_worker.glossary_ops.review_terms",
+        "context_aware_translation.adapters.qt.workers.glossary_review_task_worker.glossary_ops.review_terms",
         _review_terms,
     )
 
@@ -94,7 +94,7 @@ def test_run_emits_success_on_completion(monkeypatch: pytest.MonkeyPatch, tmp_pa
 
 
 def test_run_marks_task_running_then_completed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 
     task_store = MagicMock()
     worker = GlossaryReviewTaskWorker(
@@ -111,11 +111,11 @@ def test_run_marks_task_running_then_completed(monkeypatch: pytest.MonkeyPatch, 
         return None
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_review_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.glossary_review_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_review_task_worker.glossary_ops.review_terms",
+        "context_aware_translation.adapters.qt.workers.glossary_review_task_worker.glossary_ops.review_terms",
         _review_terms,
     )
 
@@ -126,7 +126,7 @@ def test_run_marks_task_running_then_completed(monkeypatch: pytest.MonkeyPatch, 
 
 
 def test_run_emits_error_on_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 
     task_store = MagicMock()
     worker = GlossaryReviewTaskWorker(
@@ -143,11 +143,11 @@ def test_run_emits_error_on_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: P
         raise RuntimeError("review failed")
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_review_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.glossary_review_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_review_task_worker.glossary_ops.review_terms",
+        "context_aware_translation.adapters.qt.workers.glossary_review_task_worker.glossary_ops.review_terms",
         _review_terms,
     )
 
@@ -162,7 +162,7 @@ def test_run_emits_error_on_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: P
 
 
 def test_run_emits_error_when_session_exit_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 
     task_store = MagicMock()
     worker = GlossaryReviewTaskWorker(
@@ -179,11 +179,11 @@ def test_run_emits_error_when_session_exit_fails(monkeypatch: pytest.MonkeyPatch
         return None
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_review_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.glossary_review_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowContext(mock_context, exit_error=RuntimeError("close failed")),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_review_task_worker.glossary_ops.review_terms",
+        "context_aware_translation.adapters.qt.workers.glossary_review_task_worker.glossary_ops.review_terms",
         _review_terms,
     )
 
@@ -200,7 +200,7 @@ def test_run_emits_error_when_session_exit_fails(monkeypatch: pytest.MonkeyPatch
 
 
 def test_cancel_marks_task_cancelled(tmp_path: Path):
-    from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 
     task_store = MagicMock()
     worker = GlossaryReviewTaskWorker(
@@ -217,7 +217,7 @@ def test_cancel_marks_task_cancelled(tmp_path: Path):
 
 
 def test_cancel_calls_notify_task_changed(tmp_path: Path):
-    from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 
     task_store = MagicMock()
     notify = MagicMock()
@@ -239,8 +239,8 @@ def test_cancel_calls_notify_task_changed(tmp_path: Path):
 
 
 def test_run_forwards_progress_updates(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    from context_aware_translation.adapters.qt.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
     from context_aware_translation.core.progress import ProgressUpdate, WorkflowStep
-    from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 
     task_store = MagicMock()
     worker = GlossaryReviewTaskWorker(
@@ -258,11 +258,11 @@ def test_run_forwards_progress_updates(monkeypatch: pytest.MonkeyPatch, tmp_path
             progress_callback(ProgressUpdate(step=WorkflowStep.EXPORT, current=1, total=5, message="reviewing"))
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_review_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.glossary_review_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_review_task_worker.glossary_ops.review_terms",
+        "context_aware_translation.adapters.qt.workers.glossary_review_task_worker.glossary_ops.review_terms",
         _review_terms,
     )
 
@@ -276,7 +276,7 @@ def test_run_forwards_progress_updates(monkeypatch: pytest.MonkeyPatch, tmp_path
 
 def test_run_always_uses_live_config_even_when_snapshot_set(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Glossary review always uses live config, never snapshot — per spec."""
-    from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 
     task_store = MagicMock()
     worker = GlossaryReviewTaskWorker(
@@ -300,11 +300,11 @@ def test_run_always_uses_live_config_even_when_snapshot_set(monkeypatch: pytest.
         return None
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_review_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.glossary_review_task_worker.WorkflowSession.from_book",
         fake_from_book,
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_review_task_worker.glossary_ops.review_terms",
+        "context_aware_translation.adapters.qt.workers.glossary_review_task_worker.glossary_ops.review_terms",
         _review_terms,
     )
 
@@ -319,7 +319,7 @@ def test_run_always_uses_live_config_even_when_snapshot_set(monkeypatch: pytest.
 
 
 def test_run_calls_notify_task_changed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 
     task_store = MagicMock()
     notify = MagicMock()
@@ -338,11 +338,11 @@ def test_run_calls_notify_task_changed(monkeypatch: pytest.MonkeyPatch, tmp_path
         return None
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_review_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.glossary_review_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_review_task_worker.glossary_ops.review_terms",
+        "context_aware_translation.adapters.qt.workers.glossary_review_task_worker.glossary_ops.review_terms",
         _review_terms,
     )
 
@@ -355,7 +355,7 @@ def test_run_calls_notify_task_changed(monkeypatch: pytest.MonkeyPatch, tmp_path
 
 
 def test_unknown_action_raises(tmp_path: Path):
-    from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 
     worker = GlossaryReviewTaskWorker(
         _book_manager_with_db(tmp_path),

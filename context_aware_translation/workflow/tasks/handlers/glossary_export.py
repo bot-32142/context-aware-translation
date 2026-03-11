@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 import context_aware_translation.storage.book_db as book_db
 import context_aware_translation.storage.term_repository as term_repository
-from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
+from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 from context_aware_translation.workflow.tasks.claims import (
     ClaimArbiter,
     ClaimMode,

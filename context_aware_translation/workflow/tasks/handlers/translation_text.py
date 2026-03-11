@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 import context_aware_translation.storage.book_db as book_db
 import context_aware_translation.storage.document_repository as document_repository
-from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
+from context_aware_translation.adapters.qt.workers.translation_text_task_worker import TranslationTextTaskWorker
 from context_aware_translation.workflow.tasks.claims import (
     AllDocuments,
     ClaimArbiter,

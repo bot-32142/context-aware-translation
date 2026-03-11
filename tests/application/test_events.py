@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
+from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.application.composition import build_application_context
 from context_aware_translation.application.contracts.app_setup import SaveWorkflowProfileRequest
 from context_aware_translation.application.contracts.projects import CreateProjectRequest
@@ -13,7 +14,6 @@ from context_aware_translation.application.events import (
     ProjectsInvalidatedEvent,
     QueueChangedEvent,
 )
-from context_aware_translation.ui.adapters.application_event_bridge import QtApplicationEventBridge
 
 
 def _ensure_qt_app() -> QApplication:

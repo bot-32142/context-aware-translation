@@ -393,7 +393,7 @@ def test_validate_run_allowed_when_terms_exist(tmp_path):
 
 
 def test_build_worker_run_returns_glossary_export_task_worker():
-    from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 
     deps = MagicMock()
     record = _make_record(status=STATUS_QUEUED, payload_json='{"output_path": "/tmp/glossary.xlsx"}')
@@ -403,7 +403,7 @@ def test_build_worker_run_returns_glossary_export_task_worker():
 
 
 def test_build_worker_cancel_returns_glossary_export_task_worker():
-    from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 
     deps = MagicMock()
     record = _make_record(status=STATUS_RUNNING, payload_json='{"output_path": "/tmp/glossary.xlsx"}')
@@ -415,7 +415,7 @@ def test_build_worker_cancel_returns_glossary_export_task_worker():
 def test_build_worker_extracts_output_path_from_payload():
     from pathlib import Path
 
-    from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 
     deps = MagicMock()
     record = _make_record(

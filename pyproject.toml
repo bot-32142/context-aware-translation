@@ -115,6 +115,7 @@ ignore_missing_imports = false
 exclude = [
     "tests/",
     ".venv/",
+    "context_aware_translation/adapters/qt/",
     "context_aware_translation/ui/",
 ]
 

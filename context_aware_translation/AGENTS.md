@@ -22,7 +22,8 @@ Core package for LLM-powered document translation with context-aware glossary ma
 | `documents/` | Document type implementations: `text.py`, `pdf.py`, `scanned_book.py`, `manga.py`, `base.py` (abstract Document class), plus EPUB support and alignment utilities. |
 | `llm/` | LLM integration layer: `client.py` (OpenAI client with retry/timeout), `translator.py`, `extractor.py`, `glossary_translator.py`, `summarizor.py`, `reviewer.py`, `ocr.py`, `manga_ocr.py`, `language_detector.py`, `token_tracker.py`, `image_backends/` (PIL, DALL-E, etc.), `batch_jobs/` (batch processing). |
 | `storage/` | SQLite persistence layer: `book_db.py` (term records), `registry_db.py` (global registry), `book_manager.py` (book lifecycle), `task_store.py` (task records), `context_tree_db.py` (context tree storage), `document_repository.py`, `endpoint_profile.py`, `config_profile.py`, `term_repository.py`, plus batch task stores. |
-| `ui/` | PySide6 GUI: `main_window.py` (sidebar navigation), `main.py` (entry point), `views/` (translation_view, glossary_view, book_workspace, etc.), `widgets/` (task_status_card, task_activity_panel, config_editor, etc.), `workers/` (task workers), `tasks/` (Qt task engine), `dialogs/`, `models/`, `i18n.py` (zh_CN translations). |
+| `adapters/` | Framework-specific adapter glue: Qt event bridge, Qt task engine, and Qt workers live under `adapters/qt/`. |
+| `ui/` | PySide6 GUI surfaces: `main_window.py`, `features/`, `widgets/`, `resources/`, `translations/`, `i18n.py`. |
 | `workflow/` | Task orchestration and execution: `service.py` (WorkflowService), `runtime.py`, `bootstrap.py`, `session.py`, `tasks/` (EngineCore, task handlers, claims, execution), `__init__.py` (exports entry points). |
 | `utils/` | Helper utilities: `chunking.py`, `cjk_normalize.py`, `markdown_escape.py`, `image_utils.py`, `hashing.py`, `file_utils.py`, semantic chunking, string similarity, symbol checking. |
 | `resources/` | Static assets: tokenizer data and other resources. |
@@ -43,7 +44,7 @@ Core package for LLM-powered document translation with context-aware glossary ma
 - `workflow/ops/*.py` contains workflow domain operations (translation/glossary/ocr/export/bootstrap)
 - `workflow/tasks/engine_core.py` is the pure-Python task scheduling engine (no Qt)
 - Task handlers in `workflow/tasks/handlers/` implement task_type-specific logic
-- UI workers in `ui/workers/` bridge Qt signals to task engine
+- Qt adapter workers live in `adapters/qt/workers/` and bridge UI signals to workflow operations
 - SQLite with WAL mode everywhere (registry.db global, book.db per-book, context_tree.db)
 
 **Type Safety:**

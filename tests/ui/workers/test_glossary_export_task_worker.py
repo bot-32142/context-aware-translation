@@ -62,7 +62,7 @@ def test_run_action_calls_build_fully_summarized_descriptions_and_export(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
     """Test that run action calls build_fully_summarized_descriptions and export_glossary."""
-    from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 
     task_store = MagicMock()
     task_store.get.return_value = Mock(total_items=10)
@@ -86,11 +86,11 @@ def test_run_action_calls_build_fully_summarized_descriptions_and_export(
 
     mock_export_glossary = MagicMock(return_value=42)
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_export_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.glossary_export_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(_Session()),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_export_task_worker.export_glossary",
+        "context_aware_translation.adapters.qt.workers.glossary_export_task_worker.export_glossary",
         mock_export_glossary,
     )
 
@@ -117,7 +117,7 @@ def test_run_action_calls_build_fully_summarized_descriptions_and_export(
 
 def test_run_action_updates_task_store_status_running_then_completed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Test that run action updates task status to running, then completed."""
-    from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 
     task_store = MagicMock()
     task_store.get.return_value = Mock(total_items=10)
@@ -142,11 +142,11 @@ def test_run_action_updates_task_store_status_running_then_completed(monkeypatch
 
     mock_export_glossary = MagicMock(return_value=15)
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_export_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.glossary_export_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(_Session()),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_export_task_worker.export_glossary",
+        "context_aware_translation.adapters.qt.workers.glossary_export_task_worker.export_glossary",
         mock_export_glossary,
     )
 
@@ -163,8 +163,8 @@ def test_run_action_updates_task_store_status_running_then_completed(monkeypatch
 
 def test_run_action_on_cancel_sets_cancelled_status(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Test that cancellation during run sets cancelled status."""
+    from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
     from context_aware_translation.core.cancellation import OperationCancelledError
-    from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 
     task_store = MagicMock()
     output_path = tmp_path / "glossary.csv"
@@ -186,7 +186,7 @@ def test_run_action_on_cancel_sets_cancelled_status(monkeypatch: pytest.MonkeyPa
         manager = mock_manager
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_export_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.glossary_export_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(_Session()),
     )
 
@@ -201,7 +201,7 @@ def test_run_action_on_cancel_sets_cancelled_status(monkeypatch: pytest.MonkeyPa
 
 def test_run_action_on_error_sets_failed_status(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Test that error during run sets failed status."""
-    from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 
     task_store = MagicMock()
     output_path = tmp_path / "glossary.csv"
@@ -223,7 +223,7 @@ def test_run_action_on_error_sets_failed_status(monkeypatch: pytest.MonkeyPatch,
         manager = mock_manager
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_export_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.glossary_export_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(_Session()),
     )
 
@@ -242,7 +242,7 @@ def test_run_action_on_error_sets_failed_status(monkeypatch: pytest.MonkeyPatch,
 
 def test_cancel_action_sets_cancelled_status(tmp_path: Path):
     """Test that cancel action sets cancelled status in task store."""
-    from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 
     task_store = MagicMock()
     output_path = tmp_path / "glossary.csv"
@@ -265,8 +265,8 @@ def test_cancel_action_sets_cancelled_status(tmp_path: Path):
 
 def test_progress_updates_task_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Test that progress callbacks update task store."""
+    from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
     from context_aware_translation.core.progress import ProgressUpdate, WorkflowStep
-    from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 
     task_store = MagicMock()
     task_store.get.return_value = Mock(total_items=0)
@@ -298,11 +298,11 @@ def test_progress_updates_task_store(monkeypatch: pytest.MonkeyPatch, tmp_path: 
 
     mock_export_glossary = MagicMock(return_value=10)
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_export_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.glossary_export_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(_Session()),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_export_task_worker.export_glossary",
+        "context_aware_translation.adapters.qt.workers.glossary_export_task_worker.export_glossary",
         mock_export_glossary,
     )
 
@@ -316,7 +316,7 @@ def test_progress_updates_task_store(monkeypatch: pytest.MonkeyPatch, tmp_path: 
 
 def test_output_path_used_for_export_glossary(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Test that output_path parameter is used for export_glossary."""
-    from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 
     task_store = MagicMock()
     output_path = tmp_path / "custom_output.csv"
@@ -340,11 +340,11 @@ def test_output_path_used_for_export_glossary(monkeypatch: pytest.MonkeyPatch, t
 
     mock_export_glossary = MagicMock(return_value=5)
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_export_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.glossary_export_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(_Session()),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_export_task_worker.export_glossary",
+        "context_aware_translation.adapters.qt.workers.glossary_export_task_worker.export_glossary",
         mock_export_glossary,
     )
 
@@ -360,7 +360,7 @@ def test_output_path_used_for_export_glossary(monkeypatch: pytest.MonkeyPatch, t
 
 def test_cancel_calls_notify_task_changed(tmp_path: Path):
     """Test that cancel action calls notify_task_changed callback."""
-    from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 
     task_store = MagicMock()
     notify = MagicMock()
@@ -382,7 +382,7 @@ def test_cancel_calls_notify_task_changed(tmp_path: Path):
 
 def test_run_calls_notify_task_changed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Test that run action calls notify_task_changed callback."""
-    from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 
     task_store = MagicMock()
     task_store.get.return_value = Mock(total_items=0)
@@ -409,11 +409,11 @@ def test_run_calls_notify_task_changed(monkeypatch: pytest.MonkeyPatch, tmp_path
 
     mock_export_glossary = MagicMock(return_value=5)
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_export_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.glossary_export_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(_Session()),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_export_task_worker.export_glossary",
+        "context_aware_translation.adapters.qt.workers.glossary_export_task_worker.export_glossary",
         mock_export_glossary,
     )
 
@@ -427,7 +427,7 @@ def test_run_calls_notify_task_changed(monkeypatch: pytest.MonkeyPatch, tmp_path
 
 def test_unknown_action_raises(tmp_path: Path):
     """Test that unknown action raises an error."""
-    from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 
     output_path = tmp_path / "glossary.csv"
     worker = GlossaryExportTaskWorker(

@@ -60,7 +60,7 @@ def _book_manager_with_db(tmp_path: Path) -> MagicMock:
 
 def test_run_action_calls_session_translate(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Test that run action calls translation ops with correct parameters."""
-    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
+    from context_aware_translation.adapters.qt.workers.translation_text_task_worker import TranslationTextTaskWorker
 
     task_store = MagicMock()
     worker = TranslationTextTaskWorker(
@@ -79,11 +79,11 @@ def test_run_action_calls_session_translate(monkeypatch: pytest.MonkeyPatch, tmp
         translate_calls.append(kwargs)
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.translation_ops.translate",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.translation_ops.translate",
         _translate,
     )
 
@@ -99,7 +99,7 @@ def test_run_action_calls_session_translate(monkeypatch: pytest.MonkeyPatch, tmp
 
 def test_run_action_updates_task_store_running_then_completed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """run action must update task status to running, then completed."""
-    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
+    from context_aware_translation.adapters.qt.workers.translation_text_task_worker import TranslationTextTaskWorker
 
     task_store = MagicMock()
     worker = TranslationTextTaskWorker(
@@ -116,11 +116,11 @@ def test_run_action_updates_task_store_running_then_completed(monkeypatch: pytes
         return None
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.translation_ops.translate",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.translation_ops.translate",
         _translate,
     )
 
@@ -132,7 +132,7 @@ def test_run_action_updates_task_store_running_then_completed(monkeypatch: pytes
 
 def test_run_action_does_not_auto_enqueue_reembedding(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Translation completion should not auto-trigger image reembedding tasks."""
-    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
+    from context_aware_translation.adapters.qt.workers.translation_text_task_worker import TranslationTextTaskWorker
 
     task_store = MagicMock()
     enqueue_followup = MagicMock()
@@ -151,11 +151,11 @@ def test_run_action_does_not_auto_enqueue_reembedding(monkeypatch: pytest.Monkey
         return None
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.translation_ops.translate",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.translation_ops.translate",
         _translate,
     )
 
@@ -166,8 +166,8 @@ def test_run_action_does_not_auto_enqueue_reembedding(monkeypatch: pytest.Monkey
 
 def test_run_action_on_cancel_sets_cancelled_status(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Cancellation during run sets cancelled status."""
+    from context_aware_translation.adapters.qt.workers.translation_text_task_worker import TranslationTextTaskWorker
     from context_aware_translation.core.cancellation import OperationCancelledError
-    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
 
     task_store = MagicMock()
     worker = TranslationTextTaskWorker(
@@ -184,11 +184,11 @@ def test_run_action_on_cancel_sets_cancelled_status(monkeypatch: pytest.MonkeyPa
         raise OperationCancelledError("cancelled")
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.translation_ops.translate",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.translation_ops.translate",
         _translate,
     )
 
@@ -203,7 +203,7 @@ def test_run_action_on_cancel_sets_cancelled_status(monkeypatch: pytest.MonkeyPa
 
 def test_run_action_on_error_sets_failed_status(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Error during run sets failed status."""
-    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
+    from context_aware_translation.adapters.qt.workers.translation_text_task_worker import TranslationTextTaskWorker
 
     task_store = MagicMock()
     worker = TranslationTextTaskWorker(
@@ -220,11 +220,11 @@ def test_run_action_on_error_sets_failed_status(monkeypatch: pytest.MonkeyPatch,
         raise RuntimeError("translation failed")
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.translation_ops.translate",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.translation_ops.translate",
         _translate,
     )
 
@@ -243,7 +243,7 @@ def test_run_action_on_error_sets_failed_status(monkeypatch: pytest.MonkeyPatch,
 
 def test_cancel_action_sets_cancelled_status(tmp_path: Path):
     """cancel action sets cancelled status in task store."""
-    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
+    from context_aware_translation.adapters.qt.workers.translation_text_task_worker import TranslationTextTaskWorker
 
     task_store = MagicMock()
     worker = TranslationTextTaskWorker(
@@ -261,7 +261,7 @@ def test_cancel_action_sets_cancelled_status(tmp_path: Path):
 
 def test_cancel_action_calls_notify_task_changed(tmp_path: Path):
     """cancel action calls notify_task_changed callback."""
-    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
+    from context_aware_translation.adapters.qt.workers.translation_text_task_worker import TranslationTextTaskWorker
 
     task_store = MagicMock()
     notify = MagicMock()
@@ -284,7 +284,7 @@ def test_cancel_action_calls_notify_task_changed(tmp_path: Path):
 
 def test_worker_filters_manga_document_ids(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Worker filters out manga document IDs before calling translate."""
-    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
+    from context_aware_translation.adapters.qt.workers.translation_text_task_worker import TranslationTextTaskWorker
 
     # Simulate DB with mixed doc types
     mock_db = MagicMock()
@@ -296,11 +296,11 @@ def test_worker_filters_manga_document_ids(monkeypatch: pytest.MonkeyPatch, tmp_
     }.get(doc_id)
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.SQLiteBookDB",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.SQLiteBookDB",
         lambda *_args, **_kwargs: mock_db,
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.DocumentRepository",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.DocumentRepository",
         lambda *_args, **_kwargs: mock_repo,
     )
 
@@ -321,11 +321,11 @@ def test_worker_filters_manga_document_ids(monkeypatch: pytest.MonkeyPatch, tmp_
         captured_doc_ids.extend(kwargs.get("document_ids") or [])
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.translation_ops.translate",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.translation_ops.translate",
         _capture_translate,
     )
 
@@ -339,7 +339,7 @@ def test_worker_filters_manga_document_ids(monkeypatch: pytest.MonkeyPatch, tmp_
 
 def test_worker_passes_none_document_ids_when_unset(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """When document_ids is None (all docs), no filtering is applied."""
-    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
+    from context_aware_translation.adapters.qt.workers.translation_text_task_worker import TranslationTextTaskWorker
 
     task_store = MagicMock()
     worker = TranslationTextTaskWorker(
@@ -359,11 +359,11 @@ def test_worker_passes_none_document_ids_when_unset(monkeypatch: pytest.MonkeyPa
         captured_doc_ids.append(kwargs.get("document_ids"))
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _WorkflowSessionContext(mock_context),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.translation_ops.translate",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.translation_ops.translate",
         _capture_translate,
     )
 
@@ -379,7 +379,7 @@ def test_run_uses_config_snapshot_when_provided(monkeypatch: pytest.MonkeyPatch,
     """When config_snapshot_json is set, WorkflowSession.from_snapshot is used."""
     import json as _json
 
-    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
+    from context_aware_translation.adapters.qt.workers.translation_text_task_worker import TranslationTextTaskWorker
 
     snapshot = _json.dumps({"snapshot_version": 1})
     task_store = MagicMock()
@@ -399,11 +399,11 @@ def test_run_uses_config_snapshot_when_provided(monkeypatch: pytest.MonkeyPatch,
         return None
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.WorkflowSession.from_snapshot",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.WorkflowSession.from_snapshot",
         lambda snap, book_id: (from_snapshot_calls.append((snap, book_id)) or _WorkflowSessionContext(mock_context)),
     )
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.translation_text_task_worker.translation_ops.translate",
+        "context_aware_translation.adapters.qt.workers.translation_text_task_worker.translation_ops.translate",
         _translate,
     )
 
@@ -419,7 +419,7 @@ def test_run_uses_config_snapshot_when_provided(monkeypatch: pytest.MonkeyPatch,
 
 def test_unknown_action_raises(tmp_path: Path):
     """Unknown action raises an error signal."""
-    from context_aware_translation.ui.workers.translation_text_task_worker import TranslationTextTaskWorker
+    from context_aware_translation.adapters.qt.workers.translation_text_task_worker import TranslationTextTaskWorker
 
     worker = TranslationTextTaskWorker(
         _book_manager_with_db(tmp_path),

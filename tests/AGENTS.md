@@ -25,8 +25,8 @@ Comprehensive test suite (107 tests) mirroring the main package structure. Tests
 | `llm/` | LLM clients, translators, extractors, OCR, batch gateways | `test_translator.py` (710 lines), `test_llm_client.py`, `test_extractor.py`, `test_ocr.py`, `test_gemini_backend.py`, `test_gemini_batch_gateway.py` |
 | `storage/` | SQLite repositories, book manager, context tree DB | `test_book_db.py` (1444 lines), `test_book_manager.py` (1021 lines), `test_term_repository.py` (868 lines), `test_context_tree_db.py`, `test_document_repository.py` |
 | `ui/` | PySide6 views, widgets, worker coordination | `test_glossary_view.py` (845 lines), `test_translation_view_refresh.py` (792 lines), `test_book_workspace_activity.py`, `test_config_editor.py`, `test_export_view.py` |
-| `ui/tasks/` | Task engine, view model mapping, task console | `test_task_engine.py` (13460 lines), `test_task_console.py` (14664 lines), `test_task_view_model_mapper.py` (5847 lines) |
-| `ui/workers/` | Worker tasks (translation, glossary export/review, config snapshot) | `test_translation_text_task_worker.py` (11834 lines), `test_translation_manga_task_worker.py` (8441 lines), `test_glossary_export_task_worker.py` (15956 lines), `test_config_snapshot_workers.py` (11104 lines) |
+| `ui/tasks/` | Qt adapter task-engine tests | `test_task_engine.py` (13460 lines) |
+| `ui/workers/` | Qt adapter worker tests (translation, glossary export/review, config snapshot) | `test_translation_text_task_worker.py` (11834 lines), `test_translation_manga_task_worker.py` (8441 lines), `test_glossary_export_task_worker.py` (15956 lines), `test_config_snapshot_workers.py` (11104 lines) |
 | `utils/` | Utility functions (chunking, hashing, markdown, JSON cleaning) | `test_chunking.py`, `test_semantic_chunker.py`, `test_string_similarity.py`, `test_symbol_check.py` |
 | `workflow/` | Workflow orchestration, session management, task handlers | `test_session.py`, `test_service_cancellation_semantics.py`, `test_translator_import_path.py` |
 | `workflow/tasks/execution/` | Task execution primitives | (Subdirectory for execution handlers) |

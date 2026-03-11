@@ -83,7 +83,7 @@ def _make_handler(task_type: str = "test_task", *, can_autorun: bool = True, can
 @pytest.fixture()
 def engine(tmp_store, mock_deps):
     """Create a TaskEngine with a real store and mock deps."""
-    from context_aware_translation.ui.tasks.qt_task_engine import TaskEngine
+    from context_aware_translation.adapters.qt.task_engine import TaskEngine
 
     eng = TaskEngine(store=tmp_store, deps=mock_deps)
     yield eng
@@ -359,8 +359,8 @@ def test_is_in_backoff_false_when_not_set(engine):
 
 
 def test_close_stops_autorun_timer(tmp_path, mock_deps):
+    from context_aware_translation.adapters.qt.task_engine import TaskEngine
     from context_aware_translation.storage.task_store import TaskStore
-    from context_aware_translation.ui.tasks.qt_task_engine import TaskEngine
 
     store = TaskStore(tmp_path / "tasks_close.db")
     eng = TaskEngine(store=store, deps=mock_deps)
