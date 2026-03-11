@@ -119,6 +119,7 @@ def test_project_setup_view_renders_backend_state():
         assert view.title_label.text() == view.tr("Setup for One Piece")
         assert view.custom_profile_group.isHidden()
         assert view.layout().alignment() == Qt.AlignmentFlag.AlignTop
+        assert not view.shared_profile_combo.isEditable()
         assert service.calls == [("get_state", "proj-1")]
     finally:
         view.cleanup()

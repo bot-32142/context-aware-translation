@@ -80,6 +80,7 @@ class ProjectSetupView(QWidget):
         selector_layout = QVBoxLayout(selector_group)
         row = QHBoxLayout()
         self.shared_profile_combo = QSearchableComboBox()
+        self.shared_profile_combo.setEditable(False)
         self.shared_profile_combo.setMinimumWidth(420)
         self.shared_profile_combo.setMaximumWidth(560)
         self.shared_profile_combo.currentIndexChanged.connect(self._on_shared_profile_changed)
