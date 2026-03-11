@@ -33,6 +33,8 @@ from context_aware_translation.application.runtime import (
     raise_application_error,
     recommended_workflow_profile_from_drafts,
 )
+from context_aware_translation.storage.config_profile import ConfigProfile
+from context_aware_translation.storage.endpoint_profile import EndpointProfile
 
 
 class AppSetupService(Protocol):
@@ -133,55 +135,7 @@ class DefaultAppSetupService:
         )
 
     def save_connection(self, request: SaveConnectionRequest) -> AppSetupState:
-        draft = request.connection
-        kwargs_payload = self._parse_connection_kwargs(draft)
-        if request.connection_id:
-            existing = self._runtime.book_manager.get_endpoint_profile(request.connection_id)
-            if existing is None:
-                raise_application_error(
-                    ApplicationErrorCode.NOT_FOUND, f"Connection not found: {request.connection_id}"
-                )
-            if is_managed_connection_name(existing.name):
-                raise_application_error(
-                    ApplicationErrorCode.PRECONDITION,
-                    "Managed wizard connections cannot be edited directly. Duplicate the connection if you need a custom copy.",
-                )
-            updated = self._runtime.book_manager.update_endpoint_profile(
-                request.connection_id,
-                name=draft.display_name,
-                description=draft.description,
-                api_key=existing.api_key if draft.api_key is None else draft.api_key,
-                base_url=existing.base_url if draft.base_url is None else draft.base_url,
-                model=existing.model if draft.default_model is None else draft.default_model,
-                temperature=draft.temperature,
-                kwargs=kwargs_payload,
-                timeout=draft.timeout,
-                max_retries=draft.max_retries,
-                concurrency=draft.concurrency,
-                token_limit=draft.token_limit,
-                input_token_limit=draft.input_token_limit,
-                output_token_limit=draft.output_token_limit,
-            )
-            if updated is None:
-                raise_application_error(
-                    ApplicationErrorCode.NOT_FOUND, f"Connection not found: {request.connection_id}"
-                )
-        else:
-            self._runtime.book_manager.create_endpoint_profile(
-                name=draft.display_name,
-                api_key=draft.api_key or "",
-                base_url=draft.base_url or "",
-                model=draft.default_model or "",
-                temperature=draft.temperature,
-                kwargs=kwargs_payload,
-                timeout=draft.timeout,
-                max_retries=draft.max_retries,
-                concurrency=draft.concurrency,
-                description=draft.description,
-                token_limit=draft.token_limit,
-                input_token_limit=draft.input_token_limit,
-                output_token_limit=draft.output_token_limit,
-            )
+        self._persist_connection(request.connection, connection_id=request.connection_id)
         self._runtime.invalidate_setup()
         return self.get_state()
 
@@ -250,17 +204,13 @@ class DefaultAppSetupService:
 
         saved_ids: dict[str, str] = {}
         for draft in expand_wizard_connection_drafts(request.connections):
-            state_before = {p.profile_id for p in self._runtime.book_manager.list_endpoint_profiles()}
-            self.save_connection(SaveConnectionRequest(connection=draft))
-            new_profiles = self._runtime.book_manager.list_endpoint_profiles()
-            for profile in new_profiles:
-                if profile.profile_id not in state_before and profile.name == draft.display_name:
-                    saved_ids[draft.display_name] = profile.profile_id
-                    break
-            else:
-                existing = next((p for p in new_profiles if p.name == draft.display_name), None)
-                if existing is not None:
-                    saved_ids[draft.display_name] = existing.profile_id
+            existing_connection = self._find_connection_by_name(draft.display_name)
+            saved = self._persist_connection(
+                draft,
+                connection_id=(existing_connection.profile_id if existing_connection is not None else None),
+                allow_managed_update=True,
+            )
+            saved_ids[draft.display_name] = saved.profile_id
 
         recommended_profile = recommendation.model_copy(
             update={
@@ -275,6 +225,9 @@ class DefaultAppSetupService:
                 ]
             }
         )
+        existing_profile = self._find_profile_by_name(recommended_profile.name)
+        if existing_profile is not None:
+            recommended_profile = recommended_profile.model_copy(update={"profile_id": existing_profile.profile_id})
         self.save_workflow_profile(SaveWorkflowProfileRequest(profile=recommended_profile, set_as_default=True))
         return self.get_state()
 
@@ -402,6 +355,67 @@ class DefaultAppSetupService:
             )
         payload.update({str(key): value for key, value in parsed.items()})
         return payload
+
+    def _persist_connection(
+        self,
+        draft: ConnectionDraft,
+        *,
+        connection_id: str | None = None,
+        allow_managed_update: bool = False,
+    ) -> EndpointProfile:
+        kwargs_payload = self._parse_connection_kwargs(draft)
+        if connection_id:
+            existing = self._runtime.book_manager.get_endpoint_profile(connection_id)
+            if existing is None:
+                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
+            if is_managed_connection_name(existing.name) and not allow_managed_update:
+                raise_application_error(
+                    ApplicationErrorCode.PRECONDITION,
+                    "Managed wizard connections cannot be edited directly. Duplicate the connection if you need a custom copy.",
+                )
+            updated = self._runtime.book_manager.update_endpoint_profile(
+                connection_id,
+                name=draft.display_name,
+                description=draft.description,
+                api_key=existing.api_key if draft.api_key is None else draft.api_key,
+                base_url=existing.base_url if draft.base_url is None else draft.base_url,
+                model=existing.model if draft.default_model is None else draft.default_model,
+                temperature=draft.temperature,
+                kwargs=kwargs_payload,
+                timeout=draft.timeout,
+                max_retries=draft.max_retries,
+                concurrency=draft.concurrency,
+                token_limit=draft.token_limit,
+                input_token_limit=draft.input_token_limit,
+                output_token_limit=draft.output_token_limit,
+            )
+            if updated is None:
+                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
+            return updated
+
+        return self._runtime.book_manager.create_endpoint_profile(
+            name=draft.display_name,
+            api_key=draft.api_key or "",
+            base_url=draft.base_url or "",
+            model=draft.default_model or "",
+            temperature=draft.temperature,
+            kwargs=kwargs_payload,
+            timeout=draft.timeout,
+            max_retries=draft.max_retries,
+            concurrency=draft.concurrency,
+            description=draft.description,
+            token_limit=draft.token_limit,
+            input_token_limit=draft.input_token_limit,
+            output_token_limit=draft.output_token_limit,
+        )
+
+    def _find_connection_by_name(self, name: str) -> EndpointProfile | None:
+        return next(
+            (profile for profile in self._runtime.book_manager.list_endpoint_profiles() if profile.name == name), None
+        )
+
+    def _find_profile_by_name(self, name: str) -> ConfigProfile | None:
+        return next((profile for profile in self._runtime.book_manager.list_profiles() if profile.name == name), None)
 
     def _next_connection_copy_name(self, base_name: str) -> str:
         existing = {profile.name for profile in self._runtime.book_manager.list_endpoint_profiles()}

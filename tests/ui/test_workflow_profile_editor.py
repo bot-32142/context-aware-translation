@@ -64,14 +64,20 @@ def test_workflow_profile_editor_uses_scrollable_dialog_layout():
     assert dialog.routes_table.editTriggers() == dialog.routes_table.EditTrigger.NoEditTriggers
     assert dialog.routes_table.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
     assert dialog.routes_table.columnWidth(1) >= 300
-    assert dialog.routes_table.columnWidth(2) >= 250
+    assert dialog.routes_table.columnWidth(2) >= 280
     assert dialog.routes_table.columnCount() == 4
     assert dialog.routes_table.item(0, 0).text() == "Translator"
     assert dialog.routes_table.cellWidget(0, 3) is not None
     route_row = dialog._rows[0]
     assert route_row.connection_combo is not None
-    assert route_row.connection_combo.minimumWidth() >= 250
-    assert route_row.model_edit.minimumWidth() >= 220
+    assert route_row.connection_combo.sizePolicy().horizontalPolicy() == route_row.connection_combo.sizePolicy().Policy.Expanding
+    assert route_row.model_edit.sizePolicy().horizontalPolicy() == route_row.model_edit.sizePolicy().Policy.Expanding
+    assert route_row.connection_combo.minimumHeight() >= route_row.connection_combo.sizeHint().height()
+    assert route_row.model_edit.minimumHeight() >= route_row.model_edit.sizeHint().height()
+    assert dialog.routes_table.rowHeight(0) >= dialog.routes_table.cellWidget(0, 1).sizeHint().height()
+    assert dialog.routes_table.rowHeight(0) >= dialog.routes_table.cellWidget(0, 3).sizeHint().height()
+    assert "background-color: white" in dialog.routes_table.styleSheet()
+    assert "palette(base)" not in dialog.routes_table.styleSheet()
 
 
 def test_step_advanced_config_dialog_updates_route_config():

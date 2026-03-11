@@ -136,6 +136,87 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
         context.close()
 
 
+def test_setup_wizard_rerun_updates_existing_managed_connections_and_profile(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    try:
+        context.services.app_setup.run_setup_wizard(
+            SetupWizardRequest(
+                providers=[ProviderKind.GEMINI, ProviderKind.DEEPSEEK],
+                profile_name="Team Default",
+                connections=[
+                    ConnectionDraft(
+                        display_name="Gemini",
+                        provider=ProviderKind.GEMINI,
+                        api_key="gkey-1",
+                        description="Initial wizard settings",
+                        token_limit=1000,
+                    ),
+                    ConnectionDraft(
+                        display_name="DeepSeek",
+                        provider=ProviderKind.DEEPSEEK,
+                        api_key="dkey-1",
+                        description="Initial wizard settings",
+                        token_limit=1000,
+                    ),
+                ],
+            )
+        )
+
+        initial_connection_ids = {
+            profile.name: profile.profile_id
+            for profile in context.runtime.book_manager.list_endpoint_profiles()
+            if profile.name.startswith("recommended-")
+        }
+        initial_profile = next(
+            profile for profile in context.runtime.book_manager.list_profiles() if profile.name == "Team Default"
+        )
+
+        context.services.app_setup.run_setup_wizard(
+            SetupWizardRequest(
+                providers=[ProviderKind.GEMINI, ProviderKind.DEEPSEEK],
+                profile_name="Team Default",
+                connections=[
+                    ConnectionDraft(
+                        display_name="Gemini",
+                        provider=ProviderKind.GEMINI,
+                        api_key="gkey-2",
+                        description="Updated wizard settings",
+                        token_limit=2000,
+                    ),
+                    ConnectionDraft(
+                        display_name="DeepSeek",
+                        provider=ProviderKind.DEEPSEEK,
+                        api_key="dkey-2",
+                        description="Updated wizard settings",
+                        token_limit=2000,
+                    ),
+                ],
+            )
+        )
+
+        rerun_connections = {
+            profile.name: profile
+            for profile in context.runtime.book_manager.list_endpoint_profiles()
+            if profile.name.startswith("recommended-")
+        }
+        assert {name: profile.profile_id for name, profile in rerun_connections.items()} == initial_connection_ids
+        assert rerun_connections["recommended-Gemini 2.5 Pro"].api_key == "gkey-2"
+        assert rerun_connections["recommended-Gemini 2.5 Pro"].description == "Updated wizard settings"
+        assert rerun_connections["recommended-Gemini 2.5 Pro"].token_limit == 2000
+        assert rerun_connections["recommended-DeepSeek Chat"].api_key == "dkey-2"
+        assert rerun_connections["recommended-DeepSeek Chat"].description == "Updated wizard settings"
+        assert rerun_connections["recommended-DeepSeek Chat"].token_limit == 2000
+
+        matching_profiles = [
+            profile for profile in context.runtime.book_manager.list_profiles() if profile.name == "Team Default"
+        ]
+        assert len(matching_profiles) == 1
+        assert matching_profiles[0].profile_id == initial_profile.profile_id
+    finally:
+        context.close()
+
+
 def test_project_specific_profile_remains_usable_without_shared_profiles(tmp_path: Path) -> None:
     _ensure_qt_app()
     context = build_application_context(library_root=tmp_path)

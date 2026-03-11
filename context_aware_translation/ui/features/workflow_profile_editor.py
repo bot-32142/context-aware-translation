@@ -10,7 +10,9 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
-    QHeaderView,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
@@ -47,6 +49,9 @@ class RouteRow:
     route: WorkflowStepRoute
     connection_combo: QComboBox | None
     model_edit: QLineEdit
+    row_widget: QWidget | None = None
+    step_label_widget: QLabel | None = None
+    advanced_widget: QWidget | None = None
 
 
 @dataclass(frozen=True)
@@ -224,10 +229,43 @@ ADVANCED_STEP_IDS = frozenset(
 
 
 class WorkflowRoutesEditor(QWidget):
-    _STEP_COLUMN_WIDTH = 180
-    _ADVANCED_COLUMN_WIDTH = 110
-    _CONNECTION_COLUMN_WIDTH = 300
-    _MODEL_COLUMN_WIDTH = 340
+    EditTrigger = QTableWidget.EditTrigger
+    _COLUMN_COUNT = 4
+    _MIN_STEP_COLUMN_WIDTH = 160
+    _MIN_ADVANCED_COLUMN_WIDTH = 110
+    _MIN_CONNECTION_COLUMN_WIDTH = 300
+    _MIN_MODEL_COLUMN_WIDTH = 280
+    _TABLE_STYLESHEET = (
+        "WorkflowRoutesEditor {"
+        " background-color: transparent;"
+        "}"
+        " QFrame#workflowRoutesHeader {"
+        " background-color: #f5f5f5;"
+        " border: 1px solid #e0e0e0;"
+        " border-bottom: none;"
+        "}"
+        " QFrame#workflowRouteRow {"
+        " background-color: white;"
+        " border-left: 1px solid #e0e0e0;"
+        " border-right: 1px solid #e0e0e0;"
+        " border-bottom: 1px solid #e0e0e0;"
+        "}"
+        " QLabel#workflowRouteHeader {"
+        " color: #333333;"
+        " font-weight: bold;"
+        "}"
+        " QLabel#workflowRouteCell, QLabel#workflowRouteDash {"
+        " color: #333333;"
+        "}"
+        " QScrollArea {"
+        " background-color: transparent;"
+        " border: none;"
+        "}"
+        " QLineEdit, QComboBox {"
+        " background-color: white;"
+        " color: #333333;"
+        "}"
+    )
 
     def __init__(
         self,
@@ -245,71 +283,126 @@ class WorkflowRoutesEditor(QWidget):
         self._advanced_step_ids = advanced_step_ids
         self._max_visible_rows = max_visible_rows
         self.rows: list[RouteRow] = []
+        self.table = self
+        self._items: dict[tuple[int, int], QTableWidgetItem] = {}
+        self._cell_widgets: dict[tuple[int, int], QWidget] = {}
+        self._header_columns: list[QWidget] = []
+        self._row_columns: list[list[QWidget]] = []
 
+        self.setObjectName("workflowRoutesEditor")
+        self.setStyleSheet(self._TABLE_STYLESHEET)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
         self._hint_label = create_tip_label(hint_text)
         layout.addWidget(self._hint_label)
 
-        self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(
-            [self.tr("Step"), self.tr("Connection"), self.tr("Model"), self.tr("Advanced")]
+        self._header = self._build_frame("workflowRoutesHeader")
+        self._header_columns = self._build_columns(
+            self._header,
+            [
+                self._header_label(self.tr("Step")),
+                self._header_label(self.tr("Connection")),
+                self._header_label(self.tr("Model")),
+                self._header_label(self.tr("Advanced")),
+            ],
         )
-        self.table.verticalHeader().setVisible(False)
-        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.table.setAlternatingRowColors(False)
-        self.table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectItems)
-        self.table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.table.setWordWrap(False)
-        self.table.verticalHeader().setDefaultSectionSize(40)
-        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.table.setStyleSheet(
-            "QTableWidget, QTableView { background: palette(base); selection-background-color: transparent; selection-color: palette(text); }"
-            " QTableWidget::item, QTableView::item { background-color: transparent; color: palette(text); }"
-            " QTableWidget::item:selected, QTableWidget::item:selected:active, QTableWidget::item:selected:!active,"
-            " QTableView::item:selected, QTableView::item:selected:active, QTableView::item:selected:!active { background-color: transparent; color: palette(text); }"
-            " QTableWidget::item:hover, QTableView::item:hover { background-color: transparent; color: palette(text); }"
-            " QTableWidget QLineEdit, QTableWidget QComboBox, QTableWidget QPushButton { selection-background-color: transparent; }"
-        )
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
-        self.table.setColumnWidth(0, self._STEP_COLUMN_WIDTH)
-        self.table.setColumnWidth(1, self._CONNECTION_COLUMN_WIDTH)
-        self.table.setColumnWidth(2, self._MODEL_COLUMN_WIDTH)
-        self.table.setColumnWidth(3, self._ADVANCED_COLUMN_WIDTH)
-        self.table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        layout.addWidget(self._header)
+
+        self._scroll_area = QScrollArea()
+        self._scroll_area.setWidgetResizable(True)
+        self._scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
+        self._scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._rows_container = QWidget()
+        self._rows_layout = QVBoxLayout(self._rows_container)
+        self._rows_layout.setContentsMargins(0, 0, 0, 0)
+        self._rows_layout.setSpacing(0)
+        self._scroll_area.setWidget(self._rows_container)
+        self._scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
-        layout.addWidget(self.table)
+        layout.addWidget(self._scroll_area)
         self.set_routes(routes)
 
     def set_routes(self, routes: list[WorkflowStepRoute]) -> None:
-        self.table.setRowCount(0)
+        while self._rows_layout.count():
+            item = self._rows_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.hide()
+                widget.setParent(None)
+                widget.deleteLater()
         self.rows.clear()
-        for route in routes:
-            row_index = self.table.rowCount()
-            self.table.insertRow(row_index)
-            self.table.setItem(row_index, 0, self._step_item(route.step_label))
-            self._set_advanced_widget(row_index, route)
+        self._items.clear()
+        self._cell_widgets.clear()
+        self._row_columns.clear()
+
+        for row_index, route in enumerate(routes):
+            row_frame = self._build_frame("workflowRouteRow")
+            step_label = self._body_label(route.step_label)
+            step_label.setToolTip(self.tr("Connection and model settings for this workflow step."))
 
             if route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
-                self.table.setItem(row_index, 1, self._item(route.connection_label or self.tr("Direct batch config")))
+                connection_label = self._body_label(route.connection_label or self.tr("Direct batch config"))
                 model_edit = self._build_model_edit(route.model or "", readonly=True)
-                self.table.setCellWidget(row_index, 2, self._wrap_cell_widget(model_edit))
-                self.rows.append(RouteRow(route=route, connection_combo=None, model_edit=model_edit))
-                continue
+                advanced_widget, advanced_item = self._build_advanced_cell(route, row_index)
+                columns = self._build_columns(
+                    row_frame,
+                    [
+                        step_label,
+                        connection_label,
+                        self._wrap_cell_widget(model_edit),
+                        advanced_widget,
+                    ],
+                )
+                route_row = RouteRow(
+                    route=route,
+                    connection_combo=None,
+                    model_edit=model_edit,
+                    row_widget=row_frame,
+                    step_label_widget=step_label,
+                    advanced_widget=advanced_widget,
+                )
+                self._items[(row_index, 0)] = self._step_item(route.step_label)
+                self._items[(row_index, 1)] = self._item(connection_label.text())
+                if advanced_item is not None:
+                    self._items[(row_index, 3)] = advanced_item
+            else:
+                combo = self._build_connection_combo(route.connection_id)
+                model_edit = self._build_model_edit(route.model or "")
+                combo.currentIndexChanged.connect(
+                    lambda _i, c=combo, e=model_edit: self._sync_model_from_connection(c, e)
+                )
+                advanced_widget, advanced_item = self._build_advanced_cell(route, row_index)
+                columns = self._build_columns(
+                    row_frame,
+                    [
+                        step_label,
+                        self._wrap_cell_widget(combo),
+                        self._wrap_cell_widget(model_edit),
+                        advanced_widget,
+                    ],
+                )
+                route_row = RouteRow(
+                    route=route,
+                    connection_combo=combo,
+                    model_edit=model_edit,
+                    row_widget=row_frame,
+                    step_label_widget=step_label,
+                    advanced_widget=advanced_widget,
+                )
+                self._items[(row_index, 0)] = self._step_item(route.step_label)
+                if advanced_item is not None:
+                    self._items[(row_index, 3)] = advanced_item
 
-            combo = self._build_connection_combo(route.connection_id)
-            model_edit = self._build_model_edit(route.model or "")
-            combo.currentIndexChanged.connect(lambda _i, c=combo, e=model_edit: self._sync_model_from_connection(c, e))
-            self.table.setCellWidget(row_index, 1, self._wrap_cell_widget(combo))
-            self.table.setCellWidget(row_index, 2, self._wrap_cell_widget(model_edit))
-            self.rows.append(RouteRow(route=route, connection_combo=combo, model_edit=model_edit))
+            self.rows.append(route_row)
+            self._row_columns.append(columns)
+            self._cell_widgets[(row_index, 1)] = columns[1]
+            self._cell_widgets[(row_index, 2)] = columns[2]
+            self._cell_widgets[(row_index, 3)] = columns[3]
+            self._rows_layout.addWidget(row_frame)
 
-        self._update_table_geometry()
+        self._rows_layout.addStretch()
+        self._update_layout_geometry()
 
     def set_connection_choices(self, connection_choices: list[ConnectionChoice]) -> None:
         self._connection_choices = connection_choices
@@ -350,11 +443,11 @@ class WorkflowRoutesEditor(QWidget):
 
     def _build_connection_combo(self, connection_id: str | None) -> QComboBox:
         combo = QComboBox()
-        combo.setMinimumWidth(self._CONNECTION_COLUMN_WIDTH - 24)
-        combo.setMaximumWidth(self._CONNECTION_COLUMN_WIDTH - 24)
-        combo.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        combo.setMinimumContentsLength(16)
         combo.setStyleSheet("QComboBox { font-size: 13px; padding: 4px 8px; }")
+        combo.setMinimumHeight(combo.sizeHint().height())
         combo.addItem(self.tr("Select connection"), "")
         for choice in self._connection_choices:
             combo.addItem(choice.label, choice.connection_id)
@@ -367,19 +460,23 @@ class WorkflowRoutesEditor(QWidget):
     def _build_model_edit(self, value: str, *, readonly: bool = False) -> QLineEdit:
         model_edit = QLineEdit(value)
         model_edit.setReadOnly(readonly)
-        model_edit.setMinimumWidth(self._MODEL_COLUMN_WIDTH - 24)
-        model_edit.setMaximumWidth(self._MODEL_COLUMN_WIDTH - 24)
-        model_edit.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        model_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         model_edit.setStyleSheet("QLineEdit { font-size: 13px; padding: 4px 6px; }")
+        model_edit.setMinimumHeight(model_edit.sizeHint().height())
         return model_edit
 
-    def _wrap_cell_widget(self, widget: QWidget) -> QWidget:
+    def _wrap_cell_widget(self, widget: QWidget, *, center_in_cell: bool = False) -> QWidget:
         container = QWidget()
-        container.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(6, 2, 6, 2)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        layout.addWidget(widget, 0, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+        alignment = Qt.AlignmentFlag.AlignVCenter
+        if center_in_cell:
+            alignment |= Qt.AlignmentFlag.AlignHCenter
+        layout.addWidget(widget, 0, alignment)
+        container.setMinimumHeight(max(widget.minimumHeight(), widget.sizeHint().height()))
+        container.setMinimumWidth(widget.sizeHint().width())
         return container
 
     def _sync_model_from_connection(self, combo: QComboBox, model_edit: QLineEdit) -> None:
@@ -406,16 +503,17 @@ class WorkflowRoutesEditor(QWidget):
         item.setToolTip(self.tr("Connection and model settings for this workflow step."))
         return item
 
-    def _set_advanced_widget(self, row: int, route: WorkflowStepRoute) -> None:
+    def _build_advanced_cell(self, route: WorkflowStepRoute, row: int) -> tuple[QWidget, QTableWidgetItem | None]:
         if route.step_id in self._advanced_step_ids:
             button = QPushButton(self.tr("Advanced"))
-            button.setFixedWidth(self._ADVANCED_COLUMN_WIDTH - 16)
+            button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+            button.setMinimumHeight(button.sizeHint().height())
             button.clicked.connect(lambda _checked=False, r=row: self._open_step_advanced_dialog(r))
-            self.table.setCellWidget(row, 3, self._wrap_cell_widget(button))
-            return
-        self.table.setItem(
-            row,
-            3,
+            return self._wrap_cell_widget(button, center_in_cell=True), None
+        label = self._body_label("—", object_name="workflowRouteDash", centered=True)
+        label.setToolTip(self.tr("This step has no additional settings beyond connection and model."))
+        return (
+            self._wrap_cell_widget(label, center_in_cell=True),
             self._item(
                 "—",
                 tooltip=self.tr("This step has no additional settings beyond connection and model."),
@@ -437,40 +535,138 @@ class WorkflowRoutesEditor(QWidget):
         if updated_route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
             route_row.model_edit.setText(updated_route.model or "")
 
-    def _update_table_geometry(self) -> None:
-        self.table.resizeRowsToContents()
-        header_height = self.table.horizontalHeader().height()
-        frame_height = self.table.frameWidth() * 2
-        row_heights = [self.table.rowHeight(index) for index in range(self.table.rowCount())]
-        visible_rows = (
-            len(row_heights) if self._max_visible_rows is None else min(len(row_heights), self._max_visible_rows)
+    def _build_frame(self, object_name: str) -> QFrame:
+        frame = QFrame()
+        frame.setObjectName(object_name)
+        frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        return frame
+
+    def _build_columns(self, parent: QWidget, widgets: list[QWidget]) -> list[QWidget]:
+        layout = QHBoxLayout(parent)
+        layout.setContentsMargins(16, 8, 16, 8)
+        layout.setSpacing(12)
+        hosts: list[QWidget] = []
+        for index, widget in enumerate(widgets):
+            host = QWidget(parent)
+            host.setSizePolicy(
+                QSizePolicy.Policy.Expanding if index in {1, 2} else QSizePolicy.Policy.Fixed,
+                QSizePolicy.Policy.Fixed,
+            )
+            host_layout = QVBoxLayout(host)
+            host_layout.setContentsMargins(0, 0, 0, 0)
+            host_layout.setSpacing(0)
+            alignment = Qt.AlignmentFlag.AlignVCenter
+            if index == 3:
+                alignment |= Qt.AlignmentFlag.AlignHCenter
+            else:
+                alignment |= Qt.AlignmentFlag.AlignLeft
+            host_layout.addWidget(widget, 0, alignment)
+            layout.addWidget(host, 1 if index in {1, 2} else 0)
+            hosts.append(host)
+        return hosts
+
+    def _header_label(self, text: str) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName("workflowRouteHeader")
+        return label
+
+    def _body_label(self, text: str, *, object_name: str = "workflowRouteCell", centered: bool = False) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName(object_name)
+        label.setWordWrap(False)
+        label.setAlignment(
+            Qt.AlignmentFlag.AlignCenter if centered else Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
+        return label
+
+    def _update_layout_geometry(self) -> None:
+        self._apply_column_widths()
+        for row in self.rows:
+            if row.row_widget is not None:
+                row.row_widget.adjustSize()
+                row.row_widget.setFixedHeight(row.row_widget.sizeHint().height())
+
+        row_heights = [self.rowHeight(index) for index in range(self.rowCount())]
+        visible_rows = len(row_heights) if self._max_visible_rows is None else min(len(row_heights), self._max_visible_rows)
         visible_height = sum(row_heights[:visible_rows])
-        self.table.setVerticalScrollBarPolicy(
+        if visible_rows > 0:
+            visible_height += self._rows_layout.spacing() * (visible_rows - 1)
+
+        self._scroll_area.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
             if self._max_visible_rows is None or len(row_heights) <= self._max_visible_rows
             else Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
-        self.table.setFixedHeight(header_height + visible_height + frame_height + 4)
-        total_width = (
-            self.table.verticalHeader().width()
-            + self.table.columnWidth(0)
-            + self.table.columnWidth(1)
-            + self.table.columnWidth(2)
-            + self.table.columnWidth(3)
-            + self.table.frameWidth() * 2
-            + 4
-        )
-        self.table.setMinimumWidth(total_width)
+        self._scroll_area.setFixedHeight(max(visible_height + 2, 2))
+        self.setMinimumWidth(sum(self.columnWidth(index) for index in range(self.columnCount())) + 32)
+
         editor_height = (
             self.layout().contentsMargins().top()
             + self._hint_label.sizeHint().height()
             + self.layout().spacing()
-            + self.table.height()
+            + self._header.sizeHint().height()
+            + self.layout().spacing()
+            + self._scroll_area.height()
             + self.layout().contentsMargins().bottom()
         )
         self.setMinimumHeight(editor_height)
         self.updateGeometry()
+
+    def _apply_column_widths(self) -> None:
+        available_width = max(
+            self._scroll_area.viewport().width(),
+            self._MIN_STEP_COLUMN_WIDTH
+            + self._MIN_ADVANCED_COLUMN_WIDTH
+            + self._MIN_CONNECTION_COLUMN_WIDTH
+            + self._MIN_MODEL_COLUMN_WIDTH
+            + 36,
+        )
+        step_width = self._MIN_STEP_COLUMN_WIDTH
+        advanced_width = self._MIN_ADVANCED_COLUMN_WIDTH
+        remaining_width = max(available_width - step_width - advanced_width - 36, 0)
+        connection_width = max(self._MIN_CONNECTION_COLUMN_WIDTH, int(remaining_width * 0.52))
+        model_width = max(self._MIN_MODEL_COLUMN_WIDTH, remaining_width - connection_width)
+        widths = [step_width, connection_width, model_width, advanced_width]
+        for columns in [self._header_columns, *self._row_columns]:
+            if not columns:
+                continue
+            for host, width in zip(columns, widths, strict=False):
+                host.setFixedWidth(width)
+
+    def rowCount(self) -> int:
+        return len(self.rows)
+
+    def columnCount(self) -> int:
+        return self._COLUMN_COUNT
+
+    def editTriggers(self) -> QTableWidget.EditTrigger:
+        return QTableWidget.EditTrigger.NoEditTriggers
+
+    def verticalScrollBarPolicy(self) -> Qt.ScrollBarPolicy:
+        return self._scroll_area.verticalScrollBarPolicy()
+
+    def columnWidth(self, column: int) -> int:
+        if column < 0 or column >= len(self._header_columns):
+            return 0
+        return self._header_columns[column].width() or self._header_columns[column].minimumWidth()
+
+    def rowHeight(self, row: int) -> int:
+        if row < 0 or row >= len(self.rows):
+            return 0
+        row_widget = self.rows[row].row_widget
+        if row_widget is None:
+            return 0
+        return row_widget.height() or row_widget.sizeHint().height()
+
+    def item(self, row: int, column: int) -> QTableWidgetItem | None:
+        return self._items.get((row, column))
+
+    def cellWidget(self, row: int, column: int) -> QWidget | None:
+        return self._cell_widgets.get((row, column))
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._update_layout_geometry()
 
 
 class WorkflowProfileEditorDialog(QDialog):

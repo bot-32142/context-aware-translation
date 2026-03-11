@@ -162,7 +162,7 @@ def test_project_setup_view_can_select_custom_profile():
         assert view.routes_table.columnCount() == 4
         assert view.routes_table.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         assert view.routes_table.columnWidth(1) >= 300
-        assert view.routes_table.columnWidth(2) >= 250
+        assert view.routes_table.columnWidth(2) >= 280
         assert view.routes_table.item(0, 0).text() == "Translator"
         assert view.routes_table.item(1, 0).text() == "OCR"
         assert view.routes_table.cellWidget(0, 3) is not None
@@ -172,8 +172,12 @@ def test_project_setup_view_can_select_custom_profile():
             index for index, row in enumerate(view._custom_rows) if row.route.step_id is WorkflowStepId.TRANSLATOR
         )
         translator = view._custom_rows[translator_row]
-        assert translator.connection_combo.minimumWidth() >= 250
-        assert translator.model_edit.minimumWidth() >= 220
+        assert translator.connection_combo.sizePolicy().horizontalPolicy() == translator.connection_combo.sizePolicy().Policy.Expanding
+        assert translator.model_edit.sizePolicy().horizontalPolicy() == translator.model_edit.sizePolicy().Policy.Expanding
+        assert translator.connection_combo.minimumHeight() >= translator.connection_combo.sizeHint().height()
+        assert translator.model_edit.minimumHeight() >= translator.model_edit.sizeHint().height()
+        assert view.routes_table.rowHeight(translator_row) >= view.routes_table.cellWidget(translator_row, 1).sizeHint().height()
+        assert view.routes_table.rowHeight(translator_row) >= view.routes_table.cellWidget(translator_row, 3).sizeHint().height()
         translator.connection_combo.setCurrentIndex(translator.connection_combo.findData("conn-openai"))
         translator.model_edit.setText("gpt-4.1-mini")
         view.save_button.click()
