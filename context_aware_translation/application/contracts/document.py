@@ -23,7 +23,6 @@ class DocumentWorkspaceState(ContractModel):
     project: ProjectRef
     document: DocumentRef
     active_tab: DocumentSection
-    blocker: BlockerInfo | None = None
 
 
 class OCRBoundingBox(ContractModel):

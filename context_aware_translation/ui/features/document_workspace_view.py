@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMenu,
     QMessageBox,
     QPushButton,
     QTabWidget,
@@ -21,22 +20,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from context_aware_translation.application.contracts.common import DocumentSection, UserMessageSeverity
+from context_aware_translation.application.contracts.common import DocumentSection
 from context_aware_translation.application.contracts.document import (
     DocumentExportResult,
     DocumentExportState,
 )
-from context_aware_translation.application.contracts.terms import (
-    BuildTermsRequest,
-    BulkUpdateTermsRequest,
-    FilterNoiseRequest,
-    ReviewTermsRequest,
-    TermsTableState,
-    TranslatePendingTermsRequest,
-    UpdateTermRequest,
-)
 from context_aware_translation.application.contracts.work import ExportDialogState
-from context_aware_translation.application.errors import ApplicationError, BlockedOperationError
+from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.events import (
     ApplicationEventSubscriber,
     DocumentInvalidatedEvent,
@@ -50,7 +40,7 @@ from context_aware_translation.ui.adapters.application_event_bridge import QtApp
 from context_aware_translation.ui.features.document_images_view import DocumentImagesView
 from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
 from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
-from context_aware_translation.ui.features.terms_table_widget import TermsTableWidget
+from context_aware_translation.ui.features.terms_view import TermsView
 from context_aware_translation.ui.i18n import qarg
 from context_aware_translation.ui.utils import create_tip_label
 
@@ -294,234 +284,6 @@ class WorkExportDialog(QDialog):
         self.export_button.setEnabled(self.controls.can_submit(self._state) and bool(self.controls.output_path()))
 
 
-class _DocumentTermsTab(QWidget):
-    def __init__(
-        self,
-        service: TermsService,
-        project_id: str,
-        document_id: int,
-        *,
-        parent: QWidget | None = None,
-    ) -> None:
-        super().__init__(parent)
-        self._service = service
-        self._project_id = project_id
-        self._document_id = document_id
-        self._state: TermsTableState | None = None
-        self._init_ui()
-
-    def _init_ui(self) -> None:
-        layout = QVBoxLayout(self)
-        toolbar = QHBoxLayout()
-        self.build_button = QPushButton(self.tr("Build Terms"))
-        self.build_button.clicked.connect(self._on_build_terms)
-        toolbar.addWidget(self.build_button)
-        self.translate_button = QPushButton(self.tr("Translate Untranslated"))
-        self.translate_button.clicked.connect(self._on_translate_terms)
-        toolbar.addWidget(self.translate_button)
-        self.review_button = QPushButton(self.tr("Review Terms"))
-        self.review_button.clicked.connect(self._on_review_terms)
-        toolbar.addWidget(self.review_button)
-        self.filter_noise_button = QPushButton(self.tr("Filter Rare"))
-        self.filter_noise_button.clicked.connect(self._on_filter_noise)
-        toolbar.addWidget(self.filter_noise_button)
-        toolbar.addStretch()
-        layout.addLayout(toolbar)
-
-        self.table_panel = TermsTableWidget(parent=self)
-        self.table_panel.table_view.selectionModel().selectionChanged.connect(lambda *_args: self._update_bulk_action_state())
-        self.table_panel.table_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.table_panel.table_view.customContextMenuRequested.connect(self._show_context_menu)
-        layout.addWidget(self.table_panel, 1)
-        self.table_panel.term_update_requested.connect(self._on_term_update_requested)
-        self._context_menu = QMenu(self)
-        self.edit_selected_action = self._context_menu.addAction(self.tr("Edit Selected"), self._edit_selected_terms)
-        self._context_menu.addSeparator()
-        self.mark_reviewed_action = self._context_menu.addAction(
-            self.tr("Mark Reviewed"), lambda: self._run_bulk_update(reviewed=True)
-        )
-        self.unmark_reviewed_action = self._context_menu.addAction(
-            self.tr("Unmark Reviewed"), lambda: self._run_bulk_update(reviewed=False)
-        )
-        self.mark_ignored_action = self._context_menu.addAction(
-            self.tr("Mark Ignored"), lambda: self._run_bulk_update(ignored=True)
-        )
-        self.unmark_ignored_action = self._context_menu.addAction(
-            self.tr("Unmark Ignored"), lambda: self._run_bulk_update(ignored=False)
-        )
-        self.delete_selected_action = self._context_menu.addAction(self.tr("Delete Selected"), self._delete_selected_terms)
-        self._update_bulk_action_state()
-
-    def refresh(self) -> None:
-        self._apply_state(self._service.get_document_terms(self._project_id, self._document_id))
-
-    def _apply_state(self, state: TermsTableState) -> None:
-        self._state = state
-        self.build_button.setEnabled(state.toolbar.can_build)
-        self.build_button.setToolTip(
-            state.toolbar.build_blocker.message if state.toolbar.build_blocker is not None else ""
-        )
-        self.translate_button.setEnabled(state.toolbar.can_translate_pending)
-        self.translate_button.setToolTip(
-            state.toolbar.translate_pending_blocker.message
-            if state.toolbar.translate_pending_blocker is not None
-            else self.tr("Translate all currently untranslated glossary terms for this document.")
-        )
-        self.review_button.setEnabled(state.toolbar.can_review)
-        self.review_button.setToolTip(
-            state.toolbar.review_blocker.message
-            if state.toolbar.review_blocker is not None
-            else self.tr("Run the review pass for this document terms.")
-        )
-        self.filter_noise_button.setEnabled(state.toolbar.can_filter_noise)
-        self.filter_noise_button.setToolTip(
-            state.toolbar.filter_noise_blocker.message
-            if state.toolbar.filter_noise_blocker is not None
-            else self.tr("Ignore rare terms for this document.")
-        )
-        self.table_panel.set_state(state)
-
-    def _on_build_terms(self) -> None:
-        try:
-            self._service.build_terms(BuildTermsRequest(project_id=self._project_id, document_id=self._document_id))
-        except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Build Terms Failed"), exc.payload.message)
-            return
-        self.table_panel.set_message(UserMessageSeverity.INFO, self.tr("Terms extraction queued for this document."))
-
-    def _on_translate_terms(self) -> None:
-        try:
-            accepted = self._service.translate_pending(
-                TranslatePendingTermsRequest(project_id=self._project_id, document_id=self._document_id)
-            )
-        except BlockedOperationError as exc:
-            QMessageBox.warning(self, self.tr("Translate Terms"), exc.payload.message)
-            return
-        except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Translate Terms"), exc.payload.message)
-            return
-        self.table_panel.set_message(
-            UserMessageSeverity.INFO,
-            accepted.message.text if accepted.message is not None else self.tr("Terms translation queued."),
-        )
-
-    def _on_review_terms(self) -> None:
-        try:
-            accepted = self._service.review_terms(
-                ReviewTermsRequest(project_id=self._project_id, document_id=self._document_id)
-            )
-        except BlockedOperationError as exc:
-            QMessageBox.warning(self, self.tr("Review Terms"), exc.payload.message)
-            return
-        except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Review Terms"), exc.payload.message)
-            return
-        self.table_panel.set_message(
-            UserMessageSeverity.INFO,
-            accepted.message.text if accepted.message is not None else self.tr("Terms review queued."),
-        )
-
-    def _on_filter_noise(self) -> None:
-        try:
-            state = self._service.filter_noise(
-                FilterNoiseRequest(project_id=self._project_id, document_id=self._document_id)
-            )
-        except BlockedOperationError as exc:
-            QMessageBox.warning(self, self.tr("Filter Rare Terms"), exc.payload.message)
-            self.refresh()
-            return
-        except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Filter Rare Terms"), exc.payload.message)
-            self.refresh()
-            return
-        self._apply_state(state)
-        self.table_panel.set_message(UserMessageSeverity.SUCCESS, self.tr("Rare document terms were filtered."))
-
-    def _on_term_update_requested(self, request: UpdateTermRequest) -> None:
-        try:
-            state = self._service.update_term(request)
-        except BlockedOperationError as exc:
-            QMessageBox.warning(self, self.tr("Terms"), exc.payload.message)
-            self.refresh()
-            return
-        except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Terms"), exc.payload.message)
-            self.refresh()
-            return
-        self._apply_state(state)
-
-    def _show_context_menu(self, pos) -> None:  # noqa: ANN001
-        if not self.table_panel.prepare_context_selection(pos):
-            return
-        self._update_bulk_action_state()
-        self._context_menu.popup(self.table_panel.table_view.viewport().mapToGlobal(pos))
-
-    def _edit_selected_terms(self) -> None:
-        self.table_panel.open_editors_for_selection()
-
-    def _run_bulk_update(self, *, ignored: bool | None = None, reviewed: bool | None = None) -> None:
-        if self._state is None:
-            return
-        selected = self.table_panel.selected_rows()
-        if not selected:
-            return
-        try:
-            state = self._service.bulk_update_terms(
-                BulkUpdateTermsRequest(
-                    scope=self._state.scope,
-                    term_keys=[row.term_key for row in selected],
-                    ignored=ignored,
-                    reviewed=reviewed,
-                )
-            )
-        except BlockedOperationError as exc:
-            QMessageBox.warning(self, self.tr("Terms"), exc.payload.message)
-            return
-        except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Terms"), exc.payload.message)
-            return
-        self._apply_state(state)
-
-    def _delete_selected_terms(self) -> None:
-        if self._state is None:
-            return
-        selected = self.table_panel.selected_rows()
-        if not selected:
-            return
-        if (
-            QMessageBox.question(
-                self,
-                self.tr("Delete Terms"),
-                self.tr("Delete the selected terms from this document?"),
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            != QMessageBox.StandardButton.Yes
-        ):
-            return
-        try:
-            state = self._service.bulk_update_terms(
-                BulkUpdateTermsRequest(scope=self._state.scope, term_keys=[row.term_key for row in selected], delete=True)
-            )
-        except BlockedOperationError as exc:
-            QMessageBox.warning(self, self.tr("Delete Terms"), exc.payload.message)
-            return
-        except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Delete Terms"), exc.payload.message)
-            return
-        self._apply_state(state)
-        self.table_panel.set_message(UserMessageSeverity.SUCCESS, self.tr("Selected terms were deleted."))
-
-    def _update_bulk_action_state(self) -> None:
-        has_selection = bool(self.table_panel.selected_rows())
-        self.edit_selected_action.setEnabled(has_selection)
-        self.mark_reviewed_action.setEnabled(has_selection)
-        self.unmark_reviewed_action.setEnabled(has_selection)
-        self.mark_ignored_action.setEnabled(has_selection)
-        self.unmark_ignored_action.setEnabled(has_selection)
-        self.delete_selected_action.setEnabled(has_selection)
-
-
 class _DocumentExportTab(QWidget):
     def __init__(
         self,
@@ -694,7 +456,14 @@ class DocumentWorkspaceView(QWidget):
         if section is DocumentSection.OCR:
             return DocumentOCRTab(self._document_service, self._project_id, self._document_id, parent=self)
         if section is DocumentSection.TERMS:
-            return _DocumentTermsTab(self._terms_service, self._project_id, self._document_id, parent=self)
+            return TermsView(
+                self._project_id,
+                self._terms_service,
+                None,
+                document_id=self._document_id,
+                embedded=True,
+                parent=self,
+            )
         if section is DocumentSection.IMAGES:
             widget = DocumentImagesView(self._project_id, self._document_id, self._document_service, parent=self)
             widget.open_app_setup_requested.connect(self.open_app_setup_requested.emit)

@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from context_aware_translation.application.contracts.common import UserMessageSeverity
 from context_aware_translation.application.contracts.terms import (
+    BuildTermsRequest,
     BulkUpdateTermsRequest,
     ExportTermsRequest,
     FilterNoiseRequest,
@@ -38,25 +39,36 @@ from context_aware_translation.ui.utils import create_tip_label
 
 
 class TermsView(QWidget):
-    """Project-level shared Terms surface backed by application services."""
+    """Shared Terms surface for either project or document scope."""
 
     def __init__(
         self,
         project_id: str,
         service: TermsService,
-        events: ApplicationEventSubscriber,
+        events: ApplicationEventSubscriber | None,
         *,
+        document_id: int | None = None,
+        embedded: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.project_id = project_id
+        self.document_id = document_id
+        self._embedded = embedded
         self._service = service
         self._state: TermsTableState | None = None
-        self._event_bridge = QtApplicationEventBridge(events, parent=self)
-        self._event_bridge.terms_invalidated.connect(self._on_terms_invalidated)
-        self._event_bridge.setup_invalidated.connect(self._on_setup_invalidated)
+        self._event_bridge: QtApplicationEventBridge | None = None
+        if events is not None:
+            self._event_bridge = QtApplicationEventBridge(events, parent=self)
+            self._event_bridge.terms_invalidated.connect(self._on_terms_invalidated)
+            self._event_bridge.setup_invalidated.connect(self._on_setup_invalidated)
         self._init_ui()
-        self.refresh()
+        if not self._embedded:
+            self.refresh()
+
+    @property
+    def _is_document_scope(self) -> bool:
+        return self.document_id is not None
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -64,9 +76,11 @@ class TermsView(QWidget):
 
         self.title_label = QLabel(self.tr("Terms"))
         self.title_label.setStyleSheet("font-size: 20px; font-weight: 600;")
+        self.title_label.setVisible(not self._embedded)
         layout.addWidget(self.title_label)
 
         self.tip_label = create_tip_label(self._tip_text())
+        self.tip_label.setVisible(not self._embedded)
         layout.addWidget(self.tip_label)
 
         toolbar_layout = QHBoxLayout()
@@ -84,6 +98,11 @@ class TermsView(QWidget):
         self.table_view.customContextMenuRequested.connect(self._show_context_menu)
         toolbar_layout.addWidget(self.search_input, 1)
         toolbar_layout.addWidget(self.filter_combo)
+
+        self.build_button = QPushButton(self.tr("Build Terms"))
+        self.build_button.clicked.connect(self._on_build_terms)
+        self.build_button.setVisible(self._is_document_scope)
+        toolbar_layout.addWidget(self.build_button)
 
         self.translate_button = QPushButton(self.tr("Translate Untranslated"))
         self.translate_button.clicked.connect(self._on_translate_pending)
@@ -109,23 +128,34 @@ class TermsView(QWidget):
         self.bulk_unmark_ignored_action.triggered.connect(lambda: self._run_bulk_update(ignored=False))
         self.bulk_delete_action = QAction(self.tr("Delete Selected"), self)
         self.bulk_delete_action.triggered.connect(self._delete_selected_terms)
+        self.mark_reviewed_action = self.bulk_mark_reviewed_action
+        self.unmark_reviewed_action = self.bulk_unmark_reviewed_action
+        self.mark_ignored_action = self.bulk_mark_ignored_action
+        self.unmark_ignored_action = self.bulk_unmark_ignored_action
+        self.delete_selected_action = self.bulk_delete_action
 
         self.import_button = QPushButton(self.tr("Import Terms"))
         self.import_button.clicked.connect(self._on_import_terms)
+        self.import_button.setVisible(not self._is_document_scope)
         toolbar_layout.addWidget(self.import_button)
 
         self.export_button = QPushButton(self.tr("Export Terms"))
         self.export_button.clicked.connect(self._on_export_terms)
+        self.export_button.setVisible(not self._is_document_scope)
         toolbar_layout.addWidget(self.export_button)
 
         layout.addLayout(toolbar_layout)
         layout.addWidget(self.table_panel, 1)
 
     def refresh(self) -> None:
-        self._apply_state(self._service.get_project_terms(self.project_id))
+        if self._is_document_scope:
+            self._apply_state(self._service.get_document_terms(self.project_id, self.document_id))
+        else:
+            self._apply_state(self._service.get_project_terms(self.project_id))
 
     def cleanup(self) -> None:
-        self._event_bridge.close()
+        if self._event_bridge is not None:
+            self._event_bridge.close()
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:
@@ -135,6 +165,7 @@ class TermsView(QWidget):
     def retranslateUi(self) -> None:
         self.title_label.setText(self.tr("Terms"))
         self.tip_label.setText(self._tip_text())
+        self.build_button.setText(self.tr("Build Terms"))
         self.translate_button.setText(self.tr("Translate Untranslated"))
         self.review_button.setText(self.tr("Review Terms"))
         self.filter_noise_button.setText(self.tr("Filter Rare"))
@@ -157,27 +188,37 @@ class TermsView(QWidget):
         self._update_bulk_button_state()
 
     def _apply_toolbar_state(self, toolbar) -> None:  # noqa: ANN001
+        self.build_button.setEnabled(toolbar.can_build)
         self.translate_button.setEnabled(toolbar.can_translate_pending)
         self.review_button.setEnabled(toolbar.can_review)
         self.filter_noise_button.setEnabled(toolbar.can_filter_noise)
         self.import_button.setEnabled(toolbar.can_import)
         self.export_button.setEnabled(toolbar.can_export)
 
+        self.build_button.setToolTip(
+            toolbar.build_blocker.message
+            if toolbar.build_blocker
+            else self.tr("Extract terms from this document.")
+        )
         self.translate_button.setToolTip(
             toolbar.translate_pending_blocker.message
             if toolbar.translate_pending_blocker
-            else self.tr("Translate all currently untranslated glossary terms.")
+            else self.tr("Translate all currently untranslated glossary terms for the current scope.")
         )
         self.review_button.setToolTip(
             toolbar.review_blocker.message
             if toolbar.review_blocker
-            else self.tr("Run an LLM review pass on unreviewed glossary terms.")
+            else self.tr("Run an LLM review pass on unreviewed glossary terms for the current scope.")
         )
         self.filter_noise_button.setToolTip(
             toolbar.filter_noise_blocker.message
             if toolbar.filter_noise_blocker
-            else self.tr(
-                "Automatically ignore terms that occurred only once or were recognized by the LLM in only one chunk."
+            else (
+                self.tr("Ignore rare terms for this document.")
+                if self._is_document_scope
+                else self.tr(
+                    "Automatically ignore terms that occurred only once or were recognized by the LLM in only one chunk."
+                )
             )
         )
         self.import_button.setToolTip(
@@ -190,20 +231,33 @@ class TermsView(QWidget):
         )
         self._update_bulk_button_state()
 
+    def _on_build_terms(self) -> None:
+        if self.document_id is None:
+            return
+        self._run_command(
+            lambda: self._service.build_terms(BuildTermsRequest(project_id=self.project_id, document_id=self.document_id)),
+            title=self.tr("Build Terms"),
+            success_message=self.tr("Terms extraction queued for this document."),
+        )
+
     def _on_translate_pending(self) -> None:
         self._run_command(
-            lambda: self._service.translate_pending(TranslatePendingTermsRequest(project_id=self.project_id)),
+            lambda: self._service.translate_pending(
+                TranslatePendingTermsRequest(project_id=self.project_id, document_id=self.document_id)
+            ),
             title=self.tr("Translate Terms"),
         )
 
     def _on_review_terms(self) -> None:
         self._run_command(
-            lambda: self._service.review_terms(ReviewTermsRequest(project_id=self.project_id)),
+            lambda: self._service.review_terms(
+                ReviewTermsRequest(project_id=self.project_id, document_id=self.document_id)
+            ),
             title=self.tr("Review Terms"),
         )
 
     def _on_filter_noise(self) -> None:
-        if (
+        if not self._is_document_scope and (
             QMessageBox.question(
                 self,
                 self.tr("Filter Rare Terms"),
@@ -217,7 +271,7 @@ class TermsView(QWidget):
         ):
             return
         try:
-            state = self._service.filter_noise(FilterNoiseRequest(project_id=self.project_id))
+            state = self._service.filter_noise(FilterNoiseRequest(project_id=self.project_id, document_id=self.document_id))
         except BlockedOperationError as exc:
             self._show_application_error(self.tr("Filter Rare Terms"), exc)
             return
@@ -225,7 +279,10 @@ class TermsView(QWidget):
             self._show_application_error(self.tr("Filter Rare Terms"), exc)
             return
         self._apply_state(state)
-        self._show_message(UserMessageSeverity.SUCCESS, self.tr("Rare terms were filtered."))
+        self._show_message(
+            UserMessageSeverity.SUCCESS,
+            self.tr("Rare document terms were filtered.") if self._is_document_scope else self.tr("Rare terms were filtered."),
+        )
 
     def _on_import_terms(self) -> None:
         path, _selected = QFileDialog.getOpenFileName(
@@ -257,7 +314,9 @@ class TermsView(QWidget):
         if not path:
             return
         self._run_command(
-            lambda: self._service.export_terms(ExportTermsRequest(project_id=self.project_id, output_path=path)),
+            lambda: self._service.export_terms(
+                ExportTermsRequest(project_id=self.project_id, output_path=path, document_id=self.document_id)
+            ),
             title=self.tr("Export Terms"),
         )
 
@@ -274,7 +333,7 @@ class TermsView(QWidget):
             return
         self._apply_state(state)
 
-    def _run_command(self, action, *, title: str) -> None:  # noqa: ANN001
+    def _run_command(self, action, *, title: str, success_message: str | None = None) -> None:  # noqa: ANN001
         try:
             accepted = action()
         except BlockedOperationError as exc:
@@ -283,7 +342,7 @@ class TermsView(QWidget):
         except ApplicationError as exc:
             self._show_application_error(title, exc)
             return
-        message = accepted.message.text if accepted.message is not None else self.tr("Task queued.")
+        message = accepted.message.text if accepted.message is not None else (success_message or self.tr("Task queued."))
         severity = accepted.message.severity if accepted.message is not None else UserMessageSeverity.INFO
         self._show_message(severity, message)
         self.refresh()
@@ -326,7 +385,11 @@ class TermsView(QWidget):
             QMessageBox.question(
                 self,
                 self.tr("Delete Terms"),
-                self.tr("Delete the selected terms from this project?"),
+                (
+                    self.tr("Delete the selected terms from this document?")
+                    if self._is_document_scope
+                    else self.tr("Delete the selected terms from this project?")
+                ),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
@@ -406,6 +469,8 @@ class TermsView(QWidget):
     def _on_terms_invalidated(self, event: TermsInvalidatedEvent) -> None:
         if event.project_id != self.project_id:
             return
+        if self.document_id is not None and event.document_id not in {None, self.document_id}:
+            return
         self.refresh()
 
     def _on_setup_invalidated(self, event: SetupInvalidatedEvent) -> None:
@@ -414,6 +479,8 @@ class TermsView(QWidget):
         self.refresh()
 
     def _tip_text(self) -> str:
+        if self._is_document_scope:
+            return self.tr("Review and adjust terms extracted for this document.")
         return self.tr(
             "Terms are shared across the project. Build terms from document pages in document Terms, then translate, review, filter, import, or export them here."
         )
