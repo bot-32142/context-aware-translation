@@ -1060,8 +1060,6 @@ class AppSetupView(QWidget):
                 connection_id=connection.connection_id,
                 label=connection.display_name,
                 default_model=connection.default_model,
-                provider=connection.provider.value,
-                base_url=connection.base_url,
             )
             for connection in self._state.connections
         ]

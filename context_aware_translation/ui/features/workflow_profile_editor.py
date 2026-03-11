@@ -40,8 +40,6 @@ class ConnectionChoice:
     connection_id: str
     label: str
     default_model: str | None = None
-    provider: str | None = None
-    base_url: str | None = None
 
 
 @dataclass
@@ -52,7 +50,6 @@ class RouteRow:
     connection_label_widget: QLabel | None = None
     row_widget: QWidget | None = None
     step_label_widget: QLabel | None = None
-    advanced_widget: QWidget | None = None
 
 
 @dataclass(frozen=True)
@@ -365,7 +362,6 @@ class WorkflowRoutesEditor(QWidget):
                     connection_label_widget=connection_label,
                     row_widget=row_frame,
                     step_label_widget=step_label,
-                    advanced_widget=advanced_widget,
                 )
                 self._items[(row_index, 0)] = self._step_item(route.step_label)
                 self._items[(row_index, 1)] = self._item(connection_label.text())
@@ -393,7 +389,6 @@ class WorkflowRoutesEditor(QWidget):
                     model_edit=model_edit,
                     row_widget=row_frame,
                     step_label_widget=step_label,
-                    advanced_widget=advanced_widget,
                 )
                 self._items[(row_index, 0)] = self._step_item(route.step_label)
                 if advanced_item is not None:
