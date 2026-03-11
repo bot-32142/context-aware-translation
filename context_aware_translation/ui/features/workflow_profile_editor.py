@@ -230,10 +230,12 @@ ADVANCED_STEP_IDS = frozenset(
 class WorkflowRoutesEditor(QWidget):
     EditTrigger = QTableWidget.EditTrigger
     _COLUMN_COUNT = 4
-    _MIN_STEP_COLUMN_WIDTH = 160
-    _MIN_ADVANCED_COLUMN_WIDTH = 110
-    _MIN_CONNECTION_COLUMN_WIDTH = 300
-    _MIN_MODEL_COLUMN_WIDTH = 280
+    _COLUMN_SIDE_MARGIN = 12
+    _COLUMN_SPACING = 8
+    _MIN_STEP_COLUMN_WIDTH = 100
+    _MIN_ADVANCED_COLUMN_WIDTH = 88
+    _MIN_CONNECTION_COLUMN_WIDTH = 180
+    _MIN_MODEL_COLUMN_WIDTH = 160
     _TABLE_STYLESHEET = (
         "WorkflowRoutesEditor {"
         " background-color: transparent;"
@@ -564,8 +566,8 @@ class WorkflowRoutesEditor(QWidget):
 
     def _build_columns(self, parent: QWidget, widgets: list[QWidget]) -> list[QWidget]:
         layout = QHBoxLayout(parent)
-        layout.setContentsMargins(16, 8, 16, 8)
-        layout.setSpacing(12)
+        layout.setContentsMargins(self._COLUMN_SIDE_MARGIN, 8, self._COLUMN_SIDE_MARGIN, 8)
+        layout.setSpacing(self._COLUMN_SPACING)
         hosts: list[QWidget] = []
         for index, widget in enumerate(widgets):
             host = QWidget(parent)
@@ -619,7 +621,7 @@ class WorkflowRoutesEditor(QWidget):
             else Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
         self._scroll_area.setFixedHeight(max(visible_height + 2, 2))
-        self.setMinimumWidth(sum(self.columnWidth(index) for index in range(self.columnCount())) + 32)
+        self.setMinimumWidth(self._minimum_editor_width())
 
         editor_height = (
             self.layout().contentsMargins().top()
@@ -633,21 +635,46 @@ class WorkflowRoutesEditor(QWidget):
         self.setMinimumHeight(editor_height)
         self.updateGeometry()
 
+    def _minimum_editor_width(self) -> int:
+        return sum(self._minimum_column_widths()) + self._column_layout_overhead()
+
+    def _column_layout_overhead(self) -> int:
+        return self._COLUMN_SIDE_MARGIN * 2 + self._COLUMN_SPACING * (self._COLUMN_COUNT - 1)
+
+    def _minimum_column_widths(self) -> list[int]:
+        def _max_width(default: int, widgets: list[QWidget]) -> int:
+            return max(
+                default,
+                *(max(widget.sizeHint().width(), widget.minimumSizeHint().width()) for widget in widgets),
+            )
+
+        step_widgets = [self._header_columns[0], *(row.step_label_widget for row in self.rows if row.step_label_widget is not None)]
+        connection_widgets = [self._header_columns[1], *(self._cell_widgets[index, 1] for index in range(self.rowCount()))]
+        model_widgets = [self._header_columns[2], *(self._cell_widgets[index, 2] for index in range(self.rowCount()))]
+        advanced_widgets = [self._header_columns[3], *(self._cell_widgets[index, 3] for index in range(self.rowCount()))]
+        return [
+            _max_width(self._MIN_STEP_COLUMN_WIDTH, step_widgets),
+            _max_width(self._MIN_CONNECTION_COLUMN_WIDTH, connection_widgets),
+            _max_width(self._MIN_MODEL_COLUMN_WIDTH, model_widgets),
+            _max_width(self._MIN_ADVANCED_COLUMN_WIDTH, advanced_widgets),
+        ]
+
     def _apply_column_widths(self) -> None:
-        available_width = max(
-            self._scroll_area.viewport().width(),
-            self._MIN_STEP_COLUMN_WIDTH
-            + self._MIN_ADVANCED_COLUMN_WIDTH
-            + self._MIN_CONNECTION_COLUMN_WIDTH
-            + self._MIN_MODEL_COLUMN_WIDTH
-            + 36,
+        minimum_widths = self._minimum_column_widths()
+        available_width = max(self._scroll_area.viewport().width(), self._minimum_editor_width())
+        step_width, connection_width, model_width, advanced_width = minimum_widths
+        extra_width = max(
+            available_width - self._column_layout_overhead() - step_width - connection_width - model_width - advanced_width,
+            0,
         )
-        step_width = self._MIN_STEP_COLUMN_WIDTH
-        advanced_width = self._MIN_ADVANCED_COLUMN_WIDTH
-        remaining_width = max(available_width - step_width - advanced_width - 36, 0)
-        connection_width = max(self._MIN_CONNECTION_COLUMN_WIDTH, int(remaining_width * 0.52))
-        model_width = max(self._MIN_MODEL_COLUMN_WIDTH, remaining_width - connection_width)
-        widths = [step_width, connection_width, model_width, advanced_width]
+        connection_growth = int(extra_width * 0.55)
+        model_growth = extra_width - connection_growth
+        widths = [
+            step_width,
+            connection_width + connection_growth,
+            model_width + model_growth,
+            advanced_width,
+        ]
         for columns in [self._header_columns, *self._row_columns]:
             if not columns:
                 continue
@@ -706,21 +733,33 @@ class WorkflowProfileEditorDialog(QDialog):
         self._connection_choices = connection_choices
         self._allow_name_edit = allow_name_edit
         self.setWindowTitle(self.tr("Workflow Profile"))
-        self.setMinimumWidth(980)
+        self.setMinimumSize(780, 260)
+        self.setSizeGripEnabled(True)
         self._init_ui()
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(6)
-        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        self._body_scroll = QScrollArea()
+        self._body_scroll.setWidgetResizable(True)
+        self._body_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._body_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._body_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+        body_widget = QWidget()
+        self._body_layout = QVBoxLayout(body_widget)
+        self._body_layout.setContentsMargins(0, 0, 0, 0)
+        self._body_layout.setSpacing(6)
+        self._body_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         header = create_tip_label(
             self.tr(
                 "A workflow profile is a user-facing wrapper over the existing step-based config. Edit connection and model choices here."
             )
         )
-        layout.addWidget(header)
+        self._body_layout.addWidget(header)
 
         self.general_section = CollapsibleSection(self.tr("General"))
         general_widget = QWidget()
@@ -749,7 +788,7 @@ class WorkflowProfileEditorDialog(QDialog):
         self.general_section.set_content(general_widget)
         self.general_section.set_expanded(False)
         self.general_section.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
-        layout.addWidget(self.general_section)
+        self._body_layout.addWidget(self.general_section)
 
         self.routes_section = CollapsibleSection(self.tr("Workflow Routing"))
         self.routes_editor = WorkflowRoutesEditor(
@@ -765,15 +804,20 @@ class WorkflowProfileEditorDialog(QDialog):
         self.routes_section.set_expanded(True)
         self.routes_section.refresh_content_height()
         self.routes_section.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
-        layout.addWidget(self.routes_section)
+        self._body_layout.addWidget(self.routes_section)
+
+        self._body_scroll.setWidget(body_widget)
+        layout.addWidget(self._body_scroll, 1)
 
         footer = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         footer.accepted.connect(self._accept_if_valid)
         footer.rejected.connect(self.reject)
         layout.addWidget(footer)
-        self.general_section.toggled.connect(self._schedule_resize)
-        self.routes_section.toggled.connect(self._schedule_resize)
-        self._schedule_resize()
+        for section in (self.general_section, self.routes_section):
+            section.toggled.connect(self._refresh_body_layout)
+            section.toggle_animation.finished.connect(self._refresh_body_layout)
+        self._refresh_body_layout()
+        self.resize(max(self.minimumWidth(), min(self.sizeHint().width(), 920)), min(max(self.sizeHint().height(), 420), 720))
 
     def profile(self) -> WorkflowProfileDetail:
         return WorkflowProfileDetail(
@@ -799,10 +843,8 @@ class WorkflowProfileEditorDialog(QDialog):
             return
         self.accept()
 
-    def _schedule_resize(self, *_args: object) -> None:
+    def _refresh_body_layout(self, *_args: object) -> None:
+        self.general_section.refresh_content_height()
+        self.routes_section.refresh_content_height()
+        self._body_layout.activate()
         self.layout().activate()
-        self.adjustSize()
-        target_width = max(980, self.routes_editor.table.minimumWidth() + 44)
-        target_height = min(max(self.sizeHint().height(), 260), 700)
-        self.setMinimumWidth(target_width)
-        self.setFixedSize(target_width, target_height)

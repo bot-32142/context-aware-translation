@@ -13,6 +13,7 @@ from context_aware_translation.ui.features.workflow_profile_editor import Connec
 
 try:
     from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QDialog, QPushButton, QScrollArea
 
     HAS_PYSIDE6 = True
@@ -58,14 +59,18 @@ def test_workflow_profile_editor_uses_scrollable_dialog_layout():
         allow_name_edit=True,
     )
 
+    dialog.show()
+    QTest.qWait(50)
+
     assert dialog.findChildren(QScrollArea)
     assert not dialog.general_section.is_expanded()
     assert dialog.width() <= 1240
     assert dialog.routes_table.editTriggers() == dialog.routes_table.EditTrigger.NoEditTriggers
     assert dialog.routes_table.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-    assert dialog.routes_table.columnWidth(1) >= 300
-    assert dialog.routes_table.columnWidth(2) >= 280
+    assert dialog.routes_table.columnWidth(1) >= 180
+    assert dialog.routes_table.columnWidth(2) >= 160
     assert dialog.routes_table.columnCount() == 4
+    assert dialog.routes_editor.width() == dialog.routes_section.content_area.viewport().width()
     assert dialog.routes_table.item(0, 0).text() == "Translator"
     assert dialog.routes_table.cellWidget(0, 3) is not None
     route_row = dialog._rows[0]
@@ -78,6 +83,84 @@ def test_workflow_profile_editor_uses_scrollable_dialog_layout():
     assert dialog.routes_table.rowHeight(0) >= dialog.routes_table.cellWidget(0, 3).sizeHint().height()
     assert "background-color: white" in dialog.routes_table.styleSheet()
     assert "palette(base)" not in dialog.routes_table.styleSheet()
+
+
+def test_workflow_profile_editor_is_resizable():
+    profile = WorkflowProfileDetail(
+        profile_id="profile:recommended",
+        name="Recommended",
+        kind=WorkflowProfileKind.SHARED,
+        target_language="English",
+        routes=[
+            WorkflowStepRoute(
+                step_id=WorkflowStepId.TRANSLATOR,
+                step_label=f"Translator {index}",
+                connection_id="conn-gemini",
+                connection_label="Gemini",
+                model="gemini-3-flash-preview",
+            )
+            for index in range(8)
+        ],
+    )
+    dialog = WorkflowProfileEditorDialog(
+        profile=profile,
+        connection_choices=[
+            ConnectionChoice(
+                connection_id="conn-gemini",
+                label="Gemini",
+                default_model="gemini-3-flash-preview",
+            )
+        ],
+        allow_name_edit=True,
+    )
+    dialog.show()
+    QTest.qWait(100)
+    initial_size = dialog.size()
+
+    dialog.resize(initial_size.width() + 120, initial_size.height() + 80)
+    QTest.qWait(50)
+
+    assert dialog.width() >= initial_size.width() + 100
+    assert dialog.height() >= initial_size.height() + 60
+
+
+def test_workflow_profile_editor_scrolls_when_both_sections_are_expanded():
+    profile = WorkflowProfileDetail(
+        profile_id="profile:recommended",
+        name="Recommended",
+        kind=WorkflowProfileKind.SHARED,
+        target_language="English",
+        routes=[
+            WorkflowStepRoute(
+                step_id=WorkflowStepId.TRANSLATOR,
+                step_label=f"Translator {index}",
+                connection_id="conn-gemini",
+                connection_label="Gemini",
+                model="gemini-3-flash-preview",
+            )
+            for index in range(12)
+        ],
+    )
+    dialog = WorkflowProfileEditorDialog(
+        profile=profile,
+        connection_choices=[
+            ConnectionChoice(
+                connection_id="conn-gemini",
+                label="Gemini",
+                default_model="gemini-3-flash-preview",
+            )
+        ],
+        allow_name_edit=True,
+    )
+    dialog.show()
+    dialog.general_section.set_expanded(True)
+    QTest.qWait(250)
+    dialog.resize(dialog.width(), 420)
+    QTest.qWait(50)
+
+    assert dialog._body_scroll.horizontalScrollBar().maximum() == 0
+    assert dialog._body_scroll.verticalScrollBar().maximum() > 0
+    assert dialog.routes_editor.width() == dialog.routes_section.content_area.viewport().width()
 
 
 def test_step_advanced_config_dialog_updates_route_config():

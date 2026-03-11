@@ -161,8 +161,8 @@ def test_project_setup_view_can_select_custom_profile():
         assert view.routes_table.rowCount() == 2
         assert view.routes_table.columnCount() == 4
         assert view.routes_table.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        assert view.routes_table.columnWidth(1) >= 300
-        assert view.routes_table.columnWidth(2) >= 280
+        assert view.routes_table.columnWidth(1) >= 180
+        assert view.routes_table.columnWidth(2) >= 160
         assert view.routes_table.item(0, 0).text() == "Translator"
         assert view.routes_table.item(1, 0).text() == "OCR"
         assert view.routes_table.cellWidget(0, 3) is not None

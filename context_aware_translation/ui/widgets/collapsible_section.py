@@ -35,7 +35,7 @@ class CollapsibleSection(QWidget):
         self.content_area = QScrollArea()
         self.content_area.setMaximumHeight(0)
         self.content_area.setMinimumHeight(0)
-        self.content_area.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Maximum)
+        self.content_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.content_area.setFrameShape(QFrame.Shape.NoFrame)
         self.content_area.setWidgetResizable(True)
         self.content_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
