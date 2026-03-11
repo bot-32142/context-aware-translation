@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from superqt import QCollapsible
+from superqt import QCollapsible, QSearchableComboBox
 
 from context_aware_translation.application.contracts.app_setup import (
     WorkflowProfileDetail,
@@ -454,7 +454,7 @@ class WorkflowRoutesEditor(QWidget):
         return False
 
     def _build_connection_combo(self, connection_id: str | None) -> QComboBox:
-        combo = QComboBox()
+        combo = QSearchableComboBox()
         combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         combo.setMinimumContentsLength(16)
@@ -764,7 +764,7 @@ class WorkflowProfileEditorDialog(QDialog):
         basics_layout.setHorizontalSpacing(12)
         self.name_edit = QLineEdit(self._original_profile.name)
         self.name_edit.setEnabled(self._allow_name_edit)
-        self.target_language_combo = QComboBox()
+        self.target_language_combo = QSearchableComboBox()
         self.target_language_combo.setEditable(True)
         seen_languages: set[str] = set()
         for display_name, _code in LANGUAGES:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from superqt import QElidingLabel
 
 from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.application.contracts.common import DocumentSection
@@ -248,12 +249,13 @@ class WorkExportDialog(QDialog):
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        docs_label = QLabel(
+        docs_label = QElidingLabel(
             qarg(self.tr("Export %1"), ", ".join(self._state.document_labels))
             if self._state.document_labels
             else self.tr("Export selected documents")
         )
-        docs_label.setWordWrap(True)
+        docs_label.setElideMode(Qt.TextElideMode.ElideMiddle)
+        docs_label.setToolTip(docs_label.text())
         docs_label.setStyleSheet("font-weight: 600;")
         layout.addWidget(docs_label)
         self.controls = _ExportControls(parent=self)

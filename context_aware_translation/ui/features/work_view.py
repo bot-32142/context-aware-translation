@@ -11,13 +11,13 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
-    QSizePolicy,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
+from superqt import QElidingLabel
 
 from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.application.contracts.common import (
@@ -47,6 +47,11 @@ from context_aware_translation.application.services.terms import TermsService
 from context_aware_translation.application.services.work import WorkService
 from context_aware_translation.ui.features.document_workspace_view import DocumentWorkspaceView, WorkExportDialog
 from context_aware_translation.ui.tips import create_tip_label
+from context_aware_translation.ui.widgets.table_support import (
+    apply_header_resize_modes,
+    configure_readonly_row_table,
+    fit_table_height_to_rows,
+)
 
 _STATUS_LABELS: dict[SurfaceStatus, str] = {
     SurfaceStatus.READY: "Ready",
@@ -130,8 +135,9 @@ class WorkView(QWidget):
         self.import_button.clicked.connect(self._run_import)
         import_buttons.addWidget(self.import_button)
         import_layout.addLayout(import_buttons)
-        self.import_summary_label = QLabel(self.tr("No file or folder selected"))
-        self.import_summary_label.setWordWrap(True)
+        self.import_summary_label = QElidingLabel(self.tr("No file or folder selected"))
+        self.import_summary_label.setElideMode(Qt.TextElideMode.ElideMiddle)
+        self.import_summary_label.setToolTip(self.import_summary_label.text())
         import_layout.addWidget(self.import_summary_label)
         self.import_message_label = QLabel()
         self.import_message_label.setWordWrap(True)
@@ -179,11 +185,7 @@ class WorkView(QWidget):
                 self.tr("Action"),
             ]
         )
-        self.rows_table.verticalHeader().setVisible(False)
-        self.rows_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.rows_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.rows_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.rows_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        configure_readonly_row_table(self.rows_table)
         self.rows_table.itemSelectionChanged.connect(self._on_selection_changed)
         self.rows_table.cellDoubleClicked.connect(self._on_cell_double_clicked)
         home_layout.addWidget(self.rows_table)
@@ -244,6 +246,7 @@ class WorkView(QWidget):
             if not self._selected_import_paths
             else self.import_summary_label.text()
         )
+        self.import_summary_label.setToolTip(self.import_summary_label.text())
         self.rows_table.setHorizontalHeaderLabels(
             [
                 self.tr("#"),
@@ -289,9 +292,12 @@ class WorkView(QWidget):
         for row_state in state.rows:
             self._append_row(row_state)
         self.rows_table.resizeColumnsToContents()
+        apply_header_resize_modes(
+            self.rows_table,
+            (),
+            column_widths=((1, 260), (6, 260)),
+        )
         self.rows_table.horizontalHeader().setStretchLastSection(False)
-        self.rows_table.horizontalHeader().resizeSection(1, 260)
-        self.rows_table.horizontalHeader().resizeSection(6, 260)
         self._fit_table_height()
         self._on_selection_changed()
 
@@ -319,22 +325,7 @@ class WorkView(QWidget):
         self.rows_table.setCellWidget(row, 7, button)
 
     def _fit_table_height(self) -> None:
-        header_height = self.rows_table.horizontalHeader().height()
-        frame_height = self.rows_table.frameWidth() * 2
-        row_count = self.rows_table.rowCount()
-        if row_count == 0:
-            self.rows_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-            self.rows_table.setFixedHeight(header_height + frame_height + 8)
-            return
-        row_heights = [self.rows_table.rowHeight(index) for index in range(row_count)]
-        visible_rows = min(row_count, self._TABLE_MAX_VISIBLE_ROWS)
-        visible_height = sum(row_heights[:visible_rows])
-        self.rows_table.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-            if row_count <= self._TABLE_MAX_VISIBLE_ROWS
-            else Qt.ScrollBarPolicy.ScrollBarAsNeeded
-        )
-        self.rows_table.setFixedHeight(header_height + visible_height + frame_height + 8)
+        fit_table_height_to_rows(self.rows_table, max_visible_rows=self._TABLE_MAX_VISIBLE_ROWS)
 
     def _select_files(self) -> None:
         file_paths, _selected = QFileDialog.getOpenFileNames(
@@ -366,6 +357,7 @@ class WorkView(QWidget):
         self.import_type_combo.setEnabled(bool(state.available_types))
         self.import_button.setEnabled(bool(state.available_types))
         self.import_summary_label.setText(state.summary or self.tr("No file or folder selected"))
+        self.import_summary_label.setToolTip(self.import_summary_label.text())
         if state.error_message:
             self._set_import_message(state.error_message, is_error=True)
         else:
@@ -398,6 +390,7 @@ class WorkView(QWidget):
         self.import_type_combo.setEnabled(False)
         self.import_button.setEnabled(False)
         self.import_summary_label.setText(self.tr("No file or folder selected"))
+        self.import_summary_label.setToolTip(self.import_summary_label.text())
         self.refresh()
 
     def _set_import_message(self, text: str, *, is_error: bool) -> None:

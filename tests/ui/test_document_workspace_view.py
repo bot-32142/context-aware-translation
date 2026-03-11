@@ -240,7 +240,7 @@ def test_document_workspace_terms_tab_uses_shared_terms_component():
         assert "translate_pending" in call_names
         assert "review_terms" in call_names
         assert "filter_noise" in call_names
-        assert "update_term" in call_names
+        assert "update_term_rows" in call_names
     finally:
         view.cleanup()
 

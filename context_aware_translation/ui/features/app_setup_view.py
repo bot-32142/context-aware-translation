@@ -55,6 +55,12 @@ from context_aware_translation.application.contracts.common import (
 from context_aware_translation.application.services.app_setup import AppSetupService
 from context_aware_translation.ui.features.workflow_profile_editor import ConnectionChoice, WorkflowProfileEditorDialog
 from context_aware_translation.ui.tips import create_tip_label
+from context_aware_translation.ui.widgets.table_support import (
+    apply_header_resize_modes,
+    configure_readonly_row_table,
+    fit_table_height_to_rows,
+    fit_table_min_width,
+)
 
 _PROVIDER_DEFAULTS: dict[ProviderKind, tuple[str, str]] = {
     ProviderKind.GEMINI: ("https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-3-flash-preview"),
@@ -568,9 +574,7 @@ class SetupWizardDialog(QDialog):
                 )
                 table = QTableWidget(0, 3)
                 table.setHorizontalHeaderLabels([self.tr("Step"), self.tr("Connection"), self.tr("Model")])
-                table.verticalHeader().setVisible(False)
-                table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-                table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+                configure_readonly_row_table(table)
                 for route in recommendation.routes:
                     row = table.rowCount()
                     table.insertRow(row)
@@ -579,9 +583,7 @@ class SetupWizardDialog(QDialog):
                     table.setItem(row, 2, QTableWidgetItem(route.model or ""))
                 table.resizeColumnsToContents()
                 table.resizeRowsToContents()
-                header_height = table.horizontalHeader().height()
-                rows_height = sum(table.rowHeight(index) for index in range(table.rowCount()))
-                table.setFixedHeight(header_height + rows_height + table.frameWidth() * 2 + 4)
+                fit_table_height_to_rows(table, padding=4)
                 profile_layout.addWidget(table)
             self.page_layout.addWidget(profile_group)
             self.page_layout.addStretch()
@@ -747,21 +749,20 @@ class AppSetupView(QWidget):
         self.connections_table.setHorizontalHeaderLabels(
             [self.tr("Name"), self.tr("Provider"), self.tr("Status"), self.tr("Model"), self.tr("Base URL")]
         )
-        self.connections_table.verticalHeader().setVisible(False)
-        self.connections_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.connections_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.connections_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.connections_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.connections_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self.connections_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        self.connections_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.connections_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
-        self.connections_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
-        self.connections_table.setColumnWidth(3, 320)
-        self.connections_table.setColumnWidth(4, 500)
+        configure_readonly_row_table(self.connections_table, vertical_policy=QSizePolicy.Policy.Expanding)
+        apply_header_resize_modes(
+            self.connections_table,
+            (
+                (0, QHeaderView.ResizeMode.ResizeToContents),
+                (1, QHeaderView.ResizeMode.ResizeToContents),
+                (2, QHeaderView.ResizeMode.ResizeToContents),
+                (3, QHeaderView.ResizeMode.Interactive),
+                (4, QHeaderView.ResizeMode.Interactive),
+            ),
+            column_widths=((3, 320), (4, 500)),
+        )
         self.connections_table.itemSelectionChanged.connect(self._update_connection_buttons)
         self.connections_table.cellDoubleClicked.connect(self._on_connection_double_clicked)
-        self.connections_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         connections_tab_layout.addWidget(self.connections_table)
 
         profiles_toolbar = QHBoxLayout()
@@ -780,16 +781,16 @@ class AppSetupView(QWidget):
         profiles_toolbar.addStretch()
         self.profiles_table = QTableWidget(0, 3)
         self.profiles_table.setHorizontalHeaderLabels([self.tr("Name"), self.tr("Target language"), self.tr("Default")])
-        self.profiles_table.verticalHeader().setVisible(False)
-        self.profiles_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.profiles_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.profiles_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.profiles_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.profiles_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
-        self.profiles_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
-        self.profiles_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.profiles_table.setColumnWidth(0, 360)
-        self.profiles_table.setColumnWidth(1, 220)
+        configure_readonly_row_table(self.profiles_table, vertical_policy=QSizePolicy.Policy.Expanding)
+        apply_header_resize_modes(
+            self.profiles_table,
+            (
+                (0, QHeaderView.ResizeMode.Interactive),
+                (1, QHeaderView.ResizeMode.Interactive),
+                (2, QHeaderView.ResizeMode.ResizeToContents),
+            ),
+            column_widths=((0, 360), (1, 220)),
+        )
         self.profiles_table.itemSelectionChanged.connect(self._update_profile_buttons)
         self.profiles_table.cellDoubleClicked.connect(self._on_profile_double_clicked)
 
@@ -797,7 +798,6 @@ class AppSetupView(QWidget):
         profiles_tab_layout = QVBoxLayout(self.profiles_tab)
         profiles_tab_layout.setContentsMargins(0, 0, 0, 0)
         profiles_tab_layout.addLayout(profiles_toolbar)
-        self.profiles_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         profiles_tab_layout.addWidget(self.profiles_table)
 
         self.setup_tabs.addTab(self.connections_tab, self.tr("Connections"))
@@ -1145,14 +1145,8 @@ class AppSetupView(QWidget):
             "App Setup manages reusable connections and shared workflow profiles. The wizard creates a concrete shared workflow profile using the existing step-based config system."
         )
 
-    def _fit_table_min_width(self, table: QTableWidget) -> None:
-        total_width = table.verticalHeader().width() + table.frameWidth() * 2 + 6
-        for column in range(table.columnCount()):
-            total_width += table.columnWidth(column)
-        table.setMinimumWidth(total_width)
-
     def _finalize_table(self, table: QTableWidget) -> None:
         table.resizeColumnsToContents()
         table.resizeRowsToContents()
         table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self._fit_table_min_width(table)
+        fit_table_min_width(table)
