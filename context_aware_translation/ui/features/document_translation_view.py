@@ -28,7 +28,7 @@ from context_aware_translation.application.contracts.document import (
 )
 from context_aware_translation.application.errors import ApplicationError, BlockedOperationError
 from context_aware_translation.application.services.document import DocumentService
-from context_aware_translation.ui.utils import create_tip_label
+from context_aware_translation.ui.tips import create_tip_label
 
 _STATUS_TEXT: dict[SurfaceStatus, str] = {
     SurfaceStatus.READY: "Ready",

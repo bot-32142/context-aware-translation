@@ -53,7 +53,7 @@ from context_aware_translation.application.contracts.common import (
 )
 from context_aware_translation.application.services.app_setup import AppSetupService
 from context_aware_translation.ui.features.workflow_profile_editor import ConnectionChoice, WorkflowProfileEditorDialog
-from context_aware_translation.ui.utils import create_tip_label
+from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.widgets.collapsible_section import CollapsibleSection
 
 _PROVIDER_DEFAULTS: dict[ProviderKind, tuple[str, str]] = {

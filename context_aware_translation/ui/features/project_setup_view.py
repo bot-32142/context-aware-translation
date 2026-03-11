@@ -27,7 +27,7 @@ from context_aware_translation.ui.features.workflow_profile_editor import (
     ConnectionChoice,
     WorkflowRoutesEditor,
 )
-from context_aware_translation.ui.utils import create_tip_label
+from context_aware_translation.ui.tips import create_tip_label
 
 
 class ProjectSetupView(QWidget):

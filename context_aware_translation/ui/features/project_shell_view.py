@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 )
 
 from context_aware_translation.ui.i18n import qarg
-from context_aware_translation.ui.utils import create_tip_label
+from context_aware_translation.ui.tips import create_tip_label
 
 
 class ProjectShellView(QWidget):

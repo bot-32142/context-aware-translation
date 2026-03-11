@@ -25,7 +25,7 @@ from context_aware_translation.application.contracts.projects import (
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.services.projects import ProjectsService
 from context_aware_translation.ui.i18n import qarg
-from context_aware_translation.ui.utils import create_tip_label
+from context_aware_translation.ui.tips import create_tip_label
 
 _ROLE_PROJECT = Qt.ItemDataRole.UserRole + 1
 

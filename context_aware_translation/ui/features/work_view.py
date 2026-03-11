@@ -46,7 +46,7 @@ from context_aware_translation.application.services.terms import TermsService
 from context_aware_translation.application.services.work import WorkService
 from context_aware_translation.ui.adapters.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.ui.features.document_workspace_view import DocumentWorkspaceView, WorkExportDialog
-from context_aware_translation.ui.utils import create_tip_label
+from context_aware_translation.ui.tips import create_tip_label
 
 _STATUS_LABELS: dict[SurfaceStatus, str] = {
     SurfaceStatus.READY: "Ready",

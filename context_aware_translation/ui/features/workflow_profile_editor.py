@@ -29,7 +29,7 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowStepRoute,
 )
 from context_aware_translation.ui.constants import LANGUAGES
-from context_aware_translation.ui.utils import create_tip_label
+from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.widgets.collapsible_section import CollapsibleSection
 
 

@@ -42,7 +42,7 @@ from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTa
 from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
 from context_aware_translation.ui.features.terms_view import TermsView
 from context_aware_translation.ui.i18n import qarg
-from context_aware_translation.ui.utils import create_tip_label
+from context_aware_translation.ui.tips import create_tip_label
 
 _SECTION_LABELS: dict[DocumentSection, str] = {
     DocumentSection.OCR: "OCR",

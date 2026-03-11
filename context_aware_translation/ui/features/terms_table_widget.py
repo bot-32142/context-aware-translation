@@ -24,7 +24,7 @@ from context_aware_translation.application.contracts.terms import (
     TermTableRow,
     UpdateTermRequest,
 )
-from context_aware_translation.ui.utils import create_tip_label
+from context_aware_translation.ui.tips import create_tip_label
 
 _ROLE_ROW = Qt.ItemDataRole.UserRole + 1
 _ROLE_ORDER = Qt.ItemDataRole.UserRole + 2
