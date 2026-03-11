@@ -209,3 +209,41 @@ def test_image_reembedding_backend_is_inferred_when_profile_payload_is_built():
     assert payload["image_reembedding_config"]["backend"] == "openai"
     assert dialog.routes_table.item(0, 0).text() == "Image reembedding"
     assert dialog.routes_table.item(0, 3).text() == "—"
+
+
+def test_translator_batch_model_is_edited_from_main_model_column():
+    profile = WorkflowProfileDetail(
+        profile_id="profile:recommended",
+        name="Recommended",
+        kind=WorkflowProfileKind.SHARED,
+        target_language="English",
+        routes=[
+            WorkflowStepRoute(
+                step_id=WorkflowStepId.TRANSLATOR_BATCH,
+                step_label="Translator batch",
+                connection_id=None,
+                connection_label="Gemini AI Studio",
+                model="gemini-2.5-pro",
+                step_config={
+                    "provider": "gemini_ai_studio",
+                    "api_key": "secret",
+                    "batch_size": 100,
+                    "thinking_mode": "auto",
+                },
+            )
+        ],
+    )
+    dialog = WorkflowProfileEditorDialog(profile=profile, connection_choices=[], allow_name_edit=True)
+
+    batch_row = dialog._rows[0]
+    assert batch_row.connection_combo is None
+    assert batch_row.model_edit.isReadOnly() is False
+    batch_row.model_edit.setText("gemini-2.5-flash")
+
+    built = dialog.profile()
+    payload = build_workflow_profile_payload(base_config={}, profile=built)
+
+    assert dialog.routes_table.item(0, 0).text() == "Translator batch"
+    assert dialog.routes_table.item(0, 1).text() == "Gemini AI Studio"
+    assert payload["translator_batch_config"]["provider"] == "gemini_ai_studio"
+    assert payload["translator_batch_config"]["model"] == "gemini-2.5-flash"
