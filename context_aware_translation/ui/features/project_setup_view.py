@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.application.contracts.app_setup import (
     ConnectionSummary,
     WorkflowProfileDetail,
@@ -21,7 +22,6 @@ from context_aware_translation.application.contracts.project_setup import Projec
 from context_aware_translation.application.errors import ApplicationError, BlockedOperationError
 from context_aware_translation.application.events import ApplicationEventSubscriber, SetupInvalidatedEvent
 from context_aware_translation.application.services.project_setup import ProjectSetupService
-from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.ui.features.workflow_profile_editor import (
     ADVANCED_STEP_IDS,
     ConnectionChoice,
@@ -71,9 +71,6 @@ class ProjectSetupView(QWidget):
         self.message_label = QLabel()
         self.message_label.hide()
         layout.addWidget(self.message_label)
-
-        self.summary_label = create_tip_label("")
-        layout.addWidget(self.summary_label)
 
         self.blocker_label = create_tip_label("")
         self.blocker_label.setStyleSheet("QLabel { color: #b42318; }")
@@ -140,7 +137,6 @@ class ProjectSetupView(QWidget):
         self.save_button.setText(self.tr("Save"))
         self.title_label.setText(self._title_text())
         if self._state is not None:
-            self.summary_label.setText(self._summary_text())
             self._render_effective_profile()
 
     def _apply_state(self, state: ProjectSetupState) -> None:
@@ -169,7 +165,6 @@ class ProjectSetupView(QWidget):
         self.shared_profile_combo.blockSignals(False)
 
         self.open_app_setup_button.setVisible(state.blocker is not None)
-        self.summary_label.setText(self._summary_text())
         self._render_effective_profile()
         self._show_message("", is_error=False)
 
@@ -278,15 +273,6 @@ class ProjectSetupView(QWidget):
         if self._state is None:
             return self.tr("Project Setup")
         return self.tr("Setup for %1").replace("%1", self._state.project.name)
-
-    def _summary_text(self) -> str:
-        if self._state is None:
-            return ""
-        if self._is_custom_selected():
-            return self.tr("This project is using a project-specific workflow profile.")
-        if self._current_shared_profile() is not None or self._state.selected_shared_profile is not None:
-            return self.tr("This project is using a shared workflow profile.")
-        return self.tr("Choose a shared workflow profile to continue.")
 
     def _tip_text(self) -> str:
         return self.tr(

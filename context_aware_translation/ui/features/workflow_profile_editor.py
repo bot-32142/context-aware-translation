@@ -48,22 +48,6 @@ class RouteRow:
     connection_combo: QComboBox | None
     model_edit: QLineEdit
 
-    @property
-    def step_id(self) -> WorkflowStepId:
-        return self.route.step_id
-
-    @property
-    def step_label(self) -> str:
-        return self.route.step_label
-
-    @property
-    def step_config(self) -> dict[str, bool | int | float | str | None]:
-        return self.route.step_config
-
-    @step_config.setter
-    def step_config(self, value: dict[str, bool | int | float | str | None]) -> None:
-        self.route = self.route.model_copy(update={"step_config": value})
-
 
 @dataclass(frozen=True)
 class _SpinFieldSpec:
@@ -314,15 +298,15 @@ class WorkflowRoutesEditor(QWidget):
             if route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
                 self.table.setItem(row_index, 1, self._item(route.connection_label or self.tr("Direct batch config")))
                 model_edit = self._build_model_edit(route.model or "", readonly=True)
-                self.table.setCellWidget(row_index, 2, self._cell_widget(model_edit))
+                self.table.setCellWidget(row_index, 2, self._wrap_cell_widget(model_edit))
                 self.rows.append(RouteRow(route=route, connection_combo=None, model_edit=model_edit))
                 continue
 
             combo = self._build_connection_combo(route.connection_id)
             model_edit = self._build_model_edit(route.model or "")
             combo.currentIndexChanged.connect(lambda _i, c=combo, e=model_edit: self._sync_model_from_connection(c, e))
-            self.table.setCellWidget(row_index, 1, self._cell_widget(combo))
-            self.table.setCellWidget(row_index, 2, self._cell_widget(model_edit))
+            self.table.setCellWidget(row_index, 1, self._wrap_cell_widget(combo))
+            self.table.setCellWidget(row_index, 2, self._wrap_cell_widget(model_edit))
             self.rows.append(RouteRow(route=route, connection_combo=combo, model_edit=model_edit))
 
         self._update_table_geometry()
@@ -389,7 +373,7 @@ class WorkflowRoutesEditor(QWidget):
         model_edit.setStyleSheet("QLineEdit { font-size: 13px; padding: 4px 6px; }")
         return model_edit
 
-    def _cell_widget(self, widget: QWidget) -> QWidget:
+    def _wrap_cell_widget(self, widget: QWidget) -> QWidget:
         container = QWidget()
         container.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         layout = QVBoxLayout(container)
@@ -409,6 +393,14 @@ class WorkflowRoutesEditor(QWidget):
         if default_model:
             model_edit.setText(default_model)
 
+    def _item(self, text: str, *, tooltip: str | None = None, centered: bool = False) -> QTableWidgetItem:
+        item = QTableWidgetItem(text)
+        if tooltip:
+            item.setToolTip(tooltip)
+        if centered:
+            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        return item
+
     def _step_item(self, step_label: str) -> QTableWidgetItem:
         item = self._item(step_label)
         item.setToolTip(self.tr("Connection and model settings for this workflow step."))
@@ -419,12 +411,17 @@ class WorkflowRoutesEditor(QWidget):
             button = QPushButton(self.tr("Advanced"))
             button.setFixedWidth(self._ADVANCED_COLUMN_WIDTH - 16)
             button.clicked.connect(lambda _checked=False, r=row: self._open_step_advanced_dialog(r))
-            self.table.setCellWidget(row, 3, self._cell_widget(button))
+            self.table.setCellWidget(row, 3, self._wrap_cell_widget(button))
             return
-        item = self._item("—")
-        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-        item.setToolTip(self.tr("This step has no additional settings beyond connection and model."))
-        self.table.setItem(row, 3, item)
+        self.table.setItem(
+            row,
+            3,
+            self._item(
+                "—",
+                tooltip=self.tr("This step has no additional settings beyond connection and model."),
+                centered=True,
+            ),
+        )
 
     def _open_step_advanced_dialog(self, row: int) -> None:
         if row < 0 or row >= len(self.rows):
@@ -474,9 +471,6 @@ class WorkflowRoutesEditor(QWidget):
         )
         self.setMinimumHeight(editor_height)
         self.updateGeometry()
-
-    def _item(self, text: str) -> QTableWidgetItem:
-        return QTableWidgetItem(text)
 
 
 class WorkflowProfileEditorDialog(QDialog):

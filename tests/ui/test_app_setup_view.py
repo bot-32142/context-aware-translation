@@ -134,7 +134,6 @@ def test_app_setup_view_renders_backend_state():
     assert view.setup_tabs.count() == 2
     assert view.setup_tabs.tabText(0) == view.tr("Connections")
     assert view.setup_tabs.tabText(1) == view.tr("Workflow Profiles")
-    assert "connections configured" in view.summary_label.text()
     assert view.run_wizard_button.text() == view.tr("Open Setup Wizard")
 
 
@@ -175,7 +174,7 @@ def test_app_setup_view_add_delete_test_and_edit_profile_calls_service():
         view.connections_table.selectRow(0)
         view._on_delete_connection()
         view.profiles_table.selectRow(0)
-        view._on_edit_profile()
+        view._edit_profile()
         view.profiles_table.selectRow(0)
         view._on_duplicate_profile()
         view.profiles_table.selectRow(0)
@@ -196,7 +195,7 @@ def test_app_setup_view_opens_connection_dialog_on_double_click():
     view = AppSetupView(service)
     opened: list[bool] = []
     try:
-        with patch.object(view, "_on_edit_connection", side_effect=lambda: opened.append(True)):
+        with patch.object(view, "_edit_connection", side_effect=lambda *_args: opened.append(True)):
             view.connections_table.selectRow(0)
             view._on_connection_double_clicked(0, 0)
         assert opened == [True]
@@ -218,7 +217,7 @@ def test_app_setup_view_disables_managed_connection_edits():
         view.connections_table.selectRow(0)
         assert view.duplicate_connection_button.isEnabled()
         assert not view.delete_connection_button.isEnabled()
-        with patch.object(view, "_on_edit_connection", side_effect=lambda: opened.append(True)):
+        with patch.object(view, "_edit_connection", side_effect=lambda *_args: opened.append(True)):
             view._on_connection_double_clicked(0, 0)
         assert opened == []
     finally:
@@ -441,7 +440,8 @@ def test_app_setup_view_refreshes_wizard_prompt_state():
     view = AppSetupView(service)
 
     assert view.run_wizard_button.text() == view.tr("Run Setup Wizard")
-    assert "Run the setup wizard" in view.summary_label.text()
+    assert view.connections_table.rowCount() == 0
+    assert view.profiles_table.rowCount() == 0
 
 
 def test_connection_draft_form_round_trips_advanced_fields():

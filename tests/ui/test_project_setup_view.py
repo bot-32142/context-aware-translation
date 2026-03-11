@@ -118,7 +118,6 @@ def test_project_setup_view_renders_backend_state():
     view = ProjectSetupView("proj-1", service, bus)
     try:
         assert view.title_label.text() == view.tr("Setup for One Piece")
-        assert "shared workflow profile" in view.summary_label.text().lower()
         assert view.custom_profile_group.isHidden()
         assert view.layout().alignment() == Qt.AlignmentFlag.AlignTop
         assert service.calls == [("get_state", "proj-1")]
@@ -170,7 +169,7 @@ def test_project_setup_view_can_select_custom_profile():
         assert view.routes_table.cellWidget(1, 3) is not None
 
         translator_row = next(
-            index for index, row in enumerate(view._custom_rows) if row.step_id is WorkflowStepId.TRANSLATOR
+            index for index, row in enumerate(view._custom_rows) if row.route.step_id is WorkflowStepId.TRANSLATOR
         )
         translator = view._custom_rows[translator_row]
         assert translator.connection_combo.minimumWidth() >= 250
@@ -204,7 +203,7 @@ def test_project_setup_view_custom_step_advanced_button_opens_advanced_dialog():
         custom_index = view.shared_profile_combo.findData("__custom__")
         view.shared_profile_combo.setCurrentIndex(custom_index)
         translator_row = next(
-            index for index, row in enumerate(view._custom_rows) if row.step_id is WorkflowStepId.TRANSLATOR
+            index for index, row in enumerate(view._custom_rows) if row.route.step_id is WorkflowStepId.TRANSLATOR
         )
 
         opened: list[WorkflowStepId] = []
@@ -232,7 +231,7 @@ def test_project_setup_view_custom_step_advanced_button_opens_advanced_dialog():
             editor_module.StepAdvancedConfigDialog = original
 
         assert opened == [WorkflowStepId.TRANSLATOR]
-        assert view._custom_rows[translator_row].step_config["chunk_size"] == 1234
+        assert view._custom_rows[translator_row].route.step_config["chunk_size"] == 1234
         assert view.routes_table.cellWidget(translator_row, 3) is not None
     finally:
         view.cleanup()
@@ -264,7 +263,6 @@ def test_project_setup_view_refreshes_on_setup_invalidation():
         service.state = _make_state(project_specific=True)
         bus.publish(SetupInvalidatedEvent(project_id="proj-1"))
 
-        assert "project-specific workflow profile" in view.summary_label.text().lower()
         assert not view.custom_profile_group.isHidden()
         assert service.calls == [("get_state", "proj-1"), ("get_state", "proj-1")]
     finally:

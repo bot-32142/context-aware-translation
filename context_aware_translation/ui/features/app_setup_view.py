@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import TypeVar
 
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtWidgets import (
@@ -78,6 +79,20 @@ _CAPABILITY_LABELS: dict[CapabilityCode, str] = {
     CapabilityCode.IMAGE_EDITING: "Image editing",
     CapabilityCode.REASONING_AND_REVIEW: "Reasoning and review",
 }
+
+_NEW_PROFILE_ROUTE_SPECS: tuple[tuple[WorkflowStepId, str], ...] = (
+    (WorkflowStepId.EXTRACTOR, "Extractor"),
+    (WorkflowStepId.SUMMARIZER, "Summarizer"),
+    (WorkflowStepId.GLOSSARY_TRANSLATOR, "Glossary translator"),
+    (WorkflowStepId.TRANSLATOR, "Translator"),
+    (WorkflowStepId.REVIEWER, "Reviewer"),
+    (WorkflowStepId.OCR, "OCR"),
+    (WorkflowStepId.IMAGE_REEMBEDDING, "Image reembedding"),
+    (WorkflowStepId.MANGA_TRANSLATOR, "Manga translator"),
+    (WorkflowStepId.TRANSLATOR_BATCH, "Translator batch"),
+)
+
+_T = TypeVar("_T")
 
 
 @dataclass(frozen=True)
@@ -704,9 +719,6 @@ class AppSetupView(QWidget):
         self.tip_label = create_tip_label(self._tip_text())
         layout.addWidget(self.tip_label)
 
-        self.summary_label = create_tip_label("")
-        layout.addWidget(self.summary_label)
-
         self.setup_tabs = QTabWidget()
         layout.addWidget(self.setup_tabs, 1)
 
@@ -793,7 +805,6 @@ class AppSetupView(QWidget):
         self._state = self._service.get_state()
         self._populate_connections(self._state.connections)
         self._populate_profiles(self._state)
-        self.summary_label.setText(self._summary_text(self._state))
         self.run_wizard_button.setText(
             self.tr("Run Setup Wizard") if self._state.requires_wizard else self.tr("Open Setup Wizard")
         )
@@ -824,7 +835,6 @@ class AppSetupView(QWidget):
         self.delete_profile_button.setText(self.tr("Delete"))
         self.profiles_table.setHorizontalHeaderLabels([self.tr("Name"), self.tr("Target language"), self.tr("Default")])
         if self._state is not None:
-            self.summary_label.setText(self._summary_text(self._state))
             self._populate_profiles(self._state)
             self._update_profile_buttons()
 
@@ -867,28 +877,20 @@ class AppSetupView(QWidget):
         if state.shared_profiles:
             self.profiles_table.selectRow(default_row)
 
-    def _selected_connection(self) -> ConnectionSummary | None:
-        rows = self.connections_table.selectionModel().selectedRows()
-        if not rows or self._state is None:
-            return None
-        row = rows[0].row()
-        if row < 0 or row >= len(self._state.connections):
-            return None
-        return self._state.connections[row]
-
-    def _selected_profile(self) -> WorkflowProfileDetail | None:
-        if self._state is None:
-            return None
-        rows = self.profiles_table.selectionModel().selectedRows()
+    def _selected_row_item(self, table: QTableWidget, items: Sequence[_T]) -> _T | None:
+        rows = table.selectionModel().selectedRows()
         if not rows:
             return None
         row = rows[0].row()
-        if row < 0 or row >= len(self._state.shared_profiles):
+        if row < 0 or row >= len(items):
             return None
-        return self._state.shared_profiles[row]
+        return items[row]
 
     def _update_connection_buttons(self) -> None:
-        selected_connection = self._selected_connection()
+        selected_connection = self._selected_row_item(
+            self.connections_table,
+            self._state.connections if self._state is not None else [],
+        )
         selected = selected_connection is not None
         managed = bool(selected_connection and selected_connection.is_managed)
         self.duplicate_connection_button.setEnabled(selected)
@@ -896,7 +898,10 @@ class AppSetupView(QWidget):
 
     def _update_profile_buttons(self) -> None:
         has_connections = bool(self._state and self._state.connections)
-        selected_profile = self._selected_profile()
+        selected_profile = self._selected_row_item(
+            self.profiles_table,
+            self._state.shared_profiles if self._state is not None else [],
+        )
         selected = selected_profile is not None
         self.add_profile_button.setEnabled(has_connections)
         self.duplicate_profile_button.setEnabled(selected)
@@ -909,17 +914,20 @@ class AppSetupView(QWidget):
             self.refresh()
 
     def _on_add_connection(self) -> None:
-        dialog = ConnectionEditorDialog(test_callback=self._test_connection_draft, parent=self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._service.save_connection(dialog.request())
-            self.refresh()
+        self._edit_connection()
 
-    def _on_edit_connection(self) -> None:
-        connection = self._selected_connection()
+    def _edit_connection(self, connection: ConnectionSummary | None = None) -> None:
+        connection = connection or self._selected_row_item(
+            self.connections_table,
+            self._state.connections if self._state is not None else [],
+        )
+        draft = None
+        connection_id = None
+        summary = None
         if connection is None:
-            return
-        dialog = ConnectionEditorDialog(
-            draft=ConnectionDraft(
+            dialog = ConnectionEditorDialog(test_callback=self._test_connection_draft, parent=self)
+        else:
+            draft = ConnectionDraft(
                 display_name=connection.display_name,
                 provider=connection.provider,
                 description=connection.description,
@@ -933,9 +941,13 @@ class AppSetupView(QWidget):
                 input_token_limit=connection.input_token_limit,
                 output_token_limit=connection.output_token_limit,
                 custom_parameters_json=connection.custom_parameters_json,
-            ),
-            connection_id=connection.connection_id,
-            connection_summary=connection,
+            )
+            connection_id = connection.connection_id
+            summary = connection
+        dialog = ConnectionEditorDialog(
+            draft=draft,
+            connection_id=connection_id,
+            connection_summary=summary,
             test_callback=self._test_connection_draft,
             reset_tokens_callback=self._reset_connection_tokens,
             parent=self,
@@ -945,7 +957,10 @@ class AppSetupView(QWidget):
             self.refresh()
 
     def _on_delete_connection(self) -> None:
-        connection = self._selected_connection()
+        connection = self._selected_row_item(
+            self.connections_table,
+            self._state.connections if self._state is not None else [],
+        )
         if connection is None:
             return
         result = QMessageBox.question(
@@ -963,7 +978,10 @@ class AppSetupView(QWidget):
         self.refresh()
 
     def _on_duplicate_connection(self) -> None:
-        connection = self._selected_connection()
+        connection = self._selected_row_item(
+            self.connections_table,
+            self._state.connections if self._state is not None else [],
+        )
         if connection is None:
             return
         self._service.duplicate_connection(connection.connection_id)
@@ -972,38 +990,35 @@ class AppSetupView(QWidget):
     def _on_add_profile(self) -> None:
         if self._state is None or not self._state.connections:
             return
+        self._edit_profile(self._new_profile_template())
+
+    def _edit_profile(self, profile: WorkflowProfileDetail | None = None) -> None:
+        if self._state is None:
+            return
+        current_profile = profile or self._selected_row_item(self.profiles_table, self._state.shared_profiles)
+        if current_profile is None:
+            return
         dialog = WorkflowProfileEditorDialog(
-            profile=self._new_profile_template(),
+            profile=current_profile,
             connection_choices=self._connection_choices(),
             allow_name_edit=True,
             parent=self,
         )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        self._service.save_workflow_profile(SaveWorkflowProfileRequest(profile=dialog.profile()))
+        self._service.save_workflow_profile(
+            SaveWorkflowProfileRequest(
+                profile=dialog.profile(),
+                set_as_default=(current_profile.profile_id == self._state.default_profile_id),
+            )
+        )
         self.refresh()
 
-    def _on_edit_profile(self) -> None:
-        profile = self._selected_profile()
-        if profile is None or self._state is None:
-            return
-        dialog = WorkflowProfileEditorDialog(
-            profile=profile,
-            connection_choices=self._connection_choices(),
-            allow_name_edit=True,
-            parent=self,
-        )
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self._service.save_workflow_profile(
-                SaveWorkflowProfileRequest(
-                    profile=dialog.profile(),
-                    set_as_default=(profile.profile_id == self._state.default_profile_id),
-                )
-            )
-            self.refresh()
-
     def _on_delete_profile(self) -> None:
-        profile = self._selected_profile()
+        profile = self._selected_row_item(
+            self.profiles_table,
+            self._state.shared_profiles if self._state is not None else [],
+        )
         if profile is None:
             return
         result = QMessageBox.question(
@@ -1023,14 +1038,20 @@ class AppSetupView(QWidget):
         self.refresh()
 
     def _on_duplicate_profile(self) -> None:
-        profile = self._selected_profile()
+        profile = self._selected_row_item(
+            self.profiles_table,
+            self._state.shared_profiles if self._state is not None else [],
+        )
         if profile is None:
             return
         self._service.duplicate_workflow_profile(profile.profile_id)
         self.refresh()
 
     def _on_set_default_profile(self) -> None:
-        profile = self._selected_profile()
+        profile = self._selected_row_item(
+            self.profiles_table,
+            self._state.shared_profiles if self._state is not None else [],
+        )
         if profile is None:
             return
         self._service.save_workflow_profile(
@@ -1042,13 +1063,16 @@ class AppSetupView(QWidget):
         self.refresh()
 
     def _on_profile_double_clicked(self, _row: int, _column: int) -> None:
-        self._on_edit_profile()
+        self._edit_profile()
 
     def _on_connection_double_clicked(self, _row: int, _column: int) -> None:
-        connection = self._selected_connection()
+        connection = self._selected_row_item(
+            self.connections_table,
+            self._state.connections if self._state is not None else [],
+        )
         if connection is None or connection.is_managed:
             return
-        self._on_edit_connection()
+        self._edit_connection(connection)
 
     def _test_connection_draft(self, draft: ConnectionDraft) -> ConnectionTestResult:
         result = self._service.test_connection(ConnectionTestRequest(connection=draft))
@@ -1076,7 +1100,9 @@ class AppSetupView(QWidget):
 
     def _new_profile_template(self) -> WorkflowProfileDetail:
         assert self._state is not None
-        base_profile = self._selected_profile() or (self._state.shared_profiles[0] if self._state.shared_profiles else None)
+        base_profile = self._selected_row_item(self.profiles_table, self._state.shared_profiles) or (
+            self._state.shared_profiles[0] if self._state.shared_profiles else None
+        )
         if base_profile is not None:
             return base_profile.model_copy(
                 update={
@@ -1088,17 +1114,6 @@ class AppSetupView(QWidget):
             )
 
         first_connection = self._state.connections[0]
-        route_specs = (
-            (WorkflowStepId.EXTRACTOR, "Extractor"),
-            (WorkflowStepId.SUMMARIZER, "Summarizer"),
-            (WorkflowStepId.GLOSSARY_TRANSLATOR, "Glossary translator"),
-            (WorkflowStepId.TRANSLATOR, "Translator"),
-            (WorkflowStepId.REVIEWER, "Reviewer"),
-            (WorkflowStepId.OCR, "OCR"),
-            (WorkflowStepId.IMAGE_REEMBEDDING, "Image reembedding"),
-            (WorkflowStepId.MANGA_TRANSLATOR, "Manga translator"),
-            (WorkflowStepId.TRANSLATOR_BATCH, "Translator batch"),
-        )
         routes = [
             WorkflowStepRoute(
                 step_id=step_id,
@@ -1108,7 +1123,7 @@ class AppSetupView(QWidget):
                 model=(first_connection.default_model if step_id is not WorkflowStepId.TRANSLATOR_BATCH else None),
                 step_config={},
             )
-            for step_id, label in route_specs
+            for step_id, label in _NEW_PROFILE_ROUTE_SPECS
         ]
         return WorkflowProfileDetail(
             profile_id="__new__",
@@ -1144,18 +1159,6 @@ class AppSetupView(QWidget):
             item.setData(Qt.ItemDataRole.UserRole, user_data)
         table.setItem(row, column, item)
         return item
-
-    def _summary_text(self, state: AppSetupState) -> str:
-        if state.requires_wizard:
-            return self.tr(
-                "No connections are configured yet. Run the setup wizard to create reusable connections and a shared workflow profile."
-            )
-        return (
-            f"{len(state.connections)} "
-            + self.tr("connections configured.")
-            + f" {len(state.shared_profiles)} "
-            + self.tr("shared workflow profiles available.")
-        )
 
     def _tip_text(self) -> str:
         return self.tr(
