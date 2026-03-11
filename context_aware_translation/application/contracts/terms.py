@@ -38,6 +38,8 @@ class TermTableRow(ContractModel):
     term: str
     translation: str | None = None
     description: str | None = None
+    description_tooltip: str | None = None
+    description_sort_key: int = -1
     occurrences: int = 0
     votes: int = 0
     ignored: bool = False
@@ -76,6 +78,15 @@ class UpdateTermRequest(ContractModel):
     description: str | None = None
     ignored: bool | None = None
     reviewed: bool | None = None
+
+
+class UpdateTermRowsRequest(ContractModel):
+    scope: TermsScope
+    rows: list[TermTableRow] = Field(default_factory=list)
+
+
+class UpdateTermRowsResult(ContractModel):
+    rows: list[TermTableRow] = Field(default_factory=list)
 
 
 class BuildTermsRequest(ContractModel):
@@ -117,3 +128,7 @@ class BulkUpdateTermsRequest(ContractModel):
     ignored: bool | None = None
     reviewed: bool | None = None
     delete: bool = False
+
+
+class BulkUpdateTermsResult(ContractModel):
+    affected_count: int = 0

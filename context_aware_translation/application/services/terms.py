@@ -14,6 +14,7 @@ from context_aware_translation.application.contracts.common import (
 from context_aware_translation.application.contracts.terms import (
     BuildTermsRequest,
     BulkUpdateTermsRequest,
+    BulkUpdateTermsResult,
     ExportTermsRequest,
     FilterNoiseRequest,
     ImportTermsRequest,
@@ -26,6 +27,8 @@ from context_aware_translation.application.contracts.terms import (
     TermTableRow,
     TranslatePendingTermsRequest,
     UpdateTermRequest,
+    UpdateTermRowsRequest,
+    UpdateTermRowsResult,
 )
 from context_aware_translation.application.errors import (
     ApplicationErrorCode,
@@ -38,7 +41,7 @@ from context_aware_translation.application.runtime import (
     make_blocker,
     make_document_ref,
 )
-from context_aware_translation.storage.schema.book_db import TermRecord
+from context_aware_translation.storage.schema.book_db import TermRecord, TermRowUpdate
 from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 from context_aware_translation.workflow.tasks.models import TaskAction
@@ -54,6 +57,8 @@ class TermsService(Protocol):
 
     def update_term(self, request: UpdateTermRequest) -> TermsTableState: ...
 
+    def update_term_rows(self, request: UpdateTermRowsRequest) -> UpdateTermRowsResult: ...
+
     def build_terms(self, request: BuildTermsRequest) -> AcceptedCommand: ...
 
     def translate_pending(self, request: TranslatePendingTermsRequest) -> AcceptedCommand: ...
@@ -66,7 +71,7 @@ class TermsService(Protocol):
 
     def export_terms(self, request: ExportTermsRequest) -> AcceptedCommand: ...
 
-    def bulk_update_terms(self, request: BulkUpdateTermsRequest) -> TermsTableState: ...
+    def bulk_update_terms(self, request: BulkUpdateTermsRequest) -> BulkUpdateTermsResult: ...
 
 
 class DefaultTermsService:
@@ -104,6 +109,29 @@ class DefaultTermsService:
         if request.scope.kind is TermsScopeKind.DOCUMENT and request.scope.document is not None:
             return self.get_document_terms(request.scope.project.project_id, request.scope.document.document_id)
         return self.get_project_terms(request.scope.project.project_id)
+
+    def update_term_rows(self, request: UpdateTermRowsRequest) -> UpdateTermRowsResult:
+        blocker = self._glossary_mutation_blocker(request.scope.project.project_id)
+        if blocker is not None:
+            self._raise_blocked_blocker(blocker, project_id=request.scope.project.project_id)
+        with self._runtime.open_book_db(request.scope.project.project_id) as dbx:
+            updated_count = dbx.term_repo.update_term_rows(
+                [
+                    TermRowUpdate(
+                        key=row.term_key,
+                        translated_name=row.translation or "",
+                        ignored=row.ignored,
+                        is_reviewed=row.reviewed,
+                    )
+                    for row in request.rows
+                ]
+            )
+        if updated_count:
+            self._runtime.invalidate_terms(
+                request.scope.project.project_id,
+                request.scope.document.document_id if request.scope.document is not None else None,
+            )
+        return UpdateTermRowsResult(rows=request.rows)
 
     def build_terms(self, request: BuildTermsRequest) -> AcceptedCommand:
         params: dict[str, object] = {}
@@ -170,32 +198,27 @@ class DefaultTermsService:
             params["document_ids"] = [request.document_id]
         return self._runtime.submit_task("glossary_export", request.project_id, **params)
 
-    def bulk_update_terms(self, request: BulkUpdateTermsRequest) -> TermsTableState:
+    def bulk_update_terms(self, request: BulkUpdateTermsRequest) -> BulkUpdateTermsResult:
         blocker = self._glossary_mutation_blocker(request.scope.project.project_id)
         if blocker is not None:
             self._raise_blocked_blocker(blocker, project_id=request.scope.project.project_id)
         if not request.term_keys:
-            return (
-                self.get_document_terms(request.scope.project.project_id, request.scope.document.document_id)
-                if request.scope.kind is TermsScopeKind.DOCUMENT and request.scope.document is not None
-                else self.get_project_terms(request.scope.project.project_id)
-            )
+            return BulkUpdateTermsResult()
         with self._runtime.open_book_db(request.scope.project.project_id) as dbx:
             if request.delete:
-                dbx.term_repo.delete_terms(request.term_keys)
+                affected_count = dbx.term_repo.delete_terms(request.term_keys)
             else:
-                dbx.term_repo.update_terms_bulk(
+                affected_count = dbx.term_repo.update_terms_bulk(
                     request.term_keys,
                     ignored=request.ignored,
                     is_reviewed=request.reviewed,
                 )
-        self._runtime.invalidate_terms(
-            request.scope.project.project_id,
-            request.scope.document.document_id if request.scope.document is not None else None,
-        )
-        if request.scope.kind is TermsScopeKind.DOCUMENT and request.scope.document is not None:
-            return self.get_document_terms(request.scope.project.project_id, request.scope.document.document_id)
-        return self.get_project_terms(request.scope.project.project_id)
+        if affected_count:
+            self._runtime.invalidate_terms(
+                request.scope.project.project_id,
+                request.scope.document.document_id if request.scope.document is not None else None,
+            )
+        return BulkUpdateTermsResult(affected_count=affected_count)
 
     def _build_terms_table(self, project_id: str, document_id: int | None) -> TermsTableState:
         project = self._runtime.get_project_ref(project_id)
@@ -219,9 +242,11 @@ class DefaultTermsService:
                         term_key=record.key,
                         term=record.key,
                         translation=record.translated_name,
-                        description=next(iter(record.descriptions.values()), None),
+                        description=self._primary_description(record),
+                        description_tooltip=self._description_tooltip(record),
+                        description_sort_key=self._max_chunk_id(record),
                         occurrences=len(record.occurrence),
-                        votes=record.votes,
+                        votes=self._recognized_chunk_count(record),
                         ignored=record.ignored,
                         reviewed=record.is_reviewed,
                         status=(
@@ -253,6 +278,39 @@ class DefaultTermsService:
             rows=rows,
             status=SurfaceStatus.READY,
         )
+
+    @staticmethod
+    def _recognized_chunk_count(record: TermRecord) -> int:
+        return sum(1 for key in (record.descriptions or {}) if str(key).lstrip("-").isdigit())
+
+    @staticmethod
+    def _max_chunk_id(record: TermRecord) -> int:
+        chunk_ids = [int(key) for key in (record.descriptions or {}) if str(key).lstrip("-").isdigit()]
+        return max(chunk_ids) if chunk_ids else -1
+
+    @classmethod
+    def _primary_description(cls, record: TermRecord) -> str | None:
+        entries = cls._sorted_description_entries(record)
+        return entries[0][1] if entries else None
+
+    @classmethod
+    def _description_tooltip(cls, record: TermRecord) -> str | None:
+        entries = cls._sorted_description_entries(record)
+        if not entries:
+            return None
+        return "\n".join(f"{key}: {value}" for key, value in entries)
+
+    @staticmethod
+    def _sorted_description_entries(record: TermRecord) -> list[tuple[str, str]]:
+        entries = list((record.descriptions or {}).items())
+
+        def _sort_key(item_with_index: tuple[int, tuple[str, str]]) -> tuple[int, int, int]:
+            index, (key, _value) = item_with_index
+            if str(key).lstrip("-").isdigit():
+                return (0, int(key), index)
+            return (1, index, 0)
+
+        return [item for _index, item in sorted(enumerate(entries), key=_sort_key)]
 
     def _build_toolbar_state(
         self,

@@ -43,6 +43,7 @@ from context_aware_translation.application.contracts.queue import QueueActionReq
 from context_aware_translation.application.contracts.terms import (
     BuildTermsRequest,
     BulkUpdateTermsRequest,
+    BulkUpdateTermsResult,
     ExportTermsRequest,
     FilterNoiseRequest,
     ImportTermsRequest,
@@ -50,6 +51,8 @@ from context_aware_translation.application.contracts.terms import (
     TermsTableState,
     TranslatePendingTermsRequest,
     UpdateTermRequest,
+    UpdateTermRowsRequest,
+    UpdateTermRowsResult,
 )
 from context_aware_translation.application.contracts.work import (
     DeleteDocumentStackRequest,
@@ -259,6 +262,23 @@ class FakeTermsService:
         self.calls.append(("update_term", request))
         return self.document_state or self.project_state
 
+    def update_term_rows(self, request: UpdateTermRowsRequest) -> UpdateTermRowsResult:
+        self.calls.append(("update_term_rows", request))
+        rows_by_key = {row.term_key: row for row in request.rows}
+        updated_state = (self.document_state or self.project_state).model_copy(
+            update={
+                "rows": [
+                    rows_by_key.get(row.term_key, row)
+                    for row in (self.document_state or self.project_state).rows
+                ]
+            }
+        )
+        if self.document_state is not None:
+            self.document_state = updated_state
+        else:
+            self.project_state = updated_state
+        return UpdateTermRowsResult(rows=request.rows)
+
     def build_terms(self, request: BuildTermsRequest) -> AcceptedCommand:
         self.calls.append(("build_terms", request))
         return self.command_result or AcceptedCommand(command_name="build_terms")
@@ -283,9 +303,29 @@ class FakeTermsService:
         self.calls.append(("export_terms", request))
         return self.command_result or AcceptedCommand(command_name="export_terms")
 
-    def bulk_update_terms(self, request: BulkUpdateTermsRequest) -> TermsTableState:
+    def bulk_update_terms(self, request: BulkUpdateTermsRequest) -> BulkUpdateTermsResult:
         self.calls.append(("bulk_update_terms", request))
-        return self.document_state or self.project_state
+        state = self.document_state or self.project_state
+        if request.delete:
+            updated_rows = [row for row in state.rows if row.term_key not in set(request.term_keys)]
+        else:
+            updated_rows = [
+                row.model_copy(
+                    update={
+                        **({"ignored": request.ignored} if request.ignored is not None else {}),
+                        **({"reviewed": request.reviewed} if request.reviewed is not None else {}),
+                    }
+                )
+                if row.term_key in request.term_keys
+                else row
+                for row in state.rows
+            ]
+        updated_state = state.model_copy(update={"rows": updated_rows})
+        if self.document_state is not None:
+            self.document_state = updated_state
+        else:
+            self.project_state = updated_state
+        return BulkUpdateTermsResult(affected_count=len(request.term_keys))
 
 
 @dataclass

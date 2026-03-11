@@ -22,12 +22,12 @@ from context_aware_translation.application.contracts.terms import (
     TermsScopeKind,
     TermsTableState,
     TermTableRow,
-    UpdateTermRequest,
 )
 from context_aware_translation.ui.tips import create_tip_label
 
 _ROLE_ROW = Qt.ItemDataRole.UserRole + 1
 _ROLE_ORDER = Qt.ItemDataRole.UserRole + 2
+_ROLE_SORT_VALUE = Qt.ItemDataRole.UserRole + 3
 _COLUMN_TERM = 0
 _COLUMN_TRANSLATION = 1
 _COLUMN_DESCRIPTION = 2
@@ -140,20 +140,17 @@ class _TermsFilterProxyModel(QSortFilterProxyModel):
         self._sort_stack = [(c, o) for c, o in self._sort_stack if c != column]
         self._sort_stack.insert(0, (column, order))
         self.invalidate()
-        super().sort(column, order)
+        # Always ask Qt for an ascending sort; lessThan applies the full sort stack,
+        # including per-column directions, so letting Qt invert again would break DESC.
+        super().sort(column, Qt.SortOrder.AscendingOrder)
 
     def lessThan(self, left, right) -> bool:  # noqa: ANN001
         model = self.sourceModel()
         if model is None:
             return super().lessThan(left, right)
-        left_row = model.data(model.index(left.row(), 0), _ROLE_ROW)
-        right_row = model.data(model.index(right.row(), 0), _ROLE_ROW)
-        if not isinstance(left_row, TermTableRow) or not isinstance(right_row, TermTableRow):
-            return super().lessThan(left, right)
-
         for column, order in self._sort_stack:
-            left_key = self._sort_key(column, left_row)
-            right_key = self._sort_key(column, right_row)
+            left_key = self._sort_key(model.index(left.row(), column))
+            right_key = self._sort_key(model.index(right.row(), column))
             if left_key == right_key:
                 continue
             if order == Qt.SortOrder.DescendingOrder:
@@ -165,26 +162,19 @@ class _TermsFilterProxyModel(QSortFilterProxyModel):
         return int(left_order or 0) < int(right_order or 0)
 
     @staticmethod
-    def _sort_key(column: int, row: TermTableRow) -> tuple:
-        if column == _COLUMN_TERM:
-            return ((row.term or "").casefold(),)
-        if column == _COLUMN_TRANSLATION:
-            return ((row.translation or "").casefold(),)
-        if column == _COLUMN_DESCRIPTION:
-            return ((row.description or "").casefold(),)
-        if column == _COLUMN_OCCURRENCES:
-            return (row.occurrences,)
-        if column == _COLUMN_VOTES:
-            return (row.votes,)
-        if column == _COLUMN_IGNORED:
-            return (row.ignored,)
-        if column == _COLUMN_REVIEWED:
-            return (row.reviewed,)
-        return ((row.term_key or "").casefold(),)
+    def _sort_key(index) -> tuple:  # noqa: ANN001
+        value = index.data(_ROLE_SORT_VALUE)
+        if index.column() == _COLUMN_DESCRIPTION and isinstance(value, int):
+            return (value,)
+        if index.column() in {_COLUMN_OCCURRENCES, _COLUMN_VOTES}:
+            return (int(value or 0),)
+        if index.column() in {_COLUMN_IGNORED, _COLUMN_REVIEWED}:
+            return (bool(value),)
+        return (str(value or ""),)
 
 
 class TermsTableWidget(QWidget):
-    term_update_requested = Signal(object)
+    term_rows_update_requested = Signal(object)
 
     def __init__(self, *, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -311,43 +301,29 @@ class TermsTableWidget(QWidget):
     def _build_items_for_row(self, row: TermTableRow, *, order: int) -> list[QStandardItem]:
         term_item = QStandardItem(row.term)
         term_item.setEditable(False)
-        term_item.setData(row, _ROLE_ROW)
-        term_item.setData(order, _ROLE_ORDER)
 
         translation_item = QStandardItem(row.translation or "")
-        translation_item.setData(row, _ROLE_ROW)
-        translation_item.setData(order, _ROLE_ORDER)
 
         description_item = QStandardItem(row.description or "")
-        description_item.setData(row, _ROLE_ROW)
-        description_item.setData(order, _ROLE_ORDER)
-        description_item.setToolTip(row.description or "")
+        description_item.setEditable(False)
+        description_item.setToolTip(row.description_tooltip or row.description or "")
 
         occurrences_item = QStandardItem(str(row.occurrences))
         occurrences_item.setEditable(False)
-        occurrences_item.setData(row, _ROLE_ROW)
-        occurrences_item.setData(order, _ROLE_ORDER)
 
         votes_item = QStandardItem(str(row.votes))
         votes_item.setEditable(False)
-        votes_item.setData(row, _ROLE_ROW)
-        votes_item.setData(order, _ROLE_ORDER)
 
         ignored_item = QStandardItem()
         ignored_item.setCheckable(True)
         ignored_item.setEditable(False)
         ignored_item.setCheckState(Qt.CheckState.Checked if row.ignored else Qt.CheckState.Unchecked)
-        ignored_item.setData(row, _ROLE_ROW)
-        ignored_item.setData(order, _ROLE_ORDER)
 
         reviewed_item = QStandardItem()
         reviewed_item.setCheckable(True)
         reviewed_item.setEditable(False)
         reviewed_item.setCheckState(Qt.CheckState.Checked if row.reviewed else Qt.CheckState.Unchecked)
-        reviewed_item.setData(row, _ROLE_ROW)
-        reviewed_item.setData(order, _ROLE_ORDER)
-
-        return [
+        items = [
             term_item,
             translation_item,
             description_item,
@@ -356,6 +332,8 @@ class TermsTableWidget(QWidget):
             ignored_item,
             reviewed_item,
         ]
+        self._set_row_item_data(items, row, order=order)
+        return items
 
     def _apply_local_filters(self) -> None:
         self.proxy_model.set_query(self.search_input.text())
@@ -369,18 +347,82 @@ class TermsTableWidget(QWidget):
         if not isinstance(row, TermTableRow):
             return
 
-        request = UpdateTermRequest(scope=self._state.scope, term_id=row.term_id, term_key=row.term_key)
+        updated_row = row
         if item.column() == _COLUMN_TRANSLATION:
-            request = request.model_copy(update={"translation": item.text()})
-        elif item.column() == _COLUMN_DESCRIPTION:
-            request = request.model_copy(update={"description": item.text()})
+            updated_row = row.model_copy(update={"translation": item.text()})
         elif item.column() == _COLUMN_IGNORED:
-            request = request.model_copy(update={"ignored": item.checkState() == Qt.CheckState.Checked})
+            updated_row = row.model_copy(update={"ignored": item.checkState() == Qt.CheckState.Checked})
         elif item.column() == _COLUMN_REVIEWED:
-            request = request.model_copy(update={"reviewed": item.checkState() == Qt.CheckState.Checked})
+            updated_row = row.model_copy(update={"reviewed": item.checkState() == Qt.CheckState.Checked})
         else:
             return
-        self.term_update_requested.emit(request)
+        self._update_row_snapshot(item.row(), updated_row)
+        self._replace_state_row(item.row(), updated_row)
+        self.term_rows_update_requested.emit([updated_row])
+
+    def _set_row_item_data(self, items: list[QStandardItem], row: TermTableRow, *, order: int) -> None:
+        for column, item in enumerate(items):
+            item.setData(row, _ROLE_ROW)
+            item.setData(order, _ROLE_ORDER)
+            item.setData(self._sort_value(column, row), _ROLE_SORT_VALUE)
+
+    def _update_row_snapshot(self, row_index: int, row: TermTableRow, *, invalidate: bool = True) -> None:
+        self._suppress_item_changed = True
+        try:
+            items = [self.table_model.item(row_index, column) for column in range(self.table_model.columnCount())]
+            for column, item in enumerate(items):
+                if item is None:
+                    continue
+                if column == _COLUMN_TERM:
+                    item.setText(row.term)
+                elif column == _COLUMN_TRANSLATION:
+                    item.setText(row.translation or "")
+                elif column == _COLUMN_DESCRIPTION:
+                    item.setText(row.description or "")
+                elif column == _COLUMN_OCCURRENCES:
+                    item.setText(str(row.occurrences))
+                elif column == _COLUMN_VOTES:
+                    item.setText(str(row.votes))
+                elif column == _COLUMN_IGNORED:
+                    item.setCheckState(Qt.CheckState.Checked if row.ignored else Qt.CheckState.Unchecked)
+                elif column == _COLUMN_REVIEWED:
+                    item.setCheckState(Qt.CheckState.Checked if row.reviewed else Qt.CheckState.Unchecked)
+                item.setData(row, _ROLE_ROW)
+                item.setData(self._sort_value(column, row), _ROLE_SORT_VALUE)
+                if column == _COLUMN_DESCRIPTION:
+                    item.setToolTip(row.description_tooltip or row.description or "")
+        finally:
+            self._suppress_item_changed = False
+        if invalidate:
+            self.proxy_model.invalidate()
+
+    def _replace_state_row(self, row_index: int, row: TermTableRow) -> None:
+        if self._state is None:
+            return
+        rows = list(self._state.rows)
+        if not (0 <= row_index < len(rows)):
+            return
+        rows[row_index] = row
+        self._state = self._state.model_copy(update={"rows": rows})
+        self.summary_label.setText(self._summary_text(rows))
+
+    @staticmethod
+    def _sort_value(column: int, row: TermTableRow) -> str | int | bool:
+        if column == _COLUMN_TERM:
+            return (row.term or "").casefold()
+        if column == _COLUMN_TRANSLATION:
+            return (row.translation or "").casefold()
+        if column == _COLUMN_DESCRIPTION:
+            return row.description_sort_key
+        if column == _COLUMN_OCCURRENCES:
+            return row.occurrences
+        if column == _COLUMN_VOTES:
+            return row.votes
+        if column == _COLUMN_IGNORED:
+            return row.ignored
+        if column == _COLUMN_REVIEWED:
+            return row.reviewed
+        return (row.term_key or "").casefold()
 
     def _scope_text(self, state: TermsTableState) -> str:
         if state.scope.kind is TermsScopeKind.PROJECT:
@@ -413,6 +455,53 @@ class TermsTableWidget(QWidget):
             seen_keys.add(row.term_key)
             rows.append(row)
         return rows
+
+    def rows_snapshot(self) -> list[TermTableRow]:
+        if self._state is None:
+            return []
+        return list(self._state.rows)
+
+    def apply_row_updates(self, rows: list[TermTableRow]) -> None:
+        if self._state is None or not rows:
+            return
+        rows_by_key = {row.term_key: row for row in rows}
+        state_rows = list(self._state.rows)
+        updated = False
+        for row_index in range(self.table_model.rowCount()):
+            current_row = self.table_model.data(self.table_model.index(row_index, 0), _ROLE_ROW)
+            if not isinstance(current_row, TermTableRow):
+                continue
+            updated_row = rows_by_key.get(current_row.term_key)
+            if updated_row is None:
+                continue
+            self._update_row_snapshot(row_index, updated_row, invalidate=False)
+            state_rows[row_index] = updated_row
+            updated = True
+        if not updated:
+            return
+        self._state = self._state.model_copy(update={"rows": state_rows})
+        self.summary_label.setText(self._summary_text(state_rows))
+        self.proxy_model.invalidate()
+
+    def remove_rows(self, term_keys: list[str]) -> None:
+        if self._state is None or not term_keys:
+            return
+        term_key_set = set(term_keys)
+        state_rows = list(self._state.rows)
+        row_indexes = [index for index, row in enumerate(state_rows) if row.term_key in term_key_set]
+        if not row_indexes:
+            return
+        self._suppress_item_changed = True
+        try:
+            for row_index in reversed(row_indexes):
+                self.table_model.removeRow(row_index)
+        finally:
+            self._suppress_item_changed = False
+        remaining_rows = [row for row in state_rows if row.term_key not in term_key_set]
+        self._state = self._state.model_copy(update={"rows": remaining_rows})
+        self.summary_label.setText(self._summary_text(remaining_rows))
+        self.table_view.clearSelection()
+        self.proxy_model.invalidate()
 
     def eventFilter(self, watched, event):  # noqa: ANN001
         if (
@@ -452,8 +541,7 @@ class TermsTableWidget(QWidget):
         if not selected:
             return
         for index in selected:
-            for column in (_COLUMN_TRANSLATION, _COLUMN_DESCRIPTION):
-                self.table_view.openPersistentEditor(self.proxy_model.index(index.row(), column))
+            self.table_view.openPersistentEditor(self.proxy_model.index(index.row(), _COLUMN_TRANSLATION))
         first = self.proxy_model.index(selected[0].row(), _COLUMN_TRANSLATION)
         self.table_view.setCurrentIndex(first)
         self.table_view.scrollTo(first)

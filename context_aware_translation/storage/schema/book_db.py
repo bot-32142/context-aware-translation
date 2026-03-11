@@ -25,6 +25,14 @@ class TermRecord:
     updated_at: float | None = None
 
 
+@dataclass(frozen=True)
+class TermRowUpdate:
+    key: str
+    translated_name: str
+    ignored: bool
+    is_reviewed: bool
+
+
 @dataclass
 class ChunkRecord:
     """Base chunk record for general storage operations."""
@@ -395,6 +403,31 @@ class SQLiteBookDB:
         """
         cursor = self.conn.execute(sql, params + keys)
         self.conn.commit()
+        return cursor.rowcount
+
+    def update_term_rows(self, rows: Iterable[TermRowUpdate]) -> int:
+        updates = list(rows)
+        if not updates:
+            return 0
+        now = time.time()
+        with self.conn:
+            cursor = self.conn.executemany(
+                """
+                UPDATE terms
+                SET translated_name = ?, ignored = ?, is_reviewed = ?, updated_at = ?
+                WHERE key = ?
+                """,
+                [
+                    (
+                        row.translated_name,
+                        1 if row.ignored else 0,
+                        1 if row.is_reviewed else 0,
+                        now,
+                        row.key,
+                    )
+                    for row in updates
+                ],
+            )
         return cursor.rowcount
 
     def delete_terms(self, keys: list[str]) -> int:

@@ -74,6 +74,7 @@ def _make_state(*, can_review: bool = False, can_export: bool = False) -> TermsT
                 term="ルフィ",
                 translation="Luffy",
                 description="Main character",
+                description_tooltip="1: Main character\n2: Captain of the Straw Hat Pirates",
                 occurrences=4,
                 votes=2,
                 reviewed=False,
@@ -150,12 +151,17 @@ def test_terms_view_routes_edits_and_toolbar_actions_through_service():
             translation_item = view.table_model.item(0, 1)
             translation_item.setText("Monkey D. Luffy")
             description_item = view.table_model.item(0, 2)
-            description_item.setText("Future pirate king")
+            assert not description_item.isEditable()
             ignored_item = view.table_model.item(0, 5)
             ignored_item.setCheckState(Qt.CheckState.Checked)
             reviewed_item = view.table_model.item(0, 6)
             reviewed_item.setCheckState(Qt.CheckState.Checked)
-            view.table_view.selectRow(0)
+            bulk_proxy_row = next(
+                row
+                for row in range(view.proxy_model.rowCount())
+                if view.proxy_model.index(row, 0).data() == "ニカ"
+            )
+            view.table_view.selectRow(bulk_proxy_row)
             assert view.edit_selected_action.isEnabled()
             view.bulk_mark_reviewed_action.trigger()
 
@@ -165,14 +171,19 @@ def test_terms_view_routes_edits_and_toolbar_actions_through_service():
         assert "filter_noise" in call_names
         assert "import_terms" in call_names
         assert "export_terms" in call_names
-        assert "update_term" in call_names
+        assert "update_term_rows" in call_names
         assert "bulk_update_terms" in call_names
 
-        update_requests = [payload for name, payload in service.calls if name == "update_term"]
-        assert any(payload.translation == "Monkey D. Luffy" for payload in update_requests)
-        assert any(payload.description == "Future pirate king" for payload in update_requests)
-        assert any(payload.ignored is True for payload in update_requests)
-        assert any(payload.reviewed is True for payload in update_requests)
+        update_requests = [payload for name, payload in service.calls if name == "update_term_rows"]
+        assert any(payload.rows[0].translation == "Monkey D. Luffy" for payload in update_requests)
+        assert any(payload.rows[0].ignored is True for payload in update_requests)
+        assert any(payload.rows[0].reviewed is True for payload in update_requests)
+        nika_source_row = next(
+            row
+            for row in range(view.table_model.rowCount())
+            if view.table_model.item(row, 0).text() == "ニカ"
+        )
+        assert view.table_model.item(nika_source_row, 6).checkState() == Qt.CheckState.Checked
     finally:
         view.cleanup()
 
@@ -201,7 +212,10 @@ def test_terms_view_description_tooltip_and_header_tooltips_are_restored():
     view = TermsView("proj-1", service, bus)
     try:
         description_index = view.table_model.index(0, 2)
-        assert view.table_model.data(description_index, Qt.ItemDataRole.ToolTipRole) == "Main character"
+        assert (
+            view.table_model.data(description_index, Qt.ItemDataRole.ToolTipRole)
+            == "1: Main character\n2: Captain of the Straw Hat Pirates"
+        )
 
         header_tooltip = view.table_model.headerData(2, Qt.Orientation.Horizontal, Qt.ItemDataRole.ToolTipRole)
         assert "only context summaries ending at or before the current chunk are sent" in header_tooltip
@@ -209,7 +223,7 @@ def test_terms_view_description_tooltip_and_header_tooltips_are_restored():
         view.cleanup()
 
 
-def test_terms_view_uses_stable_row_aware_sort_for_reviewed_and_ignored():
+def test_terms_view_sorting_and_live_updates_follow_legacy_glossary_behavior():
     from context_aware_translation.ui.features.terms_view import TermsView
 
     state = TermsTableState(
@@ -225,20 +239,9 @@ def test_terms_view_uses_stable_row_aware_sort_for_reviewed_and_ignored():
                 term="A",
                 translation="",
                 description="desc a",
-                occurrences=5,
+                description_sort_key=3,
+                occurrences=2,
                 votes=2,
-                ignored=False,
-                reviewed=True,
-                status=TermStatus.READY,
-            ),
-            TermTableRow(
-                term_id=2,
-                term_key="b",
-                term="B",
-                translation="",
-                description="desc b",
-                occurrences=10,
-                votes=1,
                 ignored=False,
                 reviewed=False,
                 status=TermStatus.NEEDS_REVIEW,
@@ -249,7 +252,34 @@ def test_terms_view_uses_stable_row_aware_sort_for_reviewed_and_ignored():
                 term="C",
                 translation="",
                 description="desc c",
-                occurrences=7,
+                description_sort_key=1,
+                occurrences=2,
+                votes=1,
+                ignored=False,
+                reviewed=True,
+                status=TermStatus.READY,
+            ),
+            TermTableRow(
+                term_id=2,
+                term_key="b",
+                term="B",
+                translation="",
+                description="desc b",
+                description_sort_key=2,
+                occurrences=3,
+                votes=1,
+                ignored=False,
+                reviewed=False,
+                status=TermStatus.NEEDS_REVIEW,
+            ),
+            TermTableRow(
+                term_id=4,
+                term_key="d",
+                term="D",
+                translation="",
+                description="desc d",
+                description_sort_key=4,
+                occurrences=1,
                 votes=1,
                 ignored=True,
                 reviewed=False,
@@ -258,23 +288,59 @@ def test_terms_view_uses_stable_row_aware_sort_for_reviewed_and_ignored():
         ],
     )
     service = FakeTermsService(project_state=state)
+
+    def _update_term_rows(request):  # noqa: ANN001
+        service.calls.append(("update_term_rows", request))
+        updates_by_key = {row.term_key: row for row in request.rows}
+        service.project_state = service.project_state.model_copy(
+            update={
+                "rows": [
+                    updates_by_key.get(row.term_key, row)
+                    for row in service.project_state.rows
+                ]
+            }
+        )
+        return None
+
+    service.update_term_rows = _update_term_rows
     bus = InMemoryApplicationEventBus()
     view = TermsView("proj-1", service, bus)
     try:
+        view.table_view.sortByColumn(3, Qt.SortOrder.AscendingOrder)
+        ordered_terms = [view.proxy_model.index(row, 0).data() for row in range(view.proxy_model.rowCount())]
+        assert ordered_terms == ["D", "A", "C", "B"]
+
         view.table_view.sortByColumn(3, Qt.SortOrder.DescendingOrder)
+        ordered_terms = [view.proxy_model.index(row, 0).data() for row in range(view.proxy_model.rowCount())]
+        assert ordered_terms == ["B", "A", "C", "D"]
+
+        view.table_view.sortByColumn(4, Qt.SortOrder.AscendingOrder)
+        ordered_terms = [view.proxy_model.index(row, 0).data() for row in range(view.proxy_model.rowCount())]
+        assert ordered_terms == ["B", "C", "D", "A"]
+
         view.table_view.sortByColumn(6, Qt.SortOrder.AscendingOrder)
-        ordered_terms = [
-            view.proxy_model.index(row, 0).data()
-            for row in range(view.proxy_model.rowCount())
-        ]
-        assert ordered_terms == ["B", "C", "A"]
+        ordered_terms = [view.proxy_model.index(row, 0).data() for row in range(view.proxy_model.rowCount())]
+        assert ordered_terms == ["B", "D", "A", "C"]
 
         view.table_view.sortByColumn(5, Qt.SortOrder.AscendingOrder)
-        ordered_terms = [
-            view.proxy_model.index(row, 0).data()
-            for row in range(view.proxy_model.rowCount())
-        ]
-        assert ordered_terms == ["B", "A", "C"]
+        ordered_terms = [view.proxy_model.index(row, 0).data() for row in range(view.proxy_model.rowCount())]
+        assert ordered_terms == ["B", "A", "C", "D"]
+
+        view.table_view.sortByColumn(2, Qt.SortOrder.AscendingOrder)
+        ordered_terms = [view.proxy_model.index(row, 0).data() for row in range(view.proxy_model.rowCount())]
+        assert ordered_terms == ["C", "B", "A", "D"]
+
+        view.table_model.item(3, 1).setText("Ace")
+        view.table_model.item(0, 1).setText("Luffy")
+        view.table_model.item(3, 5).setCheckState(Qt.CheckState.Unchecked)
+
+        view.filter_combo.setCurrentIndex(view.filter_combo.findData("translated"))
+        view.table_view.sortByColumn(1, Qt.SortOrder.AscendingOrder)
+        ordered_terms = [view.proxy_model.index(row, 0).data() for row in range(view.proxy_model.rowCount())]
+        assert ordered_terms == ["D", "A"]
+
+        view.filter_combo.setCurrentIndex(view.filter_combo.findData("ignored"))
+        assert view.proxy_model.rowCount() == 0
     finally:
         view.cleanup()
 

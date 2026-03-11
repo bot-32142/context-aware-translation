@@ -10,6 +10,7 @@ from context_aware_translation.storage.schema.book_db import (
     ChunkRecord,
     SQLiteBookDB,
     TermRecord,
+    TermRowUpdate,
     TranslationChunkRecord,
 )
 
@@ -313,6 +314,12 @@ class TermRepository:
             return self.keyed_context_db.update_terms_bulk(
                 term_keys, ignored=ignored, is_reviewed=is_reviewed, translated_name=translated_name
             )
+
+    def update_term_rows(self, rows: list[TermRowUpdate]) -> int:
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("StorageManager is closed")
+            return self.keyed_context_db.update_term_rows(rows)
 
     def delete_terms(self, term_keys: list[str]) -> int:
         """Delete multiple terms by key."""

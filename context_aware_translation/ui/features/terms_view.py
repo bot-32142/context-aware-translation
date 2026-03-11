@@ -24,8 +24,9 @@ from context_aware_translation.application.contracts.terms import (
     ImportTermsRequest,
     ReviewTermsRequest,
     TermsTableState,
+    TermTableRow,
     TranslatePendingTermsRequest,
-    UpdateTermRequest,
+    UpdateTermRowsRequest,
 )
 from context_aware_translation.application.errors import ApplicationError, BlockedOperationError
 from context_aware_translation.application.events import (
@@ -58,6 +59,7 @@ class TermsView(QWidget):
         self._service = service
         self._state: TermsTableState | None = None
         self._event_bridge: QtApplicationEventBridge | None = None
+        self._pending_local_terms_invalidations = 0
         if events is not None:
             self._event_bridge = QtApplicationEventBridge(events, parent=self)
             self._event_bridge.terms_invalidated.connect(self._on_terms_invalidated)
@@ -85,7 +87,7 @@ class TermsView(QWidget):
 
         toolbar_layout = QHBoxLayout()
         self.table_panel = TermsTableWidget(parent=self)
-        self.table_panel.term_update_requested.connect(self._on_term_update_requested)
+        self.table_panel.term_rows_update_requested.connect(self._on_term_rows_update_requested)
         self.search_input = self.table_panel.search_input
         self.filter_combo = self.table_panel.filter_combo
         self.scope_label = self.table_panel.scope_label
@@ -320,18 +322,13 @@ class TermsView(QWidget):
             title=self.tr("Export Terms"),
         )
 
-    def _on_term_update_requested(self, request: UpdateTermRequest) -> None:
-        try:
-            state = self._service.update_term(request)
-        except BlockedOperationError as exc:
-            self._show_application_error(self.tr("Terms"), exc)
-            self.refresh()
+    def _on_term_rows_update_requested(self, rows: list[TermTableRow]) -> None:
+        if self._state is None or not rows:
             return
-        except ApplicationError as exc:
-            self._show_application_error(self.tr("Terms"), exc)
-            self.refresh()
-            return
-        self._apply_state(state)
+        self._persist_local_terms_write(
+            lambda: self._service.update_term_rows(UpdateTermRowsRequest(scope=self._state.scope, rows=rows)),
+            title=self.tr("Terms"),
+        )
 
     def _run_command(self, action, *, title: str, success_message: str | None = None) -> None:  # noqa: ANN001
         try:
@@ -358,22 +355,36 @@ class TermsView(QWidget):
         selected = self.table_panel.selected_rows()
         if not selected:
             return
-        try:
-            state = self._service.bulk_update_terms(
+        updated_rows = []
+        updated_term_keys = []
+        for row in selected:
+            next_ignored = row.ignored if ignored is None else ignored
+            next_reviewed = row.reviewed if reviewed is None else reviewed
+            if next_ignored == row.ignored and next_reviewed == row.reviewed:
+                continue
+            updated_rows.append(
+                row.model_copy(
+                    update={
+                        "ignored": next_ignored,
+                        "reviewed": next_reviewed,
+                    }
+                )
+            )
+            updated_term_keys.append(row.term_key)
+        if not updated_rows:
+            return
+        self.table_panel.apply_row_updates(updated_rows)
+        self._persist_local_terms_write(
+            lambda: self._service.bulk_update_terms(
                 BulkUpdateTermsRequest(
                     scope=self._state.scope,
-                    term_keys=[row.term_key for row in selected],
+                    term_keys=updated_term_keys,
                     ignored=ignored,
                     reviewed=reviewed,
                 )
-            )
-        except BlockedOperationError as exc:
-            self._show_application_error(self.tr("Terms"), exc)
-            return
-        except ApplicationError as exc:
-            self._show_application_error(self.tr("Terms"), exc)
-            return
-        self._apply_state(state)
+            ),
+            title=self.tr("Terms"),
+        )
 
     def _delete_selected_terms(self) -> None:
         if self._state is None:
@@ -396,22 +407,19 @@ class TermsView(QWidget):
             != QMessageBox.StandardButton.Yes
         ):
             return
-        try:
-            state = self._service.bulk_update_terms(
+        term_keys = [row.term_key for row in selected]
+        self.table_panel.remove_rows(term_keys)
+        if self._persist_local_terms_write(
+            lambda: self._service.bulk_update_terms(
                 BulkUpdateTermsRequest(
                     scope=self._state.scope,
-                    term_keys=[row.term_key for row in selected],
+                    term_keys=term_keys,
                     delete=True,
                 )
-            )
-        except BlockedOperationError as exc:
-            self._show_application_error(self.tr("Delete Terms"), exc)
-            return
-        except ApplicationError as exc:
-            self._show_application_error(self.tr("Delete Terms"), exc)
-            return
-        self._apply_state(state)
-        self._show_message(UserMessageSeverity.SUCCESS, self.tr("Selected terms were deleted."))
+            ),
+            title=self.tr("Delete Terms"),
+        ):
+            self._show_message(UserMessageSeverity.SUCCESS, self.tr("Selected terms were deleted."))
 
     def _edit_selected_terms(self) -> None:
         self.table_panel.open_editors_for_selection()
@@ -466,10 +474,34 @@ class TermsView(QWidget):
         if show_dialog:
             QMessageBox.information(self, self.tr("Terms"), text)
 
+    def _persist_local_terms_write(self, action, *, title: str) -> bool:  # noqa: ANN001
+        if self._event_bridge is not None:
+            self._pending_local_terms_invalidations += 1
+        try:
+            action()
+        except BlockedOperationError as exc:
+            self._pending_local_terms_invalidations = max(0, self._pending_local_terms_invalidations - 1)
+            self._show_application_error(title, exc)
+            self.refresh()
+            return False
+        except ApplicationError as exc:
+            self._pending_local_terms_invalidations = max(0, self._pending_local_terms_invalidations - 1)
+            self._show_application_error(title, exc)
+            self.refresh()
+            return False
+        self._pending_local_terms_invalidations = max(0, self._pending_local_terms_invalidations - 1)
+        if self._state is not None:
+            self._state = self._state.model_copy(update={"rows": self.table_panel.rows_snapshot()})
+        self._update_bulk_button_state()
+        return True
+
     def _on_terms_invalidated(self, event: TermsInvalidatedEvent) -> None:
         if event.project_id != self.project_id:
             return
         if self.document_id is not None and event.document_id not in {None, self.document_id}:
+            return
+        if self._pending_local_terms_invalidations > 0:
+            self._pending_local_terms_invalidations -= 1
             return
         self.refresh()
 
