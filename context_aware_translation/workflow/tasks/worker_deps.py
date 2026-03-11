@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Protocol
 # Imported at runtime (not under TYPE_CHECKING) because frozen-dataclass
 # field type annotations are evaluated eagerly by dataclasses and must
 # resolve to real classes at import time.
-from context_aware_translation.storage.book_manager import BookManager
+from context_aware_translation.storage.library.book_manager import BookManager
 from context_aware_translation.storage.repositories.task_store import TaskStore
 
 if TYPE_CHECKING:

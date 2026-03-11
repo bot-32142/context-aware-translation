@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
+from context_aware_translation.adapters.files.glossary_io import import_glossary
 from context_aware_translation.application.contracts.common import (
     AcceptedCommand,
     BlockerCode,
@@ -37,7 +38,6 @@ from context_aware_translation.application.runtime import (
     make_blocker,
     make_document_ref,
 )
-from context_aware_translation.storage.glossary_io import import_glossary
 from context_aware_translation.storage.schema.book_db import TermRecord
 from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim

@@ -8,9 +8,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-from context_aware_translation.storage.book import Book, BookStatus
-from context_aware_translation.storage.config_profile import ConfigProfile
-from context_aware_translation.storage.endpoint_profile import EndpointProfile
+from context_aware_translation.storage.models.book import Book, BookStatus
+from context_aware_translation.storage.models.config_profile import ConfigProfile
+from context_aware_translation.storage.models.endpoint_profile import EndpointProfile
 
 CREATE_CONFIG_PROFILES_TABLE = """
 CREATE TABLE IF NOT EXISTS config_profiles (

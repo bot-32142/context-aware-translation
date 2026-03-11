@@ -23,7 +23,7 @@ Run after Task 01.
 - `context_aware_translation/workflow/bootstrap.py`
 - `context_aware_translation/workflow/runtime.py`
 - `context_aware_translation/workflow/session.py`
-- `context_aware_translation/storage/book_manager.py`
+- `context_aware_translation/storage/library/book_manager.py`
 - `context_aware_translation/workflow/tasks/engine_core.py`
 - `context_aware_translation/workflow/tasks/handlers/`
 - `context_aware_translation/ui/tasks/qt_task_engine.py`

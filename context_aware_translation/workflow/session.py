@@ -8,7 +8,7 @@ from context_aware_translation.workflow.bootstrap import _build_context_tree, _b
 from context_aware_translation.workflow.runtime import WorkflowContext
 
 if TYPE_CHECKING:
-    from context_aware_translation.storage.book_manager import BookManager
+    from context_aware_translation.storage.library.book_manager import BookManager
 
 
 class WorkflowSession:

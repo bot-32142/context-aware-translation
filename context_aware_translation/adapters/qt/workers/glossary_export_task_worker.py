@@ -6,10 +6,10 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
+from context_aware_translation.adapters.files.glossary_io import export_glossary
 from context_aware_translation.adapters.qt.workers.base_worker import BaseWorker
 from context_aware_translation.core.cancellation import OperationCancelledError
-from context_aware_translation.storage.book_manager import BookManager
-from context_aware_translation.storage.glossary_io import export_glossary
+from context_aware_translation.storage.library.book_manager import BookManager
 from context_aware_translation.storage.repositories.task_store import TaskStore
 from context_aware_translation.workflow.session import WorkflowSession
 

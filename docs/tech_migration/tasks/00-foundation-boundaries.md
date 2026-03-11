@@ -26,7 +26,7 @@ This task must be executed first.
 - `context_aware_translation/workflow/bootstrap.py`
 - `context_aware_translation/workflow/runtime.py`
 - `context_aware_translation/workflow/session.py`
-- `context_aware_translation/storage/book_manager.py`
+- `context_aware_translation/storage/library/book_manager.py`
 
 ## Scope
 

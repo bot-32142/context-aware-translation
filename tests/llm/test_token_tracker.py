@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from context_aware_translation.llm.token_tracker import TokenLimitExceededError, TokenTracker
-from context_aware_translation.storage.endpoint_profile import EndpointProfile
+from context_aware_translation.storage.models.endpoint_profile import EndpointProfile
 from context_aware_translation.storage.schema.registry_db import RegistryDB
 
 

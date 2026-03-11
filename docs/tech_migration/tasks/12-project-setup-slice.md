@@ -22,7 +22,7 @@ Start after Task 10. Can run in parallel with Task 11.
 
 ## Current Code To Inspect
 
-- current project/book configuration usage through `context_aware_translation/storage/book_manager.py`
+- current project/book configuration usage through `context_aware_translation/storage/library/book_manager.py`
 - `context_aware_translation/config.py`
 - current import/config/profile messaging in `context_aware_translation/ui/views/import_view.py`
 

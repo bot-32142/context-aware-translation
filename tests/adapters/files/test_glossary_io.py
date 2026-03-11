@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from context_aware_translation.storage.glossary_io import (
+from context_aware_translation.adapters.files.glossary_io import (
     _consolidate_description,
     _validate_glossary_json,
     export_glossary,

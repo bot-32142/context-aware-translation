@@ -14,7 +14,7 @@ from context_aware_translation.application.runtime import (
     build_project_summary,
     raise_application_error,
 )
-from context_aware_translation.storage.book import BookStatus
+from context_aware_translation.storage.models.book import BookStatus
 
 
 class ProjectsService(Protocol):

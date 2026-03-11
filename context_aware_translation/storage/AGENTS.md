@@ -4,7 +4,7 @@
 # storage
 
 ## Purpose
-SQLite-based persistence layer with WAL mode for concurrent access. Implements registry.db (global) and book.db (per-book) pattern. Manages book lifecycle, glossary term records, config/endpoint profiles, context tree storage, task persistence, and batch job tracking.
+SQLite-based persistence layer with WAL mode for concurrent access. Implements registry.db (global) and book.db (per-book) pattern. Owns persisted models, book-library management, context tree storage, repository access, task persistence, and batch job tracking.
 
 ## Key Files
 
@@ -12,17 +12,16 @@ SQLite-based persistence layer with WAL mode for concurrent access. Implements r
 |------|-------------|
 | `schema/registry_db.py` | Global SQLite registry database. Stores config profiles, endpoint profiles, book metadata, and cluster-level settings. Single shared database across all books. WAL mode enabled. |
 | `schema/book_db.py` | Per-book SQLite database. Stores glossary term records (name, description, occurrence count, votes, translations, timestamps). Each book has its own `book.db` file. WAL mode enabled. |
-| `book_manager.py` | Book lifecycle management. Creates/deletes books, manages folder structure, snapshots configs. Bridges UI/workflow to book metadata and storage. |
-| `book.py` | Book data model: `Book` class with id, name, status (`BookStatus` enum), paths, timestamps. Lightweight metadata container. |
-| `config_profile.py` | Config profile storage and retrieval. Stores complete workflow configs (extractor, translator, glossary, review, OCR, etc.) in JSON format with versioning. |
-| `endpoint_profile.py` | API endpoint profile storage. Stores API key, base_url, model, temperature, concurrency limits, token limits, and other per-provider settings. Profiles are referenced by name across configs. |
+| `library/book_manager.py` | Book lifecycle management. Creates/deletes books, manages folder structure, snapshots configs. Bridges UI/workflow to book metadata and storage. |
+| `models/book.py` | Book data model: `Book` class with id, name, status (`BookStatus` enum), and timestamps. Lightweight metadata container. |
+| `models/config_profile.py` | Config profile storage model. Stores complete workflow configs (extractor, translator, glossary, review, OCR, etc.) in JSON form. |
+| `models/endpoint_profile.py` | Endpoint profile storage model. Stores API key, base_url, model, concurrency limits, token budgets, and other per-provider settings. |
 | `schema/context_tree_db.py` | Context tree SQLite storage for hierarchical summarization. Stores compressed context nodes and LSM-tree metadata for token-efficient context retrieval. |
 | `repositories/document_repository.py` | CRUD operations for documents within a book. Manages document metadata and associations with extracted content. |
 | `repositories/term_repository.py` | Glossary term CRUD. Queries, inserts, updates, deletes terms from book_db. Handles multi-pass refinement (description, occurrence count, votes). |
 | `repositories/task_store.py` | Persistence for workflow tasks. Stores task state, claims, progress metadata for resumable execution. |
 | `repositories/llm_batch_store.py` | Batch job persistence for OpenAI batch API. Stores submitted requests and polls for completed results. |
 | `repositories/translation_batch_task_store.py` | Specialized batch task storage for translation workflows. Tracks batch-level progress and partial results. |
-| `glossary_io.py` | Glossary JSON import/export helpers that bridge `book.db` terms with `context_tree.db` resets on import. |
 
 ## Subdirectories (if any)
 
@@ -30,6 +29,8 @@ SQLite-based persistence layer with WAL mode for concurrent access. Implements r
 |-----------|---------|
 | `schema/` | SQLite database owners and schema definitions (`book.db`, `registry.db`, `context_tree.db`). |
 | `repositories/` | Repository-style access layers and task/batch stores built on top of the schema modules. |
+| `models/` | Persisted storage records used by the schema and higher-level storage services. |
+| `library/` | Book-library and filesystem management built on top of the registry schema. |
 
 ## For AI Agents
 
@@ -56,8 +57,11 @@ SQLite-based persistence layer with WAL mode for concurrent access. Implements r
 
 **Book Lifecycle:**
 - Books are created via `BookManager.create_book()` which initializes folder structure and SQLite databases
-- Each book gets a unique id (UUID), folder path, and status enum (`BookStatus`: CREATED, IN_PROGRESS, COMPLETED, FAILED)
+- Each book gets a unique id (UUID), folder path, and status enum (`BookStatus`: ACTIVE, ARCHIVED, DELETED)
 - Deleting a book via `BookManager.delete_book()` removes folder and all associated databases
+
+**Boundary Note:**
+- Glossary JSON import/export is no longer part of the storage package; it lives at `context_aware_translation.adapters.files.glossary_io`
 
 **Term Record Structure (book_db):**
 - Terms include: name, description (multi-pass gleaning), occurrence count, votes (for ranking), source_language, target_language
@@ -78,7 +82,7 @@ SQLite-based persistence layer with WAL mode for concurrent access. Implements r
 
 **Creating/Accessing a Book:**
 ```python
-from context_aware_translation.storage.book_manager import BookManager
+from context_aware_translation.storage.library.book_manager import BookManager
 
 manager = BookManager(library_root=Path.home() / ".cat" / "library")
 book = manager.create_book(name="My Translation Project")
@@ -108,7 +112,7 @@ terms = term_repo.query_all()
 
 **Managing Config Profiles:**
 ```python
-from context_aware_translation.storage.config_profile import ConfigProfile
+from context_aware_translation.storage.models.config_profile import ConfigProfile
 from context_aware_translation.storage.schema.registry_db import RegistryDB
 
 registry = RegistryDB(registry_root / "registry.db")
@@ -122,7 +126,7 @@ registry.save_config_profile(profile)
 
 **Managing Endpoint Profiles:**
 ```python
-from context_aware_translation.storage.endpoint_profile import EndpointProfile
+from context_aware_translation.storage.models.endpoint_profile import EndpointProfile
 from context_aware_translation.storage.schema.registry_db import RegistryDB
 
 registry = RegistryDB(registry_root / "registry.db")
@@ -174,7 +178,7 @@ state = task_store.load_task_state("glossary-001")
 ### Internal
 - `context_aware_translation.config` - Config models for validation and serialization
 - `context_aware_translation.core.models` - `Term` and data models
-- `context_aware_translation.storage.book` - `Book` and `BookStatus`
+- `context_aware_translation.storage.models.book` - `Book` and `BookStatus`
 - `context_aware_translation.utils.*` - File utilities, hashing
 
 ### External

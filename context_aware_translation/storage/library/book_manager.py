@@ -12,9 +12,9 @@ from typing import Any
 from platformdirs import user_data_dir
 
 from context_aware_translation.config import ensure_valid_persisted_config_payload
-from context_aware_translation.storage.book import Book, BookStatus
-from context_aware_translation.storage.config_profile import ConfigProfile
-from context_aware_translation.storage.endpoint_profile import EndpointProfile
+from context_aware_translation.storage.models.book import Book, BookStatus
+from context_aware_translation.storage.models.config_profile import ConfigProfile
+from context_aware_translation.storage.models.endpoint_profile import EndpointProfile
 from context_aware_translation.storage.schema.registry_db import RegistryDB
 
 # Platform-specific data directory:

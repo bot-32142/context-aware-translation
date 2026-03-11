@@ -26,7 +26,7 @@ Start after Task 10. Can run in parallel with Task 12 once the shell exists.
 - `context_aware_translation/ui/views/profile_view.py`
 - `context_aware_translation/ui/views/endpoint_profile_view.py`
 - `context_aware_translation/ui/views/config_profile_view.py`
-- `context_aware_translation/storage/book_manager.py`
+- `context_aware_translation/storage/library/book_manager.py`
 - `context_aware_translation/storage/registry_db.py`
 
 ## Scope

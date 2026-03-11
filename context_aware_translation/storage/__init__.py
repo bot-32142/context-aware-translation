@@ -1,3 +1,3 @@
-"""Storage package organization for schema owners and repositories."""
+"""Storage package organization for schema owners and storage services."""
 
-__all__ = ["repositories", "schema"]
+__all__ = ["library", "models", "repositories", "schema"]

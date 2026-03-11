@@ -9,7 +9,7 @@ from collections.abc import Callable
 from context_aware_translation.adapters.qt.workers.base_worker import BaseWorker
 from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.core.progress import ProgressUpdate
-from context_aware_translation.storage.book_manager import BookManager
+from context_aware_translation.storage.library.book_manager import BookManager
 from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 from context_aware_translation.storage.repositories.task_store import TaskStore
 from context_aware_translation.storage.schema.book_db import SQLiteBookDB

@@ -14,7 +14,7 @@ from context_aware_translation.core.progress import (
     ProgressUpdate,
     WorkflowStep,
 )
-from context_aware_translation.storage.config_profile import ConfigProfile
+from context_aware_translation.storage.models.config_profile import ConfigProfile
 from context_aware_translation.storage.repositories.term_repository import TermRepository
 from context_aware_translation.storage.schema.book_db import SQLiteBookDB, TermRecord
 
@@ -329,7 +329,7 @@ class TestValidation:
 
         Note: Uniqueness is enforced via SQL UNIQUE constraint, not pre-validation.
         """
-        from context_aware_translation.storage.book_manager import BookManager
+        from context_aware_translation.storage.library.book_manager import BookManager
 
         manager = BookManager(library_root=tmp_path)
 

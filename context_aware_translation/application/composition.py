@@ -14,7 +14,7 @@ from context_aware_translation.application.services.queue import DefaultQueueSer
 from context_aware_translation.application.services.terms import DefaultTermsService, TermsService
 from context_aware_translation.application.services.work import DefaultWorkService, WorkService
 from context_aware_translation.llm.token_tracker import TokenTracker
-from context_aware_translation.storage.book_manager import BookManager
+from context_aware_translation.storage.library.book_manager import BookManager
 from context_aware_translation.storage.repositories.task_store import TaskStore
 from context_aware_translation.workflow.task_runtime import build_task_engine
 

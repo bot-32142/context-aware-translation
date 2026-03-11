@@ -33,8 +33,8 @@ from context_aware_translation.application.runtime import (
     raise_application_error,
     recommended_workflow_profile_from_drafts,
 )
-from context_aware_translation.storage.config_profile import ConfigProfile
-from context_aware_translation.storage.endpoint_profile import EndpointProfile
+from context_aware_translation.storage.models.config_profile import ConfigProfile
+from context_aware_translation.storage.models.endpoint_profile import EndpointProfile
 
 
 class AppSetupService(Protocol):

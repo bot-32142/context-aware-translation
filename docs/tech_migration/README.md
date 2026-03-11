@@ -66,7 +66,7 @@ Existing backend foundations that should be reused, not replaced:
 - `context_aware_translation/workflow/session.py`
 - `context_aware_translation/workflow/tasks/engine_core.py`
 - `context_aware_translation/workflow/tasks/handlers/`
-- `context_aware_translation/storage/book_manager.py`
+- `context_aware_translation/storage/library/book_manager.py`
 
 ## Target Package Shape
 
