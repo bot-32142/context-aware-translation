@@ -126,14 +126,6 @@ QListWidget::item:hover {
     background-color: transparent;
 }
 
-QComboBox QAbstractItemView {
-    background-color: white;
-    color: #333333;
-    selection-background-color: #eef2f6;
-    selection-color: #333333;
-    border: 1px solid #e0e0e0;
-    outline: none;
-}
 
 /* Tab widget */
 QTabWidget::pane {
