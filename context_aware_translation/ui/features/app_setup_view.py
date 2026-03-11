@@ -851,24 +851,21 @@ class AppSetupView(QWidget):
 
     def _populate_profiles(self, state: AppSetupState) -> None:
         self.profiles_table.setRowCount(0)
+        default_row = 0
         for profile in state.shared_profiles:
             row = self.profiles_table.rowCount()
             self.profiles_table.insertRow(row)
             self._set_table_item(self.profiles_table, row, 0, profile.name, profile.profile_id)
             self._set_table_item(self.profiles_table, row, 1, profile.target_language)
             self._set_table_item(self.profiles_table, row, 2, self.tr("Yes") if profile.is_default else "")
+            if profile.is_default:
+                default_row = row
         self.profiles_table.resizeColumnsToContents()
         self.profiles_table.resizeRowsToContents()
         self.profiles_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self._fit_table_min_width(self.profiles_table)
-
-        selected_id = self._preferred_profile_id(state)
-        if selected_id:
-            for row in range(self.profiles_table.rowCount()):
-                item = self.profiles_table.item(row, 0)
-                if item is not None and item.data(Qt.ItemDataRole.UserRole) == selected_id:
-                    self.profiles_table.selectRow(row)
-                    break
+        if state.shared_profiles:
+            self.profiles_table.selectRow(default_row)
 
     def _selected_connection(self) -> ConnectionSummary | None:
         rows = self.connections_table.selectionModel().selectedRows()
@@ -880,26 +877,15 @@ class AppSetupView(QWidget):
         return self._state.connections[row]
 
     def _selected_profile(self) -> WorkflowProfileDetail | None:
-        rows = self.profiles_table.selectionModel().selectedRows()
         if self._state is None:
             return None
+        rows = self.profiles_table.selectionModel().selectedRows()
         if not rows:
-            preferred_profile_id = self._preferred_profile_id(self._state)
-            return next(
-                (profile for profile in self._state.shared_profiles if profile.profile_id == preferred_profile_id),
-                (self._state.shared_profiles[0] if self._state.shared_profiles else None),
-            )
+            return None
         row = rows[0].row()
         if row < 0 or row >= len(self._state.shared_profiles):
             return None
         return self._state.shared_profiles[row]
-
-    def _preferred_profile_id(self, state: AppSetupState) -> str | None:
-        if state.default_profile_id:
-            return state.default_profile_id
-        if state.shared_profiles:
-            return state.shared_profiles[0].profile_id
-        return None
 
     def _update_connection_buttons(self) -> None:
         selected_connection = self._selected_connection()

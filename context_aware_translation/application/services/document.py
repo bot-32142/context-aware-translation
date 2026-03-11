@@ -119,13 +119,6 @@ class DefaultDocumentService:
             project=project,
             document=make_document_ref(document_id, f"Document {document_id}", str(doc.get("document_type") or "")),
             active_tab=DocumentSection.OCR,
-            available_tabs=[
-                DocumentSection.OCR,
-                DocumentSection.TERMS,
-                DocumentSection.TRANSLATION,
-                DocumentSection.IMAGES,
-                DocumentSection.EXPORT,
-            ],
         )
 
     def get_ocr(self, project_id: str, document_id: int) -> DocumentOCRState:

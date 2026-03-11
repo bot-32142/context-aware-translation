@@ -23,7 +23,6 @@ class DocumentWorkspaceState(ContractModel):
     project: ProjectRef
     document: DocumentRef
     active_tab: DocumentSection
-    available_tabs: list[DocumentSection] = Field(default_factory=list)
     blocker: BlockerInfo | None = None
 
 

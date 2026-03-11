@@ -61,6 +61,7 @@ _SECTION_LABELS: dict[DocumentSection, str] = {
     DocumentSection.IMAGES: "Images",
     DocumentSection.EXPORT: "Export",
 }
+_DOCUMENT_SECTIONS: tuple[DocumentSection, ...] = tuple(_SECTION_LABELS)
 
 
 class _ExportControls(QWidget):
@@ -521,20 +522,6 @@ class _DocumentTermsTab(QWidget):
         self.delete_selected_action.setEnabled(has_selection)
 
 
-class _UnavailableDocumentTab(QWidget):
-    def __init__(self, title: str, description: str, *, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 24, 24, 24)
-        heading = QLabel(f"<h3>{title}</h3>")
-        body = QLabel(description)
-        body.setWordWrap(True)
-        body.setStyleSheet("color: #666666;")
-        layout.addWidget(heading)
-        layout.addWidget(body)
-        layout.addStretch()
-
-
 class _DocumentExportTab(QWidget):
     def __init__(
         self,
@@ -688,7 +675,7 @@ class DocumentWorkspaceView(QWidget):
     def _sync_tabs(self) -> None:
         if self._state is None:
             return
-        wanted_sections = list(self._state.available_tabs)
+        wanted_sections = list(_DOCUMENT_SECTIONS)
         if list(self._tab_indexes.keys()) == wanted_sections:
             return
         while self.tab_widget.count():
@@ -717,11 +704,7 @@ class DocumentWorkspaceView(QWidget):
             return DocumentTranslationView(self._document_service, self._project_id, self._document_id, parent=self)
         if section is DocumentSection.EXPORT:
             return _DocumentExportTab(self._project_id, self._document_id, self._document_service, parent=self)
-        return _UnavailableDocumentTab(
-            self.tr(_SECTION_LABELS[section]),
-            self.tr("This section is not available for the current document."),
-            parent=self,
-        )
+        raise ValueError(f"Unknown document section: {section}")
 
     def current_section(self) -> DocumentSection | None:
         current_index = self.tab_widget.currentIndex()

@@ -45,13 +45,6 @@ def _make_state() -> DocumentTranslationState:
         project=ProjectRef(project_id="proj-1", name="One Piece"),
         document=DocumentRef(document_id=4, order_index=4, label="04.png"),
         active_tab=DocumentSection.TRANSLATION,
-        available_tabs=[
-            DocumentSection.OCR,
-            DocumentSection.TERMS,
-            DocumentSection.TRANSLATION,
-            DocumentSection.IMAGES,
-            DocumentSection.EXPORT,
-        ],
     )
     return DocumentTranslationState(
         workspace=workspace,

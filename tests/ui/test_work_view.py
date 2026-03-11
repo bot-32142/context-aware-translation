@@ -79,13 +79,6 @@ def _make_workspace_state(active_tab: DocumentSection = DocumentSection.OCR) -> 
         project=ProjectRef(project_id="proj-1", name="One Piece"),
         document=DocumentRef(document_id=4, order_index=4, label="04.png"),
         active_tab=active_tab,
-        available_tabs=[
-            DocumentSection.OCR,
-            DocumentSection.TERMS,
-            DocumentSection.TRANSLATION,
-            DocumentSection.IMAGES,
-            DocumentSection.EXPORT,
-        ],
     )
 
 
