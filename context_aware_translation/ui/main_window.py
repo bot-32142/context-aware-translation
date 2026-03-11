@@ -224,14 +224,9 @@ class MainWindow(QMainWindow):
             return
 
         for view_name, widget in self._view_registry.items():
-            if not view_name.startswith("project_"):
-                continue
-            get_running_operations = getattr(widget, "get_running_operations", None)
-            if callable(get_running_operations):
-                ops = get_running_operations()
-                if isinstance(ops, list) and ops:
-                    self._sleep_inhibitor.acquire()
-                    return
+            if view_name.startswith("project_") and MainWindow._running_operations_for(widget):
+                self._sleep_inhibitor.acquire()
+                return
         self._sleep_inhibitor.release()
 
     def _current_project_view_name(self) -> str | None:
@@ -240,24 +235,35 @@ class MainWindow(QMainWindow):
         project_view_name = f"project_{self._current_book_id}"
         return project_view_name if project_view_name in self._view_registry else None
 
-    def _get_book_running_operations(self) -> list[str]:
-        """Return running operations in the current project shell."""
-        if getattr(self, "_is_closing", False):
-            return []
-
-        if self._current_book_id is None:
-            return []
+    def _current_project_widget(self) -> QWidget | None:
         view_name = self._current_project_view_name()
-        if view_name is None:
-            return []
-        workspace = self._view_registry.get(view_name)
-        if workspace is None:
-            return []
-        get_running_operations = getattr(workspace, "get_running_operations", None)
+        return self._view_registry.get(view_name) if view_name is not None else None
+
+    @staticmethod
+    def _running_operations_for(widget: object) -> list[str]:
+        get_running_operations = getattr(widget, "get_running_operations", None)
         if not callable(get_running_operations):
             return []
         running = get_running_operations()
         return running if isinstance(running, list) else []
+
+    @staticmethod
+    def _request_cancel_for(widget: object) -> None:
+        request_cancel = getattr(widget, "request_cancel_running_operations", None)
+        if callable(request_cancel):
+            request_cancel(include_engine_tasks=False)
+
+    @staticmethod
+    def _cleanup_widget(widget: object) -> None:
+        cleanup = getattr(widget, "cleanup", None)
+        if callable(cleanup):
+            cleanup()
+
+    def _get_book_running_operations(self) -> list[str]:
+        """Return running operations in the current project shell."""
+        if getattr(self, "_is_closing", False):
+            return []
+        return MainWindow._running_operations_for(self._current_project_widget())
 
     def _warn_running_operations(self, operations: list[str] | None = None) -> bool:
         """Show a warning if operations are running. Returns True if user wants to proceed."""
@@ -304,10 +310,7 @@ class MainWindow(QMainWindow):
                 self._nav_list.blockSignals(False)
                 return
             if current_project_view is not None:
-                workspace = self._view_registry.get(current_project_view)
-                request_cancel = getattr(workspace, "request_cancel_running_operations", None)
-                if callable(request_cancel):
-                    request_cancel(include_engine_tasks=False)
+                MainWindow._request_cancel_for(self._view_registry.get(current_project_view))
 
         self.switch_view(view_name)
 
@@ -421,14 +424,10 @@ class MainWindow(QMainWindow):
             self._book_nav_item = None
 
         if view_name in self._view_registry:
-            widget = self._view_registry[view_name]
-            if widget is not None:
-                cleanup = getattr(widget, "cleanup", None)
-                if callable(cleanup):
-                    cleanup()
-                self._stack.removeWidget(widget)
-                widget.deleteLater()
-            del self._view_registry[view_name]
+            widget = self._view_registry.pop(view_name)
+            MainWindow._cleanup_widget(widget)
+            self._stack.removeWidget(widget)
+            widget.deleteLater()
 
         self._current_book_id = None
         self._current_book_name = None
@@ -483,11 +482,10 @@ class MainWindow(QMainWindow):
         shell_name = self._current_project_view_name()
         if shell_name is None:
             return
-        shell = self._view_registry.get(shell_name)
-        if not isinstance(shell, ProjectShellView):
+        shell_widget = self._view_registry.get(shell_name)
+        if not isinstance(shell_widget, ProjectShellView):
             return
-
-        work_view = shell.work_widget
+        shell = shell_widget
 
         if target.kind is NavigationTargetKind.PROJECT_SETUP:
             shell.show_setup()
@@ -502,7 +500,7 @@ class MainWindow(QMainWindow):
             NavigationTargetKind.DOCUMENT_EXPORT,
         }:
             shell.show_work()
-            work_view.open_navigation_target(target)
+            shell.work_tab.open_navigation_target(target)
         else:
             shell.show_work()
 
@@ -526,8 +524,7 @@ class MainWindow(QMainWindow):
             self._profiles_nav_item.setText(self.tr("App Setup"))
         if self._book_nav_item is not None and self._current_book_name is not None:
             self._book_nav_item.setText(qarg(self.tr("Project: %1"), self._current_book_name))
-        if hasattr(self, "_queue_dock"):
-            self._queue_dock.setWindowTitle(self.tr("Queue"))
+        self._queue_dock.setWindowTitle(self.tr("Queue"))
 
         self._file_menu.setTitle(self.tr("&File"))
         self._language_menu.setTitle(self.tr("&Language"))

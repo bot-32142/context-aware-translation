@@ -33,22 +33,10 @@ class ProjectShellView(QWidget):
         super().__init__(parent)
         self.project_id = project_id
         self.project_name = project_name
-        self._work_widget = work_widget
-        self._terms_widget = terms_widget
-        self._setup_widget = setup_widget
+        self.work_tab = work_widget
+        self.terms_tab = terms_widget
+        self.setup_tab = setup_widget
         self._init_ui()
-
-    @property
-    def work_widget(self) -> QWidget | None:
-        return self._work_widget
-
-    @property
-    def terms_widget(self) -> QWidget | None:
-        return self._terms_widget
-
-    @property
-    def setup_widget(self) -> QWidget | None:
-        return self._setup_widget
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -73,25 +61,22 @@ class ProjectShellView(QWidget):
         layout.addWidget(self.tip_label)
 
         self.tab_widget = QTabWidget()
-        self.work_tab = self._work_widget
-        self.terms_tab = self._terms_widget
-        self.setup_tab = self._setup_widget
         self.tab_widget.addTab(self.work_tab, self.tr("Work"))
         self.tab_widget.addTab(self.terms_tab, self.tr("Terms"))
         self.tab_widget.addTab(self.setup_tab, self.tr("Setup"))
         layout.addWidget(self.tab_widget)
 
     def get_running_operations(self) -> list[str]:
-        running = self._work_widget.get_running_operations()
+        running = self.work_tab.get_running_operations()
         return running if isinstance(running, list) else []
 
     def request_cancel_running_operations(self, *, include_engine_tasks: bool = False) -> None:
-        self._work_widget.request_cancel_running_operations(include_engine_tasks=include_engine_tasks)
+        self.work_tab.request_cancel_running_operations(include_engine_tasks=include_engine_tasks)
 
     def cleanup(self) -> None:
-        self._work_widget.cleanup()
-        self._terms_widget.cleanup()
-        self._setup_widget.cleanup()
+        self.work_tab.cleanup()
+        self.terms_tab.cleanup()
+        self.setup_tab.cleanup()
 
     def show_work(self) -> None:
         self.tab_widget.setCurrentIndex(0)
