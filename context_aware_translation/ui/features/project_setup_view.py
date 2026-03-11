@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtWidgets import (
+    QComboBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -10,7 +11,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from superqt import QSearchableComboBox
 
 from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.application.contracts.app_setup import (
@@ -79,8 +79,7 @@ class ProjectSetupView(QWidget):
         selector_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         selector_layout = QVBoxLayout(selector_group)
         row = QHBoxLayout()
-        self.shared_profile_combo = QSearchableComboBox()
-        self.shared_profile_combo.setEditable(False)
+        self.shared_profile_combo = QComboBox()
         self.shared_profile_combo.setMinimumWidth(420)
         self.shared_profile_combo.setMaximumWidth(560)
         self.shared_profile_combo.currentIndexChanged.connect(self._on_shared_profile_changed)
