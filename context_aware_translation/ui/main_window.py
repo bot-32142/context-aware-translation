@@ -226,9 +226,9 @@ class MainWindow(QMainWindow):
         for view_name, widget in self._view_registry.items():
             if not view_name.startswith("project_"):
                 continue
-
-            if hasattr(widget, "get_running_operations"):
-                ops = widget.get_running_operations()
+            get_running_operations = getattr(widget, "get_running_operations", None)
+            if callable(get_running_operations):
+                ops = get_running_operations()
                 if isinstance(ops, list) and ops:
                     self._sleep_inhibitor.acquire()
                     return
@@ -253,11 +253,11 @@ class MainWindow(QMainWindow):
         workspace = self._view_registry.get(view_name)
         if workspace is None:
             return []
-        if hasattr(workspace, "get_running_operations"):
-            running = workspace.get_running_operations()
-            if isinstance(running, list):
-                return running
-        return []
+        get_running_operations = getattr(workspace, "get_running_operations", None)
+        if not callable(get_running_operations):
+            return []
+        running = get_running_operations()
+        return running if isinstance(running, list) else []
 
     def _warn_running_operations(self, operations: list[str] | None = None) -> bool:
         """Show a warning if operations are running. Returns True if user wants to proceed."""
@@ -305,8 +305,9 @@ class MainWindow(QMainWindow):
                 return
             if current_project_view is not None:
                 workspace = self._view_registry.get(current_project_view)
-                if workspace is not None and hasattr(workspace, "request_cancel_running_operations"):
-                    workspace.request_cancel_running_operations(include_engine_tasks=False)
+                request_cancel = getattr(workspace, "request_cancel_running_operations", None)
+                if callable(request_cancel):
+                    request_cancel(include_engine_tasks=False)
 
         self.switch_view(view_name)
 
@@ -422,8 +423,9 @@ class MainWindow(QMainWindow):
         if view_name in self._view_registry:
             widget = self._view_registry[view_name]
             if widget is not None:
-                if hasattr(widget, "cleanup"):
-                    widget.cleanup()
+                cleanup = getattr(widget, "cleanup", None)
+                if callable(cleanup):
+                    cleanup()
                 self._stack.removeWidget(widget)
                 widget.deleteLater()
             del self._view_registry[view_name]
@@ -438,12 +440,10 @@ class MainWindow(QMainWindow):
             self.show_status(qarg(self.tr("Closed project: %1"), book_name))
 
     def _refresh_projects_view(self, _event: object) -> None:
-        if hasattr(self.projects_view, "refresh"):
-            self.projects_view.refresh()
+        self.projects_view.refresh()
 
     def _refresh_app_setup_view(self, _event: object) -> None:
-        if hasattr(self.app_setup_view, "refresh"):
-            self.app_setup_view.refresh()
+        self.app_setup_view.refresh()
 
     def _open_app_setup(self) -> None:
         if self._profiles_nav_item is not None:
@@ -492,8 +492,7 @@ class MainWindow(QMainWindow):
         if target.kind is NavigationTargetKind.PROJECT_SETUP:
             shell.show_setup()
         elif target.kind is NavigationTargetKind.TERMS:
-            if shell.terms_widget is not None:
-                shell.show_terms()
+            shell.show_terms()
         elif target.kind in {
             NavigationTargetKind.WORK,
             NavigationTargetKind.DOCUMENT_OCR,
@@ -503,8 +502,7 @@ class MainWindow(QMainWindow):
             NavigationTargetKind.DOCUMENT_EXPORT,
         }:
             shell.show_work()
-            if work_view is not None and hasattr(work_view, "open_navigation_target"):
-                work_view.open_navigation_target(target)
+            work_view.open_navigation_target(target)
         else:
             shell.show_work()
 

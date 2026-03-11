@@ -82,20 +82,16 @@ class ProjectShellView(QWidget):
         layout.addWidget(self.tab_widget)
 
     def get_running_operations(self) -> list[str]:
-        if self._work_widget is not None and hasattr(self._work_widget, "get_running_operations"):
-            running = self._work_widget.get_running_operations()
-            if isinstance(running, list):
-                return running
-        return []
+        running = self._work_widget.get_running_operations()
+        return running if isinstance(running, list) else []
 
     def request_cancel_running_operations(self, *, include_engine_tasks: bool = False) -> None:
-        if self._work_widget is not None and hasattr(self._work_widget, "request_cancel_running_operations"):
-            self._work_widget.request_cancel_running_operations(include_engine_tasks=include_engine_tasks)
+        self._work_widget.request_cancel_running_operations(include_engine_tasks=include_engine_tasks)
 
     def cleanup(self) -> None:
-        for child in (self._work_widget, self._terms_widget, self._setup_widget):
-            if child is not None and hasattr(child, "cleanup"):
-                child.cleanup()
+        self._work_widget.cleanup()
+        self._terms_widget.cleanup()
+        self._setup_widget.cleanup()
 
     def show_work(self) -> None:
         self.tab_widget.setCurrentIndex(0)
