@@ -23,7 +23,7 @@ from context_aware_translation.application.contracts.common import (
     UserMessageSeverity,
 )
 from context_aware_translation.ui import i18n
-from context_aware_translation.ui.adapters import QtApplicationEventBridge
+from context_aware_translation.ui.adapters.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.ui.constants import (
     APP_VERSION,
     DEFAULT_WINDOW_HEIGHT,
@@ -33,6 +33,7 @@ from context_aware_translation.ui.constants import (
     SIDEBAR_WIDTH,
 )
 from context_aware_translation.ui.features.app_setup_view import AppSetupView
+from context_aware_translation.ui.features.library_view import LibraryView
 from context_aware_translation.ui.features.project_setup_view import ProjectSetupView
 from context_aware_translation.ui.features.project_shell_view import ProjectShellView
 from context_aware_translation.ui.features.queue_drawer_view import QueueDrawerView
@@ -40,7 +41,6 @@ from context_aware_translation.ui.features.terms_view import TermsView
 from context_aware_translation.ui.features.work_view import WorkView
 from context_aware_translation.ui.i18n import qarg
 from context_aware_translation.ui.sleep_inhibitor import SleepInhibitor
-from context_aware_translation.ui.views.library_view import LibraryView
 
 
 class MainWindow(QMainWindow):

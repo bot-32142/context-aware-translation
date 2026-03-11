@@ -21,7 +21,7 @@ from context_aware_translation.application.contracts.queue import QueueActionReq
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.events import ApplicationEventSubscriber, QueueChangedEvent
 from context_aware_translation.application.services.queue import QueueService
-from context_aware_translation.ui.adapters import QtApplicationEventBridge
+from context_aware_translation.ui.adapters.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.ui.utils import create_tip_label
 
 _STATUS_LABELS: dict[QueueStatus, str] = {

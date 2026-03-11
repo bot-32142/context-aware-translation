@@ -29,7 +29,8 @@ from context_aware_translation.application.contracts.document import (
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.services.document import DocumentService
 from context_aware_translation.ui.utils import create_tip_label
-from context_aware_translation.ui.widgets import ImageViewer, ProgressWidget
+from context_aware_translation.ui.widgets.image_viewer import ImageViewer
+from context_aware_translation.ui.widgets.progress_widget import ProgressWidget
 
 
 class _SelectableTextEdit(QTextEdit):

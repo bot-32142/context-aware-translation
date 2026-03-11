@@ -16,7 +16,7 @@ from tests.application.fakes import FakeProjectsService
 try:
     from PySide6.QtWidgets import QApplication, QMessageBox
 
-    from context_aware_translation.ui.views.library_view import LibraryView
+    from context_aware_translation.ui.features.library_view import LibraryView
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover
@@ -79,7 +79,7 @@ def test_library_view_runs_create_edit_and_delete_through_service() -> None:
             def target_language(self) -> str:
                 return "Chinese"
 
-        with patch("context_aware_translation.ui.views.library_view._ProjectDialog", _FakeCreateDialog):
+        with patch("context_aware_translation.ui.features.library_view._ProjectDialog", _FakeCreateDialog):
             emitted: list[tuple[str, str]] = []
             view.book_opened.connect(lambda project_id, name: emitted.append((project_id, name)))
             view._on_new_project()
@@ -103,7 +103,7 @@ def test_library_view_runs_create_edit_and_delete_through_service() -> None:
             def target_language(self) -> str:
                 return "Japanese"
 
-        with patch("context_aware_translation.ui.views.library_view._ProjectDialog", _FakeEditDialog):
+        with patch("context_aware_translation.ui.features.library_view._ProjectDialog", _FakeEditDialog):
             view._on_edit_project()
         assert any(name == "update_project" and payload == UpdateProjectRequest(project_id="project-1", name="Edited Project", target_language="Japanese") for name, payload in service.calls)
 
@@ -135,7 +135,7 @@ def test_library_view_context_menu_selects_clicked_row() -> None:
         target_index = view.model.index(2, 0)
         assert target_index.isValid()
         target_position = view.table_view.visualRect(target_index).center()
-        with patch("context_aware_translation.ui.views.library_view.QMenu.popup", return_value=None):
+        with patch("context_aware_translation.ui.features.library_view.QMenu.popup", return_value=None):
             view._show_context_menu(target_position)
         assert view.table_view.selectionModel().selectedRows()[0].row() == 2
     finally:

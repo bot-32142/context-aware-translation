@@ -13,7 +13,7 @@ from context_aware_translation.application.events import (
     ProjectsInvalidatedEvent,
     QueueChangedEvent,
 )
-from context_aware_translation.ui.adapters import QtApplicationEventBridge
+from context_aware_translation.ui.adapters.application_event_bridge import QtApplicationEventBridge
 
 
 def _ensure_qt_app() -> QApplication:

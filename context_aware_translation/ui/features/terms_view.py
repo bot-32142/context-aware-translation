@@ -32,7 +32,7 @@ from context_aware_translation.application.events import (
     TermsInvalidatedEvent,
 )
 from context_aware_translation.application.services.terms import TermsService
-from context_aware_translation.ui.adapters import QtApplicationEventBridge
+from context_aware_translation.ui.adapters.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.ui.features.terms_table_widget import TermsTableWidget
 from context_aware_translation.ui.utils import create_tip_label
 

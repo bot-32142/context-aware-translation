@@ -21,7 +21,7 @@ from context_aware_translation.application.contracts.project_setup import Projec
 from context_aware_translation.application.errors import ApplicationError, BlockedOperationError
 from context_aware_translation.application.events import ApplicationEventSubscriber, SetupInvalidatedEvent
 from context_aware_translation.application.services.project_setup import ProjectSetupService
-from context_aware_translation.ui.adapters import QtApplicationEventBridge
+from context_aware_translation.ui.adapters.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.ui.features.workflow_profile_editor import (
     ADVANCED_STEP_IDS,
     ConnectionChoice,
