@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import Signal
@@ -25,8 +26,9 @@ from context_aware_translation.application.contracts.common import DocumentSecti
 from context_aware_translation.application.contracts.document import (
     DocumentExportResult,
     DocumentExportState,
+    RunDocumentExportRequest,
 )
-from context_aware_translation.application.contracts.work import ExportDialogState
+from context_aware_translation.application.contracts.work import ExportDialogState, RunExportRequest
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.events import (
     ApplicationEventSubscriber,
@@ -163,6 +165,17 @@ class _ExportControls(QWidget):
             "allow_original_fallback": self.allow_original_fallback_cb.isChecked(),
         }
 
+    def submission(self, parent: QWidget) -> _ExportSubmission | None:
+        output_path = self.output_path()
+        if not output_path:
+            QMessageBox.warning(parent, self.tr("Missing Information"), self.tr("Output path is required."))
+            return None
+        format_id = self.format_id()
+        if not format_id:
+            QMessageBox.warning(parent, self.tr("Missing Information"), self.tr("Export format is required."))
+            return None
+        return _ExportSubmission(format_id=format_id, output_path=output_path, options=self.options())
+
     def _on_options_changed(self) -> None:
         self._sync_output_path()
         self.changed.emit()
@@ -211,6 +224,13 @@ class _ExportControls(QWidget):
             self.output_path_edit.setText(file_path)
 
 
+@dataclass(slots=True)
+class _ExportSubmission:
+    format_id: str
+    output_path: str
+    options: dict[str, str | int | float | bool | None]
+
+
 class WorkExportDialog(QDialog):
     def __init__(
         self,
@@ -250,24 +270,17 @@ class WorkExportDialog(QDialog):
         self._update_export_enabled()
 
     def _run_export(self) -> None:
-        output_path = self.controls.output_path()
-        if not output_path:
-            QMessageBox.warning(self, self.tr("Missing Information"), self.tr("Output path is required."))
-            return
-        from context_aware_translation.application.contracts.work import RunExportRequest
-
-        format_id = self.controls.format_id()
-        if not format_id:
-            QMessageBox.warning(self, self.tr("Missing Information"), self.tr("Export format is required."))
+        submission = self.controls.submission(self)
+        if submission is None:
             return
         try:
             result = self._service.run_export(
                 RunExportRequest(
                     project_id=self._state.project_id,
                     document_ids=self._state.document_ids,
-                    format_id=format_id,
-                    output_path=output_path,
-                    options=self.controls.options(),
+                    format_id=submission.format_id,
+                    output_path=submission.output_path,
+                    options=submission.options,
                 )
             )
         except ApplicationError as exc:
@@ -336,24 +349,17 @@ class _DocumentExportTab(QWidget):
     def _run_export(self) -> None:
         if self._state is None:
             return
-        output_path = self.controls.output_path()
-        if not output_path:
-            QMessageBox.warning(self, self.tr("Missing Information"), self.tr("Output path is required."))
+        submission = self.controls.submission(self)
+        if submission is None:
             return
-        format_id = self.controls.format_id()
-        if not format_id:
-            QMessageBox.warning(self, self.tr("Missing Information"), self.tr("Export format is required."))
-            return
-        from context_aware_translation.application.contracts.document import RunDocumentExportRequest
-
         try:
             result = self._service.export_document(
                 RunDocumentExportRequest(
                     project_id=self._project_id,
                     document_id=self._document_id,
-                    format_id=format_id,
-                    output_path=output_path,
-                    options=self.controls.options(),
+                    format_id=submission.format_id,
+                    output_path=submission.output_path,
+                    options=submission.options,
                 )
             )
         except ApplicationError as exc:

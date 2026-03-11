@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
 
 from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.application.contracts.app_setup import (
-    ConnectionSummary,
     WorkflowProfileDetail,
     WorkflowProfileKind,
 )
@@ -186,17 +185,11 @@ class ProjectSetupView(QWidget):
     def _effective_profile(self) -> WorkflowProfileDetail | None:
         if self._is_custom_selected():
             return self._draft_project_profile or (self._state.project_profile if self._state is not None else None)
-        return self._current_shared_profile() or (
-            self._state.selected_shared_profile if self._state is not None else None
-        )
+        return self._current_shared_profile() or (self._state.selected_shared_profile if self._state is not None else None)
 
     def _render_effective_profile(self) -> None:
         profile = self._effective_profile()
-        if profile is None:
-            self.custom_profile_group.hide()
-            self.custom_profile_group.setMinimumHeight(0)
-            return
-        if not self._is_custom_selected():
+        if profile is None or not self._is_custom_selected():
             self.custom_profile_group.hide()
             self.custom_profile_group.setMinimumHeight(0)
             return
@@ -254,7 +247,7 @@ class ProjectSetupView(QWidget):
         profile_id = self._current_shared_profile_id()
         if profile_id == "__custom__":
             self._ensure_custom_profile()
-        elif profile_id:
+        elif profile_id is not None:
             self._last_shared_profile_id = profile_id
             self._draft_project_profile = None
         self._render_effective_profile()
@@ -331,13 +324,13 @@ class ProjectSetupView(QWidget):
     def _connection_choices(self) -> list[ConnectionChoice]:
         if self._state is None:
             return []
-        return [self._connection_choice_from_summary(connection) for connection in self._state.available_connections]
-
-    def _connection_choice_from_summary(self, connection: ConnectionSummary) -> ConnectionChoice:
-        return ConnectionChoice(
-            connection_id=connection.connection_id,
-            label=connection.display_name,
-            default_model=connection.default_model,
-            provider=connection.provider.value,
-            base_url=connection.base_url,
-        )
+        return [
+            ConnectionChoice(
+                connection_id=connection.connection_id,
+                label=connection.display_name,
+                default_model=connection.default_model,
+                provider=connection.provider.value,
+                base_url=connection.base_url,
+            )
+            for connection in self._state.available_connections
+        ]
