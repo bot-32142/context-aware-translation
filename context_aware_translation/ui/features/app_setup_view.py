@@ -91,6 +91,11 @@ _NEW_PROFILE_ROUTE_SPECS: tuple[tuple[WorkflowStepId, str], ...] = (
     (WorkflowStepId.TRANSLATOR_BATCH, "Translator batch"),
 )
 
+
+def _provider_defaults(provider: ProviderKind) -> tuple[str, str | None, str | None]:
+    base_url, default_model = _PROVIDER_DEFAULTS[provider]
+    return _PROVIDER_LABELS[provider], (base_url or None), (default_model or None)
+
 @dataclass(frozen=True)
 class _SpinFieldSpec:
     label: str
@@ -316,14 +321,14 @@ class ConnectionDraftForm(QWidget):
 
     def _on_provider_changed(self, _index: int) -> None:
         provider = self.current_provider()
-        default_base_url, default_model = _PROVIDER_DEFAULTS[provider]
-        self.base_url_edit.setText(default_base_url)
-        self.default_model_edit.setText(default_model)
+        display_name, base_url, default_model = _provider_defaults(provider)
+        self.base_url_edit.setText(base_url or "")
+        self.default_model_edit.setText(default_model or "")
         if (
             not self.display_name_edit.text().strip()
             or self.display_name_edit.text().strip() in _PROVIDER_LABELS.values()
         ):
-            self.display_name_edit.setText(_PROVIDER_LABELS[provider])
+            self.display_name_edit.setText(display_name)
         self._sync_advanced_visibility(provider)
 
     def _sync_advanced_visibility(self, provider: ProviderKind) -> None:
@@ -498,13 +503,7 @@ class SetupWizardDialog(QDialog):
         self._profile_name_edit: QLineEdit | None = None
 
     def _build_page(self) -> None:
-        while self.page_layout.count():
-            item = self.page_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.hide()
-                widget.setParent(None)
-                widget.deleteLater()
+        self._clear_page_layout()
 
         if self._page_index == 0:
             self.step_title.setText(self.tr("Choose providers"))
@@ -595,12 +594,12 @@ class SetupWizardDialog(QDialog):
         for draft in self._wizard_state.drafts:
             if draft.provider is provider:
                 return draft
-        default_base_url, default_model = _PROVIDER_DEFAULTS[provider]
+        display_name, base_url, default_model = _provider_defaults(provider)
         return ConnectionDraft(
-            display_name=_PROVIDER_LABELS[provider],
+            display_name=display_name,
             provider=provider,
-            base_url=default_base_url or None,
-            default_model=default_model or None,
+            base_url=base_url,
+            default_model=default_model,
             temperature=0.0,
             timeout=60,
             max_retries=3,
@@ -700,6 +699,16 @@ class SetupWizardDialog(QDialog):
         minimum_height = 360 if self._page_index == 0 else 520
         target_height = min(max(self.sizeHint().height(), minimum_height), 760)
         self.resize(max(self.width(), 780), target_height)
+
+    def _clear_page_layout(self) -> None:
+        while self.page_layout.count():
+            item = self.page_layout.takeAt(0)
+            widget = item.widget()
+            if widget is None:
+                continue
+            widget.hide()
+            widget.setParent(None)
+            widget.deleteLater()
 
 
 class AppSetupView(QWidget):
@@ -850,10 +859,7 @@ class AppSetupView(QWidget):
             self._set_table_item(self.connections_table, row, 2, connection.status.value.replace("_", " ").title())
             self._set_table_item(self.connections_table, row, 3, connection.default_model or "")
             self._set_table_item(self.connections_table, row, 4, connection.base_url or "")
-        self.connections_table.resizeColumnsToContents()
-        self.connections_table.resizeRowsToContents()
-        self.connections_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self._fit_table_min_width(self.connections_table)
+        self._finalize_table(self.connections_table)
 
     def _populate_profiles(self, state: AppSetupState) -> None:
         self.profiles_table.setRowCount(0)
@@ -866,10 +872,7 @@ class AppSetupView(QWidget):
             self._set_table_item(self.profiles_table, row, 2, self.tr("Yes") if profile.is_default else "")
             if profile.is_default:
                 default_row = row
-        self.profiles_table.resizeColumnsToContents()
-        self.profiles_table.resizeRowsToContents()
-        self.profiles_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self._fit_table_min_width(self.profiles_table)
+        self._finalize_table(self.profiles_table)
         if state.shared_profiles:
             self.profiles_table.selectRow(default_row)
 
@@ -1151,3 +1154,9 @@ class AppSetupView(QWidget):
         for column in range(table.columnCount()):
             total_width += table.columnWidth(column)
         table.setMinimumWidth(total_width)
+
+    def _finalize_table(self, table: QTableWidget) -> None:
+        table.resizeColumnsToContents()
+        table.resizeRowsToContents()
+        table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._fit_table_min_width(table)
