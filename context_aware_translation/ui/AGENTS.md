@@ -24,7 +24,7 @@ PySide6-based GUI application providing book management, translation, glossary e
 | `translations/` | i18n files: `zh_CN.ts` (source translations), `zh_CN.qm` (compiled translations). All user strings must be marked with self.tr() for inclusion. |
 | `utils/` | UI utility functions: layout helpers, label factories, styling utilities. |
 | `features/` | Main workspace surfaces: project shell, work, terms, setup, queue drawer, and document tabs. |
-| `widgets/` | Reusable UI components: `progress_widget.py` (progress bars), `image_viewer.py` (image display), `collapsible_section.py` (collapsible UI sections). |
+| `widgets/` | Reusable UI components: `progress_widget.py` (progress bars), `image_viewer.py` (image display). |
 
 ## For AI Agents
 
@@ -101,6 +101,7 @@ PySide6-based GUI application providing book management, translation, glossary e
 
 ### External
 - `pyside6` - Qt6 bindings for Python (main UI framework)
+- `superqt` - supplemental Qt widgets used for collapsible sections and other higher-level components
 - `PySide6.QtCore` - Core (signals, slots, threading, i18n)
 - `PySide6.QtGui` - Graphics (colors, fonts, icons)
 - `PySide6.QtWidgets` - Widgets (main UI components)

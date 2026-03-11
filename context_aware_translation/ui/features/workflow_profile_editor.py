@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from superqt import QCollapsible
 
 from context_aware_translation.application.contracts.app_setup import (
     WorkflowProfileDetail,
@@ -32,7 +33,6 @@ from context_aware_translation.application.contracts.app_setup import (
 )
 from context_aware_translation.ui.constants import LANGUAGES
 from context_aware_translation.ui.tips import create_tip_label
-from context_aware_translation.ui.widgets.collapsible_section import CollapsibleSection
 
 
 @dataclass(frozen=True)
@@ -761,7 +761,7 @@ class WorkflowProfileEditorDialog(QDialog):
         )
         self._body_layout.addWidget(header)
 
-        self.general_section = CollapsibleSection(self.tr("General"))
+        self.general_section = QCollapsible(self.tr("General"))
         general_widget = QWidget()
         basics_layout = QFormLayout(general_widget)
         basics_layout.setContentsMargins(16, 8, 8, 8)
@@ -785,12 +785,12 @@ class WorkflowProfileEditorDialog(QDialog):
 
         basics_layout.addRow(self.tr("Profile name"), self.name_edit)
         basics_layout.addRow(self.tr("Target language"), self.target_language_combo)
-        self.general_section.set_content(general_widget)
-        self.general_section.set_expanded(False)
+        self.general_section.setContent(general_widget)
+        self.general_section.collapse(False)
         self.general_section.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self._body_layout.addWidget(self.general_section)
 
-        self.routes_section = CollapsibleSection(self.tr("Workflow Routing"))
+        self.routes_section = QCollapsible(self.tr("Workflow Routing"))
         self.routes_editor = WorkflowRoutesEditor(
             self._original_profile.routes,
             self._connection_choices,
@@ -800,9 +800,8 @@ class WorkflowProfileEditorDialog(QDialog):
         )
         self.routes_table = self.routes_editor.table
         self._rows = self.routes_editor.rows
-        self.routes_section.set_content(self.routes_editor)
-        self.routes_section.set_expanded(True)
-        self.routes_section.refresh_content_height()
+        self.routes_section.setContent(self.routes_editor)
+        self.routes_section.expand(False)
         self.routes_section.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         self._body_layout.addWidget(self.routes_section)
 
@@ -815,8 +814,7 @@ class WorkflowProfileEditorDialog(QDialog):
         layout.addWidget(footer)
         for section in (self.general_section, self.routes_section):
             section.toggled.connect(self._refresh_body_layout)
-            section.toggle_animation.finished.connect(self._refresh_body_layout)
-        self._refresh_body_layout()
+        QTimer.singleShot(0, self._refresh_body_layout)
         self.resize(max(self.minimumWidth(), min(self.sizeHint().width(), 920)), min(max(self.sizeHint().height(), 420), 720))
 
     def profile(self) -> WorkflowProfileDetail:
@@ -844,7 +842,12 @@ class WorkflowProfileEditorDialog(QDialog):
         self.accept()
 
     def _refresh_body_layout(self, *_args: object) -> None:
-        self.general_section.refresh_content_height()
-        self.routes_section.refresh_content_height()
+        self.routes_editor.updateGeometry()
+        self.routes_editor.adjustSize()
+        self._body_scroll.widget().adjustSize()
         self._body_layout.activate()
         self.layout().activate()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        QTimer.singleShot(0, self._refresh_body_layout)

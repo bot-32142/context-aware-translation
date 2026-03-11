@@ -35,6 +35,7 @@ dependencies = [
     "torch>=2.0.0",
     "transformers>=4.57.3",
     "protobuf>=4.25.0",
+    "superqt>=0.8.0",
 ]
 
 [project.scripts]

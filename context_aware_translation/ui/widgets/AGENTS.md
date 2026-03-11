@@ -9,7 +9,6 @@ Reusable UI components used across views. Widgets encapsulate common patterns (c
 ## Key Files
 | File | Description |
 |------|-------------|
-| `collapsible_section.py` | Collapsible header with toggle button and content widget. Used in dialogs for organized layout. |
 | `config_editor.py` | YAML config editor with collapsible sections for all config groups (extractor, translator, OCR, etc). |
 | `image_viewer.py` | Image display widget with zoom, pan, and annotation support (used in OCR/manga review). |
 | `language_dropdown.py` | Language selector dropdown (ISO 639-1 codes). Searchable. |
@@ -31,16 +30,11 @@ Reusable UI components used across views. Widgets encapsulate common patterns (c
 **Key Patterns:**
 
 **ConfigEditorWidget (config_editor.py):**
-- Combines multiple CollapsibleSection widgets for each config group
+- Combines multiple collapsible groups for each config group
 - Loads config dict and creates appropriate spinners, dropdowns, checkboxes
 - `get_config()` returns validated YAML-compatible dict
 - `set_config(config: dict)` populates fields from dict
 - `validate()` returns error message or None
-
-**CollapsibleSection:**
-- Header with toggle button, content area
-- Used in dialogs for organizational grouping
-- Emits `toggled(bool)` signal on click
 
 **LanguageDropdown:**
 - Dropdown of ISO 639-1 language codes
@@ -90,7 +84,6 @@ Reusable UI components used across views. Widgets encapsulate common patterns (c
 - Test validation and error handling
 - Test config round-trip (set_config → get_config)
 - Test progress updates with edge cases (0, partial, 100%)
-- Test collapsible expand/collapse toggle
 - Test OCR element selection and multi-select
 - Verify layout doesn't break with long text or many items
 

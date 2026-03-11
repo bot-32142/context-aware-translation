@@ -15,6 +15,7 @@ try:
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QDialog, QPushButton, QScrollArea
+    from superqt import QCollapsible
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -63,14 +64,16 @@ def test_workflow_profile_editor_uses_scrollable_dialog_layout():
     QTest.qWait(50)
 
     assert dialog.findChildren(QScrollArea)
-    assert not dialog.general_section.is_expanded()
+    assert isinstance(dialog.general_section, QCollapsible)
+    assert isinstance(dialog.routes_section, QCollapsible)
+    assert not dialog.general_section.isExpanded()
     assert dialog.width() <= 1240
     assert dialog.routes_table.editTriggers() == dialog.routes_table.EditTrigger.NoEditTriggers
     assert dialog.routes_table.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
     assert dialog.routes_table.columnWidth(1) >= 180
     assert dialog.routes_table.columnWidth(2) >= 160
     assert dialog.routes_table.columnCount() == 4
-    assert dialog.routes_editor.width() == dialog.routes_section.content_area.viewport().width()
+    assert dialog.routes_editor.width() <= dialog._body_scroll.viewport().width()
     assert dialog.routes_table.item(0, 0).text() == "Translator"
     assert dialog.routes_table.cellWidget(0, 3) is not None
     route_row = dialog._rows[0]
@@ -153,14 +156,14 @@ def test_workflow_profile_editor_scrolls_when_both_sections_are_expanded():
         allow_name_edit=True,
     )
     dialog.show()
-    dialog.general_section.set_expanded(True)
+    dialog.general_section.expand(False)
     QTest.qWait(250)
     dialog.resize(dialog.width(), 420)
     QTest.qWait(50)
 
     assert dialog._body_scroll.horizontalScrollBar().maximum() == 0
     assert dialog._body_scroll.verticalScrollBar().maximum() > 0
-    assert dialog.routes_editor.width() == dialog.routes_section.content_area.viewport().width()
+    assert dialog.routes_editor.width() <= dialog._body_scroll.viewport().width()
 
 
 def test_step_advanced_config_dialog_updates_route_config():

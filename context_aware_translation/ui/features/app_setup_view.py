@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from superqt import QCollapsible
 
 from context_aware_translation.application.contracts.app_setup import (
     AppSetupState,
@@ -54,7 +55,6 @@ from context_aware_translation.application.contracts.common import (
 from context_aware_translation.application.services.app_setup import AppSetupService
 from context_aware_translation.ui.features.workflow_profile_editor import ConnectionChoice, WorkflowProfileEditorDialog
 from context_aware_translation.ui.tips import create_tip_label
-from context_aware_translation.ui.widgets.collapsible_section import CollapsibleSection
 
 _PROVIDER_DEFAULTS: dict[ProviderKind, tuple[str, str]] = {
     ProviderKind.GEMINI: ("https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-3-flash-preview"),
@@ -170,7 +170,7 @@ class ConnectionDraftForm(QWidget):
         form.addRow(self.tr("API key"), self.api_key_edit)
         connection_layout.addLayout(form)
 
-        self.advanced_section = CollapsibleSection(self.tr("Advanced"))
+        self.advanced_section = QCollapsible(self.tr("Advanced"))
         advanced_widget = QWidget()
         advanced_form = QFormLayout(advanced_widget)
         self.description_edit = QTextEdit()
@@ -202,7 +202,7 @@ class ConnectionDraftForm(QWidget):
         advanced_form.addRow(self.tr("Custom parameters"), self.custom_parameters_edit)
         self._build_spin_fields(advanced_form)
         advanced_form.addRow(self.advanced_note)
-        self.advanced_section.set_content(advanced_widget)
+        self.advanced_section.setContent(advanced_widget)
         self.advanced_section.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         connection_layout.addWidget(self.advanced_section)
         connection_layout.addStretch()
@@ -332,7 +332,10 @@ class ConnectionDraftForm(QWidget):
         self._sync_advanced_visibility(provider)
 
     def _sync_advanced_visibility(self, provider: ProviderKind) -> None:
-        self.advanced_section.set_expanded(provider is ProviderKind.OPENAI_COMPATIBLE)
+        if provider is ProviderKind.OPENAI_COMPATIBLE:
+            self.advanced_section.expand(False)
+        else:
+            self.advanced_section.collapse(False)
 
 
 class ConnectionEditorDialog(QDialog):
@@ -431,7 +434,7 @@ class ConnectionEditorDialog(QDialog):
 
     def _resize_to_content(self) -> None:
         current_tab = self.form.tabs.currentIndex()
-        is_advanced = current_tab == 0 and self.form.advanced_section.is_expanded()
+        is_advanced = current_tab == 0 and self.form.advanced_section.isExpanded()
         target_width = 860 if is_advanced else 700
         current_widget = self.form.tabs.currentWidget()
         if current_widget is not None:
