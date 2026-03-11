@@ -46,7 +46,9 @@ from context_aware_translation.application.services.document import DocumentServ
 from context_aware_translation.application.services.terms import TermsService
 from context_aware_translation.application.services.work import WorkService
 from context_aware_translation.ui.features.document_workspace_view import DocumentWorkspaceView, WorkExportDialog
+from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
+from context_aware_translation.ui.viewmodels.work_home import WorkHomeViewModel
 from context_aware_translation.ui.widgets.table_support import (
     apply_header_resize_modes,
     configure_readonly_row_table,
@@ -97,6 +99,8 @@ class WorkView(QWidget):
         self._row_states: list[WorkDocumentRow] = []
         self._document_view: DocumentWorkspaceView | None = None
         self._selected_import_paths: list[str] = []
+        self._import_message_is_error = False
+        self.viewmodel = WorkHomeViewModel(self)
         self._event_bridge = QtApplicationEventBridge(events, parent=self)
         self._event_bridge.workboard_invalidated.connect(self._on_workboard_invalidated)
         self._event_bridge.setup_invalidated.connect(self._on_setup_invalidated)
@@ -109,68 +113,15 @@ class WorkView(QWidget):
 
         self.home_page = QWidget()
         home_layout = QVBoxLayout(self.home_page)
-
-        self.tip_label = create_tip_label(
-            self.tr(
-                "Import documents here, review project-wide progress, and open the next document tool directly from the table."
-            )
+        home_layout.setContentsMargins(0, 0, 0, 0)
+        self.chrome_host = QmlChromeHost(
+            "project/work_home/WorkHomeChrome.qml",
+            context_objects={"workHome": self.viewmodel},
+            parent=self.home_page,
         )
-        home_layout.addWidget(self.tip_label)
-
-        self.import_strip = QFrame()
-        self.import_strip.setFrameShape(QFrame.Shape.StyledPanel)
-        import_layout = QVBoxLayout(self.import_strip)
-        import_buttons = QHBoxLayout()
-        self.select_files_button = QPushButton(self.tr("Select Files"))
-        self.select_files_button.clicked.connect(self._select_files)
-        import_buttons.addWidget(self.select_files_button)
-        self.select_folder_button = QPushButton(self.tr("Select Folder"))
-        self.select_folder_button.clicked.connect(self._select_folder)
-        import_buttons.addWidget(self.select_folder_button)
-        self.import_type_combo = QComboBox()
-        self.import_type_combo.setEnabled(False)
-        import_buttons.addWidget(self.import_type_combo, 1)
-        self.import_button = QPushButton(self.tr("Import"))
-        self.import_button.setEnabled(False)
-        self.import_button.clicked.connect(self._run_import)
-        import_buttons.addWidget(self.import_button)
-        import_layout.addLayout(import_buttons)
-        self.import_summary_label = QElidingLabel(self.tr("No file or folder selected"))
-        self.import_summary_label.setElideMode(Qt.TextElideMode.ElideMiddle)
-        self.import_summary_label.setToolTip(self.import_summary_label.text())
-        import_layout.addWidget(self.import_summary_label)
-        self.import_message_label = QLabel()
-        self.import_message_label.setWordWrap(True)
-        self.import_message_label.hide()
-        import_layout.addWidget(self.import_message_label)
-        home_layout.addWidget(self.import_strip)
-
-        self.context_strip = QFrame()
-        self.context_strip.setFrameShape(QFrame.Shape.StyledPanel)
-        self.context_strip.setStyleSheet("QFrame { border: 1px solid #d8dee9; border-radius: 6px; }")
-        context_layout = QVBoxLayout(self.context_strip)
-        self.context_label = QLabel()
-        self.context_label.setStyleSheet("font-weight: 600;")
-        self.blocker_label = QLabel()
-        self.blocker_label.setWordWrap(True)
-        self.blocker_label.setStyleSheet("color: #b42318;")
-        context_layout.addWidget(self.context_label)
-        context_layout.addWidget(self.blocker_label)
-        home_layout.addWidget(self.context_strip)
-
-        self.setup_strip = QFrame()
-        self.setup_strip.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setup_strip.setStyleSheet(
-            "QFrame { border: 1px solid #fed7aa; background-color: #fff7ed; border-radius: 6px; }"
-        )
-        setup_layout = QHBoxLayout(self.setup_strip)
-        self.setup_label = QLabel()
-        self.setup_label.setWordWrap(True)
-        self.setup_action_button = QPushButton()
-        self.setup_action_button.clicked.connect(self._on_setup_action_clicked)
-        setup_layout.addWidget(self.setup_label, 1)
-        setup_layout.addWidget(self.setup_action_button)
-        home_layout.addWidget(self.setup_strip)
+        home_layout.addWidget(self.chrome_host)
+        self._init_home_compatibility_controls()
+        self._connect_qml_signals()
 
         self.rows_table = QTableWidget(0, 8)
         self.rows_table.setHorizontalHeaderLabels(
@@ -209,6 +160,58 @@ class WorkView(QWidget):
 
         self.stack.addWidget(self.home_page)
         layout.addWidget(self.stack)
+
+    def _init_home_compatibility_controls(self) -> None:
+        self.tip_label = create_tip_label(
+            self.tr(
+                "Import documents here, review project-wide progress, and open the next document tool directly from the table."
+            )
+        )
+        self.tip_label.hide()
+
+        self.import_strip = QFrame(self.home_page)
+        self.import_strip.hide()
+        self.import_strip.setFrameShape(QFrame.Shape.StyledPanel)
+        self.select_files_button = QPushButton(self.tr("Select Files"), self.home_page)
+        self.select_files_button.clicked.connect(self._select_files)
+        self.select_files_button.hide()
+        self.select_folder_button = QPushButton(self.tr("Select Folder"), self.home_page)
+        self.select_folder_button.clicked.connect(self._select_folder)
+        self.select_folder_button.hide()
+        self.import_type_combo = QComboBox(self.home_page)
+        self.import_type_combo.setEnabled(False)
+        self.import_type_combo.currentIndexChanged.connect(self._on_import_type_changed)
+        self.import_type_combo.hide()
+        self.import_button = QPushButton(self.tr("Import"), self.home_page)
+        self.import_button.setEnabled(False)
+        self.import_button.clicked.connect(self._run_import)
+        self.import_button.hide()
+        self.import_summary_label = QElidingLabel(self.tr("No file or folder selected"), self.home_page)
+        self.import_summary_label.setElideMode(Qt.TextElideMode.ElideMiddle)
+        self.import_summary_label.setToolTip(self.import_summary_label.text())
+        self.import_summary_label.hide()
+        self.import_message_label = QLabel(self.home_page)
+        self.import_message_label.setWordWrap(True)
+        self.import_message_label.hide()
+
+        self.context_strip = QFrame(self.home_page)
+        self.context_strip.hide()
+        self.context_strip.setFrameShape(QFrame.Shape.StyledPanel)
+        self.context_label = QLabel(self.home_page)
+        self.context_label.setStyleSheet("font-weight: 600;")
+        self.blocker_label = QLabel(self.home_page)
+        self.blocker_label.setWordWrap(True)
+        self.blocker_label.setStyleSheet("color: #b42318;")
+        self.blocker_label.hide()
+
+        self.setup_strip = QFrame(self.home_page)
+        self.setup_strip.hide()
+        self.setup_strip.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setup_label = QLabel(self.home_page)
+        self.setup_label.setWordWrap(True)
+        self.setup_action_button = QPushButton(self.home_page)
+        self.setup_action_button.clicked.connect(self._on_setup_action_clicked)
+        self.setup_action_button.hide()
 
     def refresh(self) -> None:
         self._apply_state(self._work_service.get_workboard(self._project_id))
@@ -262,14 +265,17 @@ class WorkView(QWidget):
         self.reset_document_button.setText(self.tr("Reset Document"))
         self.delete_document_button.setText(self.tr("Delete Document"))
         self.empty_label.setText(self.tr("No documents imported yet."))
+        self.viewmodel.retranslate()
+        self._sync_import_chrome_state()
         if self._document_view is not None:
-            self._document_view.back_button.setText("\u2190 " + self.tr("Back to Work"))
+            self._document_view.retranslateUi()
 
     def _apply_state(self, state: WorkboardState) -> None:
         self._state = state
-        self.context_label.setText(
+        context_summary = (
             state.context_frontier.summary if state.context_frontier is not None else self.tr("Context not ready yet.")
         )
+        self.context_label.setText(context_summary)
         blocker_text = (
             state.context_frontier.blocker.message
             if state.context_frontier and state.context_frontier.blocker is not None
@@ -277,14 +283,19 @@ class WorkView(QWidget):
         )
         self.blocker_label.setText(blocker_text)
         self.blocker_label.setVisible(bool(blocker_text))
+        self.viewmodel.set_context(context_summary, blocker_text)
 
         if state.setup_blocker is not None:
+            setup_action_label = self._setup_action_label(state.setup_blocker)
             self.setup_label.setText(state.setup_blocker.message)
-            self.setup_action_button.setText(self._setup_action_label(state.setup_blocker))
+            self.setup_action_button.setText(setup_action_label)
             self.setup_action_button.setVisible(True)
             self.setup_strip.setVisible(True)
+            self.viewmodel.set_setup(state.setup_blocker.message, setup_action_label)
         else:
             self.setup_strip.hide()
+            self.setup_action_button.hide()
+            self.viewmodel.clear_setup()
 
         self.rows_table.setRowCount(0)
         self._row_states = list(state.rows)
@@ -362,6 +373,7 @@ class WorkView(QWidget):
             self._set_import_message(state.error_message, is_error=True)
         else:
             self._set_import_message("", is_error=False)
+        self._sync_import_chrome_state()
 
     def _run_import(self) -> None:
         if not self._selected_import_paths:
@@ -391,17 +403,57 @@ class WorkView(QWidget):
         self.import_button.setEnabled(False)
         self.import_summary_label.setText(self.tr("No file or folder selected"))
         self.import_summary_label.setToolTip(self.import_summary_label.text())
+        self._sync_import_chrome_state()
         self.refresh()
 
     def _set_import_message(self, text: str, *, is_error: bool) -> None:
+        self._import_message_is_error = is_error
         if not text:
             self.import_message_label.hide()
             self.import_message_label.clear()
+            self._sync_import_chrome_state()
             return
         color = "#b42318" if is_error else "#027a48"
         self.import_message_label.setStyleSheet(f"QLabel {{ color: {color}; font-weight: 600; }}")
         self.import_message_label.setText(text)
         self.import_message_label.show()
+        self._sync_import_chrome_state()
+
+    def _on_import_type_changed(self, _index: int) -> None:
+        selected = self.import_type_combo.currentData()
+        self.viewmodel.select_import_type(str(selected) if selected else "")
+
+    def _connect_qml_signals(self) -> None:
+        root = self.chrome_host.rootObject()
+        if root is None:
+            return
+        root.selectFilesRequested.connect(self._select_files)
+        root.selectFolderRequested.connect(self._select_folder)
+        root.importRequested.connect(self._run_import)
+        root.setupActionRequested.connect(self._on_setup_action_clicked)
+        root.importTypeSelected.connect(self._on_import_type_selected)
+
+    def _on_import_type_selected(self, document_type: str) -> None:
+        index = self.import_type_combo.findData(document_type)
+        if index < 0:
+            return
+        self.import_type_combo.setCurrentIndex(index)
+        self._sync_import_chrome_state()
+
+    def _sync_import_chrome_state(self) -> None:
+        options = [
+            (str(self.import_type_combo.itemData(index) or ""), self.import_type_combo.itemText(index))
+            for index in range(self.import_type_combo.count())
+        ]
+        selected = self.import_type_combo.currentData()
+        self.viewmodel.set_import_state(
+            summary=self.import_summary_label.text().strip() or self.tr("No file or folder selected"),
+            message=self.import_message_label.text().strip() if not self.import_message_label.isHidden() else "",
+            is_error=self._import_message_is_error,
+            can_import=self.import_button.isEnabled(),
+            options=options,
+            selected_import_type=str(selected) if selected else None,
+        )
 
     def _selected_row_state(self) -> WorkDocumentRow | None:
         row = self.rows_table.currentRow()

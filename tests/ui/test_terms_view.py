@@ -8,6 +8,7 @@ from context_aware_translation.application.contracts.common import (
     AcceptedCommand,
     BlockerCode,
     BlockerInfo,
+    DocumentRef,
     ProjectRef,
     UserMessage,
     UserMessageSeverity,
@@ -46,24 +47,28 @@ def _qapp():
     yield app
 
 
-def _make_state(*, can_review: bool = False, can_export: bool = False) -> TermsTableState:
+def _make_state(
+    *, can_review: bool = False, can_export: bool = False, document_scope: bool = False
+) -> TermsTableState:
     return TermsTableState(
         scope=TermsScope(
-            kind=TermsScopeKind.PROJECT,
+            kind=TermsScopeKind.DOCUMENT if document_scope else TermsScopeKind.PROJECT,
             project=ProjectRef(project_id="proj-1", name="One Piece"),
+            document=DocumentRef(document_id=4, order_index=4, label="04.png") if document_scope else None,
         ),
         toolbar=TermsToolbarState(
+            can_build=document_scope,
             can_translate_pending=True,
             can_review=can_review,
             can_filter_noise=True,
-            can_import=True,
-            can_export=can_export,
+            can_import=not document_scope,
+            can_export=(can_export and not document_scope),
             review_blocker=(
                 None if can_review else BlockerInfo(code=BlockerCode.NEEDS_SETUP, message="Review config missing.")
             ),
             export_blocker=(
                 None
-                if can_export
+                if can_export and not document_scope
                 else BlockerInfo(code=BlockerCode.NOTHING_TO_DO, message="No terms ready for export.")
             ),
         ),
@@ -122,6 +127,125 @@ def test_terms_view_renders_backend_state_and_local_filters():
         assert view.proxy_model.rowCount() == 1
     finally:
         view.cleanup()
+        view.deleteLater()
+
+
+def test_terms_view_loads_qml_project_chrome_and_routes_toolbar_actions():
+    from context_aware_translation.ui.features.terms_view import TermsView
+
+    service = FakeTermsService(
+        project_state=_make_state(can_review=True, can_export=True),
+        command_result=AcceptedCommand(
+            command_name="terms-task",
+            message=UserMessage(severity=UserMessageSeverity.INFO, text="Queued."),
+        ),
+    )
+    bus = InMemoryApplicationEventBus()
+    view = TermsView("proj-1", service, bus)
+    try:
+        root = view.chrome_host.rootObject()
+        assert root is not None
+        assert root.objectName() == "termsPaneChrome"
+        assert root.property("titleText") == "Terms"
+        assert root.property("canTranslate") is True
+        assert root.property("canReview") is True
+        assert root.property("canExport") is True
+
+        with (
+            patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes),
+            patch.object(QFileDialog, "getOpenFileName", return_value=("/tmp/glossary.json", "JSON Files (*.json)")),
+            patch.object(QFileDialog, "getSaveFileName", return_value=("/tmp/out.json", "JSON Files (*.json)")),
+        ):
+            root.translateRequested.emit()
+            root.reviewRequested.emit()
+            root.filterRequested.emit()
+            root.importRequested.emit()
+            root.exportRequested.emit()
+
+        call_names = [name for name, _payload in service.calls]
+        assert "translate_pending" in call_names
+        assert "review_terms" in call_names
+        assert "filter_noise" in call_names
+        assert "import_terms" in call_names
+        assert "export_terms" in call_names
+    finally:
+        view.cleanup()
+        view.deleteLater()
+
+
+def test_terms_view_loads_qml_document_chrome_and_routes_document_actions():
+    from context_aware_translation.ui.features.terms_view import TermsView
+
+    service = FakeTermsService(
+        project_state=_make_state(document_scope=False),
+        document_state=_make_state(document_scope=True, can_review=True),
+        command_result=AcceptedCommand(
+            command_name="terms-task",
+            message=UserMessage(severity=UserMessageSeverity.INFO, text="Queued."),
+        ),
+    )
+    bus = InMemoryApplicationEventBus()
+    view = TermsView("proj-1", service, bus, document_id=4, embedded=True)
+    try:
+        view.refresh()
+        root = view.chrome_host.rootObject()
+        assert root is not None
+        assert root.objectName() == "termsPaneChrome"
+        assert root.property("showBuild") is True
+        assert root.property("showImport") is False
+        assert root.property("showExport") is False
+        assert root.property("canBuild") is True
+        assert root.property("canTranslate") is True
+        assert root.property("canReview") is True
+
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
+            root.buildRequested.emit()
+            root.translateRequested.emit()
+            root.reviewRequested.emit()
+            root.filterRequested.emit()
+
+        call_names = [name for name, _payload in service.calls]
+        assert "build_terms" in call_names
+        assert "translate_pending" in call_names
+        assert "review_terms" in call_names
+        assert "filter_noise" in call_names
+    finally:
+        view.cleanup()
+        view.deleteLater()
+
+
+def test_terms_view_loads_qml_document_chrome_and_routes_build_actions():
+    from context_aware_translation.ui.features.terms_view import TermsView
+
+    service = FakeTermsService(
+        project_state=_make_state(),
+        document_state=_make_state(document_scope=True),
+        command_result=AcceptedCommand(
+            command_name="terms-task",
+            message=UserMessage(severity=UserMessageSeverity.INFO, text="Queued."),
+        ),
+    )
+    view = TermsView("proj-1", service, None, document_id=4, embedded=True)
+    try:
+        view.refresh()
+        root = view.chrome_host.rootObject()
+        assert root is not None
+        assert root.objectName() == "termsPaneChrome"
+        assert root.property("showTitle") is False
+        assert root.property("showBuild") is True
+        assert root.property("showImport") is False
+        assert root.property("showExport") is False
+        assert root.property("canBuild") is True
+
+        root.buildRequested.emit()
+        root.translateRequested.emit()
+
+        call_names = [name for name, _payload in service.calls]
+        assert "build_terms" in call_names
+        assert "translate_pending" in call_names
+    finally:
+        view.cleanup()
+        view.deleteLater()
 
 
 def test_terms_view_routes_edits_and_toolbar_actions_through_service():
@@ -186,6 +310,7 @@ def test_terms_view_routes_edits_and_toolbar_actions_through_service():
         assert view.table_model.item(nika_source_row, 6).checkState() == Qt.CheckState.Checked
     finally:
         view.cleanup()
+        view.deleteLater()
 
 
 def test_terms_view_refreshes_on_terms_and_setup_invalidations():
@@ -202,6 +327,7 @@ def test_terms_view_refreshes_on_terms_and_setup_invalidations():
         assert len(get_state_calls) == 3
     finally:
         view.cleanup()
+        view.deleteLater()
 
 
 def test_terms_view_description_tooltip_and_header_tooltips_are_restored():
@@ -221,6 +347,7 @@ def test_terms_view_description_tooltip_and_header_tooltips_are_restored():
         assert "only context summaries ending at or before the current chunk are sent" in header_tooltip
     finally:
         view.cleanup()
+        view.deleteLater()
 
 
 def test_terms_view_sorting_and_live_updates_follow_legacy_glossary_behavior():
@@ -343,6 +470,7 @@ def test_terms_view_sorting_and_live_updates_follow_legacy_glossary_behavior():
         assert view.proxy_model.rowCount() == 0
     finally:
         view.cleanup()
+        view.deleteLater()
 
 
 def test_terms_view_context_menu_selects_row_and_copies_description():
@@ -368,6 +496,7 @@ def test_terms_view_context_menu_selects_row_and_copies_description():
         set_text.assert_called_once_with(expected_description)
     finally:
         view.cleanup()
+        view.deleteLater()
 
 
 def test_terms_view_context_menu_preserves_multi_selection_and_edit_selected_opens_editors():
@@ -396,3 +525,4 @@ def test_terms_view_context_menu_preserves_multi_selection_and_edit_selected_ope
         assert view.table_view.isPersistentEditorOpen(view.proxy_model.index(1, 1))
     finally:
         view.cleanup()
+        view.deleteLater()

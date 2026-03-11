@@ -23,7 +23,6 @@ from context_aware_translation.application.events import InMemoryApplicationEven
 from tests.application.fakes import FakeProjectSetupService
 
 try:
-    from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication, QDialog, QPushButton
 
     HAS_PYSIDE6 = True
@@ -109,32 +108,33 @@ def _make_state(*, blocker: str | None = None, project_specific: bool = False) -
     )
 
 
-def test_project_setup_view_renders_backend_state():
-    from context_aware_translation.ui.features.project_setup_view import ProjectSetupView
+def test_project_settings_pane_renders_backend_state():
+    from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
 
     service = FakeProjectSetupService(state=_make_state())
     bus = InMemoryApplicationEventBus()
-    view = ProjectSetupView("proj-1", service, bus)
+    view = ProjectSettingsPane("proj-1", service, bus)
     try:
-        assert view.title_label.text() == view.tr("Setup for One Piece")
-        assert view.custom_profile_group.isHidden()
-        assert view.layout().alignment() == Qt.AlignmentFlag.AlignTop
-        assert not view.shared_profile_combo.isEditable()
+        root = view.chrome_host.rootObject()
+        assert root is not None
+        assert root.objectName() == "projectSettingsPaneChrome"
+        assert view.viewmodel.title_text == "Setup for One Piece"
+        assert view.routes_group.isHidden()
         assert service.calls == [("get_state", "proj-1")]
     finally:
         view.cleanup()
 
 
-def test_project_setup_view_saves_selected_shared_profile():
-    from context_aware_translation.ui.features.project_setup_view import ProjectSetupView
+def test_project_settings_pane_saves_selected_shared_profile():
+    from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
 
     service = FakeProjectSetupService(state=_make_state())
     bus = InMemoryApplicationEventBus()
-    view = ProjectSetupView("proj-1", service, bus)
+    view = ProjectSettingsPane("proj-1", service, bus)
     saved: list[str] = []
     view.save_completed.connect(saved.append)
     try:
-        view.save_button.click()
+        view._save()
 
         assert saved == ["proj-1"]
         call_name, request = service.calls[-1]
@@ -146,47 +146,37 @@ def test_project_setup_view_saves_selected_shared_profile():
         view.cleanup()
 
 
-def test_project_setup_view_can_select_custom_profile():
-    from context_aware_translation.ui.features.project_setup_view import ProjectSetupView
+def test_project_settings_pane_can_select_custom_profile():
+    from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
 
     service = FakeProjectSetupService(state=_make_state())
     bus = InMemoryApplicationEventBus()
-    view = ProjectSetupView("proj-1", service, bus)
+    view = ProjectSettingsPane("proj-1", service, bus)
     try:
-        custom_index = view.shared_profile_combo.findData("__custom__")
-        assert custom_index >= 0
-        view.shared_profile_combo.setCurrentIndex(custom_index)
+        custom_index = next(
+            index for index, option in enumerate(view.viewmodel.profile_options) if option["label"] == "Custom profile"
+        )
+        view._on_profile_index_requested(custom_index)
 
-        assert not view.custom_profile_group.isHidden()
+        assert not view.routes_group.isHidden()
         assert view.routes_table.rowCount() == 2
         assert view.routes_table.columnCount() == 4
-        assert view.routes_table.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        assert view.routes_table.columnWidth(1) >= 180
-        assert view.routes_table.columnWidth(2) >= 160
         assert view.routes_table.item(0, 0).text() == "Translator"
         assert view.routes_table.item(1, 0).text() == "OCR"
-        assert view.routes_table.cellWidget(0, 3) is not None
-        assert view.routes_table.cellWidget(1, 3) is not None
+        assert view.viewmodel.show_custom_profile is True
 
         translator_row = next(
             index for index, row in enumerate(view._custom_rows) if row.route.step_id is WorkflowStepId.TRANSLATOR
         )
         translator = view._custom_rows[translator_row]
-        assert translator.connection_combo.sizePolicy().horizontalPolicy() == translator.connection_combo.sizePolicy().Policy.Expanding
-        assert translator.model_edit.sizePolicy().horizontalPolicy() == translator.model_edit.sizePolicy().Policy.Expanding
-        assert translator.connection_combo.minimumHeight() >= translator.connection_combo.sizeHint().height()
-        assert translator.model_edit.minimumHeight() >= translator.model_edit.sizeHint().height()
-        assert view.routes_table.rowHeight(translator_row) >= view.routes_table.cellWidget(translator_row, 1).sizeHint().height()
-        assert view.routes_table.rowHeight(translator_row) >= view.routes_table.cellWidget(translator_row, 3).sizeHint().height()
         translator.connection_combo.setCurrentIndex(translator.connection_combo.findData("conn-openai"))
         translator.model_edit.setText("gpt-4.1-mini")
-        view.save_button.click()
+        view._save()
 
         call_name, request = service.calls[-1]
         assert call_name == "save"
         assert request.shared_profile_id == "profile:shared"
         assert request.project_profile is not None
-        assert request.project_profile.kind is WorkflowProfileKind.PROJECT_SPECIFIC
         translator_route = next(
             route for route in request.project_profile.routes if route.step_id is WorkflowStepId.TRANSLATOR
         )
@@ -196,16 +186,18 @@ def test_project_setup_view_can_select_custom_profile():
         view.cleanup()
 
 
-def test_project_setup_view_custom_step_advanced_button_opens_advanced_dialog():
+def test_project_settings_pane_custom_step_advanced_button_opens_advanced_dialog():
     from context_aware_translation.ui.features import workflow_profile_editor as editor_module
-    from context_aware_translation.ui.features.project_setup_view import ProjectSetupView
+    from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
 
     service = FakeProjectSetupService(state=_make_state())
     bus = InMemoryApplicationEventBus()
-    view = ProjectSetupView("proj-1", service, bus)
+    view = ProjectSettingsPane("proj-1", service, bus)
     try:
-        custom_index = view.shared_profile_combo.findData("__custom__")
-        view.shared_profile_combo.setCurrentIndex(custom_index)
+        custom_index = next(
+            index for index, option in enumerate(view.viewmodel.profile_options) if option["label"] == "Custom profile"
+        )
+        view._on_profile_index_requested(custom_index)
         translator_row = next(
             index for index, row in enumerate(view._custom_rows) if row.route.step_id is WorkflowStepId.TRANSLATOR
         )
@@ -236,38 +228,38 @@ def test_project_setup_view_custom_step_advanced_button_opens_advanced_dialog():
 
         assert opened == [WorkflowStepId.TRANSLATOR]
         assert view._custom_rows[translator_row].route.step_config["chunk_size"] == 1234
-        assert view.routes_table.cellWidget(translator_row, 3) is not None
     finally:
         view.cleanup()
 
 
-def test_project_setup_view_opens_app_setup_for_blocker():
-    from context_aware_translation.ui.features.project_setup_view import ProjectSetupView
+def test_project_settings_pane_opens_app_setup_for_blocker():
+    from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
 
     service = FakeProjectSetupService(state=_make_state(blocker="Open App Setup."))
     bus = InMemoryApplicationEventBus()
-    view = ProjectSetupView("proj-1", service, bus)
+    view = ProjectSettingsPane("proj-1", service, bus)
     requested: list[bool] = []
     view.open_app_setup_requested.connect(lambda: requested.append(True))
     try:
-        assert not view.open_app_setup_button.isHidden()
-        view.open_app_setup_button.clicked.emit()
+        root = view.chrome_host.rootObject()
+        assert root is not None
+        root.openAppSetupRequested.emit()
         assert requested == [True]
     finally:
         view.cleanup()
 
 
-def test_project_setup_view_refreshes_on_setup_invalidation():
-    from context_aware_translation.ui.features.project_setup_view import ProjectSetupView
+def test_project_settings_pane_refreshes_on_setup_invalidation():
+    from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
 
     service = FakeProjectSetupService(state=_make_state())
     bus = InMemoryApplicationEventBus()
-    view = ProjectSetupView("proj-1", service, bus)
+    view = ProjectSettingsPane("proj-1", service, bus)
     try:
         service.state = _make_state(project_specific=True)
         bus.publish(SetupInvalidatedEvent(project_id="proj-1"))
 
-        assert not view.custom_profile_group.isHidden()
+        assert view.viewmodel.show_custom_profile is True
         assert service.calls == [("get_state", "proj-1"), ("get_state", "proj-1")]
     finally:
         view.cleanup()

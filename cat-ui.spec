@@ -23,6 +23,9 @@ datas = [
     # UI resources
     (str(project_root / 'context_aware_translation' / 'ui' / 'resources'),
      'context_aware_translation/ui/resources'),
+    # QML resources
+    (str(project_root / 'context_aware_translation' / 'ui' / 'qml'),
+     'context_aware_translation/ui/qml'),
     # Translation files
     (str(project_root / 'context_aware_translation' / 'ui' / 'translations'),
      'context_aware_translation/ui/translations'),
@@ -70,6 +73,14 @@ def _collect_data_tree(src_dir: Path, dst_root: str) -> list[tuple[str, str]]:
         rel_parent = file_path.parent.relative_to(src_dir)
         dst_dir = dst_root if rel_parent == Path('.') else f"{dst_root}/{rel_parent.as_posix()}"
         items.append((str(file_path), dst_dir))
+    return items
+
+
+def _collect_matching_files(src_dir: Path, pattern: str, dst_root: str) -> list[tuple[str, str]]:
+    items: list[tuple[str, str]] = []
+    for file_path in sorted(src_dir.glob(pattern)):
+        if file_path.is_file():
+            items.append((str(file_path), dst_root))
     return items
 
 
@@ -134,8 +145,22 @@ if not has_jp2s or not has_dictionary:
     )
 datas += opencc_datas
 
+# Bundle Qt QML imports explicitly. Python hidden imports do not include the
+# runtime QtQuick/QtQml module tree used by `import QtQuick` in .qml files.
+qt_qml_dir = Path(PySide6.__file__).resolve().parent / 'Qt' / 'qml'
+if qt_qml_dir.exists():
+    datas += _collect_data_tree(qt_qml_dir, 'PySide6/Qt/qml')
+
+# Bundle Qt's own translations so standard widget chrome can localize in
+# packaged builds, even when QLibraryInfo points at a non-bundled install path.
+qt_translations_dir = Path(PySide6.__file__).resolve().parent / 'Qt' / 'translations'
+if qt_translations_dir.exists():
+    datas += _collect_matching_files(qt_translations_dir, 'qtbase_*.qm', 'PySide6/Qt/translations')
+
 # Hidden imports for PySide6 and other dependencies
 hiddenimports = [
+    'PySide6.QtQml',
+    'PySide6.QtQuick',
     'PySide6.QtSvg',
     'PySide6.QtSvgWidgets',
     'PySide6.QtXml',

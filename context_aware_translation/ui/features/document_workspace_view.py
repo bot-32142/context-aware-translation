@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -45,7 +44,10 @@ from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTa
 from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
 from context_aware_translation.ui.features.terms_view import TermsView
 from context_aware_translation.ui.i18n import qarg
+from context_aware_translation.ui.shell_hosts.document_shell_host import DocumentShellHost
+from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
+from context_aware_translation.ui.viewmodels.document_export_pane import DocumentExportPaneViewModel
 
 _SECTION_LABELS: dict[DocumentSection, str] = {
     DocumentSection.OCR: "OCR",
@@ -312,25 +314,36 @@ class _DocumentExportTab(QWidget):
         self._project_id = project_id
         self._document_id = document_id
         self._service = service
+        self.viewmodel = DocumentExportPaneViewModel(self)
         self._state: DocumentExportState | None = None
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.chrome_host = QmlChromeHost(
+            "document/export/DocumentExportPaneChrome.qml",
+            context_objects={"exportPane": self.viewmodel},
+            parent=self,
+        )
+        layout.addWidget(self.chrome_host)
         self.tip_label = create_tip_label(
             self.tr(
                 "Export applies only to the current document. You can also start export directly from the Work list when that row is exportable."
             ),
         )
-        layout.addWidget(self.tip_label)
+        self.tip_label.hide()
         self.controls = _ExportControls(parent=self)
         self.controls.changed.connect(self._update_export_enabled)
         layout.addWidget(self.controls)
         self.export_button = QPushButton(self.tr("Export This Document"))
         self.export_button.clicked.connect(self._run_export)
+        self.export_button.hide()
         layout.addWidget(self.export_button)
         self.result_label = QLabel()
         self.result_label.setWordWrap(True)
         self.result_label.hide()
         layout.addWidget(self.result_label)
         layout.addStretch()
+        self._connect_qml_signals()
+        self._sync_chrome_state()
 
     def refresh(self) -> None:
         try:
@@ -341,12 +354,15 @@ class _DocumentExportTab(QWidget):
         self.controls.apply_state(self._state)
         self.result_label.hide()
         self.export_button.setEnabled(self._state.can_export and self.controls.can_submit(self._state))
+        self._sync_chrome_state()
 
     def _update_export_enabled(self) -> None:
         if self._state is None:
             self.export_button.setEnabled(False)
+            self._sync_chrome_state()
             return
         self.export_button.setEnabled(self._state.can_export and self.controls.can_submit(self._state))
+        self._sync_chrome_state()
 
     def _run_export(self) -> None:
         if self._state is None:
@@ -374,6 +390,29 @@ class _DocumentExportTab(QWidget):
         self.result_label.setText(message)
         self.result_label.setStyleSheet("color: #15803d;")
         self.result_label.show()
+        self._sync_chrome_state()
+
+    def retranslate(self) -> None:
+        self.tip_label.setText(
+            self.tr(
+                "Export applies only to the current document. You can also start export directly from the Work list when that row is exportable."
+            ),
+        )
+        self.export_button.setText(self.tr("Export This Document"))
+        self.viewmodel.retranslate()
+        self._sync_chrome_state()
+
+    def _connect_qml_signals(self) -> None:
+        root = self.chrome_host.rootObject()
+        if root is None:
+            return
+        root.exportRequested.connect(self._run_export)
+
+    def _sync_chrome_state(self) -> None:
+        self.viewmodel.apply_state(
+            can_export=self.export_button.isEnabled(),
+            result_text=self.result_label.text().strip() if not self.result_label.isHidden() else "",
+        )
 
 
 class DocumentWorkspaceView(QWidget):
@@ -399,7 +438,7 @@ class DocumentWorkspaceView(QWidget):
         self._terms_service = terms_service
         self._work_service = work_service
         self._state = None
-        self._tab_indexes: dict[DocumentSection, int] = {}
+        self._section_widgets: dict[DocumentSection, QWidget] = {}
         self._event_bridge = QtApplicationEventBridge(events, parent=self)
         self._event_bridge.document_invalidated.connect(self._on_document_invalidated)
         self._event_bridge.terms_invalidated.connect(self._on_terms_invalidated)
@@ -413,54 +452,38 @@ class DocumentWorkspaceView(QWidget):
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        header = QHBoxLayout()
-        self.title_label = QLabel()
-        self.title_label.setStyleSheet("font-size: 18px; font-weight: 600;")
-        header.addWidget(self.title_label)
-        header.addStretch()
-        self.back_button = QPushButton("\u2190 " + self.tr("Back to Work"))
-        self.back_button.clicked.connect(self.back_requested.emit)
-        header.addWidget(self.back_button)
-        layout.addLayout(header)
-
-        self.tip_label = create_tip_label(self.tr("These tools apply only to the current document."))
-        layout.addWidget(self.tip_label)
-
-        self.tab_widget = QTabWidget()
-        self.tab_widget.currentChanged.connect(self._on_tab_changed)
-        layout.addWidget(self.tab_widget, 1)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.shell_host = DocumentShellHost(self)
+        self.shell_host.back_requested.connect(self.back_requested.emit)
+        layout.addWidget(self.shell_host, 1)
 
     def refresh(self) -> None:
         current_section = self.current_section()
         self._state = self._document_service.get_workspace(self._project_id, self._document_id)
-        self.title_label.setText(qarg(self.tr("%1"), self._state.document.label))
-        self._sync_tabs()
-        if current_section is not None:
-            self.show_section(current_section)
-        for index in range(self.tab_widget.count()):
-            widget = self.tab_widget.widget(index)
+        target_section = current_section or self._state.active_tab
+        self._sync_sections()
+        self.shell_host.set_document_context(
+            self._project_id,
+            self._document_id,
+            qarg(self.tr("%1"), self._state.document.label),
+            section=target_section,
+        )
+        for widget in self._section_widgets.values():
             if widget is not None and hasattr(widget, "refresh"):
                 widget.refresh()
+        self.show_section(target_section)
 
-    def _sync_tabs(self) -> None:
+    def _sync_sections(self) -> None:
         if self._state is None:
             return
-        wanted_sections = list(_DOCUMENT_SECTIONS)
-        if list(self._tab_indexes.keys()) == wanted_sections:
-            return
-        while self.tab_widget.count():
-            widget = self.tab_widget.widget(0)
-            self.tab_widget.removeTab(0)
-            if widget is not None and hasattr(widget, "cleanup"):
-                widget.cleanup()
-            if widget is not None:
-                widget.deleteLater()
-        self._tab_indexes.clear()
-        for section in wanted_sections:
-            widget = self._make_tab_widget(section)
-            self._tab_indexes[section] = self.tab_widget.addTab(widget, self.tr(_SECTION_LABELS[section]))
+        for section in _DOCUMENT_SECTIONS:
+            if section in self._section_widgets:
+                continue
+            widget = self._make_section_widget(section)
+            self._section_widgets[section] = widget
+            self.shell_host.set_section_widget(section, widget)
 
-    def _make_tab_widget(self, section: DocumentSection) -> QWidget:
+    def _make_section_widget(self, section: DocumentSection) -> QWidget:
         if section is DocumentSection.OCR:
             return DocumentOCRTab(self._document_service, self._project_id, self._document_id, parent=self)
         if section is DocumentSection.TERMS:
@@ -483,49 +506,33 @@ class DocumentWorkspaceView(QWidget):
             return _DocumentExportTab(self._project_id, self._document_id, self._document_service, parent=self)
         raise ValueError(f"Unknown document section: {section}")
 
+    def section_widget(self, section: DocumentSection) -> QWidget | None:
+        return self._section_widgets.get(section)
+
     def current_section(self) -> DocumentSection | None:
-        current_index = self.tab_widget.currentIndex()
-        for section, index in self._tab_indexes.items():
-            if index == current_index:
-                return section
-        return None
+        return self.shell_host.current_section()
 
     def show_section(self, section: DocumentSection) -> None:
-        index = self._tab_indexes.get(section)
-        if index is not None:
-            self.tab_widget.setCurrentIndex(index)
-            self._activate_current_tab()
+        self.shell_host.show_section(section)
 
     def cleanup(self) -> None:
         self._event_bridge.close()
-        while self.tab_widget.count():
-            widget = self.tab_widget.widget(0)
-            self.tab_widget.removeTab(0)
-            if widget is not None and hasattr(widget, "cleanup"):
-                widget.cleanup()
-            if widget is not None:
-                widget.deleteLater()
+        self.shell_host.cleanup()
+        self._section_widgets.clear()
 
     def get_running_operations(self) -> list[str]:
-        current_widget = self.tab_widget.currentWidget()
-        if current_widget is not None and hasattr(current_widget, "get_running_operations"):
-            running = current_widget.get_running_operations()
-            if isinstance(running, list):
-                return running
-        return []
+        return self.shell_host.get_running_operations()
 
     def request_cancel_running_operations(self, *, include_engine_tasks: bool = False) -> None:
-        current_widget = self.tab_widget.currentWidget()
-        if current_widget is not None and hasattr(current_widget, "request_cancel_running_operations"):
-            current_widget.request_cancel_running_operations(include_engine_tasks=include_engine_tasks)
+        self.shell_host.request_cancel_running_operations(include_engine_tasks=include_engine_tasks)
 
-    def _on_tab_changed(self, _index: int) -> None:
-        self._activate_current_tab()
+    def changeEvent(self, event: QEvent) -> None:
+        if event.type() == QEvent.Type.LanguageChange:
+            self.retranslateUi()
+        super().changeEvent(event)
 
-    def _activate_current_tab(self) -> None:
-        current_widget = self.tab_widget.currentWidget()
-        if current_widget is not None and hasattr(current_widget, "activate_view"):
-            current_widget.activate_view()
+    def retranslateUi(self) -> None:
+        self.shell_host.retranslate()
 
     def _on_document_invalidated(self, event: DocumentInvalidatedEvent) -> None:
         if event.project_id not in {None, self._project_id}:

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import patch
 
 import pytest
 
@@ -12,7 +11,6 @@ from context_aware_translation.application.contracts.app_setup import (
     ConnectionSummary,
     ConnectionTestResult,
     ProviderCard,
-    SaveConnectionRequest,
     SetupWizardState,
     WorkflowProfileDetail,
     WorkflowProfileKind,
@@ -28,7 +26,7 @@ from context_aware_translation.application.contracts.common import (
 from tests.application.fakes import FakeAppSetupService
 
 try:
-    from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
+    from PySide6.QtWidgets import QApplication, QDialog
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -98,135 +96,12 @@ def _provider_api_key_edit(dialog, provider: ProviderKind):
     return dialog._provider_inputs[provider][1]
 
 
-class _FakeConnectionDialog:
-    def __init__(self, *args, **kwargs):
-        self._request = SaveConnectionRequest(
-            connection=ConnectionDraft(
-                display_name="DeepSeek",
-                provider=ProviderKind.DEEPSEEK,
-                api_key="secret",
-                base_url="https://api.deepseek.com",
-                default_model="deepseek-chat",
-            )
-        )
-
-    def exec(self):
-        return QDialog.DialogCode.Accepted
-
-    def request(self):
-        return self._request
-
-
-class _FakeProfileEditorDialog:
-    def __init__(self, *args, profile: WorkflowProfileDetail, **kwargs):
-        self._profile = profile.model_copy(update={"name": "Edited profile"})
-
-    def exec(self):
-        return QDialog.DialogCode.Accepted
-
-    def profile(self):
-        return self._profile
-
-
-def test_app_setup_view_renders_backend_state():
-    from context_aware_translation.ui.features.app_setup_view import AppSetupView
-
-    service = FakeAppSetupService(state=_make_state())
-    view = AppSetupView(service)
-
-    assert view.connections_table.rowCount() == 1
-    assert view.profiles_table.rowCount() == 1
-    assert view.setup_tabs.count() == 2
-    assert view.setup_tabs.tabText(0) == view.tr("Connections")
-    assert view.setup_tabs.tabText(1) == view.tr("Workflow Profiles")
-    assert view.run_wizard_button.text() == view.tr("Open Setup Wizard")
-
-
 class _FakeWizardDialog:
     def __init__(self, *args, **kwargs):
         pass
 
     def exec(self):
         return QDialog.DialogCode.Accepted
-
-
-def test_app_setup_view_add_delete_test_and_edit_profile_calls_service():
-    from context_aware_translation.ui.features.app_setup_view import AppSetupView
-
-    state = _make_state()
-    service = FakeAppSetupService(
-        state=state,
-        test_result=ConnectionTestResult(
-            connection_label="Gemini",
-            supported_capabilities=[CapabilityCode.TRANSLATION],
-            message=UserMessage(severity=UserMessageSeverity.INFO, text="Connection accepted."),
-        ),
-    )
-    view = AppSetupView(service)
-    view.connections_table.selectRow(0)
-    view.profiles_table.selectRow(0)
-
-    with (
-        patch("context_aware_translation.ui.features.app_setup_view.ConnectionEditorDialog", _FakeConnectionDialog),
-        patch(
-            "context_aware_translation.ui.features.app_setup_view.WorkflowProfileEditorDialog", _FakeProfileEditorDialog
-        ),
-        patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes),
-    ):
-        view._on_add_connection()
-        view.connections_table.selectRow(0)
-        view._on_duplicate_connection()
-        view.connections_table.selectRow(0)
-        view._on_delete_connection()
-        view.profiles_table.selectRow(0)
-        view._edit_profile()
-        view.profiles_table.selectRow(0)
-        view._on_duplicate_profile()
-        view.profiles_table.selectRow(0)
-        view._on_delete_profile()
-
-    assert any(call[0] == "save_connection" for call in service.calls)
-    assert any(call[0] == "duplicate_connection" for call in service.calls)
-    assert any(call[0] == "delete_connection" for call in service.calls)
-    assert any(call[0] == "save_workflow_profile" for call in service.calls)
-    assert any(call[0] == "duplicate_workflow_profile" for call in service.calls)
-    assert any(call[0] == "delete_workflow_profile" for call in service.calls)
-
-
-def test_app_setup_view_opens_connection_dialog_on_double_click():
-    from context_aware_translation.ui.features.app_setup_view import AppSetupView
-
-    service = FakeAppSetupService(state=_make_state())
-    view = AppSetupView(service)
-    opened: list[bool] = []
-    try:
-        with patch.object(view, "_edit_connection", side_effect=lambda *_args: opened.append(True)):
-            view.connections_table.selectRow(0)
-            view._on_connection_double_clicked(0, 0)
-        assert opened == [True]
-    finally:
-        view.deleteLater()
-
-
-def test_app_setup_view_disables_managed_connection_edits():
-    from context_aware_translation.ui.features.app_setup_view import AppSetupView
-
-    managed_state = _make_state()
-    managed_state = managed_state.model_copy(
-        update={"connections": [managed_state.connections[0].model_copy(update={"is_managed": True})]}
-    )
-    service = FakeAppSetupService(state=managed_state)
-    view = AppSetupView(service)
-    opened: list[bool] = []
-    try:
-        view.connections_table.selectRow(0)
-        assert view.duplicate_connection_button.isEnabled()
-        assert not view.delete_connection_button.isEnabled()
-        with patch.object(view, "_edit_connection", side_effect=lambda *_args: opened.append(True)):
-            view._on_connection_double_clicked(0, 0)
-        assert opened == []
-    finally:
-        view.deleteLater()
 
 
 def test_setup_wizard_dialog_previews_and_saves_through_service():
@@ -427,17 +302,6 @@ def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
     assert first_item_widget is not None
     assert _provider_checkbox(dialog, ProviderKind.GEMINI).isChecked() is True
     assert _provider_api_key_edit(dialog, ProviderKind.GEMINI).text() == "secret"
-
-
-def test_app_setup_view_refreshes_wizard_prompt_state():
-    from context_aware_translation.ui.features.app_setup_view import AppSetupView
-
-    service = FakeAppSetupService(state=_make_state(needs_wizard=True))
-    view = AppSetupView(service)
-
-    assert view.run_wizard_button.text() == view.tr("Run Setup Wizard")
-    assert view.connections_table.rowCount() == 0
-    assert view.profiles_table.rowCount() == 0
 
 
 def test_connection_draft_form_round_trips_advanced_fields():

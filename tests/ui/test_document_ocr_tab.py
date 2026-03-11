@@ -102,6 +102,40 @@ def test_document_ocr_tab_uses_structured_editor_and_bbox_overlay():
         view.deleteLater()
 
 
+def test_document_ocr_tab_loads_qml_chrome_and_qml_navigation_signals() -> None:
+    from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
+
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        ocr=DocumentOCRState(
+            workspace=_workspace_state(),
+            pages=[
+                OCRPageState(source_id=101, page_number=1, total_pages=2, status=SurfaceStatus.DONE),
+                OCRPageState(source_id=102, page_number=2, total_pages=2, status=SurfaceStatus.READY),
+            ],
+            current_page_index=0,
+            actions=DocumentOCRActions(
+                save={"enabled": True}, run_current={"enabled": True}, run_pending={"enabled": True}
+            ),
+        ),
+        ocr_page_images={101: _png_1x1(), 102: _png_1x1()},
+    )
+    view = DocumentOCRTab(service, "proj-1", 4)
+    try:
+        view.refresh()
+        root = view.chrome_host.rootObject()
+        assert root is not None
+        assert root.objectName() == "documentOcrPaneChrome"
+        assert root.property("pageLabelText") == "Page 1 of 2"
+        assert root.property("pageStatusText") == "OCR Done"
+
+        root.nextRequested.emit()
+        assert view.page_label.text() == "Page 2 of 2"
+        assert root.property("pageStatusText") == "Pending OCR"
+    finally:
+        view.deleteLater()
+
+
 def test_document_ocr_tab_saves_structured_elements():
     from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
 

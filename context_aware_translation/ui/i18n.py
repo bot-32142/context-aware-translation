@@ -1,6 +1,7 @@
 """Internationalization module for the application."""
 
 import re
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import QT_TRANSLATE_NOOP, QCoreApplication, QLibraryInfo, QLocale, QSettings, QTranslator
@@ -23,12 +24,27 @@ def get_translations_dir() -> Path:
 
     Handles both development and PyInstaller bundled environments.
     """
-    import sys
-
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:
         return Path(meipass) / "context_aware_translation" / "ui" / "translations"
     return Path(__file__).parent / "translations"
+
+
+def get_qt_translations_dirs() -> list[Path]:
+    """Return candidate directories for Qt's own translation catalogs."""
+    candidates: list[Path] = []
+
+    qt_translations_dir = Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath))
+    if qt_translations_dir.exists():
+        candidates.append(qt_translations_dir)
+
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        bundled_qt_dir = Path(meipass) / "PySide6" / "Qt" / "translations"
+        if bundled_qt_dir.exists() and bundled_qt_dir not in candidates:
+            candidates.append(bundled_qt_dir)
+
+    return candidates
 
 
 def get_system_language() -> str:
@@ -120,10 +136,11 @@ def load_translation(app: QApplication, locale_code: str) -> bool:
 
         # Best-effort: load Qt base translations (for QDialogButtonBox, etc.)
         qt_translator = QTranslator()
-        qt_translations_path = QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)
-        if qt_translator.load(f"qtbase_{locale_code}", qt_translations_path):
-            app.installTranslator(qt_translator)
-            _current_qt_translator = qt_translator
+        for qt_translations_dir in get_qt_translations_dirs():
+            if qt_translator.load(f"qtbase_{locale_code}", str(qt_translations_dir)):
+                app.installTranslator(qt_translator)
+                _current_qt_translator = qt_translator
+                break
 
         return True
     else:

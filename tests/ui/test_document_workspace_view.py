@@ -201,18 +201,29 @@ def _make_view():
     return view, bus, document_service, terms_service
 
 
+def _current_section_widget(view):
+    current_section = view.current_section()
+    assert current_section is not None
+    widget = view.section_widget(current_section)
+    assert widget is not None
+    return widget
+
+
 def test_document_workspace_view_renders_shell_tabs():
     view, _bus, _document_service, _terms_service = _make_view()
     try:
-        assert view.title_label.text() == "04.png"
-        assert "current document" in view.tip_label.text().lower()
-        assert [view.tab_widget.tabText(index) for index in range(view.tab_widget.count())] == [
-            "OCR",
-            "Terms",
-            "Translation",
-            "Images",
-            "Export",
-        ]
+        root = view.shell_host.chrome_host.rootObject()
+        assert root is not None
+        assert root.objectName() == "documentShellChrome"
+        assert root.property("surfaceTitleText") == "04.png"
+        assert "current document" in str(root.property("scopeTipText")).lower()
+        assert root.property("backToWorkLabelText") == "Back to Work"
+        assert root.property("ocrLabelText") == "OCR"
+        assert root.property("termsLabelText") == "Terms"
+        assert root.property("translationLabelText") == "Translation"
+        assert root.property("imagesLabelText") == "Images"
+        assert root.property("exportLabelText") == "Export"
+        assert view.current_section() is DocumentSection.OCR
     finally:
         view.cleanup()
 
@@ -221,8 +232,7 @@ def test_document_workspace_terms_tab_uses_shared_terms_component():
     view, _bus, _document_service, terms_service = _make_view()
     try:
         view.show_section(DocumentSection.TERMS)
-        terms_tab = view.tab_widget.currentWidget()
-        assert terms_tab is not None
+        terms_tab = _current_section_widget(view)
         assert hasattr(terms_tab, "table_panel")
         assert terms_tab.table_panel.proxy_model.rowCount() == 2
 
@@ -251,8 +261,7 @@ def test_document_workspace_terms_context_menu_preserves_multi_selection_and_ope
         view.show()
         QApplication.processEvents()
         view.show_section(DocumentSection.TERMS)
-        terms_tab = view.tab_widget.currentWidget()
-        assert terms_tab is not None
+        terms_tab = _current_section_widget(view)
 
         second_rect = terms_tab.table_panel.table_view.visualRect(terms_tab.table_panel.proxy_model.index(1, 0))
 
@@ -280,8 +289,7 @@ def test_document_workspace_ocr_tab_routes_save_and_run_actions():
     view, _bus, document_service, _terms_service = _make_view()
     try:
         view.show_section(DocumentSection.OCR)
-        ocr_tab = view.tab_widget.currentWidget()
-        assert ocr_tab is not None
+        ocr_tab = _current_section_widget(view)
         assert hasattr(ocr_tab, "save_button")
         assert ocr_tab.page_spinbox.maximum() == 2
 
@@ -301,8 +309,7 @@ def test_document_workspace_translation_tab_uses_migrated_translation_widget():
     view, _bus, document_service, _terms_service = _make_view()
     try:
         view.show_section(DocumentSection.TRANSLATION)
-        translation_tab = view.tab_widget.currentWidget()
-        assert translation_tab is not None
+        translation_tab = _current_section_widget(view)
         assert hasattr(translation_tab, "unit_list")
         assert translation_tab.unit_list.count() == 1
         assert translation_tab.translate_button.isEnabled()
@@ -370,12 +377,15 @@ def test_document_workspace_export_tab_runs_document_service():
     view = DocumentWorkspaceView("proj-1", 4, document_service, terms_service, work_service, bus)
     try:
         view.show_section(DocumentSection.EXPORT)
-        export_tab = view.tab_widget.currentWidget()
-        assert export_tab is not None
+        export_tab = _current_section_widget(view)
+        root = export_tab.chrome_host.rootObject()
+        assert root is not None
+        assert root.objectName() == "documentExportPaneChrome"
+        assert root.property("exportLabelText") == "Export This Document"
         export_tab.controls.preserve_structure_cb.setChecked(True)
         export_tab.controls.output_path_edit.setText("/tmp/export-dir")
         with patch.object(QMessageBox, "warning") as mock_warning:
-            export_tab.export_button.click()
+            root.exportRequested.emit()
         mock_warning.assert_not_called()
 
         assert document_service.calls[-1][0] == "export_document"
@@ -419,8 +429,7 @@ def test_document_workspace_images_tab_refits_when_activated():
         QApplication.processEvents()
         QApplication.processEvents()
 
-        images_tab = view.tab_widget.currentWidget()
-        assert images_tab is not None
+        images_tab = _current_section_widget(view)
         assert images_tab.image_viewer.transform().m11() > 1.0
     finally:
         view.cleanup()

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
-    QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
@@ -28,7 +27,9 @@ from context_aware_translation.application.contracts.document import (
 )
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.services.document import DocumentService
+from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
+from context_aware_translation.ui.viewmodels.document_ocr_pane import DocumentOcrPaneViewModel
 from context_aware_translation.ui.widgets.image_viewer import ImageViewer
 from context_aware_translation.ui.widgets.progress_widget import ProgressWidget
 
@@ -154,6 +155,7 @@ class DocumentOCRTab(QWidget):
         self._service = service
         self._project_id = project_id
         self._document_id = document_id
+        self.viewmodel = DocumentOcrPaneViewModel(self)
         self._state: DocumentOCRState | None = None
         self._current_page_index: int | None = None
         self._element_to_bbox: dict[int, int] = {}
@@ -162,11 +164,22 @@ class DocumentOCRTab(QWidget):
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        self.tip_label = create_tip_label(
-            self.tr("OCR applies only to the current document. Saving OCR does not rerun later steps.")
+        self.chrome_host = QmlChromeHost(
+            "document/ocr/DocumentOCRPaneChrome.qml",
+            context_objects={"ocrPane": self.viewmodel},
+            parent=self,
         )
-        layout.addWidget(self.tip_label)
+        layout.addWidget(self.chrome_host)
+
+        self._init_compatibility_controls()
+
+        self._content_widget = QWidget(self)
+        content_layout = QVBoxLayout(self._content_widget)
+        content_layout.setContentsMargins(0, 12, 0, 0)
+        content_layout.setSpacing(0)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         self.image_viewer = ImageViewer(self)
@@ -182,81 +195,84 @@ class DocumentOCRTab(QWidget):
         self._right_stack.addWidget(self.structured_list)
         splitter.addWidget(self._right_stack)
         splitter.setSizes([480, 480])
-        layout.addWidget(splitter, 1)
+        content_layout.addWidget(splitter, 1)
+        layout.addWidget(self._content_widget, 1)
 
-        nav_row = QHBoxLayout()
+        self._connect_qml_signals()
+        self._sync_chrome_state()
+
+    def _init_compatibility_controls(self) -> None:
+        self.tip_label = create_tip_label(
+            self.tr("OCR applies only to the current document. Saving OCR does not rerun later steps.")
+        )
+        self.tip_label.hide()
+
         self.first_button = QPushButton(self.tr("|<"), self)
         self.first_button.setToolTip(self.tr("First page"))
         self.first_button.clicked.connect(self._go_first)
-        nav_row.addWidget(self.first_button)
+        self.first_button.hide()
 
         self.prev_button = QPushButton(self.tr("<"), self)
         self.prev_button.setToolTip(self.tr("Previous page"))
         self.prev_button.clicked.connect(self._go_previous)
-        nav_row.addWidget(self.prev_button)
+        self.prev_button.hide()
 
         self.page_label = QLabel(self.tr("Page 0 of 0"), self)
-        nav_row.addWidget(self.page_label)
+        self.page_label.hide()
 
         self.page_status_label = QLabel(self)
-        nav_row.addWidget(self.page_status_label)
+        self.page_status_label.hide()
 
         self.next_button = QPushButton(self.tr(">"), self)
         self.next_button.setToolTip(self.tr("Next page"))
         self.next_button.clicked.connect(self._go_next)
-        nav_row.addWidget(self.next_button)
+        self.next_button.hide()
 
         self.last_button = QPushButton(self.tr(">|"), self)
         self.last_button.setToolTip(self.tr("Last page"))
         self.last_button.clicked.connect(self._go_last)
-        nav_row.addWidget(self.last_button)
+        self.last_button.hide()
 
         self.go_to_label = QLabel(self.tr("Go to:"), self)
-        nav_row.addWidget(self.go_to_label)
+        self.go_to_label.hide()
+
         self.page_spinbox = QSpinBox(self)
         self.page_spinbox.setMinimum(1)
         self.page_spinbox.setMaximum(1)
         self.page_spinbox.setFixedWidth(64)
         self.page_spinbox.setToolTip(self.tr("Enter page number"))
-        nav_row.addWidget(self.page_spinbox)
+        self.page_spinbox.hide()
 
         self.go_button = QPushButton(self.tr("Go"), self)
         self.go_button.setToolTip(self.tr("Jump to page"))
         self.go_button.clicked.connect(self._go_to_entered_page)
-        nav_row.addWidget(self.go_button)
-        nav_row.addStretch(1)
-        layout.addLayout(nav_row)
+        self.go_button.hide()
 
-        action_row = QHBoxLayout()
         self.run_current_button = QPushButton(self.tr("(Re)run OCR (Current Page)"), self)
         self.run_current_button.setToolTip(self.tr("Run or re-run OCR on the current page"))
         self.run_current_button.clicked.connect(self._run_current)
-        action_row.addWidget(self.run_current_button)
+        self.run_current_button.hide()
 
         self.run_pending_button = QPushButton(self.tr("Run OCR for Pending Pages"), self)
         self.run_pending_button.setToolTip(self.tr("Run OCR on all pending pages in this document"))
         self.run_pending_button.clicked.connect(self._run_pending)
-        action_row.addWidget(self.run_pending_button)
+        self.run_pending_button.hide()
 
         self.save_button = QPushButton(self.tr("Save"), self)
         self.save_button.setToolTip(self.tr("Save edited OCR text"))
         self.save_button.clicked.connect(self._save_current)
-        action_row.addWidget(self.save_button)
-        action_row.addStretch(1)
-        layout.addLayout(action_row)
+        self.save_button.hide()
 
         self.message_label = QLabel(self)
         self.message_label.hide()
-        layout.addWidget(self.message_label)
 
         self.progress_widget = ProgressWidget(self)
         self.progress_widget.setVisible(False)
         self.progress_widget.cancelled.connect(self._cancel_ocr)
-        layout.addWidget(self.progress_widget)
+        self.progress_widget.hide()
 
         self.empty_label = create_tip_label(self.tr("No image pages are available for OCR in this document."))
         self.empty_label.hide()
-        layout.addWidget(self.empty_label)
 
     def refresh(self) -> None:
         current_source_id = self._current_page.source_id if self._current_page is not None else None
@@ -264,6 +280,7 @@ class DocumentOCRTab(QWidget):
         self._sync_pages(current_source_id=current_source_id)
         self._apply_actions()
         self._apply_progress()
+        self._sync_chrome_state()
 
     def get_running_operations(self) -> list[str]:
         if self._state is not None and self._state.active_task_id is not None:
@@ -290,6 +307,7 @@ class DocumentOCRTab(QWidget):
             return
 
         self.empty_label.hide()
+        self._content_widget.show()
         self.image_viewer.setEnabled(True)
         self.text_edit.setEnabled(True)
         self.structured_list.setEnabled(True)
@@ -330,6 +348,10 @@ class DocumentOCRTab(QWidget):
         self.next_button.setEnabled(False)
         self.last_button.setEnabled(False)
         self.empty_label.show()
+        self._content_widget.hide()
+        self._apply_actions()
+        self._apply_progress()
+        self._sync_chrome_state()
 
     def _set_current_page(self, index: int) -> None:
         if self._state is None or not self._state.pages:
@@ -367,6 +389,7 @@ class DocumentOCRTab(QWidget):
             self.text_edit.setPlainText(page.extracted_text or "")
             self._right_stack.setCurrentWidget(self.text_edit)
         self._apply_actions()
+        self._sync_chrome_state()
 
     def _apply_page_status(self, page: OCRPageState) -> None:
         if page.status is SurfaceStatus.DONE:
@@ -418,6 +441,7 @@ class DocumentOCRTab(QWidget):
             self.save_button.setEnabled(False)
             self.run_current_button.setEnabled(False)
             self.run_pending_button.setEnabled(False)
+            self._sync_chrome_state()
             return
 
         self.save_button.setEnabled(page is not None and self._state.actions.save.enabled)
@@ -440,11 +464,13 @@ class DocumentOCRTab(QWidget):
             if self._state.actions.run_pending.blocker is not None
             else self.tr("Run OCR on all pending pages in this document")
         )
+        self._sync_chrome_state()
 
     def _apply_progress(self) -> None:
         if self._state is None or self._state.active_task_id is None:
             self.progress_widget.reset()
             self.progress_widget.setVisible(False)
+            self._sync_chrome_state()
             return
 
         self.progress_widget.setVisible(True)
@@ -455,11 +481,13 @@ class DocumentOCRTab(QWidget):
             self.progress_widget.set_progress(
                 progress.current, progress.total, progress.label or self.tr("OCR running...")
             )
+            self._sync_chrome_state()
             return
 
         self.progress_widget.progress_bar.setRange(0, 0)
         self.progress_widget.message_label.setText(self.tr("OCR running..."))
         self.progress_widget.eta_label.clear()
+        self._sync_chrome_state()
 
     def _go_previous(self) -> None:
         if self._current_page_index is None:
@@ -485,6 +513,13 @@ class DocumentOCRTab(QWidget):
         if self._state is None or not self._state.pages:
             return
         self._set_current_page(self.page_spinbox.value() - 1)
+
+    def _go_to_page_number(self, page_number: int) -> None:
+        if self._state is None or not self._state.pages:
+            return
+        clamped = min(max(page_number, 1), len(self._state.pages))
+        self.page_spinbox.setValue(clamped)
+        self._go_to_entered_page()
 
     def _save_current(self) -> None:
         page = self._current_page
@@ -581,6 +616,81 @@ class DocumentOCRTab(QWidget):
         if not text:
             self.message_label.hide()
             self.message_label.clear()
+            self._sync_chrome_state()
             return
         self.message_label.setText(text)
         self.message_label.show()
+        self._sync_chrome_state()
+
+    def changeEvent(self, event: QEvent) -> None:
+        if event.type() == QEvent.Type.LanguageChange:
+            self.retranslateUi()
+        super().changeEvent(event)
+
+    def retranslateUi(self) -> None:
+        self.tip_label.setText(
+            self.tr("OCR applies only to the current document. Saving OCR does not rerun later steps.")
+        )
+        self.text_edit.setPlaceholderText(self.tr("OCR text will appear here."))
+        self.first_button.setText(self.tr("|<"))
+        self.first_button.setToolTip(self.tr("First page"))
+        self.prev_button.setText(self.tr("<"))
+        self.prev_button.setToolTip(self.tr("Previous page"))
+        self.next_button.setText(self.tr(">"))
+        self.next_button.setToolTip(self.tr("Next page"))
+        self.last_button.setText(self.tr(">|"))
+        self.last_button.setToolTip(self.tr("Last page"))
+        self.go_to_label.setText(self.tr("Go to:"))
+        self.page_spinbox.setToolTip(self.tr("Enter page number"))
+        self.go_button.setText(self.tr("Go"))
+        self.go_button.setToolTip(self.tr("Jump to page"))
+        self.run_current_button.setText(self.tr("(Re)run OCR (Current Page)"))
+        self.run_current_button.setToolTip(self.tr("Run or re-run OCR on the current page"))
+        self.run_pending_button.setText(self.tr("Run OCR for Pending Pages"))
+        self.run_pending_button.setToolTip(self.tr("Run OCR on all pending pages in this document"))
+        self.save_button.setText(self.tr("Save"))
+        self.empty_label.setText(self.tr("No image pages are available for OCR in this document."))
+        page = self._current_page
+        if page is not None:
+            self._apply_page_status(page)
+        self.viewmodel.retranslate()
+        self._sync_chrome_state()
+
+    def _connect_qml_signals(self) -> None:
+        root = self.chrome_host.rootObject()
+        if root is None:
+            return
+        root.firstRequested.connect(self._go_first)
+        root.previousRequested.connect(self._go_previous)
+        root.nextRequested.connect(self._go_next)
+        root.lastRequested.connect(self._go_last)
+        root.goRequested.connect(self._go_to_page_number)
+        root.runCurrentRequested.connect(self._run_current)
+        root.runPendingRequested.connect(self._run_pending)
+        root.saveRequested.connect(self._save_current)
+        root.cancelRequested.connect(self._cancel_ocr)
+
+    def _sync_chrome_state(self) -> None:
+        page = self._current_page
+        page_count = len(self._state.pages) if self._state is not None else 0
+        page_number = (self._current_page_index + 1) if self._current_page_index is not None else 0
+        self.viewmodel.apply_values(
+            has_pages=page_count > 0,
+            page_number=page_number,
+            page_count=page_count,
+            page_status=page.status if page is not None else None,
+            page_input_value=self.page_spinbox.value(),
+            first_enabled=self.first_button.isEnabled(),
+            previous_enabled=self.prev_button.isEnabled(),
+            next_enabled=self.next_button.isEnabled(),
+            last_enabled=self.last_button.isEnabled(),
+            go_enabled=self.go_button.isEnabled(),
+            run_current_enabled=self.run_current_button.isEnabled(),
+            run_pending_enabled=self.run_pending_button.isEnabled(),
+            save_enabled=self.save_button.isEnabled(),
+            message_text=self.message_label.text() if not self.message_label.isHidden() else "",
+            progress_visible=not self.progress_widget.isHidden(),
+            progress_text=self.progress_widget.message_label.text(),
+            progress_can_cancel=not self.progress_widget.cancel_button.isHidden(),
+            empty_visible=not self.empty_label.isHidden(),
+        )

@@ -210,6 +210,36 @@ def test_work_view_renders_workboard_from_service():
         view.cleanup()
 
 
+def test_work_view_loads_qml_home_chrome_and_routes_setup_signal():
+    blocker = BlockerInfo(
+        code=BlockerCode.NEEDS_SETUP,
+        message="Target language is not configured for this project.",
+        target=NavigationTarget(kind=NavigationTargetKind.PROJECT_SETUP, project_id="proj-1"),
+    )
+    action = DocumentRowAction(
+        kind=DocumentRowActionKind.FIX_SETUP,
+        label="Open Setup",
+        target=NavigationTarget(kind=NavigationTargetKind.PROJECT_SETUP, project_id="proj-1"),
+    )
+    view, _bus, _work_service, _document_service, _terms_service = _make_view(
+        work_state=_make_workboard(action=action, setup_blocker=blocker, summary="Needs setup")
+    )
+    opened: list[bool] = []
+    view.open_project_setup_requested.connect(lambda: opened.append(True))
+    try:
+        root = view.chrome_host.rootObject()
+        assert root is not None
+        assert root.objectName() == "workHomeChrome"
+        assert root.property("contextSummaryText") == "Context ready through 03"
+        assert root.property("hasSetupBlocker") is True
+        assert root.property("selectFilesLabelText") == "Select Files"
+
+        root.setupActionRequested.emit()
+        assert opened == [True]
+    finally:
+        view.cleanup()
+
+
 def test_work_view_routes_setup_blocker_to_project_setup():
     blocker = BlockerInfo(
         code=BlockerCode.NEEDS_SETUP,
@@ -249,7 +279,7 @@ def test_work_view_opens_document_workspace_for_row_target():
         view.rows_table.cellWidget(0, 7).click()
         assert view._document_view is not None
         assert view.stack.currentWidget() is view._document_view
-        assert view._document_view.tab_widget.tabText(view._document_view.tab_widget.currentIndex()) == "Translation"
+        assert view._document_view.current_section() is DocumentSection.TRANSLATION
     finally:
         view.cleanup()
 
@@ -266,7 +296,7 @@ def test_work_view_routes_open_target_to_ocr_tab():
     try:
         view.rows_table.cellWidget(0, 7).click()
         assert view._document_view is not None
-        assert view._document_view.tab_widget.tabText(view._document_view.tab_widget.currentIndex()) == "OCR"
+        assert view._document_view.current_section() is DocumentSection.OCR
     finally:
         view.cleanup()
 

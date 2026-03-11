@@ -1,0 +1,244 @@
+import QtQuick
+
+Rectangle {
+    id: root
+    objectName: "workHomeChrome"
+    color: "#f3efe7"
+    implicitHeight: 278
+
+    signal selectFilesRequested
+    signal selectFolderRequested
+    signal importRequested
+    signal setupActionRequested
+    signal importTypeSelected(string documentType)
+
+    property string tipText: workHome ? workHome.tip_text : ""
+    property string selectFilesLabelText: workHome ? workHome.select_files_label : "Select Files"
+    property string selectFolderLabelText: workHome ? workHome.select_folder_label : "Select Folder"
+    property string importLabelText: workHome ? workHome.import_label : "Import"
+    property string contextSummaryText: workHome ? workHome.context_summary : ""
+    property string contextBlockerText: workHome ? workHome.context_blocker_text : ""
+    property bool hasContextBlocker: workHome ? workHome.has_context_blocker : false
+    property bool hasSetupBlocker: workHome ? workHome.has_setup_blocker : false
+    property string setupMessageText: workHome ? workHome.setup_message : ""
+    property string setupActionLabelText: workHome ? workHome.setup_action_label : ""
+    property string importSummaryText: workHome ? workHome.import_summary : ""
+    property string importMessageText: workHome ? workHome.import_message : ""
+    property string importMessageKind: workHome ? workHome.import_message_kind : ""
+    property bool hasImportMessage: workHome ? workHome.has_import_message : false
+    property bool canImport: workHome ? workHome.can_import : false
+    property bool hasImportTypeOptions: workHome ? workHome.has_import_type_options : false
+    property var importTypeOptions: workHome ? workHome.import_type_options : []
+    property string selectedImportType: workHome ? workHome.selected_import_type : ""
+
+    Rectangle {
+        anchors.fill: parent
+        color: "#f3efe7"
+    }
+
+    Column {
+        anchors.fill: parent
+        anchors.margins: 18
+        spacing: 12
+
+        Text {
+            width: parent.width
+            text: root.tipText
+            color: "#5d5349"
+            font.pixelSize: 13
+            wrapMode: Text.WordWrap
+        }
+
+        Rectangle {
+            width: parent.width
+            radius: 18
+            color: "#fcfaf6"
+            border.color: "#d9d0c4"
+            border.width: 1
+            implicitHeight: importColumn.implicitHeight + 24
+
+            Column {
+                id: importColumn
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 10
+
+                Row {
+                    spacing: 8
+
+                    Repeater {
+                        model: [
+                            { "label": root.selectFilesLabelText, "signalName": "files" },
+                            { "label": root.selectFolderLabelText, "signalName": "folder" },
+                            { "label": root.importLabelText, "signalName": "import" }
+                        ]
+
+                        delegate: Rectangle {
+                            width: modelData.signalName === "import" ? 110 : 126
+                            height: 40
+                            radius: 14
+                            color: modelData.signalName === "import" && !root.canImport ? "#ddd4c8" : "#2f251d"
+                            opacity: modelData.signalName === "import" && !root.canImport ? 0.65 : 1.0
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.label
+                                color: "#fcfaf6"
+                                font.pixelSize: 13
+                                font.bold: true
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                enabled: modelData.signalName !== "import" || root.canImport
+                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                onClicked: {
+                                    if (modelData.signalName === "files") {
+                                        root.selectFilesRequested()
+                                    } else if (modelData.signalName === "folder") {
+                                        root.selectFolderRequested()
+                                    } else {
+                                        root.importRequested()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Row {
+                    visible: root.hasImportTypeOptions
+                    spacing: 8
+
+                    Repeater {
+                        model: root.importTypeOptions
+
+                        delegate: Rectangle {
+                            required property var modelData
+
+                            height: 34
+                            radius: 12
+                            width: choiceLabel.implicitWidth + 24
+                            color: modelData.selected ? "#c79c5d" : "#e8decf"
+
+                            Text {
+                                id: choiceLabel
+                                anchors.centerIn: parent
+                                text: modelData.label
+                                color: modelData.selected ? "#2f251d" : "#5d5349"
+                                font.pixelSize: 12
+                                font.bold: modelData.selected
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.importTypeSelected(modelData.documentType)
+                            }
+                        }
+                    }
+                }
+
+                Text {
+                    width: parent.width
+                    text: root.importSummaryText
+                    color: "#2f251d"
+                    font.pixelSize: 13
+                    wrapMode: Text.WordWrap
+                    elide: Text.ElideMiddle
+                }
+
+                Text {
+                    visible: root.hasImportMessage
+                    width: parent.width
+                    text: root.importMessageText
+                    color: root.importMessageKind === "error" ? "#b42318" : "#027a48"
+                    font.pixelSize: 12
+                    font.bold: true
+                    wrapMode: Text.WordWrap
+                }
+            }
+        }
+
+        Rectangle {
+            width: parent.width
+            radius: 16
+            color: "#fcfaf6"
+            border.color: "#d9d0c4"
+            border.width: 1
+            implicitHeight: contextColumn.implicitHeight + 24
+
+            Column {
+                id: contextColumn
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 6
+
+                Text {
+                    width: parent.width
+                    text: root.contextSummaryText
+                    color: "#2f251d"
+                    font.pixelSize: 14
+                    font.bold: true
+                    wrapMode: Text.WordWrap
+                }
+
+                Text {
+                    visible: root.hasContextBlocker
+                    width: parent.width
+                    text: root.contextBlockerText
+                    color: "#b42318"
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                }
+            }
+        }
+
+        Rectangle {
+            visible: root.hasSetupBlocker
+            width: parent.width
+            radius: 16
+            color: "#fff3e8"
+            border.color: "#f0b27a"
+            border.width: 1
+            implicitHeight: setupRow.implicitHeight + 24
+
+            Row {
+                id: setupRow
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 12
+
+                Text {
+                    width: parent.width - setupButton.width - 24
+                    text: root.setupMessageText
+                    color: "#6b3b11"
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                }
+
+                Rectangle {
+                    id: setupButton
+                    width: 126
+                    height: 38
+                    radius: 14
+                    color: "#6b3b11"
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: root.setupActionLabelText
+                        color: "#fff9f2"
+                        font.pixelSize: 12
+                        font.bold: true
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.setupActionRequested()
+                    }
+                }
+            }
+        }
+    }
+}

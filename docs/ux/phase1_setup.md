@@ -6,16 +6,17 @@ Make setup understandable for non-technical users without throwing away the
 existing step-based config/profile backend.
 
 This phase reframes setup as:
-- `App Setup` for reusable connections and shared workflow profiles
-- `Project Setup` for target language, preset, and choosing either a shared
+
+- `App Settings` for reusable connections and shared workflow profiles
+- `Project Settings` for target language, preset, and choosing either a shared
   workflow profile or a project-specific workflow profile
 
-This is a UX reframing over the current config-profile system, not a new setup
-engine.
+Both settings surfaces are dialogs or panes, not primary shell pages.
 
 ## User Problem
 
 Today the user has to understand too much too early:
+
 - which provider they want
 - where credentials should live
 - which models should be used for each workflow step
@@ -23,6 +24,7 @@ Today the user has to understand too much too early:
 - how raw config sections map to actual product behavior
 
 The redesigned setup must answer only:
+
 - what services the user already has
 - what reusable connections are available
 - which workflow profile will be used
@@ -31,20 +33,22 @@ The redesigned setup must answer only:
 ## Scope
 
 Phase 1 covers:
-- `App Setup` landing page
+
+- app settings dialog and pane
 - provider-first setup wizard
 - connection management
 - capability testing as feedback only
 - recommended workflow profile generation
 - workflow profile editing
-- `Project Setup` landing page
+- project settings dialog and pane
 - shared-profile vs project-profile model
 - advanced setup sections for custom endpoints and explicit model edits
 
 Phase 1 does not cover:
+
 - queue behavior
 - document workspace design
-- shared Terms design
+- shared terms design
 - workflow execution UI outside setup
 - backend storage redesign
 
@@ -55,6 +59,7 @@ Phase 1 does not cover:
 The existing step-based config/profile backend remains the source of truth.
 
 The UX reframes it as:
+
 - **Connection**: saved provider credentials/settings
 - **Workflow Profile**: user-facing wrapper over the existing step-based config payload
 - **Shared Workflow Profile**: reusable app-level profile
@@ -63,7 +68,8 @@ The UX reframes it as:
 The wizard generates a concrete workflow profile. It does not introduce a new
 routing abstraction.
 
-### App Setup owns
+### App Settings owns
+
 - reusable service connections
 - API keys and secrets
 - known-provider defaults
@@ -71,7 +77,8 @@ routing abstraction.
 - shared workflow profiles
 - step-level connection/model routing inside workflow profiles
 
-### Project Setup owns
+### Project Settings owns
+
 - target language
 - project preset
 - selected workflow profile
@@ -80,6 +87,7 @@ routing abstraction.
 ### Precedence
 
 For each workflow step:
+
 1. project-specific workflow profile
 2. shared workflow profile
 3. missing
@@ -89,14 +97,17 @@ For each workflow step:
 Setup still exposes capabilities, but capabilities are summary-only.
 
 Required user-facing capabilities:
+
 - `Translation`
 - `Image text reading`
 - `Image editing`
 
 Optional secondary capability:
+
 - `Reasoning and review`
 
 Capabilities are used for:
+
 - readiness summaries
 - test feedback
 - blocker messaging
@@ -104,25 +115,28 @@ Capabilities are used for:
 Capabilities are not the primary editing surface.
 
 Workflow profiles are used for:
+
 - choosing which connection/model runs each step
 - generating recommended defaults
 - project-specific customization
 
-## App Setup
+## App Settings
 
 ### Purpose
 
-`App Setup` is where users tell the app what services they have and manage the
-shared setup reused across projects.
+`App Settings` is where users tell the app what services they have and manage
+the shared setup reused across projects.
 
 It should feel reusable and global:
+
 - set it up once
 - reuse it across projects
 - edit only when connections or workflow profiles change
 
-### Core Screen: App Setup Landing
+### Core Pane: App Settings
 
 Required areas:
+
 - connection summary
 - workflow profile summary
 - lightweight capability summary
@@ -131,25 +145,28 @@ Required areas:
 - `Workflow profiles` section
 - collapsed `Advanced` section for custom-provider details only
 
-### Core Screen: Provider-First Wizard
+### Provider-First Wizard
 
 The wizard should ask what the user already has, not how they want to design a
 profile.
 
 Wizard steps:
+
 1. choose providers already available
 2. enter API keys
 3. test capabilities
 4. review recommended workflow profile
-5. save app setup
+5. save app settings
 
 Wizard output:
+
 - saved connections
 - a concrete shared workflow profile with explicit step -> connection + model choices
 
 ### Provider Cards
 
 Known providers should have dedicated cards:
+
 - `Gemini`
 - `OpenAI`
 - `DeepSeek`
@@ -157,6 +174,7 @@ Known providers should have dedicated cards:
 - `OpenAI-compatible / Custom`
 
 Rules:
+
 - known providers ask for API key first
 - known providers do not expose base URL in the normal flow
 - known providers auto-pick concrete models by default
@@ -169,6 +187,7 @@ Tests must answer what the configured services can do, not only whether they are
 reachable.
 
 Test results should map to:
+
 - `Translation`
 - `Image text reading`
 - `Image editing`
@@ -182,6 +201,7 @@ editing UI.
 After testing, the app must generate a recommended workflow profile.
 
 Example:
+
 - `OCR / text extraction -> Gemini / gemini-3-flash-preview`
 - `Build terms -> DeepSeek / deepseek-chat`
 - `Summary / context building -> DeepSeek / deepseek-chat`
@@ -193,6 +213,7 @@ Example:
 - `Image reinsertion -> Gemini / gemini-3.1-flash-image-preview`
 
 The user should then choose one of:
+
 - `Use recommended profile`
 - `Edit workflow profile`
 - `Advanced`
@@ -204,6 +225,7 @@ Workflow profiles are the main advanced-friendly setup surface.
 The editor should use the existing real step map, not a capability map.
 
 Required rows:
+
 - `Extractor`
 - `Summarizer`
 - `Glossary translator`
@@ -215,155 +237,76 @@ Required rows:
 - `Translator batch`
 
 Required columns:
+
 - `Step`
 - `Connection`
 - `Model`
 
-Rules:
-- known providers auto-fill concrete models when a row is first generated
-- users may change connection and model manually if needed
-- custom providers may require explicit model entry
-- profiles should be named and reusable
-- no extra source / override / auto-manual columns should be shown
-
-### Advanced in App Setup
-
-Advanced should be collapsed by default.
-
-It may reveal:
-- custom provider endpoint/base URL
-- custom provider model names
-- connection metadata
-- workflow-profile details that are not needed in the default view
-
-Known providers should not expose raw endpoint editing in the normal flow.
-
-## Project Setup
+## Project Settings
 
 ### Purpose
 
-`Project Setup` answers:
-- what language this project targets
-- which quality preset it uses
-- which workflow profile this project uses
+`Project Settings` answers:
 
-### Core Screen: Project Setup Landing
+- what language is this project translating into
+- what quality preset should it use
+- which workflow profile is active
+- does this project need a custom profile or can it reuse a shared one
+
+### Core Pane: Project Settings
 
 Required areas:
+
 - target language
 - project preset
-- selected workflow profile
-- project-ready summary
-- `Use shared profile` affordance
-- `Customize for this project` affordance
-- `Edit project profile` affordance when a project-specific profile exists
-- `Open App Setup` deep link when a required shared connection or profile is missing
-- collapsed `Advanced` section
+- selected workflow profile summary
+- workflow step summary
+- `Use shared profile` / `Customize for this project` actions
+- `Open App Settings` deep link when a required shared connection or profile is missing
+- save action
 
-### Project Setup Profile Selection
+### Project Settings Profile Selection
 
-The primary control is workflow profile selection.
+Project settings should show:
 
-Project Setup should show:
-- selected shared workflow profile
-- short summary of what that profile covers
-- target language
-- preset
-- CTA:
-  - `Use shared profile`
-  - `Customize for this project`
-  - `Edit project profile`
-  - `Open App Setup`
+- the currently selected shared workflow profile
+- whether a project-specific profile exists
+- a short explanation of which profile will win
+- a route summary for important workflow steps
 
-### Project-Specific Profile
+Advanced controls may remain behind a secondary editor or expandable route
+detail surface.
 
-If a project needs different step routing, the user should be able to create a
-project-specific workflow profile by copying the selected shared profile and
-editing it.
+### Interaction Rules
 
-Rules:
-- default behavior is use a shared workflow profile
-- project-specific customization is explicit
-- project-specific profiles remain editable from Project Setup
-- the UI should avoid the word `override` on the main surface
-- project-specific profiles still use the same step table as shared profiles
+- app settings changes remain global
+- project settings changes remain local to the active project
+- missing global dependencies deep-link to app settings instead of sending the
+  user to a separate shell page
+- saving project settings returns the user to `Work`
 
-### Project Setup Interaction Rules
+## Minimum States
 
-- default behavior is use a shared workflow profile
-- project-specific customization is opt-in
-- project setup should not expose raw endpoint editing by default
-- if the needed connection or shared profile does not exist globally, route the
-  user to `App Setup`
-- saving project setup returns the user to `Work`
+App settings needs at least:
 
-## Interaction Rules
+- no connections yet
+- connections saved but no profile
+- recommended profile ready
+- shared profiles present
+- custom provider advanced section open
+- wizard in progress / review / saved
 
-- provider choice comes before endpoint/model choice
-- known-provider setup is key-first, not endpoint-first
-- default setup should auto-pick concrete models for known providers
-- the app must always explain whether a missing piece is app-level or
-  project-level
-- setup should not imply that every project needs a project-specific profile
-- advanced sections should expand in place, not switch the entire app into a
-  different mode
+Project settings needs at least:
 
-## Component Design Package
-
-Components that need dedicated design:
-- app setup landing shell
-- provider card
-- provider selection grid
-- API key entry panel
-- connection test result row
-- workflow profile summary card
-- workflow profile routing table
-- project setup shell
-- profile selector
-- customize-for-project control
-- advanced setup section
-- success / failure state panels
-
-## Required States
-
-App Setup needs at least:
-- no connections
-- one known provider configured
-- mixed providers configured
-- capability coverage partial
-- fully ready
-- custom provider configured
-- test failed
-- recommended workflow profile generated
-- shared workflow profile list with at least one imported legacy profile
-
-Project Setup needs at least:
-- shared profile available
-- no shared profile available
-- project uses shared profile
-- project uses project-specific profile
-- project blocked by missing setup
-- project fully ready
-
-## Design Tasks
-
-1. Wireframe the `App Setup` landing page.
-2. Wireframe the provider-first wizard.
-3. Define the provider card states.
-4. Define capability testing copy and result states.
-5. Define the workflow profile summary and routing table.
-6. Wireframe the `Project Setup` page.
-7. Define shared-profile vs project-profile interactions.
-8. Define the advanced setup sections for custom endpoints and explicit model edits.
-9. Prototype the first-run flow from project -> app setup wizard -> project setup -> work.
+- no valid shared profile available
+- shared profile selected
+- project-specific profile selected
+- missing dependency that requires app settings
+- save completed
 
 ## Acceptance Criteria
 
-- A user can set up common providers without learning endpoints first.
-- A user can understand what the app can and cannot do from capability tests.
-- App-wide connections and shared workflow profiles are visibly distinct from
-  project choices.
-- The app can generate a recommended workflow profile from supplied providers.
-- Project Setup clearly supports either a shared workflow profile or a project-specific workflow profile.
-- Advanced endpoint/model management exists, but does not block normal setup.
-- The spec makes clear that this is a UX reframing over the existing config-profile backend.
+- Users can understand the difference between app-wide reusable setup and project-specific setup.
+- App settings supports both quick-start wizard flows and advanced workflow-profile editing.
+- Project settings clearly supports either a shared workflow profile or a project-specific workflow profile.
+- Settings remain secondary surfaces, not main navigation destinations.

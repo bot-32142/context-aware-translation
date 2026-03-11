@@ -36,7 +36,9 @@ from context_aware_translation.application.events import (
 )
 from context_aware_translation.application.services.terms import TermsService
 from context_aware_translation.ui.features.terms_table_widget import TermsTableWidget
+from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
+from context_aware_translation.ui.viewmodels.terms_pane import TermsPaneViewModel
 
 
 class TermsView(QWidget):
@@ -56,10 +58,16 @@ class TermsView(QWidget):
         self.project_id = project_id
         self.document_id = document_id
         self._embedded = embedded
+        self._use_qml_chrome = (document_id is None and not embedded) or document_id is not None
         self._service = service
         self._state: TermsTableState | None = None
         self._event_bridge: QtApplicationEventBridge | None = None
         self._pending_local_terms_invalidations = 0
+        self.viewmodel = (
+            TermsPaneViewModel(document_scope=self._is_document_scope, embedded=self._embedded, parent=self)
+            if self._use_qml_chrome
+            else None
+        )
         if events is not None:
             self._event_bridge = QtApplicationEventBridge(events, parent=self)
             self._event_bridge.terms_invalidated.connect(self._on_terms_invalidated)
@@ -76,13 +84,22 @@ class TermsView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
+        self.chrome_host: QmlChromeHost | None = None
+        if self._use_qml_chrome:
+            self.chrome_host = QmlChromeHost(
+                "project/terms/TermsPaneChrome.qml",
+                context_objects={"termsPane": self.viewmodel},
+                parent=self,
+            )
+            layout.addWidget(self.chrome_host)
+
         self.title_label = QLabel(self.tr("Terms"))
         self.title_label.setStyleSheet("font-size: 20px; font-weight: 600;")
-        self.title_label.setVisible(not self._embedded)
+        self.title_label.setVisible(not self._embedded and not self._use_qml_chrome)
         layout.addWidget(self.title_label)
 
         self.tip_label = create_tip_label(self._tip_text())
-        self.tip_label.setVisible(not self._embedded)
+        self.tip_label.setVisible(not self._embedded and not self._use_qml_chrome)
         layout.addWidget(self.tip_label)
 
         toolbar_layout = QHBoxLayout()
@@ -103,20 +120,27 @@ class TermsView(QWidget):
 
         self.build_button = QPushButton(self.tr("Build Terms"))
         self.build_button.clicked.connect(self._on_build_terms)
-        self.build_button.setVisible(self._is_document_scope)
-        toolbar_layout.addWidget(self.build_button)
+        self.build_button.setVisible(self._is_document_scope and not self._use_qml_chrome)
+        if self._is_document_scope and not self._use_qml_chrome:
+            toolbar_layout.addWidget(self.build_button)
 
         self.translate_button = QPushButton(self.tr("Translate Untranslated"))
         self.translate_button.clicked.connect(self._on_translate_pending)
-        toolbar_layout.addWidget(self.translate_button)
+        self.translate_button.setVisible(not self._use_qml_chrome)
+        if not self._use_qml_chrome:
+            toolbar_layout.addWidget(self.translate_button)
 
         self.review_button = QPushButton(self.tr("Review Terms"))
         self.review_button.clicked.connect(self._on_review_terms)
-        toolbar_layout.addWidget(self.review_button)
+        self.review_button.setVisible(not self._use_qml_chrome)
+        if not self._use_qml_chrome:
+            toolbar_layout.addWidget(self.review_button)
 
         self.filter_noise_button = QPushButton(self.tr("Filter Rare"))
         self.filter_noise_button.clicked.connect(self._on_filter_noise)
-        toolbar_layout.addWidget(self.filter_noise_button)
+        self.filter_noise_button.setVisible(not self._use_qml_chrome)
+        if not self._use_qml_chrome:
+            toolbar_layout.addWidget(self.filter_noise_button)
 
         self.edit_selected_action = QAction(self.tr("Edit Selected"), self)
         self.edit_selected_action.triggered.connect(self._edit_selected_terms)
@@ -139,15 +163,19 @@ class TermsView(QWidget):
         self.import_button = QPushButton(self.tr("Import Terms"))
         self.import_button.clicked.connect(self._on_import_terms)
         self.import_button.setVisible(not self._is_document_scope)
-        toolbar_layout.addWidget(self.import_button)
+        if not self._is_document_scope and not self._use_qml_chrome:
+            toolbar_layout.addWidget(self.import_button)
 
         self.export_button = QPushButton(self.tr("Export Terms"))
         self.export_button.clicked.connect(self._on_export_terms)
         self.export_button.setVisible(not self._is_document_scope)
-        toolbar_layout.addWidget(self.export_button)
+        if not self._is_document_scope and not self._use_qml_chrome:
+            toolbar_layout.addWidget(self.export_button)
 
         layout.addLayout(toolbar_layout)
         layout.addWidget(self.table_panel, 1)
+        if self._use_qml_chrome:
+            self._connect_qml_signals()
 
     def refresh(self) -> None:
         if self._is_document_scope:
@@ -180,6 +208,8 @@ class TermsView(QWidget):
         self.import_button.setText(self.tr("Import Terms"))
         self.export_button.setText(self.tr("Export Terms"))
         self.table_panel.retranslateUi()
+        if self.viewmodel is not None:
+            self.viewmodel.retranslate()
         if self._state is not None:
             self._apply_toolbar_state(self._state.toolbar)
 
@@ -231,7 +261,29 @@ class TermsView(QWidget):
         self.export_button.setToolTip(
             toolbar.export_blocker.message if toolbar.export_blocker else self.tr("Export terms to a JSON file.")
         )
+        if self.viewmodel is not None:
+            self.viewmodel.apply_toolbar_state(
+                can_build=toolbar.can_build,
+                can_translate=toolbar.can_translate_pending,
+                can_review=toolbar.can_review,
+                can_filter=toolbar.can_filter_noise,
+                can_import=toolbar.can_import,
+                can_export=toolbar.can_export,
+            )
         self._update_bulk_button_state()
+
+    def _connect_qml_signals(self) -> None:
+        if self.chrome_host is None:
+            return
+        root = self.chrome_host.rootObject()
+        if root is None:
+            return
+        root.buildRequested.connect(self._on_build_terms)
+        root.translateRequested.connect(self._on_translate_pending)
+        root.reviewRequested.connect(self._on_review_terms)
+        root.filterRequested.connect(self._on_filter_noise)
+        root.importRequested.connect(self._on_import_terms)
+        root.exportRequested.connect(self._on_export_terms)
 
     def _on_build_terms(self) -> None:
         if self.document_id is None:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -28,7 +28,9 @@ from context_aware_translation.application.contracts.document import (
 )
 from context_aware_translation.application.errors import ApplicationError, BlockedOperationError
 from context_aware_translation.application.services.document import DocumentService
+from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
+from context_aware_translation.ui.viewmodels.document_translation_pane import DocumentTranslationPaneViewModel
 
 _STATUS_TEXT: dict[SurfaceStatus, str] = {
     SurfaceStatus.READY: "Ready",
@@ -62,6 +64,7 @@ class DocumentTranslationView(QWidget):
         self._service = service
         self._project_id = project_id
         self._document_id = document_id
+        self.viewmodel = DocumentTranslationPaneViewModel(self)
         self._state: DocumentTranslationState | None = None
         self._find_pos = 0
         self._init_ui()
@@ -70,28 +73,30 @@ class DocumentTranslationView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
+        self.chrome_host = QmlChromeHost(
+            "document/translation/DocumentTranslationPaneChrome.qml",
+            context_objects={"translationPane": self.viewmodel},
+            parent=self,
+        )
+        layout.addWidget(self.chrome_host)
         self.tip_label = create_tip_label(
             self.tr("Translation review is scoped to this document only. Saving edits does not trigger hidden reruns."),
         )
-        layout.addWidget(self.tip_label)
-
+        self.tip_label.hide()
         self.progress_label = QLabel()
         self.progress_label.setStyleSheet("color: #666666;")
-        layout.addWidget(self.progress_label)
+        self.progress_label.hide()
 
-        top_actions = QHBoxLayout()
         self.enable_polish_cb = QCheckBox(self.tr("Enable polish pass"))
         self.enable_polish_cb.setChecked(True)
         self.enable_polish_cb.toggled.connect(self.refresh)
-        top_actions.addWidget(self.enable_polish_cb)
+        self.enable_polish_cb.hide()
         self.translate_button = QPushButton(self.tr("Translate"))
         self.translate_button.clicked.connect(self._translate_document)
-        top_actions.addWidget(self.translate_button)
+        self.translate_button.hide()
         self.batch_translate_button = QPushButton(self.tr("Submit Batch Task"))
         self.batch_translate_button.clicked.connect(self._submit_batch_translation)
-        top_actions.addWidget(self.batch_translate_button)
-        top_actions.addStretch()
-        layout.addLayout(top_actions)
+        self.batch_translate_button.hide()
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
@@ -177,6 +182,8 @@ class DocumentTranslationView(QWidget):
         splitter.addWidget(right_panel)
         splitter.setSizes([260, 740])
         layout.addWidget(splitter, 1)
+        self._connect_qml_signals()
+        self._sync_chrome_state()
 
     def refresh(self) -> None:
         previous_unit_id = self._selected_unit_id()
@@ -188,6 +195,7 @@ class DocumentTranslationView(QWidget):
             ),
             previous_unit_id=previous_unit_id,
         )
+        self._sync_chrome_state()
 
     def get_running_operations(self) -> list[str]:
         if self._state is None or self._state.active_task_id is None:
@@ -219,6 +227,7 @@ class DocumentTranslationView(QWidget):
             self._render_selected_unit(state.units[selected_row])
         else:
             self._render_selected_unit(None)
+        self._sync_chrome_state()
 
     def _on_unit_selected(self, row: int) -> None:
         if self._state is None or row < 0 or row >= len(self._state.units):
@@ -239,6 +248,7 @@ class DocumentTranslationView(QWidget):
             self.retranslate_button.setEnabled(False)
             self.previous_button.setEnabled(False)
             self.next_button.setEnabled(False)
+            self._sync_chrome_state()
             return
 
         self._find_pos = 0
@@ -264,6 +274,7 @@ class DocumentTranslationView(QWidget):
         else:
             self.line_hint.hide()
         self._update_navigation_buttons()
+        self._sync_chrome_state()
 
     def _selected_unit(self) -> TranslationUnitState | None:
         if self._state is None:
@@ -409,6 +420,7 @@ class DocumentTranslationView(QWidget):
         }.get(severity, "#2563eb")
         self.progress_label.setStyleSheet(f"color: {color};")
         self.progress_label.setText(text)
+        self._sync_chrome_state()
 
     def _row_text(self, unit: TranslationUnitState) -> str:
         return f"{_STATUS_ICON[unit.status]} {unit.label}"
@@ -477,6 +489,53 @@ class DocumentTranslationView(QWidget):
 
     def _clear_find_highlight(self) -> None:
         self.translation_text.setExtraSelections([])
+
+    def changeEvent(self, event: QEvent) -> None:
+        if event.type() == QEvent.Type.LanguageChange:
+            self.retranslateUi()
+        super().changeEvent(event)
+
+    def retranslateUi(self) -> None:
+        self.tip_label.setText(
+            self.tr("Translation review is scoped to this document only. Saving edits does not trigger hidden reruns."),
+        )
+        self.enable_polish_cb.setText(self.tr("Enable polish pass"))
+        self.translate_button.setText(self.tr("Translate"))
+        self.batch_translate_button.setText(self.tr("Submit Batch Task"))
+        self.source_label.setText(self.tr("Source"))
+        self.translation_label.setText(self.tr("Translation"))
+        self.find_input.setPlaceholderText(self.tr("Find..."))
+        self.replace_input.setPlaceholderText(self.tr("Replace with..."))
+        self.find_next_button.setText(self.tr("Find Next"))
+        self.replace_button.setText(self.tr("Replace"))
+        self.replace_all_button.setText(self.tr("Replace All"))
+        self.save_button.setText(self.tr("Save"))
+        self.retranslate_button.setText(self.tr("Retranslate"))
+        self.previous_button.setText("\u2190 " + self.tr("Previous"))
+        self.next_button.setText(self.tr("Next") + " \u2192")
+        self.viewmodel.retranslate()
+        self._sync_chrome_state()
+
+    def _connect_qml_signals(self) -> None:
+        root = self.chrome_host.rootObject()
+        if root is None:
+            return
+        root.polishToggled.connect(self._on_polish_toggled)
+        root.translateRequested.connect(self._translate_document)
+        root.batchRequested.connect(self._submit_batch_translation)
+
+    def _on_polish_toggled(self, enabled: bool) -> None:
+        self.enable_polish_cb.setChecked(enabled)
+        self._sync_chrome_state()
+
+    def _sync_chrome_state(self) -> None:
+        self.viewmodel.apply_state(
+            progress_text=self.progress_label.text().strip(),
+            polish_enabled=self.enable_polish_cb.isChecked(),
+            can_translate=self.translate_button.isEnabled(),
+            supports_batch=self.batch_translate_button.isVisible(),
+            can_batch=self.batch_translate_button.isEnabled(),
+        )
 
 
 __all__ = ["DocumentTranslationView"]

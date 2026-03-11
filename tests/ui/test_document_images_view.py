@@ -135,32 +135,41 @@ def test_document_images_view_renders_backend_state_and_runs_actions():
     view = DocumentImagesView("proj-1", 4, service)
     try:
         view.refresh()
+        root = view.chrome_host.rootObject()
 
+        assert root is not None
+        assert root.objectName() == "documentImagesPaneChrome"
+        assert root.property("pageLabelText") == "Image 1 of 2"
+        assert root.property("statusText") == "Pending"
+        assert root.property("runSelectedEnabled") is True
+        assert root.property("runPendingEnabled") is True
+        assert root.property("forceAllEnabled") is True
         assert view.page_label.text() == "Image 1 of 2"
         assert view.status_label.text() == "Pending"
         assert view.text_panel.toPlainText() == "Everyone, get down now!!!"
         assert view.run_selected_button.isEnabled()
         assert view.run_pending_button.isEnabled()
         assert view.force_all_button.isEnabled()
-        assert not view.progress_widget.isVisible()
+        assert root.property("progressVisible") is False
         assert not view.toggle_button.isEnabled()
         assert view.toggle_button.text() == "Show Image"
+        assert root.property("toggleLabelText") == "Show Image"
 
-        view.run_selected_button.click()
+        root.runSelectedRequested.emit()
         selected_request = next(payload for name, payload in service.calls if name == "run_image_reinsertion")
         assert selected_request.source_id == 101
         assert selected_request.force_all is True
 
-        view.run_pending_button.click()
+        root.runPendingRequested.emit()
         pending_request = [payload for name, payload in service.calls if name == "run_image_reinsertion"][1]
         assert pending_request.source_id is None
         assert pending_request.force_all is False
 
-        view.force_all_button.click()
+        root.forceAllRequested.emit()
         force_request = [payload for name, payload in service.calls if name == "run_image_reinsertion"][2]
         assert force_request.source_id is None
         assert force_request.force_all is True
-        assert view.message_label.text() == "Queued."
+        assert root.property("messageText") == "Queued."
     finally:
         view.deleteLater()
 
@@ -180,13 +189,15 @@ def test_document_images_view_cancels_active_task():
     view = DocumentImagesView("proj-1", 4, service)
     try:
         view.refresh()
+        root = view.chrome_host.rootObject()
 
-        assert not view.progress_widget.isHidden()
-        assert not view.progress_widget.cancel_button.isHidden()
-        assert view.progress_widget.message_label.text() == "apply"
         assert view.get_running_operations() == ["Put text back into images"]
+        assert root is not None
+        assert root.property("progressVisible") is True
+        assert root.property("progressCanCancel") is True
+        assert root.property("progressText") == "apply"
 
-        view.progress_widget.cancel_button.click()
+        root.cancelRequested.emit()
         assert ("cancel_image_reinsertion", ("proj-1", "task-1")) in service.calls
     finally:
         view.deleteLater()
@@ -205,11 +216,14 @@ def test_document_images_view_uses_embedded_bytes_and_shows_reembedded_first():
     try:
         view.refresh()
         view._go_next()
+        root = view.chrome_host.rootObject()
 
         assert view.status_label.text() == "Reembedded"
         assert view.right_label.text() == "Reembedded"
-        assert view.toggle_button.isEnabled()
-        assert view.toggle_button.text() == "Show Text"
+        assert root is not None
+        assert root.property("statusText") == "Reembedded"
+        assert root.property("toggleEnabled") is True
+        assert root.property("toggleLabelText") == "Show Text"
         assert not any(name == "get_ocr_page_image" and payload[2] == 102 for name, payload in service.calls)
     finally:
         view.deleteLater()
@@ -303,12 +317,14 @@ def test_document_images_view_routes_setup_blocker_and_document_workspace_forwar
     workspace.open_app_setup_requested.connect(lambda: requested.append("app"))
     try:
         workspace.show_section(DocumentSection.IMAGES)
-        images_tab = workspace.tab_widget.currentWidget()
+        images_tab = workspace.section_widget(DocumentSection.IMAGES)
         assert images_tab is not None
-        assert not images_tab.blocker_strip.isHidden()
-        assert images_tab.blocker_action_button.text() == "Open App Setup"
+        root = images_tab.chrome_host.rootObject()
+        assert root is not None
+        assert root.property("blockerText") == "Image editing needs a shared connection in App Setup."
+        assert root.property("blockerActionLabelText") == "Open App Setup"
 
-        images_tab.blocker_action_button.click()
+        root.blockerActionRequested.emit()
         assert requested == ["app"]
     finally:
         workspace.cleanup()

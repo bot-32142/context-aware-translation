@@ -93,11 +93,11 @@ Core package for LLM-powered document translation with context-aware glossary ma
 - Token tracking via `TokenTracker`
 
 **PySide6 UI:**
-- Main window navigation via `QListWidget` sidebar
-- Stacked widget for view switching
-- Translation strings in `.ts` / `.qm` files (zh_CN)
-- Workers for long-running operations (glossary extraction, OCR, translation)
-- Task status monitoring via `TaskStatusCard` and `TaskActivityPanel`
+- App/project/document chrome is migrating to hybrid QML hosts under `ui/qml/`, `ui/viewmodels/`, and `ui/shell_hosts/`
+- `MainWindow` is moving toward composition and lifetime management; shell policy should live in hosts/viewmodels instead of widget-local navigation code
+- Translation strings live in `.ts` / `.qm` files (zh_CN), and QML-backed chrome still depends on the same Qt translation pipeline
+- Workers handle long-running operations (glossary extraction, OCR, translation)
+- Task status monitoring still flows through `TaskStatusCard`, `TaskActivityPanel`, and the queue drawer surfaces
 
 **Task Execution:**
 - Pure-Python `EngineCore` in `workflow/tasks/engine_core.py`

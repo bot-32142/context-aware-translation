@@ -84,6 +84,12 @@ def test_document_translation_view_renders_units_and_routes_actions():
     view = DocumentTranslationView(service, "proj-1", 4)
     try:
         view.refresh()
+        root = view.chrome_host.rootObject()
+        assert root is not None
+        assert root.objectName() == "documentTranslationPaneChrome"
+        assert root.property("translateLabelText") == "Translate"
+        assert root.property("canTranslate") is True
+        assert root.property("supportsBatch") is True
         assert view.unit_list.count() == 2
         assert view.translate_button.isEnabled()
         assert view.batch_translate_button.isEnabled()
@@ -95,9 +101,9 @@ def test_document_translation_view_renders_units_and_routes_actions():
 
         view.translation_text.setPlainText("One\nTwo updated")
         view.save_button.click()
-        view.translate_button.click()
-        view.enable_polish_cb.setChecked(False)
-        view.batch_translate_button.click()
+        root.translateRequested.emit()
+        root.polishToggled.emit(False)
+        root.batchRequested.emit()
 
         with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
             view.retranslate_button.click()

@@ -7,13 +7,14 @@ a task console.
 
 ## User Problem
 
-Background actions matter, but non-technical users should not have to manage
-tasks to operate the app. They only need to understand progress, blockers, and
-what is safe to do next.
+Background actions matter, but most users only need to understand progress,
+blockers, and what is safe to do next. Queue should stay visible and actionable
+without becoming the primary shell.
 
 ## Scope
 
 Phase 3 covers:
+
 - queue drawer shell
 - queue item display model
 - status language
@@ -21,24 +22,28 @@ Phase 3 covers:
 - task actions and escalation to details
 
 Phase 3 does not cover:
-- Work home itself
+
+- work-home layout
 - document editing surfaces
-- setup flow design
+- app/project settings content design
 
 ## Core Surface
 
 ### Queue Drawer
 
 Purpose:
+
 - show what is running, queued, blocked, failed, or done
 - provide explicit control over background actions
 - explain task state in human language
 
-The drawer should be accessible globally but remain secondary to the Work home.
+The drawer should be accessible from app or project chrome but remain
+secondary to `Work`.
 
 ## Queue Item Model
 
 Each queue item should show:
+
 - user-facing action title
 - related document or project scope
 - status
@@ -48,6 +53,7 @@ Each queue item should show:
 - actions
 
 Allowed actions:
+
 - `Run`
 - `Cancel`
 - `Retry`
@@ -55,15 +61,17 @@ Allowed actions:
 - `Open related item`
 
 `Open related item` should route to one of:
+
 - the related document row in `Work`
-- the related document tab (`OCR`, `Terms`, `Translation`, `Images`, `Export`)
+- the related document section (`OCR`, `Terms`, `Translation`, `Images`, `Export`)
 - top-level `Terms` when the issue is truly shared
-- project `Setup` when the issue is project-scoped configuration
-- `App Setup` when the issue is missing or broken global connections
+- the project settings dialog when the issue is project-scoped configuration
+- the app settings dialog when the issue is missing or broken global connections
 
 ## Status Language
 
 Use these statuses:
+
 - `Running`
 - `Queued`
 - `Blocked`
@@ -76,7 +84,8 @@ details area.
 
 ## Blocker Language
 
-Queue blockers should use the same high-level taxonomy as Work:
+Queue blockers should use the same high-level taxonomy as `Work`:
+
 - needs setup
 - needs earlier document first
 - already running elsewhere
@@ -88,10 +97,9 @@ message.
 
 ## Notification Model
 
-This phase must also define how the app notifies users of status changes.
-
 Use:
-- inline issue summaries on Work
+
+- inline issue summaries on `Work`
 - lightweight toasts for completion or failure
 - queue drawer for deep inspection
 
@@ -100,6 +108,7 @@ Do not require modal dialogs for routine task completions.
 ## Component Design Package
 
 Components that need dedicated design:
+
 - queue drawer shell
 - queue section header
 - queue item row
@@ -113,6 +122,7 @@ Components that need dedicated design:
 ## Required States
 
 Queue items need at least:
+
 - queued
 - running with progress
 - running without progress
@@ -122,6 +132,7 @@ Queue items need at least:
 - cancelled
 
 The drawer needs:
+
 - empty
 - active only
 - mixed history
@@ -131,14 +142,13 @@ The drawer needs:
 
 1. Wireframe the queue drawer.
 2. Design the queue item row and all statuses.
-3. Define how a user opens related Work, Document, Terms, Project Setup, or App Setup targets from the queue.
+3. Define how a user opens related `Work`, document, `Terms`, project settings, or app settings targets from the queue.
 4. Define the notification model for routine completions and failures.
-5. Prototype the drawer on top of the Work home.
+5. Prototype the drawer against the current shell chrome.
 
 ## Acceptance Criteria
 
-- A user can understand what is happening in the background without learning the
-  task engine.
+- A user can understand what is happening in the background without learning the task engine.
 - Queue visibility does not overwhelm the default shell.
 - Failures and blockers are understandable and actionable.
 - Advanced operational detail is available without taking over the main UI.

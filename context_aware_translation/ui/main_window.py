@@ -1,16 +1,11 @@
-"""Main application window with sidebar navigation."""
+"""Main application window with QML app and project shell chrome."""
 
-from PySide6.QtCore import QEvent, QSettings, Qt, QTimer
+from PySide6.QtCore import QEvent, QSettings, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
-    QDockWidget,
-    QHBoxLayout,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
     QMessageBox,
-    QStackedWidget,
     QStatusBar,
     QWidget,
 )
@@ -19,7 +14,6 @@ from context_aware_translation.adapters.qt.application_event_bridge import QtApp
 from context_aware_translation.application.composition import build_application_context
 from context_aware_translation.application.contracts.common import (
     NavigationTarget,
-    NavigationTargetKind,
     UserMessage,
     UserMessageSeverity,
 )
@@ -30,21 +24,32 @@ from context_aware_translation.ui.constants import (
     DEFAULT_WINDOW_WIDTH,
     MIN_WINDOW_HEIGHT,
     MIN_WINDOW_WIDTH,
-    SIDEBAR_WIDTH,
 )
-from context_aware_translation.ui.features.app_setup_view import AppSetupView
+from context_aware_translation.ui.features.app_settings_pane import AppSettingsPane
 from context_aware_translation.ui.features.library_view import LibraryView
-from context_aware_translation.ui.features.project_setup_view import ProjectSetupView
-from context_aware_translation.ui.features.project_shell_view import ProjectShellView
+from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
 from context_aware_translation.ui.features.queue_drawer_view import QueueDrawerView
 from context_aware_translation.ui.features.terms_view import TermsView
 from context_aware_translation.ui.features.work_view import WorkView
 from context_aware_translation.ui.i18n import qarg
+from context_aware_translation.ui.shell_hosts.app_settings_dialog_host import AppSettingsDialogHost
+from context_aware_translation.ui.shell_hosts.app_shell_host import AppShellHost
+from context_aware_translation.ui.shell_hosts.project_settings_dialog_host import ProjectSettingsDialogHost
+from context_aware_translation.ui.shell_hosts.project_shell_host import ProjectShellHost
+from context_aware_translation.ui.shell_hosts.queue_shell_host import QueueShellHost
 from context_aware_translation.ui.sleep_inhibitor import SleepInhibitor
+from context_aware_translation.ui.viewmodels.router import ModalRoute, PrimaryRoute, route_state_from_navigation_target
+from context_aware_translation.ui.window_controllers import (
+    ProjectSessionManager,
+    QueueDockController,
+    cleanup_widget,
+    request_cancel_for,
+    running_operations_for,
+)
 
 
 class MainWindow(QMainWindow):
-    """Main application window with sidebar navigation."""
+    """Main application window with QML app shell chrome."""
 
     def __init__(self) -> None:
         """Initialize the main window."""
@@ -58,12 +63,9 @@ class MainWindow(QMainWindow):
         # Current project state
         self._current_book_id: str | None = None
         self._current_book_name: str | None = None
-        self._book_nav_item: QListWidgetItem | None = None
+        self._project_settings_dialog = None
         self._is_closing = False
 
-        # Navigation items (store for retranslation)
-        self._library_nav_item: QListWidgetItem | None = None
-        self._profiles_nav_item: QListWidgetItem | None = None
         self._sleep_inhibitor = SleepInhibitor()
 
         # Initialize the application composition root and bridge application events.
@@ -92,70 +94,56 @@ class MainWindow(QMainWindow):
 
     def _init_ui(self) -> None:
         """Initialize the main UI layout."""
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QHBoxLayout(central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
+        self._app_shell = AppShellHost(self)
+        self._app_shell.projects_requested.connect(self._show_projects_surface)
+        self._app_shell.close_project_requested.connect(self._show_projects_surface)
+        self._app_shell.app_settings_requested.connect(self._open_app_setup)
+        self._app_shell.queue_requested.connect(self._on_queue_requested)
+        self.setCentralWidget(self._app_shell)
 
-        self._nav_list = QListWidget()
-        self._nav_list.setFixedWidth(SIDEBAR_WIDTH)
-        self._nav_list.setStyleSheet(
-            """
-            QListWidget {
-                background-color: #f5f5f5;
-                color: #333333;
-                border: none;
-                border-right: 1px solid #e0e0e0;
-            }
-            QListWidget::item {
-                padding: 12px;
-                border-bottom: 1px solid #e0e0e0;
-                color: #333333;
-            }
-            QListWidget::item:hover {
-                background-color: #e8e8e8;
-                color: #333333;
-            }
-            QListWidget::item:selected {
-                background-color: #3b82f6;
-                color: white;
-            }
-        """
+        self._project_sessions = ProjectSessionManager(
+            parent_window=self,
+            app_shell=self._app_shell,
+            services=self._app_context.services,
+            events=self._app_context.events,
+            work_view_factory=WorkView,
+            terms_view_factory=TermsView,
+            project_settings_pane_factory=ProjectSettingsPane,
+            project_shell_factory=ProjectShellHost,
+            project_shell_type=ProjectShellHost,
+            project_settings_dialog_factory=ProjectSettingsDialogHost,
+            show_projects_surface_callback=self._show_projects_surface,
+            queue_requested_callback=self._on_queue_requested,
+            open_app_setup_callback=self._open_app_setup,
+            project_setup_saved_callback=self._on_project_setup_saved,
         )
-        self._nav_list.currentItemChanged.connect(self._on_nav_changed)
-
-        self._library_nav_item = QListWidgetItem(self.tr("Projects"))
-        self._library_nav_item.setData(Qt.ItemDataRole.UserRole, "projects")
-        self._nav_list.addItem(self._library_nav_item)
-
-        self._profiles_nav_item = QListWidgetItem(self.tr("App Setup"))
-        self._profiles_nav_item.setData(Qt.ItemDataRole.UserRole, "app_setup")
-        self._nav_list.addItem(self._profiles_nav_item)
-
-        self._stack = QStackedWidget()
+        self._sync_project_session_state()
 
         self.projects_view = LibraryView(self._app_context.services.projects)
         self.projects_view.book_opened.connect(self._on_book_opened)
         self.register_view("projects", self.projects_view)
 
-        self.app_setup_view = AppSetupView(self._app_context.services.app_setup)
-        self.register_view("app_setup", self.app_setup_view)
+        self.app_setup_view = AppSettingsPane(self._app_context.services.app_setup)
+        self._app_settings_dialog = AppSettingsDialogHost(self)
+        self._app_settings_dialog.set_app_settings_widget(self.app_setup_view)
+        self._app_settings_dialog.finished.connect(lambda _result: self._app_shell.dismiss_modal())
 
-        main_layout.addWidget(self._nav_list)
-        main_layout.addWidget(self._stack, 1)
+        self._queue_controller = QueueDockController(
+            parent_window=self,
+            app_shell=self._app_shell,
+            queue_service=self._app_context.services.queue,
+            events=self._app_context.events,
+            drawer_factory=QueueDrawerView,
+            shell_factory=QueueShellHost,
+            open_navigation_target_callback=self._open_navigation_target,
+            notification_callback=self._on_queue_notification,
+            title_text=lambda: self.tr("Queue"),
+        )
+        self._queue_drawer = self._queue_controller.queue_drawer
+        self._queue_shell = self._queue_controller.queue_shell
+        self._queue_dock = self._queue_controller.dock
 
-        self._queue_drawer = QueueDrawerView(self._app_context.services.queue, self._app_context.events, parent=self)
-        self._queue_drawer.open_related_item_requested.connect(self._open_navigation_target)
-        self._queue_drawer.notification_requested.connect(self._on_queue_notification)
-        self._queue_dock = QDockWidget(self.tr("Queue"), self)
-        self._queue_dock.setObjectName("queueDrawerDock")
-        self._queue_dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea)
-        self._queue_dock.setWidget(self._queue_drawer)
-        self._queue_dock.hide()
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._queue_dock)
-
-        self._nav_list.setCurrentRow(0)
+        self._app_shell.show_projects_view()
 
     def _init_menu_bar(self) -> None:
         """Initialize the menu bar."""
@@ -167,6 +155,10 @@ class MainWindow(QMainWindow):
         self._open_data_action = QAction(self.tr("Open &Data Folder"), self)
         self._open_data_action.triggered.connect(self._on_open_data_folder)
         self._file_menu.addAction(self._open_data_action)
+
+        self._app_settings_action = QAction(self.tr("App &Settings"), self)
+        self._app_settings_action.triggered.connect(self._open_app_setup)
+        self._file_menu.addAction(self._app_settings_action)
 
         self._language_menu = menubar.addMenu(self.tr("&Language"))
         self._language_group = QActionGroup(self)
@@ -230,34 +222,26 @@ class MainWindow(QMainWindow):
         self._sleep_inhibitor.release()
 
     def _current_project_view_name(self) -> str | None:
-        if self._current_book_id is None:
-            return None
-        project_view_name = f"project_{self._current_book_id}"
-        return project_view_name if project_view_name in self._view_registry else None
+        return self._project_sessions.current_project_view_name()
 
     def _current_project_widget(self) -> QWidget | None:
-        view_name = self._current_project_view_name()
-        return self._view_registry.get(view_name) if view_name is not None else None
+        return self._project_sessions.current_project_widget()
+
+    def _current_project_shell(self) -> ProjectShellHost | None:
+        shell = self._project_sessions.current_project_shell()
+        return shell if isinstance(shell, ProjectShellHost) else None
 
     @staticmethod
     def _running_operations_for(widget: object) -> list[str]:
-        get_running_operations = getattr(widget, "get_running_operations", None)
-        if not callable(get_running_operations):
-            return []
-        running = get_running_operations()
-        return running if isinstance(running, list) else []
+        return running_operations_for(widget)
 
     @staticmethod
     def _request_cancel_for(widget: object) -> None:
-        request_cancel = getattr(widget, "request_cancel_running_operations", None)
-        if callable(request_cancel):
-            request_cancel(include_engine_tasks=False)
+        request_cancel_for(widget)
 
     @staticmethod
     def _cleanup_widget(widget: object) -> None:
-        cleanup = getattr(widget, "cleanup", None)
-        if callable(cleanup):
-            cleanup()
+        cleanup_widget(widget)
 
     def _get_book_running_operations(self) -> list[str]:
         """Return running operations in the current project shell."""
@@ -287,32 +271,6 @@ class MainWindow(QMainWindow):
             QMessageBox.StandardButton.Cancel,
         )
         return result == QMessageBox.StandardButton.Ok
-
-    def _on_nav_changed(self, current: QListWidgetItem | None, _previous: QListWidgetItem | None) -> None:
-        """Handle navigation item change."""
-        if getattr(self, "_is_closing", False):
-            return
-
-        if current is None:
-            return
-
-        view_name = current.data(Qt.ItemDataRole.UserRole)
-        if not view_name or not isinstance(view_name, str):
-            return
-
-        current_project_view = self._current_project_view_name()
-        is_navigating_away_from_project = self._current_book_id is not None and view_name != current_project_view
-        running_operations = self._get_book_running_operations()
-        if is_navigating_away_from_project and running_operations:
-            if not self._warn_running_operations(running_operations):
-                self._nav_list.blockSignals(True)
-                self._nav_list.setCurrentItem(self._book_nav_item)
-                self._nav_list.blockSignals(False)
-                return
-            if current_project_view is not None:
-                MainWindow._request_cancel_for(self._view_registry.get(current_project_view))
-
-        self.switch_view(view_name)
 
     def _on_open_data_folder(self) -> None:
         """Open the data folder in the system file manager."""
@@ -350,90 +308,31 @@ class MainWindow(QMainWindow):
         self.open_project(book_id, book_name)
 
     def register_view(self, name: str, widget: QWidget) -> None:
-        """Register a view widget with the stacked widget."""
-        self._stack.addWidget(widget)
-        self._view_registry[name] = widget
+        """Register a view widget with the app shell host."""
+        self._project_sessions.register_view(name, widget)
+        self._sync_project_session_state()
 
     def switch_view(self, view_name: str) -> None:
-        """Switch to a registered view."""
-        if view_name not in self._view_registry:
+        """Switch to a registered view through the app shell host."""
+        if not self._project_sessions.switch_view(view_name):
             self.show_status(qarg(self.tr("View '%1' not found"), view_name), 3000)
-            return
-
-        widget = self._view_registry[view_name]
-        self._stack.setCurrentWidget(widget)
 
     def open_project(self, book_id: str, book_name: str) -> None:
-        """Open a project shell and add it to navigation."""
+        """Open a project shell through the app shell host."""
         self.close_book()
-
-        self._current_book_id = book_id
-        self._current_book_name = book_name
-
-        project_item = QListWidgetItem(qarg(self.tr("Project: %1"), book_name))
-        project_item.setData(Qt.ItemDataRole.UserRole, f"project_{book_id}")
-        self._nav_list.addItem(project_item)
-        self._book_nav_item = project_item
-
-        work_view = WorkView(
-            book_id,
-            self._app_context.services.work,
-            self._app_context.services.document,
-            self._app_context.services.terms,
-            self._app_context.events,
-        )
-        terms_view = TermsView(
-            book_id,
-            self._app_context.services.terms,
-            self._app_context.events,
-        )
-        setup_view = ProjectSetupView(
-            book_id,
-            self._app_context.services.project_setup,
-            self._app_context.events,
-        )
-        project_shell = ProjectShellView(
-            project_id=book_id,
-            project_name=book_name,
-            work_widget=work_view,
-            terms_widget=terms_view,
-            setup_widget=setup_view,
-        )
-        project_shell.close_requested.connect(self.close_book)
-        project_shell.queue_requested.connect(self._on_queue_requested)
-        work_view.open_app_setup_requested.connect(self._open_app_setup)
-        work_view.open_project_setup_requested.connect(project_shell.show_setup)
-        setup_view.open_app_setup_requested.connect(self._open_app_setup)
-        setup_view.save_completed.connect(lambda _project_id: self._on_project_setup_saved(project_shell))
-        self.register_view(f"project_{book_id}", project_shell)
-
-        self._nav_list.setCurrentItem(project_item)
+        self._project_sessions.open_project(book_id, book_name)
+        self._sync_project_session_state()
         self.show_status(qarg(self.tr("Opened project: %1"), book_name))
 
     def close_book(self) -> None:
-        """Close the current project shell and remove it from navigation."""
-        if self._current_book_id is None:
+        """Close the current project shell and return to projects."""
+        if self._project_sessions.current_project_id is None:
+            self._app_shell.show_projects_view()
             return
 
-        book_name = self._current_book_name
-        view_name = self._current_project_view_name() or f"project_{self._current_book_id}"
-
-        if self._book_nav_item is not None:
-            row = self._nav_list.row(self._book_nav_item)
-            self._nav_list.takeItem(row)
-            self._book_nav_item = None
-
-        if view_name in self._view_registry:
-            widget = self._view_registry.pop(view_name)
-            MainWindow._cleanup_widget(widget)
-            self._stack.removeWidget(widget)
-            widget.deleteLater()
-
-        self._current_book_id = None
-        self._current_book_name = None
-        self._nav_list.setCurrentRow(0)
-        if self._queue_dock.isVisible():
-            self._queue_drawer.set_scope(None)
+        book_name = self._project_sessions.close_current_project()
+        self._sync_project_session_state()
+        self._queue_controller.clear_if_visible()
 
         if book_name:
             self.show_status(qarg(self.tr("Closed project: %1"), book_name))
@@ -445,64 +344,86 @@ class MainWindow(QMainWindow):
         self.app_setup_view.refresh()
 
     def _open_app_setup(self) -> None:
-        if self._profiles_nav_item is not None:
-            self._nav_list.setCurrentItem(self._profiles_nav_item)
+        self._app_shell.present_app_settings()
+        self.app_setup_view.refresh()
+        self._app_settings_dialog.retranslate()
+        self._app_settings_dialog.present()
 
-    def _on_project_setup_saved(self, shell: ProjectShellView) -> None:
-        shell.show_work()
+    def _destroy_project_settings_dialog(self) -> None:
+        self._project_sessions.destroy_project_settings_dialog()
+        self._sync_project_session_state()
+
+    def _open_project_settings(self, shell: ProjectShellHost) -> None:
+        self._project_sessions.open_project_settings(shell)
+        self._sync_project_session_state()
+
+    def _on_project_setup_saved(self, shell: ProjectShellHost) -> None:
+        self._project_sessions.on_project_setup_saved(shell)
+        self._sync_project_session_state()
         self.show_status(self.tr("Project setup saved."), 3000)
 
     def _on_queue_requested(self) -> None:
         self._open_queue_drawer(project_id=self._current_book_id, project_name=self._current_book_name)
 
     def _open_queue_drawer(self, *, project_id: str | None, project_name: str | None = None) -> None:
-        self._queue_drawer.set_scope(project_id, project_name=project_name)
-        self._queue_dock.setWindowTitle(self.tr("Queue"))
-        self._queue_dock.show()
-        self._queue_dock.raise_()
+        self._queue_controller.open(project_id=project_id, project_name=project_name)
+
+    def _on_queue_visibility_changed(self, visible: bool) -> None:
+        self._queue_controller.handle_visibility_changed(visible)
 
     def _on_queue_notification(self, message: UserMessage) -> None:
         timeout_ms = 7000 if message.severity is UserMessageSeverity.ERROR else 3000
         self.show_status(message.text, timeout_ms)
 
+    def _show_projects_surface(self) -> None:
+        current_project_view = self._current_project_view_name()
+        running_operations = self._get_book_running_operations()
+        if current_project_view is not None and running_operations:
+            if not self._warn_running_operations(running_operations):
+                return
+            MainWindow._request_cancel_for(self._view_registry.get(current_project_view))
+        self.close_book()
+
     def _open_navigation_target(self, target: NavigationTarget) -> None:
-        if target.kind is NavigationTargetKind.PROJECTS:
-            if self._library_nav_item is not None:
-                self._nav_list.setCurrentItem(self._library_nav_item)
-            return
-        if target.kind is NavigationTargetKind.APP_SETUP:
-            self._open_app_setup()
+        route = route_state_from_navigation_target(target)
+        if route is None:
             return
 
-        if target.project_id is not None and target.project_id != self._current_book_id:
-            book = self.book_manager.get_book(target.project_id)
+        if route.primary is PrimaryRoute.PROJECTS and route.project_id is None and route.modal is None:
+            self._show_projects_surface()
+            return
+        if route.modal is ModalRoute.APP_SETTINGS:
+            self._open_app_setup()
+            return
+        if route.modal is ModalRoute.QUEUE:
+            project_name = self._current_book_name if route.project_id == self._current_book_id else None
+            if route.project_id is not None and project_name is None:
+                book = self.book_manager.get_book(route.project_id)
+                if book is not None:
+                    project_name = book.name
+            self._open_queue_drawer(project_id=route.project_id, project_name=project_name)
+            return
+
+        if route.project_id is not None and route.project_id != self._current_book_id:
+            book = self.book_manager.get_book(route.project_id)
             if book is not None:
                 self.open_project(book.book_id, book.name)
 
-        shell_name = self._current_project_view_name()
-        if shell_name is None:
+        shell = self._project_sessions.current_project_shell()
+        if shell is None:
             return
-        shell_widget = self._view_registry.get(shell_name)
-        if not isinstance(shell_widget, ProjectShellView):
-            return
-        shell = shell_widget
 
-        if target.kind is NavigationTargetKind.PROJECT_SETUP:
-            shell.show_setup()
-        elif target.kind is NavigationTargetKind.TERMS:
-            shell.show_terms()
-        elif target.kind in {
-            NavigationTargetKind.WORK,
-            NavigationTargetKind.DOCUMENT_OCR,
-            NavigationTargetKind.DOCUMENT_TERMS,
-            NavigationTargetKind.DOCUMENT_TRANSLATION,
-            NavigationTargetKind.DOCUMENT_IMAGES,
-            NavigationTargetKind.DOCUMENT_EXPORT,
-        }:
-            shell.show_work()
-            shell.work_tab.open_navigation_target(target)
+        if route.modal is ModalRoute.PROJECT_SETTINGS:
+            self._open_project_settings(shell)
+        elif route.primary is PrimaryRoute.TERMS and route.document_id is None:
+            shell.show_terms_view()
+        elif route.primary is PrimaryRoute.WORK:
+            shell.show_work_view()
+            work_widget = shell.work_widget
+            if work_widget is not None and route.document_id is not None and route.document_section is not None:
+                work_widget.open_navigation_target(target)
         else:
-            shell.show_work()
+            shell.show_work_view()
 
     def show_status(self, message: str, timeout_ms: int = 5000) -> None:
         """Show a status message in the status bar."""
@@ -517,20 +438,18 @@ class MainWindow(QMainWindow):
     def retranslateUi(self) -> None:
         """Retranslate all UI elements."""
         self.setWindowTitle(self.tr("Context-Aware Translation"))
-
-        if self._library_nav_item is not None:
-            self._library_nav_item.setText(self.tr("Projects"))
-        if self._profiles_nav_item is not None:
-            self._profiles_nav_item.setText(self.tr("App Setup"))
-        if self._book_nav_item is not None and self._current_book_name is not None:
-            self._book_nav_item.setText(qarg(self.tr("Project: %1"), self._current_book_name))
-        self._queue_dock.setWindowTitle(self.tr("Queue"))
+        self._app_shell.retranslate()
+        self._app_settings_dialog.retranslate()
+        self._queue_controller.retranslate()
+        self._project_sessions.retranslate()
+        self._sync_project_session_state()
 
         self._file_menu.setTitle(self.tr("&File"))
         self._language_menu.setTitle(self.tr("&Language"))
         self._help_menu.setTitle(self.tr("&Help"))
 
         self._open_data_action.setText(self.tr("Open &Data Folder"))
+        self._app_settings_action.setText(self.tr("App &Settings"))
         self._about_action.setText(self.tr("&About"))
 
         current_message = self._status_bar.currentMessage()
@@ -542,7 +461,8 @@ class MainWindow(QMainWindow):
         self._is_closing = True
         self._sleep_check_timer.stop()
         self.close_book()
-        self._queue_drawer.cleanup()
+        self._app_settings_dialog.close()
+        self._queue_controller.cleanup()
         self._app_events.close()
         self._task_engine.close()
         self._task_store.close()
@@ -550,3 +470,9 @@ class MainWindow(QMainWindow):
         self._sleep_inhibitor.release()
         self._save_geometry()
         super().closeEvent(event)
+
+    def _sync_project_session_state(self) -> None:
+        self._view_registry = self._project_sessions.view_registry
+        self._current_book_id = self._project_sessions.current_project_id
+        self._current_book_name = self._project_sessions.current_project_name
+        self._project_settings_dialog = self._project_sessions.project_settings_dialog

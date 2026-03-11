@@ -3,14 +3,14 @@
 ## Objective
 
 Redesign the app from a tool-tab UI into a guided translation workspace without
-changing the underlying ordered-document, context-tree, or task-engine model.
+changing the ordered-document, context-tree, or task-engine model underneath.
 
-The app must present the workflow users actually have:
-- an app owns reusable service connections and workflow profiles
+The product should present the workflow users actually have:
+- an app owns reusable service connections and shared workflow profiles
 - a `Project` contains an ordered stack of `Documents`
 - earlier documents shape later context
 - users move the stack forward through explicit actions
-- concurrency and conflicts exist, but they are secondary UI
+- concurrency and conflicts exist, but they stay secondary UI
 
 ## Locked Product Model
 
@@ -20,8 +20,10 @@ User-facing nouns:
 - `Context Frontier`: the furthest document whose OCR/context state is valid for
   downstream work
 - `Terms`: the shared glossary for the current project
-- `App Setup`: global service connections, workflow profiles, and provider wizard
-- `Project Setup`: project-specific language, preset, and workflow profile selection
+- `App Settings`: reusable service connections, shared workflow profiles, and
+  the provider-first setup wizard, opened as an app-level dialog
+- `Project Settings`: target language, preset, and workflow profile selection,
+  opened as a project-level dialog
 - `Action`: a user-triggered operation such as reading text, building terms,
   translating, reinserting text, or exporting
 - `Issue`: something that needs attention, such as a blocker or failed action
@@ -36,37 +38,57 @@ Not user-facing on default surfaces:
 
 ## Shell Model
 
-The redesign has two shells.
+The redesign has one app shell plus nested project and document surfaces.
 
 ### App Shell
 
 Purpose:
 - let users create or open projects
-- hold global reusable service configuration
-- host the provider-first setup wizard
+- host app-level actions and status
+- open `App Settings` without leaving the current shell context
 
-App-level destinations:
+Primary app surface:
 - `Projects`
-- `App Setup`
+
+Secondary app surfaces:
+- `App Settings` dialog
+- `Queue Drawer`
+
+There is no global left sidebar.
 
 ### Project Shell
 
 Purpose:
 - let users process one ordered document stack
-- expose the shared Terms surface for that project
-- expose project-specific setup and routing
+- expose the shared `Terms` surface for that project
+- open project-scoped settings and queue actions without adding extra primary routes
 
-Project-level destinations:
+Primary project routes:
 - `Work`
 - `Terms`
-- `Setup`
 
-Secondary global surface:
+Secondary project surfaces:
+- `Project Settings` dialog
 - `Queue Drawer`
 
-Document-scoped tools live under `Work` inside a document workspace. This
-replaces the current feature-tab model where `Import`, `OCR Review`,
-`Glossary`, `Translate`, `Reembedding`, and `Export` are siblings.
+There is no project-level left sidebar and no `Setup` route.
+
+### Document Workspace
+
+This is a nested surface under `Work`.
+
+Purpose:
+- hold document-scoped tools in one place
+- keep OCR, Terms, Translation, Images, and Export close to the current document
+
+Local document navigation:
+- `OCR`
+- `Terms`
+- `Translation`
+- `Images`
+- `Export`
+
+There is no document `Overview` section in the current shell model.
 
 ## Screen Roles
 
@@ -78,18 +100,17 @@ Purpose:
 - list existing projects
 - create a new project
 - open a project
-- surface whether app setup is incomplete before the user enters a project
+- surface when app settings are incomplete before the user enters a project
 
-### App Setup
+### App Settings
 
-This is outside the project shell.
+This is an app-level dialog, not a shell destination.
 
 Purpose:
 - create and edit reusable service connections
 - run a provider-first setup wizard
 - generate a recommended workflow profile from available providers
 - let users edit shared workflow profiles when needed
-- treat workflow profiles as user-facing wrappers over the existing step-based config payload
 - expose raw endpoint controls only for custom providers or explicit advanced edits
 
 ### Work
@@ -109,7 +130,7 @@ Core elements:
 - ordered document list
 - row-level primary actions
 
-The row action should usually route the user into the correct document tab
+The row action should usually route the user into the correct document section
 rather than directly executing work.
 
 ### Document Workspace
@@ -120,34 +141,27 @@ Purpose:
 - hold document-scoped tools in one place
 - keep OCR, Terms, Translation, Images, and Export close to the current document
 
-Sections inside the document workspace:
-- `Overview`
-- `OCR`
-- `Terms`
-- `Translation`
-- `Images`
-- `Export`
-
 ### Terms
 
 This is the only shared glossary surface inside a project.
 
 Purpose:
-- provide the canonical project-wide Terms table
+- provide the canonical project-wide terms table
 - support shared term review, translation, filtering, import, and export
 - stay visually close to the current table UI
 
 Document `Terms` is a filtered view of this same data, not a separate glossary.
 
-### Project Setup
+### Project Settings
 
-This is the `Setup` destination inside a project.
+This is a project-level dialog launched from the project shell gear action or
+from blocker CTAs.
 
 Purpose:
 - choose target language and project preset
 - choose which workflow profile the project uses
 - optionally customize a project-specific workflow profile when needed
-- deep-link to `App Setup` when global connections are missing or insufficient
+- deep-link to `App Settings` when shared connections are missing or insufficient
 
 ### Queue Drawer
 
@@ -166,20 +180,19 @@ There is no global Simple/Pro mode for the entire product.
 
 Instead:
 - `Work`, `Terms`, and document workspace keep one stable UX model
-- `Setup` carries most of the complexity management
+- app/project settings carry most setup-specific complexity
 - advanced controls appear as collapsible sections, drawers, or detail panels
 - default surfaces stay plain-language and low-noise
 
 Advanced controls are allowed when they add real control, especially in:
-- `App Setup`
-- `Project Setup`
-- `Queue` details
+- `App Settings`
+- `Project Settings`
+- queue details
 - document-level rerun and diagnostics panels
-
 
 ## Setup Implementation Principle
 
-Setup is a UX reframing over the existing step-based config/profile backend.
+Settings are a UX reframing over the existing step-based config/profile backend.
 
 The backend model stays the same in substance:
 - saved provider connections
@@ -189,14 +202,14 @@ The backend model stays the same in substance:
 The UX renames and organizes that model as:
 - `Connections`
 - `Workflow Profiles`
-- `Project Setup` choosing a shared profile or a project-specific profile
+- `Project Settings` choosing a shared profile or a project-specific profile
 
 The setup wizard generates a concrete saved workflow profile. It does not create
 a separate routing abstraction.
 
 ## Setup Model
 
-### App Setup owns
+### App Settings own
 - reusable provider connections
 - API keys and secrets
 - known-provider defaults
@@ -204,7 +217,7 @@ a separate routing abstraction.
 - shared workflow profiles
 - step-level connection and model routing inside workflow profiles
 
-### Project Setup owns
+### Project Settings own
 - target language
 - project quality preset
 - selected workflow profile
@@ -236,8 +249,7 @@ These behaviors are fixed and must be reflected clearly in the UX.
 
 ## Action Hierarchy
 
-The app should always favor explicit, scoped actions over global wizard-like
-controls.
+The app should favor explicit, scoped actions over global wizard-like controls.
 
 Primary project actions are row- or document-scoped:
 - `Open`
@@ -247,70 +259,15 @@ Primary project actions are row- or document-scoped:
 - `Open Images`
 - `Export`
 
-Shared Terms actions:
+Shared terms actions:
 - `Translate pending`
 - `Review`
 - `Filter noise`
 - `Import`
 - `Export`
 
-Setup actions:
-- `Open App Setup`
+Settings actions:
+- `Open App Settings`
 - `Use recommended profile`
 - `Use shared profile`
-- `Edit workflow profile`
-- `Customize for this project`
-- `Edit project profile`
-- `Test connection`
-- `Advanced`
-
-Direct-execution rule:
-- `Work` should mostly navigate users to the correct document tab
-- `Export` is the main exception and may remain a direct row action
-- direct export should open a small export dialog or sheet, not a separate
-  top-level screen
-
-## Blocked-State Taxonomy
-
-Every blocked state shown in the UI must map to one of these categories:
-- `Needs setup`
-- `Needs earlier document first`
-- `Already running elsewhere`
-- `Needs review`
-- `Nothing to do`
-
-The app should never show internal conflict language first. Technical detail
-can exist behind a details affordance.
-
-## Home-Screen Logic
-
-The Work screen should act like an editorial operations desk.
-
-For each document row, the UI should answer:
-- where is this document in the order
-- what its current state is
-- whether it is blocked
-- what the one primary action is
-
-For the project overall, the UI should answer:
-- how far the context frontier has advanced
-- which document is currently blocking progress
-- whether project setup is sufficient
-- whether the missing piece is app-level setup or project-level setup
-
-## Scope Boundary
-
-Phase 0 locks:
-- nouns
-- app shell vs project shell
-- top-level IA
-- document-workspace role
-- setup model
-- screen roles
-- interaction rules
-- blocked-state taxonomy
-
-Phase 0 does not lock:
-- visual style
-- component layouts below the screen-role level
-- implementation sequence
+- `Open Project Settings`

@@ -1,4 +1,4 @@
-"""Tests for the Task 10 app shell migration."""
+"""Tests for the QML-backed app shell migration."""
 
 from __future__ import annotations
 
@@ -85,13 +85,160 @@ class _FakeProjectsView(QWidget):
         self.refresh_calls += 1
 
 
-class _FakeAppSetupView(QWidget):
+class _FakeAppSettingsPane(QWidget):
     def __init__(self, _service, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.refresh_calls = 0
 
     def refresh(self) -> None:
         self.refresh_calls += 1
+
+
+class _FakeAppSettingsDialogHost(QWidget):
+    finished = Signal(int)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.body_widget: QWidget | None = None
+        self.present_calls = 0
+        self.retranslate_calls = 0
+
+    def set_app_settings_widget(self, widget: QWidget) -> QWidget:
+        self.body_widget = widget
+        return widget
+
+    def set_app_setup_widget(self, widget: QWidget) -> QWidget:
+        return self.set_app_settings_widget(widget)
+
+    def present(self) -> None:
+        self.present_calls += 1
+        self.show()
+
+    def retranslate(self) -> None:
+        self.retranslate_calls += 1
+
+    def close(self) -> bool:
+        result = super().close()
+        self.finished.emit(0)
+        return result
+
+
+class _FakeProjectSettingsDialogHost(QWidget):
+    finished = Signal(int)
+    close_requested = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.body_widget: QWidget | None = None
+        self.present_calls = 0
+        self.retranslate_calls = 0
+        self.setWindowTitle("Project Settings")
+
+    def set_project_settings_widget(self, widget: QWidget) -> QWidget:
+        self.body_widget = widget
+        return widget
+
+    def set_project_setup_widget(self, widget: QWidget) -> QWidget:
+        return self.set_project_settings_widget(widget)
+
+    def present(self) -> None:
+        self.present_calls += 1
+        self.show()
+
+    def dismiss(self) -> None:
+        self.close()
+
+    def retranslate(self) -> None:
+        self.retranslate_calls += 1
+        self.setWindowTitle("Project Settings")
+
+    def close(self) -> bool:
+        result = super().close()
+        self.finished.emit(0)
+        return result
+
+
+class _FakeQueueShellHost(QWidget):
+    close_requested = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.queue_widget: QWidget | None = None
+        self.scope: tuple[str | None, str | None] = (None, None)
+        self.retranslate_calls = 0
+        self.cleanup_calls = 0
+
+    def set_queue_widget(self, widget: QWidget) -> QWidget:
+        self.queue_widget = widget
+        return widget
+
+    def set_scope(self, project_id: str | None, *, project_name: str | None = None) -> None:
+        self.scope = (project_id, project_name)
+        if self.queue_widget is not None:
+            set_scope = getattr(self.queue_widget, "set_scope", None)
+            if callable(set_scope):
+                set_scope(project_id, project_name=project_name)
+
+    def clear_scope(self) -> None:
+        self.scope = (None, None)
+        if self.queue_widget is not None:
+            set_scope = getattr(self.queue_widget, "set_scope", None)
+            if callable(set_scope):
+                set_scope(None)
+
+    def retranslate(self) -> None:
+        self.retranslate_calls += 1
+
+    def cleanup(self) -> None:
+        self.cleanup_calls += 1
+
+
+class _FakeAppShellHost(QWidget):
+    projects_requested = Signal()
+    app_settings_requested = Signal()
+    queue_requested = Signal()
+    close_project_requested = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.views: dict[str, QWidget] = {}
+        self.current_view_key = ""
+        self.current_project_id = ""
+        self.current_project_name = ""
+        self.modal_route = ""
+
+    def set_projects_widget(self, widget: QWidget) -> QWidget:
+        self.views["projects"] = widget
+        return widget
+
+    def set_project_widget(self, key: str, widget: QWidget) -> QWidget:
+        self.views[key] = widget
+        return widget
+
+    def show_projects_view(self) -> None:
+        self.current_view_key = "projects"
+        self.current_project_id = ""
+        self.current_project_name = ""
+
+    def show_project_view(self, key: str, project_id: str, project_name: str) -> None:
+        self.current_view_key = key
+        self.current_project_id = project_id
+        self.current_project_name = project_name
+
+    def remove_project_widget(self, key: str) -> QWidget | None:
+        removed = self.views.pop(key, None)
+        if self.current_view_key == key:
+            self.show_projects_view()
+        return removed
+
+    def present_app_settings(self) -> None:
+        self.modal_route = "app_settings"
+
+    def present_queue(self, *, project_id: str | None = None) -> None:
+        self.modal_route = "queue"
+
+    def dismiss_modal(self) -> None:
+        self.modal_route = ""
 
 
 class _FakeWorkView(QWidget):
@@ -132,7 +279,7 @@ class _FakeWorkView(QWidget):
         self.routed_targets.append(target)
 
 
-class _FakeProjectSetupView(QWidget):
+class _FakeProjectSettingsPane(QWidget):
     open_app_setup_requested = Signal()
     save_completed = Signal(str)
 
@@ -142,6 +289,10 @@ class _FakeProjectSetupView(QWidget):
         self.service = service
         self.events = events
         self.cleanup_calls = 0
+        self.refresh_calls = 0
+
+    def refresh(self) -> None:
+        self.refresh_calls += 1
 
     def cleanup(self) -> None:
         self.cleanup_calls += 1
@@ -157,6 +308,95 @@ class _FakeTermsView(QWidget):
 
     def cleanup(self) -> None:
         self.cleanup_calls += 1
+
+
+class _FakeProjectShellHost(QWidget):
+    queue_requested = Signal()
+    project_settings_requested = Signal()
+    back_requested = Signal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._work_widget: QWidget | None = None
+        self._terms_widget: QWidget | None = None
+        self._project_settings_widget: QWidget | None = None
+        self.current_surface = ""
+        self.project_id = ""
+        self.project_name = ""
+        self.retranslate_calls = 0
+
+    def set_work_widget(self, widget: QWidget) -> QWidget:
+        self._work_widget = widget
+        return widget
+
+    def set_terms_widget(self, widget: QWidget) -> QWidget:
+        self._terms_widget = widget
+        return widget
+
+    def set_project_settings_widget(self, widget: QWidget) -> QWidget:
+        self._project_settings_widget = widget
+        return widget
+
+    @property
+    def work_widget(self) -> QWidget | None:
+        return self._work_widget
+
+    @property
+    def terms_widget(self) -> QWidget | None:
+        return self._terms_widget
+
+    @property
+    def project_settings_widget(self) -> QWidget | None:
+        return self._project_settings_widget
+
+    def set_project_context(self, project_id: str, project_name: str, *, primary="work") -> None:  # noqa: ANN001
+        self.project_id = project_id
+        self.project_name = project_name
+        self.current_surface = "terms" if str(primary) == "terms" else "work"
+
+    def show_work_view(self) -> None:
+        self.current_surface = "work"
+
+    def show_terms_view(self) -> None:
+        self.current_surface = "terms"
+
+    def present_project_settings(self) -> None:
+        self.current_surface = "project_settings"
+
+    def present_queue(self) -> None:
+        self.current_surface = "queue"
+
+    def dismiss_modal(self) -> None:
+        if self.current_surface in {"project_settings", "queue"}:
+            self.current_surface = "work"
+
+    def retranslate(self) -> None:
+        self.retranslate_calls += 1
+
+    def get_running_operations(self) -> list[str]:
+        work_widget = self._work_widget
+        if work_widget is None:
+            return []
+        get_running_operations = getattr(work_widget, "get_running_operations", None)
+        if not callable(get_running_operations):
+            return []
+        return get_running_operations()
+
+    def request_cancel_running_operations(self, *, include_engine_tasks: bool = False) -> None:
+        work_widget = self._work_widget
+        if work_widget is None:
+            return
+        request_cancel = getattr(work_widget, "request_cancel_running_operations", None)
+        if callable(request_cancel):
+            request_cancel(include_engine_tasks=include_engine_tasks)
+
+    def cleanup(self) -> None:
+        for widget in (self._work_widget, self._terms_widget, self._project_settings_widget):
+            if widget is None:
+                continue
+            cleanup = getattr(widget, "cleanup", None)
+            if callable(cleanup):
+                cleanup()
 
 
 def _make_context():
@@ -226,9 +466,20 @@ def _make_window():
         patch("context_aware_translation.ui.main_window.build_application_context", return_value=context)
     )
     patch_stack.enter_context(patch("context_aware_translation.ui.main_window.LibraryView", _FakeProjectsView))
-    patch_stack.enter_context(patch("context_aware_translation.ui.main_window.AppSetupView", _FakeAppSetupView))
+    patch_stack.enter_context(patch("context_aware_translation.ui.main_window.AppSettingsPane", _FakeAppSettingsPane))
+    patch_stack.enter_context(patch("context_aware_translation.ui.main_window.AppShellHost", _FakeAppShellHost))
+    patch_stack.enter_context(
+        patch("context_aware_translation.ui.main_window.AppSettingsDialogHost", _FakeAppSettingsDialogHost)
+    )
+    patch_stack.enter_context(
+        patch("context_aware_translation.ui.main_window.ProjectSettingsDialogHost", _FakeProjectSettingsDialogHost)
+    )
+    patch_stack.enter_context(patch("context_aware_translation.ui.main_window.QueueShellHost", _FakeQueueShellHost))
+    patch_stack.enter_context(patch("context_aware_translation.ui.main_window.ProjectShellHost", _FakeProjectShellHost))
     patch_stack.enter_context(patch("context_aware_translation.ui.main_window.WorkView", _FakeWorkView))
-    patch_stack.enter_context(patch("context_aware_translation.ui.main_window.ProjectSetupView", _FakeProjectSetupView))
+    patch_stack.enter_context(
+        patch("context_aware_translation.ui.main_window.ProjectSettingsPane", _FakeProjectSettingsPane)
+    )
     patch_stack.enter_context(patch("context_aware_translation.ui.main_window.TermsView", _FakeTermsView))
     try:
         window = MainWindow()
@@ -237,76 +488,42 @@ def _make_window():
         raise
     return window, context, patch_stack
 
-
-def test_project_shell_view_delegates_to_work_widget():
-    from context_aware_translation.ui.features.project_shell_view import ProjectShellView
-
-    work_widget = _FakeWorkView("project-1", None, None, None, None)
-    terms_widget = _FakeTermsView("project-1", None, None)
-    setup_widget = _FakeProjectSetupView("project-1", None, None)
-    work_widget.running_operations = ["Translation"]
-
-    queue_calls: list[bool] = []
-    close_calls: list[bool] = []
-    shell = ProjectShellView(
-        "project-1",
-        "One Piece",
-        work_widget=work_widget,
-        terms_widget=terms_widget,
-        setup_widget=setup_widget,
-    )
-    shell.queue_requested.connect(lambda: queue_calls.append(True))
-    shell.close_requested.connect(lambda: close_calls.append(True))
-
-    assert shell.tab_widget.tabText(0) == shell.tr("Work")
-    assert shell.tab_widget.tabText(1) == shell.tr("Terms")
-    assert shell.tab_widget.tabText(2) == shell.tr("Setup")
-    assert shell.get_running_operations() == ["Translation"]
-
-    shell.queue_button.click()
-    shell.back_button.click()
-    shell.request_cancel_running_operations(include_engine_tasks=True)
-    shell.cleanup()
-
-    assert queue_calls == [True]
-    assert close_calls == [True]
-    assert work_widget.cancel_requests == [True]
-    assert work_widget.cleanup_calls == 1
-    assert terms_widget.cleanup_calls == 1
-    assert setup_widget.cleanup_calls == 1
-
-
 def test_main_window_routes_projects_into_project_shell():
     window, context, patch_stack = _make_window()
     try:
-        assert window._library_nav_item.text() == window.tr("Projects")
-        assert window._profiles_nav_item.text() == window.tr("App Setup")
+        assert isinstance(window.centralWidget(), _FakeAppShellHost)
+        assert window._app_shell.current_view_key == "projects"
         assert context.runtime.task_engine.start_autorun_calls == 1
 
         window.open_project("project-1", "One Piece")
 
         shell = window._view_registry["project_project-1"]
-        assert shell is window._stack.currentWidget()
-        assert shell.tab_widget.tabText(0) == shell.tr("Work")
-        assert shell.tab_widget.tabText(1) == shell.tr("Terms")
-        assert shell.tab_widget.tabText(2) == shell.tr("Setup")
-        assert isinstance(shell.work_tab, _FakeWorkView)
-        assert isinstance(shell.terms_tab, _FakeTermsView)
-        assert isinstance(shell.setup_tab, _FakeProjectSetupView)
-        assert window._book_nav_item.text() == window.tr("Project: One Piece")
+        assert window._app_shell.current_view_key == "project_project-1"
+        assert shell is window._app_shell.views["project_project-1"]
+        assert isinstance(shell, _FakeProjectShellHost)
+        assert isinstance(shell.work_widget, _FakeWorkView)
+        assert isinstance(shell.terms_widget, _FakeTermsView)
+        assert isinstance(shell.project_settings_widget, _FakeProjectSettingsPane)
+        assert isinstance(window._project_settings_dialog, _FakeProjectSettingsDialogHost)
+        assert window._project_settings_dialog.body_widget is shell.project_settings_widget
+        assert window._app_shell.current_project_name == "One Piece"
+        assert shell.current_surface == "work"
 
-        shell.queue_button.click()
+        shell.queue_requested.emit()
         assert not window._queue_dock.isHidden()
         assert "One Piece" in window._queue_drawer.tip_label.text()
+        assert window._app_shell.modal_route == "queue"
 
-        shell.work_tab.open_project_setup_requested.emit()
-        assert shell.tab_widget.currentWidget() is shell.setup_tab
+        shell.work_widget.open_project_setup_requested.emit()
+        assert not window._project_settings_dialog.isHidden()
+        assert window._project_settings_dialog.windowTitle() == window.tr("Project Settings")
 
-        shell.setup_tab.open_app_setup_requested.emit()
-        assert window._stack.currentWidget() is window.app_setup_view
+        shell.project_settings_widget.open_app_setup_requested.emit()
+        assert not window._app_settings_dialog.isHidden()
+        assert window._app_shell.modal_route == "app_settings"
 
-        shell.setup_tab.save_completed.emit("project-1")
-        assert shell.tab_widget.currentWidget() is shell.work_tab
+        shell.project_settings_widget.save_completed.emit("project-1")
+        assert shell.current_surface == "work"
         assert "Project setup saved" in window.statusBar().currentMessage()
     finally:
         window.close()
@@ -326,12 +543,13 @@ def test_main_window_refreshes_shell_roots_from_application_events():
         patch_stack.close()
 
 
-def test_main_window_routes_queue_targets_into_current_shell():
-    window, context, patch_stack = _make_window()
+def test_main_window_routes_navigation_targets_through_route_bridge():
+    window, _context, patch_stack = _make_window()
     try:
         window.open_project("project-1", "One Piece")
         shell = window._view_registry["project_project-1"]
-        work_tab = shell.work_tab
+        work_tab = shell.work_widget
+        assert isinstance(work_tab, _FakeWorkView)
 
         window._open_navigation_target(
             NavigationTarget(
@@ -340,7 +558,7 @@ def test_main_window_routes_queue_targets_into_current_shell():
                 document_id=4,
             )
         )
-        assert shell.tab_widget.currentWidget() is shell.work_tab
+        assert shell.current_surface == "work"
         assert work_tab.routed_targets[-1].kind is NavigationTargetKind.DOCUMENT_TRANSLATION
 
         window._open_navigation_target(
@@ -349,7 +567,16 @@ def test_main_window_routes_queue_targets_into_current_shell():
                 project_id="project-1",
             )
         )
-        assert shell.tab_widget.currentWidget() is shell.setup_tab
+        assert not window._project_settings_dialog.isHidden()
+
+        window._open_navigation_target(
+            NavigationTarget(
+                kind=NavigationTargetKind.QUEUE,
+                project_id="project-1",
+            )
+        )
+        assert not window._queue_dock.isHidden()
+        assert window._queue_shell.scope == ("project-1", "One Piece")
 
         window._open_navigation_target(
             NavigationTarget(
@@ -357,7 +584,35 @@ def test_main_window_routes_queue_targets_into_current_shell():
                 project_id="project-1",
             )
         )
-        assert shell.tab_widget.currentWidget() is shell.terms_tab
+        assert shell.current_surface == "terms"
+    finally:
+        window.close()
+        patch_stack.close()
+
+
+def test_main_window_routes_global_queue_target_without_open_project():
+    window, _context, patch_stack = _make_window()
+    try:
+        window._open_navigation_target(NavigationTarget(kind=NavigationTargetKind.QUEUE))
+
+        assert not window._queue_dock.isHidden()
+        assert window._queue_shell.scope == (None, None)
+        assert window._app_shell.modal_route == "queue"
+    finally:
+        window.close()
+        patch_stack.close()
+
+
+def test_main_window_app_shell_projects_request_closes_current_project():
+    window, _context, patch_stack = _make_window()
+    try:
+        window.open_project("project-1", "One Piece")
+
+        window._app_shell.projects_requested.emit()
+
+        assert window._current_book_id is None
+        assert window._app_shell.current_view_key == "projects"
+        assert "project_project-1" not in window._view_registry
     finally:
         window.close()
         patch_stack.close()

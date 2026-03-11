@@ -1,219 +1,64 @@
-# Technical Migration Task Pack
+# Technical Migration Docs
 
-This directory turns the approved UX design into an implementation program with
-clear backend/UI isolation and parallelizable feature slices.
+This directory now contains two related but distinct migration tracks:
 
-## Goal
+1. The completed application-boundary migration that moved UI behavior behind
+   `context_aware_translation/application/` contracts and services.
+2. The active QML shell migration that replaces widget shell chrome with hybrid
+   Qt Quick / QML hosts while keeping the same backend boundary.
 
-Establish a stable application-contract boundary between UI and backend so that:
-- the Qt UI can be replaced later without rewriting backend logic
-- backend refactors do not force UI rewrites as long as contracts stay stable
-- feature work can be split across multiple agents with minimal file overlap
+## Current Execution Plan
 
-## Locked Architectural Direction
+The active source of truth is:
 
-Foundation boundary ADR:
-- [ADR 0001: Application Boundary and UI Isolation](adr-0001-application-boundary.md)
+- [QML Shell Migration Plan](qml-shell-migration-plan.md)
 
-- UI must talk only to an application layer.
-- The application layer owns commands, queries, DTOs, events, and errors.
-- Backend internals (`workflow`, `storage`, `core`, `documents`, `llm`) stay behind that boundary.
-- Qt becomes one adapter; a future HTTP/WebSocket adapter can be added later.
-- Contracts should be JSON-serializable from day one.
-- Advanced controls stay inside the same application/service boundary.
+Use that plan for:
 
-## Current Problem Summary
+- current task status
+- task numbering (`Q01` through `Q42`)
+- shell IA decisions
+- subagent/task splitting guidance
 
-Today the Qt views directly import and use backend internals such as:
-- `BookManager`
-- `SQLiteBookDB`
-- `DocumentRepository`
-- `TaskEngine` preflight / submit details
-- profile/config storage details
+## Historical Task Pack
 
-That means the UI knows too much about backend structure and task semantics.
-The first migration goal is to stop direct UI imports of backend internals.
+Older task files in this directory describe the earlier application-boundary
+migration and are still useful as historical implementation context. They are
+not the current execution checklist for shell/chrome work.
 
-## Must-Read UX Specs
+In particular:
 
-Read these first before touching technical design:
-- [UX architecture](../ux/phase0/architecture.md)
-- [UX journeys](../ux/phase0/journeys.md)
-- [UX terminology](../ux/phase0/terminology.md)
-- [Setup UX](../ux/phase1_setup.md)
-- [Work UX](../ux/phase2_work.md)
-- [Queue UX](../ux/phase3_queue.md)
-- [Document workspace UX](../ux/phase4_document_workspace.md)
-- [Terms UX](../ux/phase5_terms.md)
-- [Advanced controls UX](../ux/phase6_advanced_controls.md)
+- app settings is now an app-level dialog, not a shell page
+- project settings is now a project-level dialog, not a project route
+- project primary routes are `Work` and `Terms`
+- document local navigation is `OCR`, `Terms`, `Translation`, `Images`, `Export`
+- app/project/document/queue chrome should be described in terms of
+  `ui/qml/`, `ui/viewmodels/`, and `ui/shell_hosts/`
 
-## Current Technical Seams To Know
+## Still-Locked Architecture
 
-Current UI/backend coupling is concentrated in:
-- `context_aware_translation/ui/main_window.py`
-- `context_aware_translation/ui/views/book_workspace.py`
-- `context_aware_translation/ui/views/library_view.py`
-- `context_aware_translation/ui/views/profile_view.py`
-- `context_aware_translation/ui/views/translation_view.py`
-- `context_aware_translation/ui/views/glossary_view.py`
-- `context_aware_translation/ui/views/ocr_review_view.py`
-- `context_aware_translation/ui/views/reembedding_view.py`
-- `context_aware_translation/ui/views/export_view.py`
+These rules remain unchanged across both migrations:
 
-Existing backend foundations that should be reused, not replaced:
-- `context_aware_translation/workflow/bootstrap.py`
-- `context_aware_translation/workflow/runtime.py`
-- `context_aware_translation/workflow/session.py`
-- `context_aware_translation/workflow/tasks/engine_core.py`
-- `context_aware_translation/workflow/tasks/handlers/`
-- `context_aware_translation/storage/library/book_manager.py`
-
-## Target Package Shape
-
-Expected new package direction:
+- UI talks only to the application layer.
+- Backend internals (`workflow`, `storage`, `core`, `documents`, `llm`) stay
+  behind that boundary.
+- New shell code should follow:
 
 ```text
-context_aware_translation/
-  application/
-    contracts/
-    services/
-    events.py
-    errors.py
-    composition.py
-  ui/
-    features/
-      projects/
-      app_setup/
-      project_setup/
-      work/
-      terms/
-      queue/
-      document/
+QML -> QObject viewmodels / presenters -> application.services/contracts/events
 ```
 
-Exact naming can be adjusted if needed, but the dependency rule is fixed.
+- Do not reintroduce direct backend imports into new UI code.
+- Preserve existing behavior unless the UX or migration plan explicitly changes it.
 
-## How To Use These Task Files
+## How To Use This Directory
 
-When assigning one task to a new Codex session, send:
-- this overview file
-- the specific task file
-- any linked UX specs listed in that task
+When assigning work to a new Codex session:
 
-Tell the agent to stay inside the task scope, avoid opportunistic refactors, and
-call out any dependency blocker instead of expanding the task.
+- send this overview
+- send [QML Shell Migration Plan](qml-shell-migration-plan.md)
+- send the specific task file(s) for the assigned slice
+- include the relevant UX spec if the task changes interaction design
 
-## Global Rules For All Tasks
-
-1. UI code must not import `storage`, `workflow`, `core`, `documents`, or `llm` directly once a slice is migrated.
-2. New application contracts must be framework-agnostic and JSON-serializable.
-3. Preserve existing behavior unless the UX spec explicitly changes it.
-4. Do not build a network service yet. The first adapter stays in-process Python.
-5. Prefer adding a clean seam before moving feature code.
-6. Keep tasks narrow. Do not opportunistically refactor adjacent slices.
-7. Add or update tests for every migrated slice.
-
-## Interaction-State Model
-
-This is a locked architectural rule for all migrated surfaces.
-
-1. Surface queries own button state.
-- Queries from `application.services` must return the enabled/disabled/busy
-  state and blocker reason for visible actions.
-- Migrated views should render that state, not recompute it locally.
-
-2. Click-time preflight remains authoritative.
-- Even if a button rendered enabled, the command path must run strict backend
-  preflight again before mutating state.
-- This preserves correctness for races around active claims and task state.
-
-3. Refresh uses invalidation + requery.
-- UI should subscribe to application invalidation events.
-- On invalidation, the surface reruns its query and rerenders from fresh DTOs.
-- Do not keep widget-local claim listeners or direct task-engine listeners as
-  the system of record.
-
-4. DB state alone is not sufficient.
-- Action availability depends on both persisted state and in-memory active
-  claims in the task engine.
-- Event invalidation must therefore represent both kinds of change.
-
-## Execution Waves
-
-### Wave 0: Foundation
-Execute in this order:
-1. [Task 00](tasks/00-foundation-boundaries.md)
-2. [Task 01](tasks/01-foundation-contracts.md)
-3. [Task 02](tasks/02-foundation-services-composition.md)
-4. [Task 03](tasks/03-foundation-events-queue-contract.md)
-5. [Task 04](tasks/04-foundation-tests-and-boundaries.md)
-
-Wave 0 must land before feature-slice migration starts.
-Task 03 is the point where the action-state and invalidation model becomes
-usable. No feature slice should implement enable/disable or refresh behavior
-against raw task-engine APIs before Task 03 lands.
-
-### Wave 1: Shell and Setup
-Can start after Wave 0. Recommended order:
-1. [Task 10](tasks/10-app-shell-navigation.md)
-2. [Task 11](tasks/11-app-setup-slice.md)
-3. [Task 12](tasks/12-project-setup-slice.md)
-
-Task 11 and Task 12 can run in parallel once Task 10 provides the navigation shell.
-
-Current implementation notes for Wave 1:
-- Task 10 intentionally keeps `Work` backed by the embedded legacy
-  `BookWorkspace` until the dedicated Work slice lands.
-- Task 11 currently performs provider-inferred capability testing in its first
-  migrated version. Real provider probing can be added later without changing
-  the application contract. Capability output is summary-only, not the main
-  setup editing model.
-- Task 12 uses workflow-profile selection instead of inherit/override cards.
-  Raw endpoint/model editing belongs in App Setup, not Project Setup.
-
-### Wave 2: Project-Level Surfaces
-Can start after Wave 1 skeletons exist:
-- [Task 20](tasks/20-work-slice.md)
-- [Task 21](tasks/21-terms-slice.md)
-- [Task 22](tasks/22-document-workspace-shell.md)
-- [Task 23](tasks/23-queue-drawer-slice.md)
-
-Task 20, 21, and 23 can run in parallel. Task 22 should start once the new Work navigation target exists.
-
-### Wave 3: Document Functionality
-Can start after Task 22:
-- [Task 30](tasks/30-document-ocr-slice.md)
-- [Task 31](tasks/31-document-translation-slice.md)
-- [Task 32](tasks/32-document-images-slice.md)
-- [Task 33](tasks/33-document-export-slice.md)
-
-These can mostly run in parallel if they stay inside their assigned document tabs.
-
-## Recommended Agent Assignment
-
-- Agent A: Wave 0 foundation tasks
-- Agent B: App shell + App Setup
-- Agent C: Project Setup
-- Agent D: Work + Queue
-- Agent E: Terms
-- Agent F: Document shell + OCR
-- Agent G: Translation
-- Agent H: Images + Export
-
-## Definition Of Foundation Done
-
-The foundation is good enough when:
-- a new `application/` layer exists
-- UI can depend on service interfaces and contract DTOs
-- backend internals are hidden behind composition
-- queue/task updates can be exposed as application events
-- action state and blockers can be rendered from application queries
-- migrated surfaces refresh through invalidation + requery
-- import boundaries are enforceable in CI
-- at least one migrated slice can be tested against a fake application service
-
-## Important Constraint
-
-Do not treat these as independent greenfield rewrites. The existing backend is
-valuable. The migration should wrap and isolate it first, then replace UI
-surface by surface.
+Keep tasks narrow, respect file ownership, and prefer the current migration plan
+over older shell/navigation assumptions elsewhere in the docs.
