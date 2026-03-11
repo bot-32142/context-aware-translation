@@ -11,7 +11,7 @@ Core package for LLM-powered document translation with context-aware glossary ma
 | File | Description |
 |------|-------------|
 | `config.py` | All config dataclasses: `LLMConfig`, `ExtractorConfig`, `SummarizerConfig`, `TranslatorConfig`, `GlossaryConfig`, `ReviewConfig`, `OCRConfig`, `ImageReembeddingConfig`, `MangaTranslatorConfig`, `EndpointProfile`. Central config hub; note: `num_of_chunks_per_llm_call` must NOT exceed 10. |
-| `glossary_io.py` | Glossary import/export to/from JSON files; handles term consolidation and validation. |
+| `storage/glossary_io.py` | Glossary import/export to/from JSON files; handles term consolidation and validation. |
 | `__init__.py` | Package initialization and logging configuration via `configure_logging()`. |
 
 ## Subdirectories
@@ -21,7 +21,7 @@ Core package for LLM-powered document translation with context-aware glossary ma
 | `core/` | Context tree and translation strategies: `context_tree.py` (hierarchical summarization), `context_manager.py` (context lifecycle), `translation_strategies.py` (strategy patterns), `context_extractor.py`, `progress.py`, `models.py`. |
 | `documents/` | Document type implementations: `text.py`, `pdf.py`, `scanned_book.py`, `manga.py`, `base.py` (abstract Document class), plus EPUB support and alignment utilities. |
 | `llm/` | LLM integration layer: `client.py` (OpenAI client with retry/timeout), `translator.py`, `extractor.py`, `glossary_translator.py`, `summarizor.py`, `reviewer.py`, `ocr.py`, `manga_ocr.py`, `language_detector.py`, `token_tracker.py`, `image_backends/` (PIL, DALL-E, etc.), `batch_jobs/` (batch processing). |
-| `storage/` | SQLite persistence layer: `book_db.py` (term records), `registry_db.py` (global registry), `book_manager.py` (book lifecycle), `task_store.py` (task records), `context_tree_db.py` (context tree storage), `document_repository.py`, `endpoint_profile.py`, `config_profile.py`, `term_repository.py`, plus batch task stores. |
+| `storage/` | SQLite persistence layer with `schema/` (raw DB/schema owners), `repositories/` (query/update services), `book_manager.py` (book lifecycle), `glossary_io.py`, endpoint/config profiles, and batch/task storage. |
 | `adapters/` | Framework-specific adapter glue: Qt event bridge, Qt task engine, and Qt workers live under `adapters/qt/`. |
 | `ui/` | PySide6 GUI surfaces: `main_window.py`, `features/`, `widgets/`, `resources/`, `translations/`, `i18n.py`. |
 | `workflow/` | Task orchestration and execution: `service.py` (WorkflowService), `runtime.py`, `bootstrap.py`, `session.py`, `tasks/` (EngineCore, task handlers, claims, execution), `__init__.py` (exports entry points). |

@@ -24,7 +24,7 @@ Start after Wave 1.
 
 - `context_aware_translation/ui/views/glossary_view.py`
 - `context_aware_translation/ui/models/term_model.py`
-- `context_aware_translation/glossary_io.py`
+- `context_aware_translation/storage/glossary_io.py`
 - `context_aware_translation/storage/term_repository.py`
 
 ## Scope

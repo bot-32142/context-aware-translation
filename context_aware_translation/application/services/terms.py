@@ -37,9 +37,9 @@ from context_aware_translation.application.runtime import (
     make_blocker,
     make_document_ref,
 )
-from context_aware_translation.glossary_io import import_glossary
-from context_aware_translation.storage.book_db import TermRecord
-from context_aware_translation.storage.context_tree_db import ContextTreeDB
+from context_aware_translation.storage.glossary_io import import_glossary
+from context_aware_translation.storage.schema.book_db import TermRecord
+from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 from context_aware_translation.workflow.tasks.models import TaskAction
 

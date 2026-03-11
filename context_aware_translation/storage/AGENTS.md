@@ -10,24 +10,26 @@ SQLite-based persistence layer with WAL mode for concurrent access. Implements r
 
 | File | Description |
 |------|-------------|
-| `registry_db.py` | Global SQLite registry database. Stores config profiles, endpoint profiles, book metadata, and cluster-level settings. Single shared database across all books. WAL mode enabled. |
-| `book_db.py` | Per-book SQLite database. Stores glossary term records (name, description, occurrence count, votes, translations, timestamps). Each book has its own `book.db` file. WAL mode enabled. |
+| `schema/registry_db.py` | Global SQLite registry database. Stores config profiles, endpoint profiles, book metadata, and cluster-level settings. Single shared database across all books. WAL mode enabled. |
+| `schema/book_db.py` | Per-book SQLite database. Stores glossary term records (name, description, occurrence count, votes, translations, timestamps). Each book has its own `book.db` file. WAL mode enabled. |
 | `book_manager.py` | Book lifecycle management. Creates/deletes books, manages folder structure, snapshots configs. Bridges UI/workflow to book metadata and storage. |
 | `book.py` | Book data model: `Book` class with id, name, status (`BookStatus` enum), paths, timestamps. Lightweight metadata container. |
 | `config_profile.py` | Config profile storage and retrieval. Stores complete workflow configs (extractor, translator, glossary, review, OCR, etc.) in JSON format with versioning. |
 | `endpoint_profile.py` | API endpoint profile storage. Stores API key, base_url, model, temperature, concurrency limits, token limits, and other per-provider settings. Profiles are referenced by name across configs. |
-| `context_tree_db.py` | Context tree SQLite storage for hierarchical summarization. Stores compressed context nodes and LSM-tree metadata for token-efficient context retrieval. |
-| `document_repository.py` | CRUD operations for documents within a book. Manages document metadata and associations with extracted content. |
-| `term_repository.py` | Glossary term CRUD. Queries, inserts, updates, deletes terms from book_db. Handles multi-pass refinement (description, occurrence count, votes). |
-| `task_store.py` | Persistence for workflow tasks. Stores task state, claims, progress metadata for resumable execution. |
-| `llm_batch_store.py` | Batch job persistence for OpenAI batch API. Stores submitted requests and polls for completed results. |
-| `translation_batch_task_store.py` | Specialized batch task storage for translation workflows. Tracks batch-level progress and partial results. |
+| `schema/context_tree_db.py` | Context tree SQLite storage for hierarchical summarization. Stores compressed context nodes and LSM-tree metadata for token-efficient context retrieval. |
+| `repositories/document_repository.py` | CRUD operations for documents within a book. Manages document metadata and associations with extracted content. |
+| `repositories/term_repository.py` | Glossary term CRUD. Queries, inserts, updates, deletes terms from book_db. Handles multi-pass refinement (description, occurrence count, votes). |
+| `repositories/task_store.py` | Persistence for workflow tasks. Stores task state, claims, progress metadata for resumable execution. |
+| `repositories/llm_batch_store.py` | Batch job persistence for OpenAI batch API. Stores submitted requests and polls for completed results. |
+| `repositories/translation_batch_task_store.py` | Specialized batch task storage for translation workflows. Tracks batch-level progress and partial results. |
+| `glossary_io.py` | Glossary JSON import/export helpers that bridge `book.db` terms with `context_tree.db` resets on import. |
 
 ## Subdirectories (if any)
 
 | Directory | Purpose |
 |-----------|---------|
-| *(none)* | All storage logic is file-based in the root directory. No subdirectories. |
+| `schema/` | SQLite database owners and schema definitions (`book.db`, `registry.db`, `context_tree.db`). |
+| `repositories/` | Repository-style access layers and task/batch stores built on top of the schema modules. |
 
 ## For AI Agents
 
@@ -85,10 +87,10 @@ book = manager.create_book(name="My Translation Project")
 
 **Storing and Retrieving Glossary Terms:**
 ```python
-from context_aware_translation.storage.book_db import BookDB
-from context_aware_translation.storage.term_repository import TermRepository
+from context_aware_translation.storage.schema.book_db import SQLiteBookDB
+from context_aware_translation.storage.repositories.term_repository import TermRepository
 
-db = BookDB(book_path / "book.db")
+db = SQLiteBookDB(book_path / "book.db")
 term_repo = TermRepository(db)
 
 # Insert a term
@@ -107,7 +109,7 @@ terms = term_repo.query_all()
 **Managing Config Profiles:**
 ```python
 from context_aware_translation.storage.config_profile import ConfigProfile
-from context_aware_translation.storage.registry_db import RegistryDB
+from context_aware_translation.storage.schema.registry_db import RegistryDB
 
 registry = RegistryDB(registry_root / "registry.db")
 profile = ConfigProfile(
@@ -121,7 +123,7 @@ registry.save_config_profile(profile)
 **Managing Endpoint Profiles:**
 ```python
 from context_aware_translation.storage.endpoint_profile import EndpointProfile
-from context_aware_translation.storage.registry_db import RegistryDB
+from context_aware_translation.storage.schema.registry_db import RegistryDB
 
 registry = RegistryDB(registry_root / "registry.db")
 endpoint = EndpointProfile(
@@ -140,9 +142,9 @@ registry.save_endpoint_profile(endpoint)
 
 **Transaction Safety:**
 ```python
-from context_aware_translation.storage.book_db import BookDB
+from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
-db = BookDB(book_path / "book.db")
+db = SQLiteBookDB(book_path / "book.db")
 # Use context manager for atomic operations
 with db.conn:
     # All operations within this block are transactional
@@ -153,7 +155,7 @@ with db.conn:
 
 **Task State Persistence:**
 ```python
-from context_aware_translation.storage.task_store import TaskStore
+from context_aware_translation.storage.repositories.task_store import TaskStore
 
 task_store = TaskStore(db)
 # Save task state

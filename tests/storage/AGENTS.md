@@ -14,6 +14,7 @@ Tests for SQLite storage layer.
 | test_context_tree_db.py | Context tree database persistence |
 | test_document_repository.py | Document repository and access patterns |
 | test_document_tables.py | Document table schema and operations |
+| test_glossary_io.py | Glossary JSON import/export for book and context-tree storage |
 | test_term_repository.py | Glossary term storage and retrieval |
 | test_task_store.py | Task storage and state management |
 | test_llm_batch_store.py | LLM batch request storage |

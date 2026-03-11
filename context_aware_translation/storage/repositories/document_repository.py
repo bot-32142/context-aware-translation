@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from context_aware_translation.storage.book_db import SQLiteBookDB
+    from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
 
 class DocumentRepository:
@@ -212,7 +212,7 @@ class DocumentRepository:
 
         if cutoff is not None and context_tree_db_path is not None:
             # Step 2: Clean context tree (separate DB -- do first for fail-safety)
-            from context_aware_translation.storage.context_tree_db import ContextTreeDB
+            from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 
             ct_db = ContextTreeDB(context_tree_db_path)
             try:
@@ -288,7 +288,7 @@ class DocumentRepository:
 
         if cutoff is not None and context_tree_db_path is not None:
             # Step 2: Clean context tree (separate DB -- do first for fail-safety)
-            from context_aware_translation.storage.context_tree_db import ContextTreeDB
+            from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 
             ct_db = ContextTreeDB(context_tree_db_path)
             try:

@@ -8,14 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from context_aware_translation.glossary_io import (
+from context_aware_translation.storage.glossary_io import (
     _consolidate_description,
     _validate_glossary_json,
     export_glossary,
     import_glossary,
 )
-from context_aware_translation.storage.book_db import SQLiteBookDB, TermRecord
-from context_aware_translation.storage.context_tree_db import ContextTreeDB
+from context_aware_translation.storage.repositories.term_repository import TermRepository
+from context_aware_translation.storage.schema.book_db import SQLiteBookDB, TermRecord
+from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 
 
 @pytest.fixture
@@ -459,8 +460,6 @@ class TestGuards:
 
         from context_aware_translation.core.context_manager import TranslationContextManager
         from context_aware_translation.core.context_tree import ContextTree
-        from context_aware_translation.storage.term_repository import TermRepository
-
         # Create a term with both imported and chunk descriptions
         term = _make_term(
             "hero",

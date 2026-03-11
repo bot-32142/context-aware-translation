@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
 from context_aware_translation.core.models import KeyedContext, Term
-from context_aware_translation.storage.book_db import (
+from context_aware_translation.storage.schema.book_db import (
     ChunkRecord,
     SQLiteBookDB,
     TermRecord,

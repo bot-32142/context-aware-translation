@@ -10,7 +10,7 @@ Comprehensive test suite (107 tests) mirroring the main package structure. Tests
 | File | Description |
 |------|-------------|
 | `conftest.py` | Shared pytest fixtures: `temp_config` (Config with dummy API settings), `temp_db` (SQLiteBookDB), `temp_context_tree_db` (ContextTreeDB) |
-| `test_glossary_io.py` | Glossary import/export: consolidation, validation, round-trip I/O |
+| `storage/test_glossary_io.py` | Glossary import/export: consolidation, validation, round-trip I/O |
 | `data/` | Test fixtures: `test_chunk.txt`, `test_chunk2.txt` for document parsing tests |
 
 ## Subdirectories

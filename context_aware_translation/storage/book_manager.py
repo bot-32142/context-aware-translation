@@ -15,7 +15,7 @@ from context_aware_translation.config import ensure_valid_persisted_config_paylo
 from context_aware_translation.storage.book import Book, BookStatus
 from context_aware_translation.storage.config_profile import ConfigProfile
 from context_aware_translation.storage.endpoint_profile import EndpointProfile
-from context_aware_translation.storage.registry_db import RegistryDB
+from context_aware_translation.storage.schema.registry_db import RegistryDB
 
 # Platform-specific data directory:
 # macOS:   ~/Library/Application Support/ContextAwareTranslation
@@ -717,9 +717,9 @@ class BookManager:
         if not book_db_path.exists():
             return None
 
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
-        from context_aware_translation.storage.term_repository import TermRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.term_repository import TermRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         db = None
         try:

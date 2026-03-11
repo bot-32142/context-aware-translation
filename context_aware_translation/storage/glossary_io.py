@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from context_aware_translation.storage.book_db import SQLiteBookDB
-    from context_aware_translation.storage.context_tree_db import ContextTreeDB
+    from context_aware_translation.storage.schema.book_db import SQLiteBookDB
+    from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 
-from context_aware_translation.storage.book_db import TermRecord
+from context_aware_translation.storage.schema.book_db import TermRecord
 
 
 def _sort_key(key: str) -> int:
