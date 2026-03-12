@@ -93,6 +93,8 @@ def test_document_translation_view_renders_units_and_routes_actions():
         assert view.unit_list.count() == 2
         assert view.translate_button.isEnabled()
         assert view.batch_translate_button.isEnabled()
+        assert view.batch_translate_button.isHidden()
+        assert not view.batch_translate_button.isWindow()
         assert view.save_button.isEnabled()
         assert view.retranslate_button.isEnabled()
         assert not view.previous_button.isEnabled()

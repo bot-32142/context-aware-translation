@@ -67,6 +67,7 @@ class DocumentTranslationView(QWidget):
         self.viewmodel = DocumentTranslationPaneViewModel(self)
         self._state: DocumentTranslationState | None = None
         self._find_pos = 0
+        self._supports_batch = False
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -204,10 +205,11 @@ class DocumentTranslationView(QWidget):
 
     def _apply_state(self, state: DocumentTranslationState, *, previous_unit_id: str | None) -> None:
         self._state = state
+        self._supports_batch = state.supports_batch
         self.progress_label.setText(self._progress_text(state))
         self.translate_button.setEnabled(state.run_action.enabled)
         self.translate_button.setToolTip(state.run_action.blocker.message if state.run_action.blocker else "")
-        self.batch_translate_button.setVisible(state.supports_batch)
+        self.batch_translate_button.hide()
         self.batch_translate_button.setEnabled(state.batch_action.enabled)
         self.batch_translate_button.setToolTip(state.batch_action.blocker.message if state.batch_action.blocker else "")
         self.unit_list.blockSignals(True)
@@ -533,7 +535,7 @@ class DocumentTranslationView(QWidget):
             progress_text=self.progress_label.text().strip(),
             polish_enabled=self.enable_polish_cb.isChecked(),
             can_translate=self.translate_button.isEnabled(),
-            supports_batch=not self.batch_translate_button.isHidden(),
+            supports_batch=self._supports_batch,
             can_batch=self.batch_translate_button.isEnabled(),
         )
 

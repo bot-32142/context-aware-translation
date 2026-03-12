@@ -4,7 +4,10 @@ Rectangle {
     id: root
     objectName: "projectSettingsPaneChrome"
     color: "#fcfaf6"
-    implicitHeight: contentColumn.implicitHeight + 36
+    implicitHeight: titleLabel.implicitHeight + tipLabel.implicitHeight + actionRow.implicitHeight + 48
+        + (root.hasBlocker ? blockerCard.implicitHeight + 12 : 0)
+        + (root.hasMessage ? messageCard.implicitHeight + 12 : 0)
+        + (root.showCustomProfile ? customCard.implicitHeight + 12 : 0)
 
     signal saveRequested
     signal openAppSetupRequested
@@ -62,6 +65,7 @@ Rectangle {
         spacing: 12
 
         Text {
+            id: titleLabel
             width: parent.width
             text: root.titleText
             color: "#2f251d"
@@ -71,6 +75,7 @@ Rectangle {
         }
 
         Text {
+            id: tipLabel
             width: parent.width
             text: root.tipText
             color: "#675b4e"
@@ -79,9 +84,13 @@ Rectangle {
         }
 
         Rectangle {
+            id: blockerCard
             visible: root.hasBlocker
             width: parent.width
-            implicitHeight: blockerColumn.implicitHeight + 24
+            implicitHeight: blockerMessage.implicitHeight
+                + (root.showOpenAppSetup ? blockerButton.height + blockerColumn.spacing : 0)
+                + 24
+            height: implicitHeight
             radius: 16
             color: "#fff7ed"
             border.width: 1
@@ -89,11 +98,14 @@ Rectangle {
 
             Column {
                 id: blockerColumn
-                anchors.fill: parent
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
                 anchors.margins: 12
                 spacing: 10
 
                 Text {
+                    id: blockerMessage
                     width: parent.width
                     text: root.blockerText
                     color: "#9a3412"
@@ -127,9 +139,11 @@ Rectangle {
         }
 
         Rectangle {
+            id: messageCard
             visible: root.hasMessage
             width: parent.width
             implicitHeight: messageLabel.implicitHeight + 20
+            height: implicitHeight
             radius: 14
             color: root.messageFill(root.messageKind)
             border.width: 1
@@ -148,9 +162,15 @@ Rectangle {
         }
 
         Rectangle {
+            id: customCard
             visible: root.showCustomProfile
             width: parent.width
-            implicitHeight: customColumn.implicitHeight + 24
+            implicitHeight: customTitle.implicitHeight
+                + customBody.implicitHeight
+                + customHint.implicitHeight
+                + customColumn.spacing * 2
+                + 24
+            height: implicitHeight
             radius: 16
             color: "#f3eee5"
             border.width: 1
@@ -158,11 +178,14 @@ Rectangle {
 
             Column {
                 id: customColumn
-                anchors.fill: parent
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
                 anchors.margins: 12
                 spacing: 6
 
                 Text {
+                    id: customTitle
                     width: parent.width
                     text: root.customProfileLabel
                     color: "#2f251d"
@@ -172,6 +195,7 @@ Rectangle {
                 }
 
                 Text {
+                    id: customBody
                     width: parent.width
                     text: root.customProfileText
                     color: "#5f5447"
@@ -180,6 +204,7 @@ Rectangle {
                 }
 
                 Text {
+                    id: customHint
                     width: parent.width
                     text: root.routesHintText
                     color: "#786b5e"
@@ -190,6 +215,7 @@ Rectangle {
         }
 
         Row {
+            id: actionRow
             spacing: 8
 
             Rectangle {

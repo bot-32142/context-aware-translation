@@ -141,6 +141,7 @@ class DocumentImagesView(QWidget):
                 "Image actions are explicit. Review one image, reinsert pending images, or rerun everything for this document."
             )
         )
+        self.tip_label.setParent(self)
         self.tip_label.hide()
 
         self.blocker_strip = QFrame(self)

@@ -23,7 +23,8 @@ from context_aware_translation.application.events import InMemoryApplicationEven
 from tests.application.fakes import FakeProjectSetupService
 
 try:
-    from PySide6.QtWidgets import QApplication, QDialog, QPushButton
+    from PySide6.QtGui import QColor, QImage
+    from PySide6.QtWidgets import QApplication, QDialog, QPushButton, QWidget
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -106,6 +107,50 @@ def _make_state(*, blocker: str | None = None, project_specific: bool = False) -
             )
         ),
     )
+
+
+def _flush() -> None:
+    QApplication.processEvents()
+    QApplication.processEvents()
+
+
+def _grab_image(widget: QWidget, *, width: int = 980, height: int = 900) -> QImage:
+    widget.resize(width, height)
+    widget.show()
+    _flush()
+    return widget.grab().toImage()
+
+
+def _color_distance(left: QColor, right: QColor) -> int:
+    return (
+        abs(left.red() - right.red())
+        + abs(left.green() - right.green())
+        + abs(left.blue() - right.blue())
+        + abs(left.alpha() - right.alpha())
+    )
+
+
+def _crop_rect(image: QImage, *, x: int, y: int, width: int, height: int) -> QImage:
+    scale = image.devicePixelRatio()
+    return image.copy(
+        int(x * scale),
+        int(y * scale),
+        max(1, int(width * scale)),
+        max(1, int(height * scale)),
+    )
+
+
+def _ink_ratio(image: QImage, *, background: QColor) -> float:
+    if image.isNull():
+        return 0.0
+    samples = 0
+    colored = 0
+    for y in range(0, image.height(), 2):
+        for x in range(0, image.width(), 2):
+            samples += 1
+            if _color_distance(image.pixelColor(x, y), background) > 24:
+                colored += 1
+    return colored / samples if samples else 0.0
 
 
 def test_project_settings_pane_renders_backend_state():
@@ -273,4 +318,67 @@ def test_project_settings_pane_refreshes_on_setup_invalidation():
         assert view.viewmodel.show_custom_profile is True
         assert service.calls == [("get_state", "proj-1"), ("get_state", "proj-1")]
     finally:
+        view.cleanup()
+
+
+def test_project_settings_pane_screenshot_restores_shared_layout_after_custom_round_trip():
+    from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
+
+    service = FakeProjectSetupService(state=_make_state())
+    bus = InMemoryApplicationEventBus()
+    view = ProjectSettingsPane("proj-1", service, bus)
+    try:
+        root = view.chrome_host.rootObject()
+        assert root is not None
+
+        shared_before = _grab_image(view)
+        shared_before_height = float(root.property("implicitHeight"))
+
+        custom_index = next(
+            index for index, option in enumerate(view.viewmodel.profile_options) if option["label"] == "Custom profile"
+        )
+        view.profile_combo.setCurrentIndex(custom_index)
+        _flush()
+
+        custom_image = _grab_image(view)
+        custom_height = float(root.property("implicitHeight"))
+        custom_region = view.routes_group.geometry()
+
+        view.profile_combo.setCurrentIndex(0)
+        _flush()
+
+        shared_after = _grab_image(view)
+        shared_after_height = float(root.property("implicitHeight"))
+
+        shared_before_crop = _crop_rect(
+            shared_before,
+            x=custom_region.x(),
+            y=custom_region.y(),
+            width=custom_region.width(),
+            height=custom_region.height(),
+        )
+        custom_crop = _crop_rect(
+            custom_image,
+            x=custom_region.x(),
+            y=custom_region.y(),
+            width=custom_region.width(),
+            height=custom_region.height(),
+        )
+        shared_after_crop = _crop_rect(
+            shared_after,
+            x=custom_region.x(),
+            y=custom_region.y(),
+            width=custom_region.width(),
+            height=custom_region.height(),
+        )
+        background = shared_before_crop.pixelColor(0, 0)
+
+        assert _ink_ratio(custom_crop, background=background) > _ink_ratio(shared_before_crop, background=background) + 0.08
+        assert abs(_ink_ratio(shared_after_crop, background=background) - _ink_ratio(shared_before_crop, background=background)) <= 0.02
+        assert custom_height > shared_before_height
+        assert shared_after_height == shared_before_height
+        assert view.routes_group.isHidden()
+        assert view.routes_group.maximumHeight() == 0
+    finally:
+        view.close()
         view.cleanup()

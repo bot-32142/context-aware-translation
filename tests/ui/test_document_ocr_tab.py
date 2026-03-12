@@ -22,7 +22,7 @@ from context_aware_translation.application.contracts.document import (
 from tests.application.fakes import FakeDocumentService
 
 try:
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication, QLabel
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -58,6 +58,11 @@ def _workspace_state() -> DocumentWorkspaceState:
         document=DocumentRef(document_id=4, order_index=4, label="04.png"),
         active_tab=DocumentSection.OCR,
     )
+
+
+def _flush() -> None:
+    QApplication.processEvents()
+    QApplication.processEvents()
 
 
 def test_document_ocr_tab_uses_structured_editor_and_bbox_overlay():
@@ -227,6 +232,52 @@ def test_document_ocr_tab_can_cancel_active_task():
         cancel_request = next(payload for name, payload in service.calls if name == "cancel_ocr")
         assert cancel_request.task_id == "ocr-task-1"
     finally:
+        view.deleteLater()
+
+
+def test_document_ocr_tab_empty_state_stays_embedded_and_renders_in_screenshot():
+    from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
+
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        ocr=DocumentOCRState(
+            workspace=_workspace_state(),
+            pages=[],
+            current_page_index=None,
+            actions=DocumentOCRActions(
+                save={"enabled": False},
+                run_current={"enabled": False},
+                run_pending={"enabled": False},
+            ),
+        ),
+        ocr_page_images={},
+    )
+    view = DocumentOCRTab(service, "proj-1", 4)
+    try:
+        view.resize(960, 720)
+        view.show()
+        view.refresh()
+        _flush()
+
+        assert view.empty_label.parentWidget() is view
+        assert view.empty_label.isVisible()
+        assert not view.empty_label.isWindow()
+        stray_empty_labels = [
+            widget
+            for widget in QApplication.topLevelWidgets()
+            if widget is not view
+            and widget.isVisible()
+            and isinstance(widget, QLabel)
+            and widget.text() == "No image pages are available for OCR in this document."
+        ]
+        assert not stray_empty_labels
+
+        screenshot = view.grab().toImage()
+        assert not screenshot.isNull()
+        assert round(screenshot.deviceIndependentSize().width()) == view.width()
+        assert round(screenshot.deviceIndependentSize().height()) == view.height()
+    finally:
+        view.close()
         view.deleteLater()
 
 

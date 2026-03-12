@@ -197,6 +197,7 @@ class DocumentOCRTab(QWidget):
         splitter.setSizes([480, 480])
         content_layout.addWidget(splitter, 1)
         layout.addWidget(self._content_widget, 1)
+        layout.addWidget(self.empty_label)
 
         self.chrome_host = QmlChromeHost(
             "document/ocr/DocumentOCRPaneChrome.qml",
@@ -213,6 +214,7 @@ class DocumentOCRTab(QWidget):
         self.tip_label = create_tip_label(
             self.tr("OCR applies only to the current document. Saving OCR does not rerun later steps.")
         )
+        self.tip_label.setParent(self)
         self.tip_label.hide()
 
         self.first_button = QPushButton(self.tr("|<"), self)
@@ -280,6 +282,7 @@ class DocumentOCRTab(QWidget):
         self.progress_widget.hide()
 
         self.empty_label = create_tip_label(self.tr("No image pages are available for OCR in this document."))
+        self.empty_label.setParent(self)
         self.empty_label.hide()
 
     def refresh(self) -> None:

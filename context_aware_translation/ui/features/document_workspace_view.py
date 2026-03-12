@@ -329,6 +329,7 @@ class _DocumentExportTab(QWidget):
                 "Export applies only to the current document. You can also start export directly from the Work list when that row is exportable."
             ),
         )
+        self.tip_label.setParent(self)
         self.tip_label.hide()
         self.controls_card = QFrame(self)
         self.controls_card.setFrameShape(QFrame.Shape.StyledPanel)

@@ -769,6 +769,7 @@ def test_document_workspace_clickthrough_smoke_keeps_ocr_images_terms_and_export
         assert translation_root.property("translateLabelText") == "Translate"
         assert translation_root.property("batchLabelText") == "Submit Batch Task"
         assert translation_root.property("supportsBatch") is True
+        assert translation_view.batch_translate_button.isHidden()
         assert translation_view.batch_translate_button.parent() is translation_view
 
         document_view.show_section(DocumentSection.EXPORT)

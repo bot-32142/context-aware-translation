@@ -256,6 +256,9 @@ class ProjectSettingsPane(QWidget):
             self.routes_editor.hide()
             self.routes_group.hide()
             self.routes_group.setMinimumHeight(0)
+            self.routes_group.setMaximumHeight(0)
+            self.routes_group.updateGeometry()
+            self.layout().activate()
             self._schedule_chrome_resize()
             return
         self.routes_group.show()
@@ -264,7 +267,11 @@ class ProjectSettingsPane(QWidget):
         self.routes_editor.set_routes(profile.routes)
         self.routes_editor.adjustSize()
         self.routes_group.adjustSize()
-        self.routes_group.setMinimumHeight(self.routes_group.sizeHint().height())
+        group_height = self.routes_group.sizeHint().height()
+        self.routes_group.setMinimumHeight(group_height)
+        self.routes_group.setMaximumHeight(group_height)
+        self.routes_group.updateGeometry()
+        self.layout().activate()
         self._schedule_chrome_resize()
 
     def _schedule_chrome_resize(self) -> None:
