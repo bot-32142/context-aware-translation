@@ -194,6 +194,46 @@ def test_document_ocr_tab_saves_structured_elements():
         view.deleteLater()
 
 
+def test_document_ocr_tab_qml_save_signal_persists_manual_text_edit():
+    from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
+
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        ocr=DocumentOCRState(
+            workspace=_workspace_state(),
+            pages=[
+                OCRPageState(
+                    source_id=101,
+                    page_number=1,
+                    total_pages=1,
+                    status=SurfaceStatus.DONE,
+                    extracted_text="line one",
+                )
+            ],
+            current_page_index=0,
+            actions=DocumentOCRActions(
+                save={"enabled": True},
+                run_current={"enabled": True},
+                run_pending={"enabled": True},
+            ),
+        ),
+        ocr_page_images={101: _png_1x1()},
+    )
+    view = DocumentOCRTab(service, "proj-1", 4)
+    try:
+        view.refresh()
+        root = view.chrome_host.rootObject()
+        assert root is not None
+        view.text_edit.setPlainText("edited manually")
+
+        root.saveRequested.emit()
+
+        save_request = next(payload for name, payload in service.calls if name == "save_ocr")
+        assert save_request.extracted_text == "edited manually"
+    finally:
+        view.deleteLater()
+
+
 def test_document_ocr_tab_can_cancel_active_task():
     from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
 

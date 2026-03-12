@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QScrollArea,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -23,6 +24,7 @@ from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.events import ApplicationEventSubscriber, QueueChangedEvent
 from context_aware_translation.application.services.queue import QueueService
 from context_aware_translation.ui.tips import create_tip_label
+from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
 
 _STATUS_LABELS: dict[QueueStatus, str] = {
     QueueStatus.RUNNING: "Running",
@@ -45,12 +47,17 @@ class _QueueItemCard(QFrame):
         self.set_item(item)
 
     def _init_ui(self) -> None:
+        self.setObjectName("queueItemCard")
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setStyleSheet(
-            "QFrame { background: #fcfaf6; border: 1px solid #d9d0c4; border-radius: 14px; }"
-            "QPushButton { background: #e7ddd0; border: none; border-radius: 14px; padding: 8px 14px;"
-            " color: #2f251d; font-weight: 600; }"
-            "QPushButton:disabled { background: #d7cebf; color: #786b5e; }"
+        apply_hybrid_control_theme(
+            self,
+            extra_stylesheet="""
+            QFrame#queueItemCard {
+                background: #fcfaf6;
+                border: 1px solid #d9d0c4;
+                border-radius: 14px;
+            }
+            """,
         )
 
         layout = QVBoxLayout(self)
@@ -96,6 +103,11 @@ class _QueueItemCard(QFrame):
             button = QPushButton()
             button.clicked.connect(lambda _checked=False, action=action: self.action_requested.emit(self._item, action))
             self._buttons[action] = button
+            set_button_tone(
+                button,
+                "danger" if action is QueueActionKind.DELETE else None,
+                size="compact",
+            )
             button_row.addWidget(button)
         button_row.addStretch()
         layout.addLayout(button_row)
@@ -156,6 +168,7 @@ class QueueDrawerView(QWidget):
 
     open_related_item_requested = Signal(object)  # NavigationTarget
     notification_requested = Signal(object)  # UserMessage
+    _refresh_requested = Signal()
 
     def __init__(
         self,
@@ -172,8 +185,10 @@ class QueueDrawerView(QWidget):
         self._last_status: dict[str, QueueStatus] = {}
         self._suppressed_transition_notifications: set[str] = set()
         self._loaded_once = False
+        self._refresh_pending = False
         self._event_bridge = QtApplicationEventBridge(events, parent=self)
         self._event_bridge.queue_changed.connect(self._on_queue_changed)
+        self._refresh_requested.connect(self._flush_queued_refresh, Qt.ConnectionType.QueuedConnection)
         self._init_ui()
         self.refresh()
 
@@ -181,6 +196,21 @@ class QueueDrawerView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
+        apply_hybrid_control_theme(
+            self,
+            extra_stylesheet="""
+            QFrame#queueEmptyCard {
+                background: #f8f3ea;
+                border: 1px dashed #d9d0c4;
+                border-radius: 18px;
+            }
+            QLabel#queueEmptyTitle {
+                color: #2f251d;
+                font-size: 18px;
+                font-weight: 600;
+            }
+            """,
+        )
 
         self.title_label = QLabel()
         self.title_label.setStyleSheet("font-size: 18px; font-weight: 600;")
@@ -196,21 +226,45 @@ class QueueDrawerView(QWidget):
         self.message_label.setStyleSheet("color: #475467;")
         layout.addWidget(self.message_label)
 
+        self.body_stack = QStackedWidget(self)
+        self.body_stack.setMinimumHeight(240)
+
+        self.empty_page = QWidget(self.body_stack)
+        empty_layout = QVBoxLayout(self.empty_page)
+        empty_layout.setContentsMargins(0, 0, 0, 0)
+        empty_layout.addStretch(1)
+        self.empty_card = QFrame(self.empty_page)
+        self.empty_card.setObjectName("queueEmptyCard")
+        self.empty_card.setMinimumHeight(180)
+        empty_card_layout = QVBoxLayout(self.empty_card)
+        empty_card_layout.setContentsMargins(22, 22, 22, 22)
+        empty_card_layout.setSpacing(8)
+        self.empty_title_label = QLabel(self.tr("Queue is clear"), self.empty_card)
+        self.empty_title_label.setObjectName("queueEmptyTitle")
+        self.empty_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_card_layout.addWidget(self.empty_title_label)
         self.empty_label = create_tip_label(self.tr("No background actions right now."))
-        layout.addWidget(self.empty_label)
+        self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_card_layout.addWidget(self.empty_label)
+        empty_layout.addWidget(self.empty_card)
+        empty_layout.addStretch(1)
+        self.body_stack.addWidget(self.empty_page)
 
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
         self.rows_container = QWidget()
         self.rows_layout = QVBoxLayout(self.rows_container)
         self.rows_layout.setContentsMargins(0, 0, 0, 0)
         self.rows_layout.setSpacing(8)
         self.rows_layout.addStretch()
         self.scroll_area.setWidget(self.rows_container)
-        layout.addWidget(self.scroll_area, 1)
+        self.body_stack.addWidget(self.scroll_area)
+        layout.addWidget(self.body_stack, 1)
 
         self.refresh_button = QPushButton(self.tr("Refresh"))
         self.refresh_button.clicked.connect(self.refresh)
+        set_button_tone(self.refresh_button, "ghost")
         layout.addWidget(self.refresh_button)
 
         self.retranslateUi()
@@ -224,6 +278,7 @@ class QueueDrawerView(QWidget):
             self.refresh()
 
     def refresh(self) -> None:
+        self._refresh_pending = False
         state = self._service.get_queue(project_id=self._scope_project_id)
         self._apply_state(state)
 
@@ -243,6 +298,7 @@ class QueueDrawerView(QWidget):
             self.tip_label.setText(self.tr("Showing background actions for {0}.").format(self._scope_label))
         else:
             self.tip_label.setText(self.tr("Showing background actions for the current project."))
+        self.empty_title_label.setText(self.tr("Queue is clear"))
         self.empty_label.setText(self.tr("No background actions right now."))
         self.refresh_button.setText(self.tr("Refresh"))
         for row in self._rows.values():
@@ -250,8 +306,7 @@ class QueueDrawerView(QWidget):
 
     def _apply_state(self, state: QueueState) -> None:
         self.message_label.setText(self._summary_text(state))
-        self.empty_label.setVisible(not state.items)
-        self.scroll_area.setVisible(bool(state.items))
+        self.body_stack.setCurrentWidget(self.scroll_area if state.items else self.empty_page)
 
         self._clear_rows()
         previous_status = dict(self._last_status)
@@ -327,7 +382,7 @@ class QueueDrawerView(QWidget):
             self.notification_requested.emit(
                 UserMessage(severity=UserMessageSeverity.ERROR, text=exc.payload.message, code=exc.payload.code.value)
             )
-            self.refresh()
+            self._queue_refresh()
             return
         self._suppressed_transition_notifications.add(item.queue_item_id)
         if result.message is not None:
@@ -339,4 +394,15 @@ class QueueDrawerView(QWidget):
                     text=self.tr("Queue action '{0}' applied.").format(result.command_name),
                 )
             )
+        self._queue_refresh()
+
+    def _queue_refresh(self) -> None:
+        if self._refresh_pending:
+            return
+        self._refresh_pending = True
+        self._refresh_requested.emit()
+
+    def _flush_queued_refresh(self) -> None:
+        if not self._refresh_pending:
+            return
         self.refresh()

@@ -138,6 +138,7 @@ class MainWindow(QMainWindow):
             open_navigation_target_callback=self._open_navigation_target,
             notification_callback=self._on_queue_notification,
             title_text=lambda: self.tr("Queue"),
+            dismiss_project_modal_callback=self._dismiss_current_project_modal,
         )
         self._queue_drawer = self._queue_controller.queue_drawer
         self._queue_shell = self._queue_controller.queue_shell
@@ -370,6 +371,12 @@ class MainWindow(QMainWindow):
 
     def _on_queue_visibility_changed(self, visible: bool) -> None:
         self._queue_controller.handle_visibility_changed(visible)
+
+    def _dismiss_current_project_modal(self) -> None:
+        shell = self._current_project_shell()
+        if shell is None:
+            return
+        shell.dismiss_modal()
 
     def _on_queue_notification(self, message: UserMessage) -> None:
         timeout_ms = 7000 if message.severity is UserMessageSeverity.ERROR else 3000

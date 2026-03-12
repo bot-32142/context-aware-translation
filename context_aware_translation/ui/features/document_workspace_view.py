@@ -48,6 +48,7 @@ from context_aware_translation.ui.shell_hosts.document_shell_host import Documen
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.viewmodels.document_export_pane import DocumentExportPaneViewModel
+from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
 
 _SECTION_LABELS: dict[DocumentSection, str] = {
     DocumentSection.OCR: "OCR",
@@ -104,6 +105,8 @@ class _ExportControls(QWidget):
         )
         self.allow_original_fallback_cb.toggled.connect(self._on_options_changed)
         layout.addWidget(self.allow_original_fallback_cb)
+        apply_hybrid_control_theme(self)
+        set_button_tone(self.browse_button)
 
     def apply_state(self, state: ExportDialogState | DocumentExportState) -> None:
         self._default_output_path = state.default_output_path or ""
@@ -270,6 +273,11 @@ class WorkExportDialog(QDialog):
         self.export_button.clicked.connect(self._run_export)
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)
+        apply_hybrid_control_theme(self)
+        set_button_tone(self.export_button, "primary")
+        cancel_button = self.button_box.button(QDialogButtonBox.StandardButton.Cancel)
+        if cancel_button is not None:
+            set_button_tone(cancel_button, "ghost")
 
         self._update_export_enabled()
 
@@ -340,21 +348,6 @@ class _DocumentExportTab(QWidget):
                 border-radius: 12px;
                 background-color: #fdfaf5;
             }
-            QComboBox, QLineEdit {
-                min-height: 34px;
-                border: 1px solid #d8cdbf;
-                border-radius: 8px;
-                padding: 0 10px;
-                background-color: #ffffff;
-            }
-            QPushButton {
-                min-height: 34px;
-                border-radius: 10px;
-                padding: 0 14px;
-                background-color: #efe0ca;
-                color: #2f251d;
-                font-weight: 600;
-            }
             QCheckBox {
                 color: #2f251d;
             }
@@ -378,6 +371,8 @@ class _DocumentExportTab(QWidget):
         controls_layout.addWidget(self.result_label)
         layout.addWidget(self.controls_card)
         layout.addStretch()
+        apply_hybrid_control_theme(self.controls_card)
+        set_button_tone(self.export_button, "primary")
         self._connect_qml_signals()
         self._sync_chrome_state()
 

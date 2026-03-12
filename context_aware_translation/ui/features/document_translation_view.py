@@ -31,6 +31,7 @@ from context_aware_translation.application.services.document import DocumentServ
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.viewmodels.document_translation_pane import DocumentTranslationPaneViewModel
+from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
 
 _STATUS_TEXT: dict[SurfaceStatus, str] = {
     SurfaceStatus.READY: "Ready",
@@ -66,7 +67,6 @@ class DocumentTranslationView(QWidget):
         self._document_id = document_id
         self.viewmodel = DocumentTranslationPaneViewModel(self)
         self._state: DocumentTranslationState | None = None
-        self._find_pos = 0
         self._supports_batch = False
         self._init_ui()
 
@@ -183,6 +183,14 @@ class DocumentTranslationView(QWidget):
         splitter.addWidget(right_panel)
         splitter.setSizes([260, 740])
         layout.addWidget(splitter, 1)
+        apply_hybrid_control_theme(self)
+        set_button_tone(self.find_next_button, size="compact")
+        set_button_tone(self.replace_button, size="compact")
+        set_button_tone(self.replace_all_button, size="compact")
+        set_button_tone(self.save_button, "primary")
+        set_button_tone(self.retranslate_button)
+        set_button_tone(self.previous_button, size="compact")
+        set_button_tone(self.next_button, size="compact")
         self._connect_qml_signals()
         self._sync_chrome_state()
 
@@ -253,7 +261,6 @@ class DocumentTranslationView(QWidget):
             self._sync_chrome_state()
             return
 
-        self._find_pos = 0
         self._clear_find_highlight()
         self.selection_label.setText(f"{unit.label} · {self.tr(_STATUS_TEXT[unit.status])}")
         self.source_text.setPlainText(unit.source_text or "")
@@ -442,7 +449,6 @@ class DocumentTranslationView(QWidget):
         return " | ".join(parts)
 
     def _on_find_text_changed(self, _text: str) -> None:
-        self._find_pos = 0
         self._clear_find_highlight()
 
     def _find_next(self) -> None:
@@ -450,17 +456,12 @@ class DocumentTranslationView(QWidget):
         if not search_text:
             return
         self._clear_find_highlight()
-        text = self.translation_text.toPlainText()
-        start = self._find_pos
-        pos = text.find(search_text, start)
-        if pos < 0 and start > 0:
-            pos = text.find(search_text, 0)
-        if pos < 0:
+        start = self._find_start_position()
+        cursor = self.translation_text.document().find(search_text, start)
+        if cursor.isNull() and start > 0:
+            cursor = self.translation_text.document().find(search_text, 0)
+        if cursor.isNull():
             return
-        self._find_pos = pos + len(search_text)
-        cursor = self.translation_text.textCursor()
-        cursor.setPosition(pos)
-        cursor.setPosition(pos + len(search_text), QTextCursor.MoveMode.KeepAnchor)
         self.translation_text.setTextCursor(cursor)
         extra = QTextEdit.ExtraSelection()
         extra.cursor = cursor
@@ -474,9 +475,8 @@ class DocumentTranslationView(QWidget):
         if not search_text:
             return
         cursor = self.translation_text.textCursor()
-        if cursor.hasSelection() and cursor.selectedText() == search_text:
+        if cursor.hasSelection() and self._normalized_selected_text(cursor) == search_text:
             cursor.insertText(self.replace_input.text())
-            self._find_pos = cursor.position()
         self._find_next()
 
     def _replace_all(self) -> None:
@@ -486,11 +486,19 @@ class DocumentTranslationView(QWidget):
         self.translation_text.setPlainText(
             self.translation_text.toPlainText().replace(search_text, self.replace_input.text())
         )
-        self._find_pos = 0
         self._clear_find_highlight()
 
     def _clear_find_highlight(self) -> None:
         self.translation_text.setExtraSelections([])
+
+    def _find_start_position(self) -> int:
+        cursor = self.translation_text.textCursor()
+        if cursor.hasSelection():
+            return cursor.selectionEnd()
+        return cursor.position()
+
+    def _normalized_selected_text(self, cursor: QTextCursor) -> str:
+        return cursor.selectedText().replace("\u2029", "\n")
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:

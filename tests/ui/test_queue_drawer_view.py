@@ -211,3 +211,72 @@ def test_queue_drawer_view_deduplicates_local_action_and_transition_notification
         assert notices[0].text == "Retry queued."
     finally:
         view.cleanup()
+
+
+def test_queue_drawer_view_deletes_rows_on_next_event_turn():
+    from context_aware_translation.ui.features.queue_drawer_view import QueueDrawerView
+
+    service = FakeQueueService(
+        state=QueueState(
+            items=[
+                QueueItem(
+                    queue_item_id="task-1",
+                    title="Read text from images",
+                    project_id="proj-1",
+                    document_id=4,
+                    status=QueueStatus.DONE,
+                    related_target=NavigationTarget(
+                        kind=NavigationTargetKind.DOCUMENT_OCR,
+                        project_id="proj-1",
+                        document_id=4,
+                    ),
+                    available_actions=[QueueActionKind.OPEN_RELATED_ITEM, QueueActionKind.DELETE],
+                ),
+                QueueItem(
+                    queue_item_id="task-2",
+                    title="Export terms",
+                    project_id="proj-1",
+                    document_id=4,
+                    status=QueueStatus.DONE,
+                    related_target=NavigationTarget(
+                        kind=NavigationTargetKind.DOCUMENT_TERMS,
+                        project_id="proj-1",
+                        document_id=4,
+                    ),
+                    available_actions=[QueueActionKind.OPEN_RELATED_ITEM, QueueActionKind.DELETE],
+                ),
+            ]
+        )
+    )
+
+    def _apply_action(request):  # noqa: ANN001
+        service.calls.append(("apply_action", request))
+        service.state = QueueState(
+            items=[item for item in service.state.items if item.queue_item_id != request.queue_item_id]
+        )
+        return AcceptedCommand(command_name="delete")
+
+    service.apply_action = _apply_action  # type: ignore[method-assign]
+    bus = InMemoryApplicationEventBus()
+    view = QueueDrawerView(service, bus)
+    try:
+        first_row = view._rows["task-1"]
+        first_row._buttons[QueueActionKind.DELETE].click()
+
+        assert set(view._rows) == {"task-1", "task-2"}
+
+        QApplication.processEvents()
+
+        assert set(view._rows) == {"task-2"}
+
+        second_row = view._rows["task-2"]
+        second_row._buttons[QueueActionKind.DELETE].click()
+
+        assert set(view._rows) == {"task-2"}
+
+        QApplication.processEvents()
+
+        assert view._rows == {}
+        assert not view.empty_label.isHidden()
+    finally:
+        view.cleanup()

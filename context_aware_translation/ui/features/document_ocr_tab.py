@@ -31,6 +31,7 @@ from context_aware_translation.application.services.document import DocumentServ
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.viewmodels.document_ocr_pane import DocumentOcrPaneViewModel
+from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
 from context_aware_translation.ui.widgets.image_viewer import ImageViewer
 from context_aware_translation.ui.widgets.progress_widget import ProgressWidget
 
@@ -205,6 +206,18 @@ class DocumentOCRTab(QWidget):
             parent=self,
         )
         layout.addWidget(self.chrome_host)
+        apply_hybrid_control_theme(self)
+        for button in (
+            self.first_button,
+            self.prev_button,
+            self.next_button,
+            self.last_button,
+            self.go_button,
+            self.run_current_button,
+            self.run_pending_button,
+            self.save_button,
+        ):
+            set_button_tone(button, "primary" if button is self.save_button else None, size="compact")
 
         self._connect_qml_signals()
         self._sync_chrome_state()

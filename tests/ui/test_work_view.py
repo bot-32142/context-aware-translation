@@ -209,6 +209,7 @@ def test_work_view_renders_workboard_from_service():
         assert view.rows_table.item(0, 5).text() == "In progress (1/2)"
         assert view.rows_table.cellWidget(0, 7).text() == "Open Translation"
         assert view.rows_table.rowHeight(0) >= view.rows_table.cellWidget(0, 7).sizeHint().height()
+        assert view.rows_table.columnWidth(7) >= view.rows_table.cellWidget(0, 7).minimumWidth()
         assert work_service.calls == [("get_workboard", "proj-1")]
     finally:
         view.cleanup()

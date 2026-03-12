@@ -41,9 +41,12 @@ class QueueDockController:
         open_navigation_target_callback: Callable[[object], None],
         notification_callback: Callable[[object], None],
         title_text: Callable[[], str],
+        dismiss_project_modal_callback: Callable[[], None] | None = None,
     ) -> None:
         self._app_shell = app_shell
         self._title_text = title_text
+        self._dismiss_project_modal_callback = dismiss_project_modal_callback
+        self._is_closing = False
 
         self.queue_drawer = drawer_factory(queue_service, events, parent=parent_window)
         self.queue_drawer.open_related_item_requested.connect(open_navigation_target_callback)
@@ -62,7 +65,7 @@ class QueueDockController:
         self.dock.setWidget(self.queue_shell)
         self.dock.hide()
         self.dock.visibilityChanged.connect(self.handle_visibility_changed)
-        self.queue_shell.close_requested.connect(self.dock.close)
+        self.queue_shell.close_requested.connect(self.close)
         parent_window.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock)
 
     def open(self, *, project_id: str | None, project_name: str | None = None) -> None:
@@ -73,16 +76,24 @@ class QueueDockController:
         self.dock.raise_()
 
     def handle_visibility_changed(self, visible: bool) -> None:
-        if visible:
+        if visible or self._is_closing:
             return
-        self._app_shell.dismiss_modal()
-        self.queue_shell.clear_scope()
+        self._dismiss_queue_modal_state()
+
+    def close(self) -> None:
+        if self._is_closing:
+            return
+        self._is_closing = True
+        try:
+            self.dock.hide()
+            self._dismiss_queue_modal_state()
+        finally:
+            self._is_closing = False
 
     def clear_if_visible(self) -> None:
-        if not self.dock.isVisible():
+        if self.dock.isHidden():
             return
-        self._app_shell.dismiss_modal()
-        self.queue_shell.clear_scope()
+        self.close()
 
     def retranslate(self) -> None:
         self.dock.setWindowTitle(self._title_text())
@@ -91,6 +102,12 @@ class QueueDockController:
     def cleanup(self) -> None:
         self.queue_shell.cleanup()
         self.queue_drawer.cleanup()
+
+    def _dismiss_queue_modal_state(self) -> None:
+        self._app_shell.dismiss_modal()
+        if self._dismiss_project_modal_callback is not None:
+            self._dismiss_project_modal_callback()
+        self.queue_shell.clear_scope()
 
 
 class ProjectSessionManager:

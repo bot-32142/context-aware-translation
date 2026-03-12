@@ -19,6 +19,7 @@ from context_aware_translation.ui.features.workflow_profile_editor import (
 )
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.viewmodels.project_settings_pane import ProjectSettingsPaneViewModel
+from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme
 
 _CUSTOM_PROFILE_ID = "__custom__"
 
@@ -106,6 +107,7 @@ class ProjectSettingsPane(QWidget):
         layout.addStretch(1)
         self.routes_group.hide()
 
+        apply_hybrid_control_theme(self)
         self._connect_qml_signals()
         self._schedule_chrome_resize()
 

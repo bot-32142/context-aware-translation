@@ -33,6 +33,7 @@ from context_aware_translation.application.contracts.app_setup import (
 )
 from context_aware_translation.ui.constants import LANGUAGES
 from context_aware_translation.ui.tips import create_tip_label
+from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
 
 
 @dataclass(frozen=True)
@@ -140,6 +141,9 @@ class StepAdvancedConfigDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+        apply_hybrid_control_theme(self)
+        set_button_tone(buttons.button(QDialogButtonBox.StandardButton.Save), "primary")
+        set_button_tone(buttons.button(QDialogButtonBox.StandardButton.Cancel), "ghost")
 
     def route(self) -> WorkflowStepRoute:
         return self._serialize()
@@ -807,6 +811,9 @@ class WorkflowProfileEditorDialog(QDialog):
         footer.accepted.connect(self._accept_if_valid)
         footer.rejected.connect(self.reject)
         layout.addWidget(footer)
+        apply_hybrid_control_theme(self)
+        set_button_tone(footer.button(QDialogButtonBox.StandardButton.Save), "primary")
+        set_button_tone(footer.button(QDialogButtonBox.StandardButton.Cancel), "ghost")
         for section in (self.general_section, self.routes_section):
             section.toggled.connect(self._refresh_body_layout)
         QTimer.singleShot(0, self._refresh_body_layout)

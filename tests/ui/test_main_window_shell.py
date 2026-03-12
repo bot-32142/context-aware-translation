@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from context_aware_translation.application.contracts.common import (
+    AcceptedCommand,
     NavigationTarget,
     NavigationTargetKind,
     ProjectRef,
@@ -626,6 +627,127 @@ def test_main_window_queue_drawer_refreshes_from_queue_events():
         context.events.publish(QueueChangedEvent(project_id="project-1"))
 
         assert ("get_queue", "project-1") in context.services.queue.calls
+    finally:
+        window.close()
+        patch_stack.close()
+
+
+def test_main_window_queue_can_close_after_delete_empties_list():
+    window, context, patch_stack = _make_window()
+    try:
+        context.services.queue.state = QueueState(
+            items=[
+                QueueItem(
+                    queue_item_id="task-1",
+                    title="Read text from images",
+                    project_id="project-1",
+                    document_id=4,
+                    status=QueueStatus.FAILED,
+                    related_target=NavigationTarget(
+                        kind=NavigationTargetKind.DOCUMENT_OCR,
+                        project_id="project-1",
+                        document_id=4,
+                    ),
+                    available_actions=[QueueActionKind.OPEN_RELATED_ITEM, QueueActionKind.DELETE],
+                )
+            ]
+        )
+
+        def _apply_action(request):  # noqa: ANN001
+            context.services.queue.calls.append(("apply_action", request))
+            context.services.queue.state = QueueState(items=[])
+            return AcceptedCommand(command_name="delete")
+
+        context.services.queue.apply_action = _apply_action  # type: ignore[method-assign]
+
+        window.open_project("project-1", "One Piece")
+        shell = window._view_registry["project_project-1"]
+        assert isinstance(shell, _FakeProjectShellHost)
+
+        window._on_queue_requested()
+        shell.present_queue()
+
+        row = window._queue_drawer._rows["task-1"]
+        row._buttons[QueueActionKind.DELETE].click()
+        QApplication.processEvents()
+        assert window._queue_drawer._rows == {}
+
+        window._queue_shell.close_requested.emit()
+        QApplication.processEvents()
+
+        assert window._queue_dock.isHidden()
+        assert window._app_shell.modal_route == ""
+        assert window._queue_shell.scope == (None, None)
+        assert shell.current_surface == "work"
+    finally:
+        window.close()
+        patch_stack.close()
+
+
+def test_main_window_queue_close_after_multiple_deletes_clears_project_modal_state():
+    window, context, patch_stack = _make_window()
+    try:
+        context.services.queue.state = QueueState(
+            items=[
+                QueueItem(
+                    queue_item_id="task-1",
+                    title="Read text from images",
+                    project_id="project-1",
+                    document_id=4,
+                    status=QueueStatus.DONE,
+                    related_target=NavigationTarget(
+                        kind=NavigationTargetKind.DOCUMENT_OCR,
+                        project_id="project-1",
+                        document_id=4,
+                    ),
+                    available_actions=[QueueActionKind.OPEN_RELATED_ITEM, QueueActionKind.DELETE],
+                ),
+                QueueItem(
+                    queue_item_id="task-2",
+                    title="Export terms",
+                    project_id="project-1",
+                    document_id=4,
+                    status=QueueStatus.DONE,
+                    related_target=NavigationTarget(
+                        kind=NavigationTargetKind.DOCUMENT_TERMS,
+                        project_id="project-1",
+                        document_id=4,
+                    ),
+                    available_actions=[QueueActionKind.OPEN_RELATED_ITEM, QueueActionKind.DELETE],
+                ),
+            ]
+        )
+
+        def _apply_action(request):  # noqa: ANN001
+            context.services.queue.calls.append(("apply_action", request))
+            context.services.queue.state = QueueState(
+                items=[item for item in context.services.queue.state.items if item.queue_item_id != request.queue_item_id]
+            )
+            return AcceptedCommand(command_name="delete")
+
+        context.services.queue.apply_action = _apply_action  # type: ignore[method-assign]
+
+        window.open_project("project-1", "One Piece")
+        shell = window._view_registry["project_project-1"]
+        assert isinstance(shell, _FakeProjectShellHost)
+
+        shell.present_queue()
+        shell.queue_requested.emit()
+        assert shell.current_surface == "queue"
+
+        window._queue_drawer._rows["task-1"]._buttons[QueueActionKind.DELETE].click()
+        QApplication.processEvents()
+        window._queue_drawer._rows["task-2"]._buttons[QueueActionKind.DELETE].click()
+        QApplication.processEvents()
+        assert window._queue_drawer._rows == {}
+
+        window._queue_shell.close_requested.emit()
+        QApplication.processEvents()
+
+        assert window._queue_dock.isHidden()
+        assert window._app_shell.modal_route == ""
+        assert window._queue_shell.scope == (None, None)
+        assert shell.current_surface == "work"
     finally:
         window.close()
         patch_stack.close()

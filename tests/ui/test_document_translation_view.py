@@ -76,6 +76,11 @@ def _make_state() -> DocumentTranslationState:
     )
 
 
+def _selected_range(view) -> tuple[int, int, str]:
+    cursor = view.translation_text.textCursor()
+    return cursor.selectionStart(), cursor.selectionEnd(), cursor.selectedText()
+
+
 def test_document_translation_view_renders_units_and_routes_actions():
     from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
 
@@ -111,10 +116,13 @@ def test_document_translation_view_renders_units_and_routes_actions():
             view.retranslate_button.click()
 
         call_names = [name for name, _payload in service.calls]
+        translation_calls = [payload for name, payload in service.calls if name == "run_translation"]
         assert "run_translation" in call_names
         assert "save_translation" in call_names
         assert "retranslate" in call_names
-        assert any(name == "run_translation" and payload.batch for name, payload in service.calls if name == "run_translation")
+        assert len(translation_calls) == 2
+        assert sum(1 for payload in translation_calls if not payload.batch) == 1
+        assert sum(1 for payload in translation_calls if payload.batch) == 1
         view.next_button.click()
         assert view.unit_list.currentRow() == 1
     finally:
@@ -135,5 +143,33 @@ def test_document_translation_view_disables_editing_for_blocked_page():
         assert not view.retranslate_button.isEnabled()
         assert view.translation_text.isReadOnly()
         assert "No OCR text detected" in view.blocker_label.text()
+    finally:
+        view.deleteLater()
+
+
+def test_document_translation_view_find_next_uses_live_cursor_position_and_wraps():
+    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
+
+    state = _make_state()
+    service = FakeDocumentService(workspace=state.workspace, translation=state)
+    view = DocumentTranslationView(service, "proj-1", 4)
+    try:
+        view.refresh()
+        view.translation_text.setPlainText("alpha beta alpha beta alpha")
+        view.find_input.setText("alpha")
+
+        view.find_next_button.click()
+        assert _selected_range(view) == (0, 5, "alpha")
+
+        cursor = view.translation_text.textCursor()
+        cursor.clearSelection()
+        cursor.setPosition(17)
+        view.translation_text.setTextCursor(cursor)
+
+        view.find_next_button.click()
+        assert _selected_range(view) == (22, 27, "alpha")
+
+        view.find_next_button.click()
+        assert _selected_range(view) == (0, 5, "alpha")
     finally:
         view.deleteLater()

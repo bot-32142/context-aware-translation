@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QMessageBox,
     QPushButton,
@@ -373,9 +374,10 @@ class WorkView(QWidget):
         self.rows_table.resizeColumnsToContents()
         apply_header_resize_modes(
             self.rows_table,
-            (),
+            ((7, QHeaderView.ResizeMode.Fixed),),
             column_widths=((1, 260), (6, 260)),
         )
+        self._sync_action_column_width()
         self.rows_table.horizontalHeader().setStretchLastSection(False)
         self._ensure_row_heights()
         self._fit_table_height()
@@ -403,6 +405,7 @@ class WorkView(QWidget):
         button = QPushButton(row_state.primary_action.label)
         button.setEnabled(row_state.primary_action.kind is not DocumentRowActionKind.BLOCKED)
         button.setStyleSheet(self._ROW_ACTION_BUTTON_STYLE)
+        button.setMinimumWidth(button.sizeHint().width())
         button.clicked.connect(lambda _checked=False, item=row_state: self._handle_row_action(item))
         self.rows_table.setCellWidget(row, 7, button)
 
@@ -413,6 +416,17 @@ class WorkView(QWidget):
         self.rows_table.resizeRowsToContents()
         for row in range(self.rows_table.rowCount()):
             self.rows_table.setRowHeight(row, max(self.rows_table.rowHeight(row), 44))
+
+    def _sync_action_column_width(self) -> None:
+        required_width = 0
+        for row in range(self.rows_table.rowCount()):
+            widget = self.rows_table.cellWidget(row, 7)
+            if widget is None:
+                continue
+            required_width = max(required_width, widget.sizeHint().width())
+        if required_width <= 0:
+            return
+        self.rows_table.setColumnWidth(7, max(self.rows_table.columnWidth(7), required_width + 24))
 
     def _select_files(self) -> None:
         file_paths, _selected = QFileDialog.getOpenFileNames(

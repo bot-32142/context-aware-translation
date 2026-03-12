@@ -193,6 +193,7 @@ class DefaultDocumentService:
                 request.project_id,
                 request.document_id,
                 chunk_count=dbx.document_repo.get_chunk_count(request.document_id),
+                allow_existing_chunks=True,
             )
             if blocker is not None:
                 raise_application_error(
@@ -223,7 +224,12 @@ class DefaultDocumentService:
         self._runtime.invalidate_document(
             request.project_id,
             request.document_id,
-            sections=[DocumentSection.OCR, DocumentSection.TERMS],
+            sections=[
+                DocumentSection.OCR,
+                DocumentSection.TERMS,
+                DocumentSection.TRANSLATION,
+                DocumentSection.EXPORT,
+            ],
         )
         self._runtime.invalidate_workboard(request.project_id)
         return self.get_ocr(request.project_id, request.document_id)
@@ -646,11 +652,6 @@ class DefaultDocumentService:
         chunk_count: int,
         active_task: Any,
     ) -> DocumentOCRActions:
-        blocker = self._ocr_mutation_blocker(project_id, document_id, chunk_count=chunk_count, active_task=active_task)
-        if blocker is not None:
-            disabled = ActionState(enabled=False, blocker=blocker)
-            return DocumentOCRActions(save=disabled, run_current=disabled, run_pending=disabled)
-
         if not has_pages or current_source_id is None:
             no_pages = ActionState(
                 enabled=False,
@@ -663,6 +664,24 @@ class DefaultDocumentService:
                 ),
             )
             return DocumentOCRActions(save=no_pages, run_current=no_pages, run_pending=no_pages)
+
+        save_blocker = self._ocr_mutation_blocker(
+            project_id,
+            document_id,
+            chunk_count=chunk_count,
+            active_task=active_task,
+            allow_existing_chunks=True,
+        )
+        rerun_blocker = self._ocr_mutation_blocker(
+            project_id,
+            document_id,
+            chunk_count=chunk_count,
+            active_task=active_task,
+        )
+        save_action = ActionState(enabled=save_blocker is None, blocker=save_blocker)
+        if rerun_blocker is not None:
+            disabled = ActionState(enabled=False, blocker=rerun_blocker)
+            return DocumentOCRActions(save=save_action, run_current=disabled, run_pending=disabled)
 
         current_allowed, current_blocker = self._decision_to_action_state(
             project_id,
@@ -685,7 +704,7 @@ class DefaultDocumentService:
             document_id=document_id,
         )
         return DocumentOCRActions(
-            save=ActionState(enabled=True),
+            save=save_action,
             run_current=ActionState(enabled=current_allowed, blocker=current_blocker),
             run_pending=ActionState(enabled=pending_allowed, blocker=pending_blocker),
         )
@@ -714,6 +733,7 @@ class DefaultDocumentService:
         *,
         chunk_count: int,
         active_task: Any | None = None,
+        allow_existing_chunks: bool = False,
     ) -> BlockerInfo | None:
         if active_task is not None:
             return make_blocker(
@@ -737,7 +757,7 @@ class DefaultDocumentService:
                 project_id=project_id,
                 document_id=document_id,
             )
-        if chunk_count > 0:
+        if chunk_count > 0 and not allow_existing_chunks:
             return make_blocker(
                 BlockerCode.NOTHING_TO_DO,
                 "OCR is locked after terms or translation have started for this document.",

@@ -375,7 +375,7 @@ def test_project_settings_pane_screenshot_restores_shared_layout_after_custom_ro
 
         assert _ink_ratio(custom_crop, background=background) > _ink_ratio(shared_before_crop, background=background) + 0.08
         assert abs(_ink_ratio(shared_after_crop, background=background) - _ink_ratio(shared_before_crop, background=background)) <= 0.02
-        assert custom_height > shared_before_height
+        assert custom_height == shared_before_height
         assert shared_after_height == shared_before_height
         assert view.routes_group.isHidden()
         assert view.routes_group.maximumHeight() == 0

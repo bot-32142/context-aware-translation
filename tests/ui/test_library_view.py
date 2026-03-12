@@ -16,7 +16,7 @@ from tests.application.fakes import FakeProjectsService
 try:
     from PySide6.QtWidgets import QApplication, QMessageBox
 
-    from context_aware_translation.ui.features.library_view import LibraryView
+    from context_aware_translation.ui.features.library_view import LibraryView, _ProjectDialog
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover
@@ -141,4 +141,17 @@ def test_library_view_context_menu_selects_clicked_row() -> None:
     finally:
         view.close()
         view.deleteLater()
+        QApplication.processEvents()
+
+
+def test_project_dialog_uses_dropdown_for_target_language() -> None:
+    dialog = _ProjectDialog(title="New Project", target_language="English")
+    try:
+        assert dialog.target_language_combo.objectName() == "projectTargetLanguageCombo"
+        assert dialog.target_language_combo.currentText() == "English"
+        dialog.target_language_combo.setCurrentIndex(0)
+        assert dialog.target_language is None
+    finally:
+        dialog.close()
+        dialog.deleteLater()
         QApplication.processEvents()

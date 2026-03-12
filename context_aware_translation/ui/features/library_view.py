@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from PySide6.QtCore import QEvent, QPoint, Qt, Signal, Slot
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
@@ -24,8 +25,10 @@ from context_aware_translation.application.contracts.projects import (
 )
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.services.projects import ProjectsService
+from context_aware_translation.ui.constants import LANGUAGES
 from context_aware_translation.ui.i18n import qarg
 from context_aware_translation.ui.tips import create_tip_label
+from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
 
 _ROLE_PROJECT = Qt.ItemDataRole.UserRole + 1
 
@@ -51,14 +54,33 @@ class _ProjectDialog(QDialog):
         self.name_edit.setPlaceholderText(self.tr("Enter project name"))
         form.addRow(self.tr("Name*:"), self.name_edit)
 
-        self.target_language_edit = QLineEdit(target_language or "")
-        self.target_language_edit.setPlaceholderText(self.tr("Optional target language"))
-        form.addRow(self.tr("Target language:"), self.target_language_edit)
+        self.target_language_combo = QComboBox(self)
+        self.target_language_combo.setObjectName("projectTargetLanguageCombo")
+        self.target_language_combo.setMinimumWidth(260)
+        self.target_language_combo.addItem("")
+        seen_languages: set[str] = set()
+        for display_name, _internal_name in LANGUAGES:
+            if display_name in seen_languages:
+                continue
+            seen_languages.add(display_name)
+            self.target_language_combo.addItem(display_name)
+        if target_language:
+            index = self.target_language_combo.findText(target_language, Qt.MatchFlag.MatchFixedString)
+            if index < 0:
+                self.target_language_combo.addItem(target_language)
+                index = self.target_language_combo.count() - 1
+            self.target_language_combo.setCurrentIndex(index)
+        else:
+            self.target_language_combo.setCurrentIndex(0)
+        form.addRow(self.tr("Target language:"), self.target_language_combo)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+        apply_hybrid_control_theme(self)
+        set_button_tone(buttons.button(QDialogButtonBox.StandardButton.Save), "primary")
+        set_button_tone(buttons.button(QDialogButtonBox.StandardButton.Cancel), "ghost")
 
     @property
     def project_name(self) -> str:
@@ -66,7 +88,7 @@ class _ProjectDialog(QDialog):
 
     @property
     def target_language(self) -> str | None:
-        value = self.target_language_edit.text().strip()
+        value = self.target_language_combo.currentText().strip()
         return value or None
 
     def _on_accept(self) -> None:
@@ -122,6 +144,11 @@ class LibraryView(QWidget):
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
 
         layout.addWidget(self.table_view)
+        apply_hybrid_control_theme(self)
+        set_button_tone(self.new_button, "primary")
+        set_button_tone(self.open_button)
+        set_button_tone(self.edit_button)
+        set_button_tone(self.delete_button, "danger")
         self.retranslateUi()
 
     def _connect_signals(self) -> None:

@@ -46,6 +46,7 @@ from context_aware_translation.application.contracts.common import (
 )
 from context_aware_translation.application.services.app_setup import AppSetupService
 from context_aware_translation.ui.tips import create_tip_label
+from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
 from context_aware_translation.ui.widgets.table_support import (
     configure_readonly_row_table,
     fit_table_height_to_rows,
@@ -386,6 +387,10 @@ class ConnectionEditorDialog(QDialog):
         self.button_box.rejected.connect(self.reject)
         self.test_button.clicked.connect(self._on_test)
         layout.addWidget(self.button_box)
+        apply_hybrid_control_theme(self)
+        set_button_tone(self.button_box.button(QDialogButtonBox.StandardButton.Save), "primary")
+        set_button_tone(self.button_box.button(QDialogButtonBox.StandardButton.Cancel), "ghost")
+        set_button_tone(self.test_button)
         self.form.advanced_section.toggled.connect(self._schedule_resize)
         self.form.tabs.currentChanged.connect(lambda _index: self._schedule_resize())
         self._schedule_resize()
@@ -495,6 +500,11 @@ class SetupWizardDialog(QDialog):
         self.finish_button.clicked.connect(self._finish)
         self.cancel_button.clicked.connect(self.reject)
         layout.addWidget(self.button_box)
+        apply_hybrid_control_theme(self)
+        set_button_tone(self.back_button, "ghost")
+        set_button_tone(self.next_button)
+        set_button_tone(self.finish_button, "primary")
+        set_button_tone(self.cancel_button, "ghost")
 
         self._page_index = 0
         self._available_providers: list[ProviderCard] = []

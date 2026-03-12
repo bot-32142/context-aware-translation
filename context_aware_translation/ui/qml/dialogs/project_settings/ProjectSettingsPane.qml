@@ -7,7 +7,6 @@ Rectangle {
     implicitHeight: titleLabel.implicitHeight + tipLabel.implicitHeight + actionRow.implicitHeight + 48
         + (root.hasBlocker ? blockerCard.implicitHeight + 12 : 0)
         + (root.hasMessage ? messageCard.implicitHeight + 12 : 0)
-        + (root.showCustomProfile ? customCard.implicitHeight + 12 : 0)
 
     signal saveRequested
     signal openAppSetupRequested
@@ -158,59 +157,6 @@ Rectangle {
                 font.pixelSize: 12
                 font.bold: true
                 wrapMode: Text.WordWrap
-            }
-        }
-
-        Rectangle {
-            id: customCard
-            visible: root.showCustomProfile
-            width: parent.width
-            implicitHeight: customTitle.implicitHeight
-                + customBody.implicitHeight
-                + customHint.implicitHeight
-                + customColumn.spacing * 2
-                + 24
-            height: implicitHeight
-            radius: 16
-            color: "#f3eee5"
-            border.width: 1
-            border.color: "#ddd4c8"
-
-            Column {
-                id: customColumn
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.margins: 12
-                spacing: 6
-
-                Text {
-                    id: customTitle
-                    width: parent.width
-                    text: root.customProfileLabel
-                    color: "#2f251d"
-                    font.pixelSize: 13
-                    font.bold: true
-                    wrapMode: Text.WordWrap
-                }
-
-                Text {
-                    id: customBody
-                    width: parent.width
-                    text: root.customProfileText
-                    color: "#5f5447"
-                    font.pixelSize: 12
-                    wrapMode: Text.WordWrap
-                }
-
-                Text {
-                    id: customHint
-                    width: parent.width
-                    text: root.routesHintText
-                    color: "#786b5e"
-                    font.pixelSize: 11
-                    wrapMode: Text.WordWrap
-                }
             }
         }
 

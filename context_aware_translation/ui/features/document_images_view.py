@@ -30,6 +30,7 @@ from context_aware_translation.application.services.document import DocumentServ
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.viewmodels.document_images_pane import DocumentImagesPaneViewModel
+from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
 from context_aware_translation.ui.widgets.image_viewer import ImageViewer
 from context_aware_translation.ui.widgets.progress_widget import ProgressWidget
 
@@ -131,6 +132,9 @@ class DocumentImagesView(QWidget):
             parent=self,
         )
         layout.addWidget(self.chrome_host)
+        apply_hybrid_control_theme(self)
+        set_button_tone(self.toggle_button, size="compact")
+        set_button_tone(self.blocker_action_button)
         self._connect_qml_signals()
         self._sync_chrome_state()
         self._schedule_chrome_resize()

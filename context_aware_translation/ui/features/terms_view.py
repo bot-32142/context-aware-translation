@@ -40,6 +40,7 @@ from context_aware_translation.ui.features.terms_table_widget import TermsTableW
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.viewmodels.terms_pane import TermsPaneViewModel
+from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
 
 
 class TermsView(QWidget):
@@ -180,6 +181,16 @@ class TermsView(QWidget):
         if self._use_qml_chrome:
             self._connect_qml_signals()
             self._schedule_chrome_resize()
+        apply_hybrid_control_theme(self)
+        for button in (
+            self.build_button,
+            self.translate_button,
+            self.review_button,
+            self.filter_noise_button,
+            self.import_button,
+            self.export_button,
+        ):
+            set_button_tone(button)
 
     def refresh(self) -> None:
         if self._is_document_scope:
