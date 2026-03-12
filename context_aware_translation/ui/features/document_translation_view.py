@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QTextCharFormat, QTextCursor
+from PySide6.QtGui import QColor, QPainter, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QHBoxLayout,
     QLabel,
@@ -12,6 +13,9 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSplitter,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -51,6 +55,35 @@ _STATUS_ICON: dict[SurfaceStatus, str] = {
     SurfaceStatus.CANCELLED: "–",
 }
 
+
+class _TranslationUnitListDelegate(QStyledItemDelegate):
+    _TEXT_COLOR = QColor("#2f251d")
+    _HOVER_COLOR = QColor("#f4ecdf")
+    _SELECTED_COLOR = QColor("#efe7da")
+
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index) -> None:  # noqa: ANN001
+        item_option = QStyleOptionViewItem(option)
+        self.initStyleOption(item_option, index)
+
+        row_rect = item_option.rect.adjusted(4, 2, -4, -2)
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(Qt.PenStyle.NoPen)
+        if item_option.state & QStyle.StateFlag.State_Selected:
+            painter.setBrush(self._SELECTED_COLOR)
+            painter.drawRoundedRect(row_rect, 10, 10)
+        elif item_option.state & QStyle.StateFlag.State_MouseOver:
+            painter.setBrush(self._HOVER_COLOR)
+            painter.drawRoundedRect(row_rect, 10, 10)
+        painter.restore()
+
+        item_option.state &= ~QStyle.StateFlag.State_Selected
+        item_option.state &= ~QStyle.StateFlag.State_HasFocus
+        item_option.palette.setColor(item_option.palette.ColorRole.Text, self._TEXT_COLOR)
+        item_option.palette.setColor(item_option.palette.ColorRole.HighlightedText, self._TEXT_COLOR)
+        item_option.rect = row_rect.adjusted(10, 0, -10, 0)
+        style = item_option.widget.style() if item_option.widget is not None else QApplication.style()
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, item_option, painter, item_option.widget)
 
 class DocumentTranslationView(QWidget):
     def __init__(
@@ -106,6 +139,11 @@ class DocumentTranslationView(QWidget):
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.addWidget(QLabel(self.tr("Units")))
         self.unit_list = QListWidget()
+        self.unit_list.setMouseTracking(True)
+        self.unit_list.setSpacing(2)
+        self.unit_list.setUniformItemSizes(True)
+        self.unit_list.setItemDelegate(_TranslationUnitListDelegate(self.unit_list))
+        self.unit_list.setAttribute(Qt.WidgetAttribute.WA_MacShowFocusRect, False)
         self.unit_list.currentRowChanged.connect(self._on_unit_selected)
         left_layout.addWidget(self.unit_list)
         splitter.addWidget(left_panel)

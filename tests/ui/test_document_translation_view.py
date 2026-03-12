@@ -81,6 +81,18 @@ def _selected_range(view) -> tuple[int, int, str]:
     return cursor.selectionStart(), cursor.selectionEnd(), cursor.selectedText()
 
 
+def _selected_row_color(view) -> tuple[int, int, int]:
+    item = view.unit_list.item(view.unit_list.currentRow())
+    rect = view.unit_list.visualItemRect(item)
+    point = rect.topLeft()
+    point.setX(rect.right() - 20)
+    point.setY(rect.center().y())
+    image = view.unit_list.viewport().grab().toImage()
+    ratio = image.devicePixelRatio()
+    color = image.pixelColor(int(point.x() * ratio), int(point.y() * ratio))
+    return color.red(), color.green(), color.blue()
+
+
 def test_document_translation_view_renders_units_and_routes_actions():
     from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
 
@@ -126,6 +138,31 @@ def test_document_translation_view_renders_units_and_routes_actions():
         view.next_button.click()
         assert view.unit_list.currentRow() == 1
     finally:
+        view.deleteLater()
+
+
+def test_document_translation_view_uses_stable_selection_fill_for_unit_list():
+    from PySide6.QtWidgets import QApplication
+
+    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
+
+    state = _make_state()
+    service = FakeDocumentService(workspace=state.workspace, translation=state)
+    view = DocumentTranslationView(service, "proj-1", 4)
+    try:
+        view.resize(1080, 720)
+        view.show()
+        view.refresh()
+        view.unit_list.setFocus()
+        view.unit_list.setCurrentRow(0)
+        QApplication.processEvents()
+
+        red, green, blue = _selected_row_color(view)
+        assert abs(red - 239) <= 20
+        assert abs(green - 231) <= 20
+        assert abs(blue - 218) <= 20
+    finally:
+        view.close()
         view.deleteLater()
 
 
