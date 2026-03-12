@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QFrame,
@@ -44,6 +46,133 @@ class _SelectableTextEdit(QTextEdit):
         super().focusInEvent(event)
 
 
+@dataclass(frozen=True)
+class _ElementPalette:
+    accent: str
+    background: str
+    background_selected: str
+    border: str
+    editor_background: str
+    editor_border: str
+    badge_background: str
+    badge_border: str
+    muted_text: str
+
+
+_DEFAULT_ELEMENT_PALETTE = _ElementPalette(
+    accent="#5f5447",
+    background="#f7f1e8",
+    background_selected="#efe7da",
+    border="#d8cbbc",
+    editor_background="#fffdfa",
+    editor_border="#dfd2c4",
+    badge_background="#efe3d3",
+    badge_border="#dccab7",
+    muted_text="#7a7063",
+)
+
+_ELEMENT_PALETTES = {
+    "chapter": _ElementPalette(
+        accent="#1a237e",
+        background="#eef1ff",
+        background_selected="#e4e8ff",
+        border="#c6cffd",
+        editor_background="#f9faff",
+        editor_border="#c2caf7",
+        badge_background="#dfe5ff",
+        badge_border="#b7c4ff",
+        muted_text="#5a6794",
+    ),
+    "section": _ElementPalette(
+        accent="#1565c0",
+        background="#ecf5ff",
+        background_selected="#e2f0ff",
+        border="#b8d8f7",
+        editor_background="#f9fcff",
+        editor_border="#bbd8f2",
+        badge_background="#dcedff",
+        badge_border="#b6d7f8",
+        muted_text="#58789a",
+    ),
+    "subsection": _ElementPalette(
+        accent="#42a5f5",
+        background="#eef8ff",
+        background_selected="#e4f3ff",
+        border="#bfe3fb",
+        editor_background="#fbfdff",
+        editor_border="#c4e0f4",
+        badge_background="#dcf0ff",
+        badge_border="#b8dcf4",
+        muted_text="#5b8096",
+    ),
+    "paragraph": _ElementPalette(
+        accent="#5f5447",
+        background="#f7f1e8",
+        background_selected="#efe7da",
+        border="#d8cbbc",
+        editor_background="#fffdfa",
+        editor_border="#dfd2c4",
+        badge_background="#efe3d3",
+        badge_border="#dccab7",
+        muted_text="#7a7063",
+    ),
+    "image": _ElementPalette(
+        accent="#2e7d32",
+        background="#edf8ef",
+        background_selected="#e1f2e4",
+        border="#b8dcba",
+        editor_background="#fbfffb",
+        editor_border="#bfdabd",
+        badge_background="#dcf1de",
+        badge_border="#b7d7b9",
+        muted_text="#5d7c60",
+    ),
+    "table": _ElementPalette(
+        accent="#6a1b9a",
+        background="#f7eefc",
+        background_selected="#f0e4fa",
+        border="#dac0ea",
+        editor_background="#fefbff",
+        editor_border="#dcc7ea",
+        badge_background="#eddcf7",
+        badge_border="#d0b4e4",
+        muted_text="#7f6990",
+    ),
+    "list": _ElementPalette(
+        accent="#e65100",
+        background="#fff2e8",
+        background_selected="#ffe8d7",
+        border="#f0c7ab",
+        editor_background="#fffdfa",
+        editor_border="#efd0b6",
+        badge_background="#ffe1ce",
+        badge_border="#efc2a3",
+        muted_text="#8d705e",
+    ),
+    "quote": _ElementPalette(
+        accent="#00695c",
+        background="#eaf8f5",
+        background_selected="#dff2ee",
+        border="#b5ddd5",
+        editor_background="#fbfffe",
+        editor_border="#badfd8",
+        badge_background="#d8f0eb",
+        badge_border="#add5cf",
+        muted_text="#5a8079",
+    ),
+}
+
+_ELEMENT_KIND_ALIASES = {
+    "text": "paragraph",
+    "heading": "section",
+    "subheading": "subsection",
+    "sub_section": "subsection",
+    "bullet_list": "list",
+    "ordered_list": "list",
+    "unordered_list": "list",
+}
+
+
 class _StructuredElementCard(QFrame):
     selected = Signal(int)
 
@@ -51,21 +180,41 @@ class _StructuredElementCard(QFrame):
         super().__init__(parent)
         self._index = index
         self._selected = False
+        self._palette = self._palette_for_kind(element.kind)
+        self.setObjectName("ocrStructuredElementCard")
         self._editor = _SelectableTextEdit(self)
+        self._editor.setObjectName("ocrStructuredElementEditor")
         self._editor.setPlainText(element.text)
         self._editor.setMinimumHeight(64)
         self._editor.focused.connect(lambda: self.selected.emit(self._index))
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(4)
-        title = QLabel(self._title_text(element), self)
-        title.setStyleSheet("font-weight: 600;")
-        layout.addWidget(title)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
+        self._title = QLabel(self._title_text(element), self)
+        self._title.setStyleSheet(
+            f"color: {self._palette.accent};"
+            "font-weight: 700;"
+            "font-size: 11px;"
+            f"background-color: {self._palette.badge_background};"
+            f"border: 1px solid {self._palette.badge_border};"
+            "border-radius: 9px;"
+            "padding: 2px 8px;"
+        )
+        layout.addWidget(self._title, 0, Qt.AlignmentFlag.AlignLeft)
         if element.bbox is not None:
-            bbox_label = QLabel(self._bbox_text(element.bbox), self)
-            bbox_label.setStyleSheet("color: #667085; font-size: 11px;")
-            layout.addWidget(bbox_label)
+            self._bbox_label = QLabel(self._bbox_text(element.bbox), self)
+            self._bbox_label.setStyleSheet(
+                f"color: {self._palette.muted_text};"
+                "font-size: 11px;"
+                f"background-color: {self._palette.editor_background};"
+                f"border: 1px solid {self._palette.editor_border};"
+                "border-radius: 8px;"
+                "padding: 2px 8px;"
+            )
+            layout.addWidget(self._bbox_label, 0, Qt.AlignmentFlag.AlignLeft)
+        else:
+            self._bbox_label = None
         layout.addWidget(self._editor)
         self._apply_style()
 
@@ -81,9 +230,25 @@ class _StructuredElementCard(QFrame):
         self._apply_style()
 
     def _apply_style(self) -> None:
-        border = "#f79009" if self._selected else "#d0d5dd"
-        background = "#fff7ed" if self._selected else "#ffffff"
-        self.setStyleSheet(f"QFrame {{ border: 2px solid {border}; border-radius: 6px; background: {background}; }}")
+        border_width = 2 if self._selected else 1
+        border = self._palette.accent if self._selected else self._palette.border
+        background = self._palette.background_selected if self._selected else self._palette.background
+        self.setStyleSheet(
+            f"QFrame#ocrStructuredElementCard {{"
+            f" border: {border_width}px solid {border};"
+            " border-radius: 10px;"
+            f" background-color: {background};"
+            "}}"
+        )
+        self._editor.setStyleSheet(
+            f"QTextEdit#ocrStructuredElementEditor {{"
+            f" background-color: {self._palette.editor_background};"
+            f" border: 1px solid {self._palette.accent if self._selected else self._palette.editor_border};"
+            " border-radius: 8px;"
+            " padding: 6px 8px;"
+            f" selection-background-color: {self._palette.badge_background};"
+            "}}"
+        )
 
     @staticmethod
     def _title_text(element: OCRTextElement) -> str:
@@ -94,6 +259,14 @@ class _StructuredElementCard(QFrame):
     def _bbox_text(bbox: OCRBoundingBox) -> str:
         return f"x={bbox.x:.3f}, y={bbox.y:.3f}, w={bbox.width:.3f}, h={bbox.height:.3f}"
 
+    @classmethod
+    def _palette_for_kind(cls, kind: str | None) -> _ElementPalette:
+        if not kind:
+            return _DEFAULT_ELEMENT_PALETTE
+        normalized = kind.strip().lower().replace("-", "_").replace(" ", "_")
+        mapped = _ELEMENT_KIND_ALIASES.get(normalized, normalized)
+        return _ELEMENT_PALETTES.get(mapped, _DEFAULT_ELEMENT_PALETTE)
+
 
 class _StructuredElementList(QScrollArea):
     element_selected = Signal(int)
@@ -103,12 +276,18 @@ class _StructuredElementList(QScrollArea):
         self._cards: list[_StructuredElementCard] = []
         self._selected_index = -1
         self._container = QWidget(self)
+        self._container.setObjectName("ocrStructuredElementContainer")
         self._layout = QVBoxLayout(self._container)
         self._layout.setContentsMargins(4, 4, 4, 4)
         self._layout.setSpacing(8)
         self.setWidget(self._container)
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setStyleSheet(
+            "QScrollArea { background-color: #f6f1e8; border: none; }"
+            "QWidget#ocrStructuredElementContainer { background-color: transparent; }"
+        )
 
     def set_elements(self, elements: list[OCRTextElement]) -> None:
         self.clear()

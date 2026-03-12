@@ -68,6 +68,8 @@ from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, TaskAction
 
+_IMAGE_REEMBEDDABLE_DOCUMENT_TYPES = frozenset({"pdf", "scanned_book", "manga", "epub"})
+
 
 class DocumentService(Protocol):
     def get_workspace(self, project_id: str, document_id: int) -> DocumentWorkspaceState: ...
@@ -438,6 +440,7 @@ class DefaultDocumentService:
         return self._runtime.submit_task(
             "chunk_retranslation",
             request.project_id,
+            document_ids=[request.document_id],
             chunk_id=int(request.unit_id),
             document_id=request.document_id,
         )
@@ -1149,7 +1152,6 @@ class DefaultDocumentService:
         assets: list[ImageAssetState],
         active_task: TaskRecord | None,
     ) -> DocumentImagesToolbarState:
-        del document_type
         if active_task is not None:
             cancel_decision = self._runtime.task_engine.preflight_task(active_task.task_id, TaskAction.CANCEL)
             return DocumentImagesToolbarState(
@@ -1168,6 +1170,8 @@ class DefaultDocumentService:
             )
 
         if not assets:
+            if document_type not in _IMAGE_REEMBEDDABLE_DOCUMENT_TYPES:
+                return DocumentImagesToolbarState()
             decision = self._runtime.task_engine.preflight(
                 "image_reembedding",
                 project_id,

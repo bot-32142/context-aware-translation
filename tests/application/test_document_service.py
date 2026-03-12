@@ -222,6 +222,34 @@ def test_document_service_save_ocr_remains_available_after_chunking_starts(tmp_p
         context.close()
 
 
+def test_document_service_get_images_hides_unsupported_document_type_blocker(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    try:
+        project = context.services.projects.create_project(
+            CreateProjectRequest(name="Plain Text Images", target_language="English")
+        )
+        project_id = project.project.project_id
+        _configure_project_for_ocr(context, project_id)
+
+        db, repo = _open_repo(context, project_id)
+        try:
+            document_id = repo.insert_document("text")
+            db.commit()
+        finally:
+            db.close()
+
+        state = context.services.document.get_images(project_id, document_id)
+
+        assert state.assets == []
+        assert not state.toolbar.can_run_pending
+        assert not state.toolbar.can_force_all
+        assert state.toolbar.run_pending_blocker is None
+        assert state.toolbar.force_all_blocker is None
+    finally:
+        context.close()
+
+
 def test_epub_asset_migration_hides_non_image_sources_from_ocr_and_workboard(tmp_path: Path) -> None:
     _ensure_qt_app()
     context = build_application_context(library_root=tmp_path)

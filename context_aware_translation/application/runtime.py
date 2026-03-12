@@ -884,14 +884,38 @@ def queue_item_from_record(record: TaskRecord) -> QueueItem:
 
 def _single_document_id(record: TaskRecord) -> int | None:
     if not record.document_ids_json:
-        return None
+        return _document_id_from_payload(record.payload_json)
     try:
         payload = json.loads(record.document_ids_json)
     except json.JSONDecodeError:
-        return None
+        return _document_id_from_payload(record.payload_json)
     if isinstance(payload, list) and len(payload) == 1:
         try:
             return int(payload[0])
+        except (TypeError, ValueError):
+            return _document_id_from_payload(record.payload_json)
+    return _document_id_from_payload(record.payload_json)
+
+
+def _document_id_from_payload(payload_json: str | None) -> int | None:
+    if not payload_json:
+        return None
+    try:
+        payload = json.loads(payload_json)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    raw_document_id = payload.get("document_id")
+    if raw_document_id is not None:
+        try:
+            return int(raw_document_id)
+        except (TypeError, ValueError):
+            return None
+    raw_document_ids = payload.get("document_ids")
+    if isinstance(raw_document_ids, list) and len(raw_document_ids) == 1:
+        try:
+            return int(raw_document_ids[0])
         except (TypeError, ValueError):
             return None
     return None

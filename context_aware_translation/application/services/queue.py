@@ -28,7 +28,11 @@ class DefaultQueueService:
         self._runtime = runtime
 
     def get_queue(self, *, project_id: str | None = None) -> QueueState:
-        records = self._runtime.task_store.list_tasks(book_id=project_id)
+        records = self._runtime.task_store.list_tasks(
+            book_id=project_id,
+            include_payload=True,
+            include_config_snapshot=False,
+        )
         return QueueState(items=[queue_item_from_record(record) for record in records])
 
     def apply_action(self, request: QueueActionRequest) -> AcceptedCommand:

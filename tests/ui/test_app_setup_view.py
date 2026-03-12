@@ -362,6 +362,7 @@ def test_connection_draft_form_rejects_invalid_custom_json():
 
 
 def test_connection_editor_dialog_uses_scrollable_form_layout():
+    from PySide6.QtWidgets import QScrollArea
     from superqt import QCollapsible
 
     from context_aware_translation.ui.features.app_setup_view import ConnectionEditorDialog
@@ -369,9 +370,14 @@ def test_connection_editor_dialog_uses_scrollable_form_layout():
     dialog = ConnectionEditorDialog()
 
     assert isinstance(dialog.form.advanced_section, QCollapsible)
+    assert isinstance(dialog.scroll_area, QScrollArea)
+    assert dialog.scroll_area.widget() is dialog.form
+    assert dialog.scroll_area.widgetResizable() is True
     assert dialog.form.tabs.count() == 2
-    assert 620 <= dialog.width() <= 860
-    assert dialog.height() <= 360
+    assert dialog.width() >= 820
+    assert dialog.height() >= 480
+    assert dialog.maximumWidth() > dialog.width()
+    assert dialog.maximumHeight() > dialog.height()
 
 
 def test_connection_editor_dialog_tests_inside_dialog():

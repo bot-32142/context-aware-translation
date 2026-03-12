@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -351,16 +352,21 @@ class ConnectionEditorDialog(QDialog):
         self._test_callback = test_callback
         self._reset_tokens_callback = reset_tokens_callback
         self.setWindowTitle(self.tr("Connection"))
-        self.setMinimumWidth(620)
-        self.resize(700, 220)
+        self.setMinimumSize(820, 480)
+        self.resize(900, 560)
         self.form = ConnectionDraftForm(self)
+        self.form.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         if draft is not None:
             self.form.set_draft(draft)
         self._init_ui()
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.addWidget(self.form)
+        self.scroll_area = QScrollArea(self)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll_area.setWidget(self.form)
+        layout.addWidget(self.scroll_area, 1)
         if self._connection_summary is not None:
             self.token_usage_group = QGroupBox(self.tr("Token usage"))
             usage_layout = QFormLayout(self.token_usage_group)
@@ -435,7 +441,7 @@ class ConnectionEditorDialog(QDialog):
     def _resize_to_content(self) -> None:
         current_tab = self.form.tabs.currentIndex()
         is_advanced = current_tab == 0 and self.form.advanced_section.isExpanded()
-        target_width = 860 if is_advanced else 700
+        target_width = 960 if is_advanced else 860
         current_widget = self.form.tabs.currentWidget()
         if current_widget is not None:
             current_widget.adjustSize()
@@ -445,12 +451,12 @@ class ConnectionEditorDialog(QDialog):
         self.layout().activate()
         self.form.adjustSize()
         if current_tab == 0 and not is_advanced:
-            target_height = 220
+            target_height = 520
         elif current_tab == 1:
-            target_height = 340 if self._connection_summary is not None else 260
+            target_height = 560 if self._connection_summary is not None else 500
         else:
-            target_height = min(max(self.sizeHint().height(), 360), 620)
-        self.setFixedSize(max(self.minimumWidth(), target_width), target_height)
+            target_height = min(max(self.sizeHint().height(), 620), 760)
+        self.resize(max(self.width(), self.minimumWidth(), target_width), max(self.minimumHeight(), target_height))
 
 
 class SetupWizardDialog(QDialog):

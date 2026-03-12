@@ -261,6 +261,42 @@ def test_retranslate_manga_page_submits_scoped_translation_task(tmp_path) -> Non
         context.close()
 
 
+def test_retranslate_text_chunk_submits_document_scoped_task(tmp_path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    try:
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Text Doc", target_language="English")
+        )
+        project_id = created.project.project_id
+        document_id = _create_text_document(context, project_id)
+
+        service = context.services.document
+        context.runtime.task_engine.preflight = MagicMock(return_value=Decision(allowed=True))
+        context.runtime.task_engine.submit_and_start = MagicMock(
+            return_value=SimpleNamespace(task_id="task-2", status="queued")
+        )
+
+        command = service.retranslate(
+            RetranslateRequest(
+                project_id=project_id,
+                document_id=document_id,
+                unit_id="2",
+            )
+        )
+
+        assert command.command_name == "chunk_retranslation"
+        context.runtime.task_engine.submit_and_start.assert_called_once_with(
+            "chunk_retranslation",
+            project_id,
+            document_ids=[document_id],
+            chunk_id=2,
+            document_id=document_id,
+        )
+    finally:
+        context.close()
+
+
 def test_run_translation_submits_document_translation_task(tmp_path) -> None:
     _ensure_qt_app()
     context = build_application_context(library_root=tmp_path)
