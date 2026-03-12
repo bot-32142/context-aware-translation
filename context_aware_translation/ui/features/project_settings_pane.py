@@ -36,6 +36,7 @@ class ProjectSettingsPane(QWidget):
         service: ProjectSetupService,
         events: ApplicationEventSubscriber,
         *,
+        auto_refresh: bool = True,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -43,14 +44,17 @@ class ProjectSettingsPane(QWidget):
         self._service = service
         self._state: ProjectSetupState | None = None
         self._selected_profile_id: str | None = None
+        self._pending_profile_id: str | None = None
         self._profile_option_values: list[str] = []
+        self._profile_option_signature: tuple[tuple[str, str], ...] = ()
         self._draft_project_profile: WorkflowProfileDetail | None = None
         self._custom_base_profile_id: str | None = None
         self._event_bridge = QtApplicationEventBridge(events, parent=self)
         self._event_bridge.setup_invalidated.connect(self._on_setup_invalidated)
         self.viewmodel = ProjectSettingsPaneViewModel(self)
         self._init_ui()
-        self.refresh()
+        if auto_refresh:
+            self.refresh()
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -75,7 +79,11 @@ class ProjectSettingsPane(QWidget):
         self.profile_combo.setObjectName("projectWorkflowProfileCombo")
         self.profile_combo.setMinimumWidth(420)
         self.profile_combo.setMaximumWidth(560)
+        self.profile_combo.setMinimumContentsLength(24)
         self.profile_combo.setMinimumHeight(40)
+        self.profile_combo.setMaxVisibleItems(10)
+        self.profile_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.profile_combo.view().setMinimumWidth(self.profile_combo.minimumWidth())
         self.profile_combo.currentIndexChanged.connect(self._on_profile_index_requested)
         profile_layout.addWidget(self.profile_combo)
         self.profile_detail_label = QLabel(self.profile_section)
@@ -164,7 +172,14 @@ class ProjectSettingsPane(QWidget):
     def _on_profile_index_requested(self, index: int) -> None:
         if index < 0 or index >= len(self._profile_option_values):
             return
-        profile_id = self._profile_option_values[index]
+        self._pending_profile_id = self._profile_option_values[index]
+        QTimer.singleShot(0, self._apply_pending_profile_selection)
+
+    def _apply_pending_profile_selection(self) -> None:
+        profile_id = self._pending_profile_id
+        self._pending_profile_id = None
+        if profile_id is None:
+            return
         if profile_id == _CUSTOM_PROFILE_ID:
             self._selected_profile_id = _CUSTOM_PROFILE_ID
             self._ensure_custom_profile()
@@ -235,12 +250,20 @@ class ProjectSettingsPane(QWidget):
         self._schedule_chrome_resize()
 
     def _sync_profile_selector(self, options: list[dict[str, object]], selected_index: int) -> None:
-        self.profile_combo.blockSignals(True)
-        self.profile_combo.clear()
-        for option in options:
-            self.profile_combo.addItem(str(option.get("label", "")), str(option.get("detail", "")))
-        self.profile_combo.setCurrentIndex(selected_index)
-        self.profile_combo.blockSignals(False)
+        signature = tuple((str(option.get("label", "")), str(option.get("detail", ""))) for option in options)
+        if signature != self._profile_option_signature:
+            self.profile_combo.blockSignals(True)
+            self.profile_combo.clear()
+            for option in options:
+                self.profile_combo.addItem(str(option.get("label", "")), str(option.get("detail", "")))
+            self.profile_combo.blockSignals(False)
+            self._profile_option_signature = signature
+
+        if self.profile_combo.currentIndex() != selected_index:
+            self.profile_combo.blockSignals(True)
+            self.profile_combo.setCurrentIndex(selected_index)
+            self.profile_combo.blockSignals(False)
+
         has_options = bool(options)
         self.profile_section.setVisible(has_options)
         self.profile_combo.setEnabled(has_options)
@@ -267,11 +290,9 @@ class ProjectSettingsPane(QWidget):
         self.routes_editor.show()
         self.routes_editor.set_connection_choices(self._connection_choices())
         self.routes_editor.set_routes(profile.routes)
-        self.routes_editor.adjustSize()
-        self.routes_group.adjustSize()
-        group_height = self.routes_group.sizeHint().height()
-        self.routes_group.setMinimumHeight(group_height)
-        self.routes_group.setMaximumHeight(group_height)
+        self.routes_group.setMinimumHeight(0)
+        self.routes_group.setMaximumHeight(16777215)
+        self.routes_editor.updateGeometry()
         self.routes_group.updateGeometry()
         self.layout().activate()
         self._schedule_chrome_resize()

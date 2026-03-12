@@ -23,7 +23,9 @@ from context_aware_translation.application.events import InMemoryApplicationEven
 from tests.application.fakes import FakeProjectSetupService
 
 try:
+    from PySide6.QtCore import Qt
     from PySide6.QtGui import QColor, QImage
+    from PySide6.QtTest import QSignalSpy, QTest
     from PySide6.QtWidgets import QApplication, QDialog, QPushButton, QWidget
 
     HAS_PYSIDE6 = True
@@ -163,15 +165,43 @@ def test_project_settings_pane_renders_backend_state():
         root = view.chrome_host.rootObject()
         assert root is not None
         assert root.objectName() == "projectSettingsPaneChrome"
+        assert root.property("showHeader") is False
         assert view.viewmodel.title_text == "Setup for One Piece"
         assert view.profile_combo.objectName() == "projectWorkflowProfileCombo"
         assert view.profile_combo.currentIndex() == 0
         assert view.profile_combo.currentText() == "Recommended"
+        assert view.profile_combo.minimumContentsLength() == 24
+        assert view.profile_combo.view().minimumWidth() == view.profile_combo.minimumWidth()
+        assert "combobox-popup: 0" in view.styleSheet()
+        assert "QComboBox::down-arrow" in view.styleSheet()
         assert view.profile_detail_label.text() == "Shared workflow profile"
         assert view.routes_group.isHidden()
         assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
         assert service.calls == [("get_state", "proj-1")]
     finally:
+        view.cleanup()
+
+
+def test_project_settings_pane_switching_profiles_does_not_reset_combo_model():
+    from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
+
+    service = FakeProjectSetupService(state=_make_state())
+    bus = InMemoryApplicationEventBus()
+    view = ProjectSettingsPane("proj-1", service, bus)
+    try:
+        model_reset_spy = QSignalSpy(view.profile_combo.model().modelReset)
+        custom_index = next(
+            index for index, option in enumerate(view.viewmodel.profile_options) if option["label"] == "Custom profile"
+        )
+
+        view.profile_combo.setCurrentIndex(custom_index)
+        _flush()
+        view.profile_combo.setCurrentIndex(0)
+        _flush()
+
+        assert model_reset_spy.count() == 0
+    finally:
+        view.close()
         view.cleanup()
 
 
@@ -242,6 +272,35 @@ def test_project_settings_pane_can_select_custom_profile():
         view.cleanup()
 
 
+def test_project_settings_pane_first_popup_click_switches_to_custom_profile():
+    from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
+
+    service = FakeProjectSetupService(state=_make_state())
+    bus = InMemoryApplicationEventBus()
+    view = ProjectSettingsPane("proj-1", service, bus)
+    try:
+        custom_index = next(
+            index for index, option in enumerate(view.viewmodel.profile_options) if option["label"] == "Custom profile"
+        )
+        view.show()
+        _flush()
+        view.profile_combo.showPopup()
+        _flush()
+
+        popup = view.profile_combo.view()
+        model_index = popup.model().index(custom_index, 0)
+        rect = popup.visualRect(model_index)
+        QTest.mouseClick(popup.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, rect.center())
+        _flush()
+
+        assert view.profile_combo.currentIndex() == custom_index
+        assert view.viewmodel.show_custom_profile is True
+        assert not view.routes_group.isHidden()
+    finally:
+        view.close()
+        view.cleanup()
+
+
 def test_project_settings_pane_custom_step_advanced_button_opens_advanced_dialog():
     from context_aware_translation.ui.features import workflow_profile_editor as editor_module
     from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
@@ -254,6 +313,7 @@ def test_project_settings_pane_custom_step_advanced_button_opens_advanced_dialog
             index for index, option in enumerate(view.viewmodel.profile_options) if option["label"] == "Custom profile"
         )
         view._on_profile_index_requested(custom_index)
+        _flush()
         translator_row = next(
             index for index, row in enumerate(view._custom_rows) if row.route.step_id is WorkflowStepId.TRANSLATOR
         )

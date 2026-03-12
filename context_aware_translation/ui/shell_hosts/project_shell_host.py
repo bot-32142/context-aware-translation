@@ -70,6 +70,10 @@ class ProjectShellHost(HybridShellHost):
 
     def show_terms_view(self) -> None:
         self.viewmodel.show_terms()
+        if self._terms_widget is not None:
+            ensure_loaded = getattr(self._terms_widget, "ensure_loaded", None)
+            if callable(ensure_loaded):
+                ensure_loaded()
         if self.content_widget("terms") is not None:
             self.show_content("terms")
 

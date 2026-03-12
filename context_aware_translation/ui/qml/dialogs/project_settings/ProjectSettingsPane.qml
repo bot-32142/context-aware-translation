@@ -4,13 +4,12 @@ Rectangle {
     id: root
     objectName: "projectSettingsPaneChrome"
     color: "#fcfaf6"
-    implicitHeight: titleLabel.implicitHeight + tipLabel.implicitHeight + actionRow.implicitHeight + 48
-        + (root.hasBlocker ? blockerCard.implicitHeight + 12 : 0)
-        + (root.hasMessage ? messageCard.implicitHeight + 12 : 0)
+    implicitHeight: contentColumn.implicitHeight + 36
 
     signal saveRequested
     signal openAppSetupRequested
 
+    property bool showHeader: false
     property string titleText: projectSettingsPane ? projectSettingsPane.title_text : "Project Setup"
     property string tipText: projectSettingsPane ? projectSettingsPane.tip_text : ""
     property string customProfileLabel: projectSettingsPane ? projectSettingsPane.custom_profile_label : "Custom profile"
@@ -65,6 +64,7 @@ Rectangle {
 
         Text {
             id: titleLabel
+            visible: root.showHeader
             width: parent.width
             text: root.titleText
             color: "#2f251d"
@@ -75,6 +75,7 @@ Rectangle {
 
         Text {
             id: tipLabel
+            visible: root.showHeader
             width: parent.width
             text: root.tipText
             color: "#675b4e"

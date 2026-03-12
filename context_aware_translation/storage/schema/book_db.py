@@ -926,10 +926,12 @@ class SQLiteBookDB:
         - total_sources: Total number of sources
         - ocr_completed: Number of image sources with OCR completed
         - ocr_pending: Number of sources needing OCR (image sources with is_ocr_completed=0)
+        - text_pending_ready: Number of sources whose text still needs to be added and are ready for glossary work
         - total_chunks: Total number of chunks
         - chunks_extracted: Number of chunks with is_extracted=1
         - chunks_mapped: Number of chunks with is_occurrence_mapped=1
         - chunks_translated: Number of chunks with is_translated=1
+        - first_source_relative_path, first_source_sequence_number: lightweight label hints for the document
         """
         rows = self.conn.execute(
             """
@@ -940,17 +942,27 @@ class SQLiteBookDB:
                 COALESCE(src.total_sources, 0) as total_sources,
                 COALESCE(src.ocr_completed, 0) as ocr_completed,
                 COALESCE(src.ocr_pending, 0) as ocr_pending,
+                COALESCE(src.text_pending_ready, 0) as text_pending_ready,
                 COALESCE(ch.total_chunks, 0) as total_chunks,
                 COALESCE(ch.chunks_extracted, 0) as chunks_extracted,
                 COALESCE(ch.chunks_mapped, 0) as chunks_mapped,
-                COALESCE(ch.chunks_translated, 0) as chunks_translated
+                COALESCE(ch.chunks_translated, 0) as chunks_translated,
+                first_src.first_source_relative_path,
+                COALESCE(first_src.first_source_sequence_number, 0) as first_source_sequence_number
             FROM document d
             LEFT JOIN (
                 SELECT
                     document_id,
                     COUNT(*) as total_sources,
                     SUM(CASE WHEN source_type = 'image' AND is_ocr_completed = 1 THEN 1 ELSE 0 END) as ocr_completed,
-                    SUM(CASE WHEN source_type = 'image' AND is_ocr_completed = 0 THEN 1 ELSE 0 END) as ocr_pending
+                    SUM(CASE WHEN source_type = 'image' AND is_ocr_completed = 0 THEN 1 ELSE 0 END) as ocr_pending,
+                    SUM(
+                        CASE
+                            WHEN is_text_added = 0 AND (source_type != 'image' OR is_ocr_completed = 1)
+                            THEN 1
+                            ELSE 0
+                        END
+                    ) as text_pending_ready
                 FROM document_sources
                 GROUP BY document_id
             ) src ON d.document_id = src.document_id
@@ -964,6 +976,20 @@ class SQLiteBookDB:
                 FROM chunks
                 GROUP BY document_id
             ) ch ON d.document_id = ch.document_id
+            LEFT JOIN (
+                SELECT
+                    ds.document_id,
+                    ds.relative_path as first_source_relative_path,
+                    ds.sequence_number as first_source_sequence_number
+                FROM document_sources ds
+                INNER JOIN (
+                    SELECT document_id, MIN(sequence_number) as first_source_sequence_number
+                    FROM document_sources
+                    GROUP BY document_id
+                ) first_ds
+                    ON ds.document_id = first_ds.document_id
+                    AND ds.sequence_number = first_ds.first_source_sequence_number
+            ) first_src ON d.document_id = first_src.document_id
             ORDER BY d.document_id
             """
         ).fetchall()

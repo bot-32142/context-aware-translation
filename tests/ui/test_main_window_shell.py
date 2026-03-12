@@ -284,13 +284,15 @@ class _FakeProjectSettingsPane(QWidget):
     open_app_setup_requested = Signal()
     save_completed = Signal(str)
 
-    def __init__(self, project_id, service, events, parent: QWidget | None = None):  # noqa: ANN001
+    def __init__(self, project_id, service, events, *, auto_refresh: bool = True, parent: QWidget | None = None):  # noqa: ANN001
         super().__init__(parent)
         self.project_id = project_id
         self.service = service
         self.events = events
         self.cleanup_calls = 0
         self.refresh_calls = 0
+        if auto_refresh:
+            self.refresh()
 
     def refresh(self) -> None:
         self.refresh_calls += 1
@@ -300,12 +302,22 @@ class _FakeProjectSettingsPane(QWidget):
 
 
 class _FakeTermsView(QWidget):
-    def __init__(self, project_id, service, events, parent: QWidget | None = None):  # noqa: ANN001
+    def __init__(self, project_id, service, events, *, auto_refresh: bool = True, parent: QWidget | None = None):  # noqa: ANN001
         super().__init__(parent)
         self.project_id = project_id
         self.service = service
         self.events = events
         self.cleanup_calls = 0
+        self.refresh_calls = 0
+        if auto_refresh:
+            self.refresh()
+
+    def refresh(self) -> None:
+        self.refresh_calls += 1
+
+    def ensure_loaded(self) -> None:
+        if self.refresh_calls == 0:
+            self.refresh()
 
     def cleanup(self) -> None:
         self.cleanup_calls += 1
@@ -359,6 +371,10 @@ class _FakeProjectShellHost(QWidget):
         self.current_surface = "work"
 
     def show_terms_view(self) -> None:
+        if self._terms_widget is not None:
+            ensure_loaded = getattr(self._terms_widget, "ensure_loaded", None)
+            if callable(ensure_loaded):
+                ensure_loaded()
         self.current_surface = "terms"
 
     def present_project_settings(self) -> None:
@@ -526,6 +542,32 @@ def test_main_window_routes_projects_into_project_shell():
         shell.project_settings_widget.save_completed.emit("project-1")
         assert shell.current_surface == "work"
         assert "Project setup saved" in window.statusBar().currentMessage()
+    finally:
+        window.close()
+        patch_stack.close()
+
+
+def test_main_window_open_project_lazy_loads_hidden_terms_and_project_settings():
+    window, context, patch_stack = _make_window()
+    try:
+        project_setup_service = MagicMock()
+        context.services.project_setup = project_setup_service
+
+        window.open_project("project-1", "One Piece")
+
+        shell = window._view_registry["project_project-1"]
+        assert isinstance(shell, _FakeProjectShellHost)
+        assert isinstance(shell.terms_widget, _FakeTermsView)
+        assert isinstance(shell.project_settings_widget, _FakeProjectSettingsPane)
+        assert shell.terms_widget.refresh_calls == 0
+        assert shell.project_settings_widget.refresh_calls == 0
+
+        shell.show_terms_view()
+        assert shell.terms_widget.refresh_calls == 1
+
+        window._open_project_settings(shell)
+        assert shell.project_settings_widget.refresh_calls == 1
+        assert project_setup_service.get_state.call_count == 0
     finally:
         window.close()
         patch_stack.close()

@@ -54,6 +54,7 @@ class TermsView(QWidget):
         *,
         document_id: int | None = None,
         embedded: bool = False,
+        auto_refresh: bool = True,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -63,6 +64,7 @@ class TermsView(QWidget):
         self._use_qml_chrome = (document_id is None and not embedded) or document_id is not None
         self._service = service
         self._state: TermsTableState | None = None
+        self._loaded_once = False
         self._event_bridge: QtApplicationEventBridge | None = None
         self._pending_local_terms_invalidations = 0
         self.viewmodel = (
@@ -76,7 +78,7 @@ class TermsView(QWidget):
             if not (self._is_document_scope and self._embedded):
                 self._event_bridge.setup_invalidated.connect(self._on_setup_invalidated)
         self._init_ui()
-        if not self._embedded:
+        if auto_refresh and not self._embedded:
             self.refresh()
 
     @property
@@ -197,6 +199,12 @@ class TermsView(QWidget):
             self._apply_state(self._service.get_document_terms(self.project_id, self.document_id))
         else:
             self._apply_state(self._service.get_project_terms(self.project_id))
+        self._loaded_once = True
+
+    def ensure_loaded(self) -> None:
+        if self._loaded_once:
+            return
+        self.refresh()
 
     def cleanup(self) -> None:
         if self._event_bridge is not None:
@@ -404,6 +412,20 @@ class TermsView(QWidget):
         self._show_message(UserMessageSeverity.SUCCESS, self.tr("Terms imported."))
 
     def _on_export_terms(self) -> None:
+        if (
+            QMessageBox.question(
+                self,
+                self.tr("Export Terms"),
+                self.tr(
+                    "Exporting terms may build missing context summaries before writing the file. "
+                    "The export will run in the background and appear in Queue so you can keep working. Continue?"
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
         path, _selected = QFileDialog.getSaveFileName(
             self,
             self.tr("Export Terms"),
@@ -412,12 +434,24 @@ class TermsView(QWidget):
         )
         if not path:
             return
-        self._run_command(
-            lambda: self._service.export_terms(
+        try:
+            self._service.export_terms(
                 ExportTermsRequest(project_id=self.project_id, output_path=path, document_id=self.document_id)
+            )
+        except BlockedOperationError as exc:
+            self._show_application_error(self.tr("Export Terms"), exc)
+            return
+        except ApplicationError as exc:
+            self._show_application_error(self.tr("Export Terms"), exc)
+            return
+        self._show_message(
+            UserMessageSeverity.INFO,
+            self.tr(
+                "Terms export was queued. Context summaries will be built in the background if needed. "
+                "Check Queue for progress."
             ),
-            title=self.tr("Export Terms"),
         )
+        self.refresh()
 
     def _on_term_rows_update_requested(self, rows: list[TermTableRow]) -> None:
         if self._state is None or not rows:

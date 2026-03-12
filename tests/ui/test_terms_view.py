@@ -14,6 +14,7 @@ from context_aware_translation.application.contracts.common import (
     UserMessageSeverity,
 )
 from context_aware_translation.application.contracts.terms import (
+    ExportTermsRequest,
     TermsScope,
     TermsScopeKind,
     TermsTableState,
@@ -189,6 +190,55 @@ def test_terms_view_loads_qml_project_chrome_and_routes_toolbar_actions():
         root.setProperty("reviewLabelText", "Review Terms With The Current Shared Workflow Profile")
         QApplication.processEvents()
         assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
+    finally:
+        view.cleanup()
+        view.deleteLater()
+
+
+def test_terms_view_export_warns_and_mentions_background_queue():
+    from context_aware_translation.ui.features.terms_view import TermsView
+
+    service = FakeTermsService(
+        project_state=_make_state(can_review=True, can_export=True),
+        command_result=AcceptedCommand(command_name="export_terms"),
+    )
+    bus = InMemoryApplicationEventBus()
+    view = TermsView("proj-1", service, bus)
+    try:
+        with (
+            patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes) as question,
+            patch.object(QFileDialog, "getSaveFileName", return_value=("/tmp/out.json", "JSON Files (*.json)")),
+            patch.object(view, "_show_message") as show_message,
+        ):
+            view.export_button.click()
+
+        question.assert_called_once()
+        assert ("export_terms", ExportTermsRequest(project_id="proj-1", output_path="/tmp/out.json", document_id=None)) in service.calls
+        show_message.assert_called_once()
+        severity, text = show_message.call_args.args
+        assert severity is UserMessageSeverity.INFO
+        assert "background" in text.lower()
+        assert "queue" in text.lower()
+    finally:
+        view.cleanup()
+        view.deleteLater()
+
+
+def test_terms_view_export_cancel_skips_file_dialog_and_service():
+    from context_aware_translation.ui.features.terms_view import TermsView
+
+    service = FakeTermsService(project_state=_make_state(can_review=True, can_export=True))
+    bus = InMemoryApplicationEventBus()
+    view = TermsView("proj-1", service, bus)
+    try:
+        with (
+            patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No),
+            patch.object(QFileDialog, "getSaveFileName") as get_save_file_name,
+        ):
+            view.export_button.click()
+
+        get_save_file_name.assert_not_called()
+        assert not any(name == "export_terms" for name, _payload in service.calls)
     finally:
         view.cleanup()
         view.deleteLater()

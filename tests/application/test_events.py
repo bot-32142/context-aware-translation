@@ -94,6 +94,30 @@ def test_task_engine_signal_is_forwarded_to_application_events(tmp_path: Path) -
         context.close()
 
 
+def test_worker_task_change_uses_single_coalesced_application_event_flush(tmp_path: Path) -> None:
+    app = _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    seen: list[ApplicationEventKind] = []
+    subscription = context.events.subscribe(lambda event: seen.append(event.kind))
+    try:
+        context.runtime.worker_deps.notify_task_changed("proj-1")
+        app.processEvents()
+        assert seen == []
+
+        context.runtime.task_engine._flush_task_changed()
+
+        assert seen == [
+            ApplicationEventKind.QUEUE_CHANGED,
+            ApplicationEventKind.WORKBOARD_INVALIDATED,
+            ApplicationEventKind.DOCUMENT_INVALIDATED,
+            ApplicationEventKind.TERMS_INVALIDATED,
+            ApplicationEventKind.PROJECTS_INVALIDATED,
+        ]
+    finally:
+        subscription.close()
+        context.close()
+
+
 def test_qt_application_event_bridge_emits_typed_signals() -> None:
     app = _ensure_qt_app()
     bus = InMemoryApplicationEventBus()

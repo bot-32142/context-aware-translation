@@ -51,6 +51,11 @@ def build_task_engine(
         engine = engine_ref.get("engine")
         if engine is not None:
             engine.enqueue_task_changed.emit(book_id)
+            return
+        # During bootstrap there is no engine instance yet. Keep the fallback
+        # callback for that narrow window, but once the engine exists all task
+        # invalidations must flow through TaskEngine so queued worker updates are
+        # coalesced on the UI thread.
         if on_task_changed is not None:
             on_task_changed(book_id)
 

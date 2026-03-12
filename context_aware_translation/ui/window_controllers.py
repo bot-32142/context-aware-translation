@@ -254,12 +254,14 @@ class ProjectSessionManager:
             book_id,
             self._services.terms,
             self._events,
+            auto_refresh=False,
             parent=project_shell,
         )
         project_settings_pane = self._project_settings_pane_factory(
             book_id,
             self._services.project_setup,
             self._events,
+            auto_refresh=False,
             parent=project_settings_dialog,
         )
         project_settings_dialog = self._build_project_settings_dialog(

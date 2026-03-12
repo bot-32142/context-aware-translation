@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from PySide6.QtWidgets import QApplication
 
 from context_aware_translation.application.composition import build_application_context
@@ -15,6 +16,7 @@ from context_aware_translation.application.contracts.app_setup import (
 from context_aware_translation.application.contracts.common import ProviderKind
 from context_aware_translation.application.contracts.project_setup import SaveProjectSetupRequest
 from context_aware_translation.application.contracts.projects import CreateProjectRequest
+from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 
 
 def _ensure_qt_app() -> QApplication:
@@ -67,6 +69,48 @@ def test_project_setup_and_work_queries_use_service_boundary(tmp_path: Path) -> 
         assert project_setup.selected_shared_profile_id is not None or project_setup.project_profile is not None
         assert workboard.project.project_id == project_id
         assert workboard.rows == []
+    finally:
+        context.close()
+
+
+def test_workboard_builds_labels_without_per_document_metadata_queries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    try:
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Manga Test", target_language="English")
+        )
+        project_id = created.project.project_id
+
+        with context.runtime.open_book_db(project_id) as dbx:
+            first_doc = dbx.document_repo.insert_document("manga")
+            dbx.document_repo.insert_document_source(
+                first_doc,
+                0,
+                "image",
+                relative_path="chapter-01/04.png",
+                is_ocr_completed=True,
+            )
+            second_doc = dbx.document_repo.insert_document("manga")
+            dbx.document_repo.insert_document_source(
+                second_doc,
+                0,
+                "image",
+                relative_path="chapter-01/05.png",
+                is_ocr_completed=True,
+            )
+
+        def _unexpected_metadata_call(_self, document_id: int):  # noqa: ANN001
+            raise AssertionError(f"unexpected metadata fetch for document {document_id}")
+
+        monkeypatch.setattr(DocumentRepository, "get_document_sources_metadata", _unexpected_metadata_call)
+
+        workboard = context.services.work.get_workboard(project_id)
+
+        assert [row.document.label for row in workboard.rows] == ["04.png", "05.png"]
     finally:
         context.close()
 

@@ -85,16 +85,6 @@ class DefaultWorkService:
         config = self._runtime.get_effective_config_payload(project_id)
         with self._runtime.open_book_db(project_id) as dbx:
             docs = dbx.document_repo.get_documents_with_status()
-            document_sources = {
-                int(doc["document_id"]): dbx.document_repo.get_document_sources_metadata(int(doc["document_id"]))
-                for doc in docs
-            }
-            pending_glossary_ids = {
-                int(doc["document_id"]) for doc in dbx.document_repo.list_documents_pending_glossary()
-            }
-            pending_translation_ids = {
-                int(doc["document_id"]) for doc in dbx.document_repo.list_documents_pending_translation()
-            }
         setup_blocker = self._resolve_setup_blocker(project_id, config, docs)
 
         rows: list[WorkDocumentRow] = []
@@ -105,13 +95,17 @@ class DefaultWorkService:
             document_id = int(doc["document_id"])
             document_type = str(doc.get("document_type") or "")
             total_chunks = int(doc.get("total_chunks", 0) or 0)
+            extracted_chunks = int(doc.get("chunks_extracted", 0) or 0)
+            mapped_chunks = int(doc.get("chunks_mapped", 0) or 0)
             translated_chunks = int(doc.get("chunks_translated", 0) or 0)
             ocr_pending = int(doc.get("ocr_pending", 0) or 0)
+            text_pending_ready = int(doc.get("text_pending_ready", 0) or 0)
             ref = self._build_document_ref(
                 document_id=document_id,
                 document_type=document_type,
                 order_index=order_index,
-                sources=document_sources.get(document_id, []),
+                first_source_relative_path=str(doc.get("first_source_relative_path") or ""),
+                first_source_sequence_number=int(doc.get("first_source_sequence_number", 1) or 1),
             )
 
             if blocking_doc_id is not None and document_id > blocking_doc_id:
@@ -162,7 +156,7 @@ class DefaultWorkService:
                 )
                 blocking_doc_id = document_id
                 blocking_message = summary
-            elif document_id in pending_glossary_ids:
+            elif text_pending_ready > 0 or (total_chunks > 0 and (extracted_chunks < total_chunks or mapped_chunks < total_chunks)):
                 status = SurfaceStatus.READY
                 summary = "Open Terms to build terms"
                 action = DocumentRowAction(
@@ -176,7 +170,7 @@ class DefaultWorkService:
                 )
                 blocking_doc_id = document_id
                 blocking_message = summary
-            elif document_id in pending_translation_ids or (total_chunks > 0 and translated_chunks < total_chunks):
+            elif total_chunks > 0 and translated_chunks < total_chunks:
                 status = SurfaceStatus.READY
                 summary = "Open Translation"
                 action = DocumentRowAction(
@@ -301,17 +295,15 @@ class DefaultWorkService:
         document_id: int,
         document_type: str,
         order_index: int,
-        sources: list[dict],
+        first_source_relative_path: str,
+        first_source_sequence_number: int,
     ) -> DocumentRef:
         label = f"Document {order_index}"
-        if sources:
-            first_source = sources[0]
-            relative_path = str(first_source.get("relative_path") or "").strip()
-            if relative_path:
-                label = Path(relative_path).name
-            else:
-                sequence_number = int(first_source.get("sequence_number", 1) or 1)
-                label = f"{document_type.replace('_', ' ').title()} {sequence_number}"
+        relative_path = first_source_relative_path.strip()
+        if relative_path:
+            label = Path(relative_path).name
+        elif first_source_sequence_number > 0:
+            label = f"{document_type.replace('_', ' ').title()} {first_source_sequence_number}"
 
         return DocumentRef(
             document_id=document_id,
