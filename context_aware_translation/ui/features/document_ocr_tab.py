@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QLabel,
@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
 from context_aware_translation.application.contracts.common import SurfaceStatus
 from context_aware_translation.application.contracts.document import (
@@ -160,6 +161,9 @@ class DocumentOCRTab(QWidget):
         self._current_page_index: int | None = None
         self._element_to_bbox: dict[int, int] = {}
         self._bbox_to_element: dict[int, int] = {}
+        self._chrome_resize_timer = QTimer(self)
+        self._chrome_resize_timer.setSingleShot(True)
+        self._chrome_resize_timer.timeout.connect(self._sync_chrome_height)
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -167,21 +171,15 @@ class DocumentOCRTab(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        self.chrome_host = QmlChromeHost(
-            "document/ocr/DocumentOCRPaneChrome.qml",
-            context_objects={"ocrPane": self.viewmodel},
-            parent=self,
-        )
-        layout.addWidget(self.chrome_host)
-
         self._init_compatibility_controls()
 
         self._content_widget = QWidget(self)
         content_layout = QVBoxLayout(self._content_widget)
-        content_layout.setContentsMargins(0, 12, 0, 0)
+        content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setChildrenCollapsible(False)
         self.image_viewer = ImageViewer(self)
         self.image_viewer.bbox_clicked.connect(self._on_bbox_clicked)
         splitter.addWidget(self.image_viewer)
@@ -194,12 +192,22 @@ class DocumentOCRTab(QWidget):
         self._right_stack.addWidget(self.text_edit)
         self._right_stack.addWidget(self.structured_list)
         splitter.addWidget(self._right_stack)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 1)
         splitter.setSizes([480, 480])
         content_layout.addWidget(splitter, 1)
         layout.addWidget(self._content_widget, 1)
 
+        self.chrome_host = QmlChromeHost(
+            "document/ocr/DocumentOCRPaneChrome.qml",
+            context_objects={"ocrPane": self.viewmodel},
+            parent=self,
+        )
+        layout.addWidget(self.chrome_host)
+
         self._connect_qml_signals()
         self._sync_chrome_state()
+        self._schedule_chrome_resize()
 
     def _init_compatibility_controls(self) -> None:
         self.tip_label = create_tip_label(
@@ -627,6 +635,10 @@ class DocumentOCRTab(QWidget):
             self.retranslateUi()
         super().changeEvent(event)
 
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        self._schedule_chrome_resize()
+
     def retranslateUi(self) -> None:
         self.tip_label.setText(
             self.tr("OCR applies only to the current document. Saving OCR does not rerun later steps.")
@@ -694,3 +706,25 @@ class DocumentOCRTab(QWidget):
             progress_can_cancel=not self.progress_widget.cancel_button.isHidden(),
             empty_visible=not self.empty_label.isHidden(),
         )
+        self._schedule_chrome_resize()
+
+    def _schedule_chrome_resize(self) -> None:
+        self._sync_chrome_height()
+        self._chrome_resize_timer.start(0)
+
+    def _sync_chrome_height(self) -> None:
+        if not isValid(self.chrome_host):
+            return
+        root = self.chrome_host.rootObject()
+        if root is None:
+            return
+        implicit_height = root.property("implicitHeight")
+        try:
+            chrome_height = max(int(float(implicit_height)), 0)
+        except (TypeError, ValueError):
+            return
+        if chrome_height <= 0:
+            return
+        self.chrome_host.setMinimumHeight(chrome_height)
+        self.chrome_host.setMaximumHeight(chrome_height)
+        self.chrome_host.updateGeometry()

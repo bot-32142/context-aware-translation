@@ -30,7 +30,7 @@ from tests.application.fakes import FakeTermsService
 
 try:
     from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
+    from PySide6.QtWidgets import QApplication, QFileDialog, QHeaderView, QMessageBox
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -118,6 +118,10 @@ def test_terms_view_renders_backend_state_and_local_filters():
         assert view.review_button.toolTip() == "Review config missing."
         assert not view.edit_selected_action.isEnabled()
         assert view.table_view.itemDelegateForColumn(1).__class__.__name__ == "_TranslationDelegate"
+        assert view.table_view.horizontalHeader().sectionResizeMode(3) is QHeaderView.ResizeMode.Interactive
+        assert view.table_view.horizontalHeader().sectionResizeMode(4) is QHeaderView.ResizeMode.Interactive
+        assert view.table_view.horizontalHeader().sectionResizeMode(5) is QHeaderView.ResizeMode.Interactive
+        assert view.table_view.horizontalHeader().sectionResizeMode(6) is QHeaderView.ResizeMode.Interactive
 
         view.search_input.setText("luffy")
         assert view.proxy_model.rowCount() == 1
@@ -150,6 +154,13 @@ def test_terms_view_loads_qml_project_chrome_and_routes_toolbar_actions():
         assert root.property("canTranslate") is True
         assert root.property("canReview") is True
         assert root.property("canExport") is True
+        assert view.import_button.isHidden()
+        assert view.export_button.isHidden()
+        assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
+        assert view.import_button.isVisible() is False
+        assert view.export_button.isVisible() is False
+        assert view.import_button.isWindow() is False
+        assert view.export_button.isWindow() is False
 
         with (
             patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes),
@@ -168,6 +179,16 @@ def test_terms_view_loads_qml_project_chrome_and_routes_toolbar_actions():
         assert "filter_noise" in call_names
         assert "import_terms" in call_names
         assert "export_terms" in call_names
+
+        root.setProperty("width", 220)
+        root.setProperty(
+            "tipText",
+            "Terms are shared across the project and this explanatory copy should wrap once the chrome narrows.",
+        )
+        root.setProperty("translateLabelText", "Translate All Untranslated Project Terms Right Now")
+        root.setProperty("reviewLabelText", "Review Terms With The Current Shared Workflow Profile")
+        QApplication.processEvents()
+        assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
     finally:
         view.cleanup()
         view.deleteLater()
@@ -197,6 +218,7 @@ def test_terms_view_loads_qml_document_chrome_and_routes_document_actions():
         assert root.property("canBuild") is True
         assert root.property("canTranslate") is True
         assert root.property("canReview") is True
+        assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
 
         with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
             root.buildRequested.emit()
@@ -209,6 +231,15 @@ def test_terms_view_loads_qml_document_chrome_and_routes_document_actions():
         assert "translate_pending" in call_names
         assert "review_terms" in call_names
         assert "filter_noise" in call_names
+
+        root.setProperty("width", 220)
+        root.setProperty(
+            "tipText",
+            "Terms here are scoped to the current document and this copy should wrap when the chrome narrows.",
+        )
+        root.setProperty("buildLabelText", "Build Terms From The Current Document Before Review")
+        QApplication.processEvents()
+        assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
     finally:
         view.cleanup()
         view.deleteLater()

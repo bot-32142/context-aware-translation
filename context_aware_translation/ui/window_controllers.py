@@ -55,6 +55,10 @@ class QueueDockController:
         self.dock = QDockWidget(self._title_text(), parent_window)
         self.dock.setObjectName("queueDrawerDock")
         self.dock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea)
+        self.dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
+        title_bar = QWidget(self.dock)
+        title_bar.setFixedHeight(0)
+        self.dock.setTitleBarWidget(title_bar)
         self.dock.setWidget(self.queue_shell)
         self.dock.hide()
         self.dock.visibilityChanged.connect(self.handle_visibility_changed)
@@ -219,25 +223,33 @@ class ProjectSessionManager:
             self.project_settings_dialog.retranslate()
 
     def _build_project_shell(self, book_id: str, book_name: str):
+        project_shell = self._project_shell_factory(self._parent_window)
+        project_settings_dialog = self._project_settings_dialog_factory(self._parent_window)
         work_view = self._work_view_factory(
             book_id,
             self._services.work,
             self._services.document,
             self._services.terms,
             self._events,
+            parent=project_shell,
         )
         terms_view = self._terms_view_factory(
             book_id,
             self._services.terms,
             self._events,
+            parent=project_shell,
         )
         project_settings_pane = self._project_settings_pane_factory(
             book_id,
             self._services.project_setup,
             self._events,
+            parent=project_settings_dialog,
         )
-        project_shell = self._project_shell_factory(self._parent_window)
-        project_settings_dialog = self._build_project_settings_dialog(project_shell, project_settings_pane)
+        project_settings_dialog = self._build_project_settings_dialog(
+            project_shell,
+            project_settings_pane,
+            dialog=project_settings_dialog,
+        )
         project_shell.set_work_widget(work_view)
         project_shell.set_terms_widget(terms_view)
         project_shell.set_project_settings_widget(project_settings_pane)
@@ -252,8 +264,9 @@ class ProjectSessionManager:
         self.project_settings_dialog = project_settings_dialog
         return project_shell
 
-    def _build_project_settings_dialog(self, project_shell, project_settings_pane):
-        dialog = self._project_settings_dialog_factory(self._parent_window)
+    def _build_project_settings_dialog(self, project_shell, project_settings_pane, *, dialog=None):
+        if dialog is None:
+            dialog = self._project_settings_dialog_factory(self._parent_window)
         dialog.set_project_settings_widget(project_settings_pane)
         dialog.finished.connect(lambda _result: project_shell.dismiss_modal())
         return dialog

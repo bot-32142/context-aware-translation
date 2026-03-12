@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -34,7 +35,6 @@ from context_aware_translation.application.events import (
     ApplicationEventSubscriber,
     DocumentInvalidatedEvent,
     SetupInvalidatedEvent,
-    TermsInvalidatedEvent,
 )
 from context_aware_translation.application.services.document import DocumentService
 from context_aware_translation.application.services.terms import TermsService
@@ -330,17 +330,52 @@ class _DocumentExportTab(QWidget):
             ),
         )
         self.tip_label.hide()
-        self.controls = _ExportControls(parent=self)
+        self.controls_card = QFrame(self)
+        self.controls_card.setFrameShape(QFrame.Shape.StyledPanel)
+        self.controls_card.setStyleSheet(
+            """
+            QFrame {
+                border: 1px solid #dbcdb9;
+                border-radius: 12px;
+                background-color: #fdfaf5;
+            }
+            QComboBox, QLineEdit {
+                min-height: 34px;
+                border: 1px solid #d8cdbf;
+                border-radius: 8px;
+                padding: 0 10px;
+                background-color: #ffffff;
+            }
+            QPushButton {
+                min-height: 34px;
+                border-radius: 10px;
+                padding: 0 14px;
+                background-color: #efe0ca;
+                color: #2f251d;
+                font-weight: 600;
+            }
+            QCheckBox {
+                color: #2f251d;
+            }
+            """
+        )
+        controls_layout = QVBoxLayout(self.controls_card)
+        controls_layout.setContentsMargins(18, 18, 18, 18)
+        controls_layout.setSpacing(12)
+
+        self.controls = _ExportControls(parent=self.controls_card)
         self.controls.changed.connect(self._update_export_enabled)
-        layout.addWidget(self.controls)
+        controls_layout.addWidget(self.controls)
         self.export_button = QPushButton(self.tr("Export This Document"))
         self.export_button.clicked.connect(self._run_export)
         self.export_button.hide()
-        layout.addWidget(self.export_button)
+        controls_layout.addWidget(self.export_button, 0, Qt.AlignmentFlag.AlignLeft)
         self.result_label = QLabel()
         self.result_label.setWordWrap(True)
+        self.result_label.setStyleSheet("color: #15803d; font-weight: 600;")
         self.result_label.hide()
-        layout.addWidget(self.result_label)
+        controls_layout.addWidget(self.result_label)
+        layout.addWidget(self.controls_card)
         layout.addStretch()
         self._connect_qml_signals()
         self._sync_chrome_state()
@@ -388,7 +423,6 @@ class _DocumentExportTab(QWidget):
     def _show_result(self, result: DocumentExportResult) -> None:
         message = result.message.text if result.message is not None else result.output_path
         self.result_label.setText(message)
-        self.result_label.setStyleSheet("color: #15803d;")
         self.result_label.show()
         self._sync_chrome_state()
 
@@ -437,11 +471,11 @@ class DocumentWorkspaceView(QWidget):
         self._document_service = document_service
         self._terms_service = terms_service
         self._work_service = work_service
+        self._events = events
         self._state = None
         self._section_widgets: dict[DocumentSection, QWidget] = {}
         self._event_bridge = QtApplicationEventBridge(events, parent=self)
         self._event_bridge.document_invalidated.connect(self._on_document_invalidated)
-        self._event_bridge.terms_invalidated.connect(self._on_terms_invalidated)
         self._event_bridge.setup_invalidated.connect(self._on_setup_invalidated)
         self._init_ui()
         self.refresh()
@@ -490,7 +524,7 @@ class DocumentWorkspaceView(QWidget):
             return TermsView(
                 self._project_id,
                 self._terms_service,
-                None,
+                self._events,
                 document_id=self._document_id,
                 embedded=True,
                 parent=self,
@@ -535,13 +569,6 @@ class DocumentWorkspaceView(QWidget):
         self.shell_host.retranslate()
 
     def _on_document_invalidated(self, event: DocumentInvalidatedEvent) -> None:
-        if event.project_id not in {None, self._project_id}:
-            return
-        if event.document_id not in {None, self._document_id}:
-            return
-        self.refresh()
-
-    def _on_terms_invalidated(self, event: TermsInvalidatedEvent) -> None:
         if event.project_id not in {None, self._project_id}:
             return
         if event.document_id not in {None, self._document_id}:

@@ -198,6 +198,9 @@ def test_work_view_renders_workboard_from_service():
     view, _bus, work_service, _document_service, _terms_service = _make_view(work_state=_make_workboard(action=action))
     try:
         assert view.context_label.text() == "Context ready through 03"
+        assert view.context_label.isHidden()
+        assert view.blocker_label.isHidden()
+        assert view.setup_label.isHidden()
         assert view.rows_table.rowCount() == 1
         assert view.rows_table.item(0, 1).text() == "04.png"
         assert view.rows_table.item(0, 2).text() == "2"
@@ -205,6 +208,7 @@ def test_work_view_renders_workboard_from_service():
         assert view.rows_table.item(0, 4).text() == "In progress (1/2)"
         assert view.rows_table.item(0, 5).text() == "In progress (1/2)"
         assert view.rows_table.cellWidget(0, 7).text() == "Open Translation"
+        assert view.rows_table.rowHeight(0) >= view.rows_table.cellWidget(0, 7).sizeHint().height()
         assert work_service.calls == [("get_workboard", "proj-1")]
     finally:
         view.cleanup()
@@ -233,6 +237,11 @@ def test_work_view_loads_qml_home_chrome_and_routes_setup_signal():
         assert root.property("contextSummaryText") == "Context ready through 03"
         assert root.property("hasSetupBlocker") is True
         assert root.property("selectFilesLabelText") == "Select Files"
+        assert int(root.property("implicitHeight")) > 180
+        assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
+        assert view.setup_strip.isHidden()
+        assert view.setup_label.isHidden()
+        assert view.setup_action_button.isHidden()
 
         root.setupActionRequested.emit()
         assert opened == [True]
@@ -257,8 +266,8 @@ def test_work_view_routes_setup_blocker_to_project_setup():
     opened: list[bool] = []
     view.open_project_setup_requested.connect(lambda: opened.append(True))
     try:
-        assert not view.setup_strip.isHidden()
-        view.setup_action_button.click()
+        assert view.setup_strip.isHidden()
+        view._on_setup_action_clicked()
         assert opened == [True]
     finally:
         view.cleanup()
@@ -392,6 +401,7 @@ def test_work_view_reset_and_delete_selected_document():
     )
     view, _bus, work_service, _document_service, _terms_service = _make_view(work_state=_make_workboard(action=action))
     try:
+        assert view.reset_document_button.styleSheet() == view.delete_document_button.styleSheet()
         view.rows_table.selectRow(0)
         with (
             patch(

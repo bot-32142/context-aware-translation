@@ -46,7 +46,10 @@ Rectangle {
     property bool progressCanCancel: ocrPane ? ocrPane.progress_can_cancel : false
     property bool emptyVisible: ocrPane ? ocrPane.empty_visible : true
     width: parent ? parent.width : 960
-    implicitHeight: 168
+    implicitHeight: tipCard.implicitHeight + navigationRow.implicitHeight + actionFlow.implicitHeight + 52
+        + (progressRow.visible ? progressRow.height + 10 : 0)
+        + (messageTextItem.visible ? messageTextItem.implicitHeight + 10 : 0)
+        + (emptyStateText.visible ? emptyStateText.implicitHeight + 10 : 0)
 
     function actionButtonColor(enabled) {
         return enabled ? "#2f251d" : "#d5cdc0"
@@ -62,6 +65,7 @@ Rectangle {
         spacing: 10
 
         Rectangle {
+            id: tipCard
             width: parent.width
             radius: 10
             color: "#f2eadf"
@@ -81,6 +85,7 @@ Rectangle {
         }
 
         Row {
+            id: navigationRow
             width: parent.width
             spacing: 8
 
@@ -129,19 +134,21 @@ Rectangle {
             }
 
             Text {
-                anchors.verticalCenter: parent.verticalCenter
+                height: 34
                 text: root.pageLabelText
                 color: "#2f251d"
                 font.pixelSize: 13
                 font.bold: true
+                verticalAlignment: Text.AlignVCenter
             }
 
             Text {
-                anchors.verticalCenter: parent.verticalCenter
+                height: 34
                 text: root.pageStatusText
                 color: root.pageStatusColor
                 font.pixelSize: 13
                 font.bold: true
+                verticalAlignment: Text.AlignVCenter
             }
 
             Rectangle {
@@ -191,10 +198,11 @@ Rectangle {
             Item { width: 12; height: 1 }
 
             Text {
-                anchors.verticalCenter: parent.verticalCenter
+                height: 34
                 text: root.goToLabelText
                 color: "#5e5144"
                 font.pixelSize: 12
+                verticalAlignment: Text.AlignVCenter
             }
 
             Rectangle {
@@ -240,119 +248,150 @@ Rectangle {
                 }
             }
 
-            Item {
-                width: Math.max(0, parent.width - 700)
-                height: 1
-            }
         }
 
-        Row {
+        Flow {
+            id: actionFlow
             width: parent.width
             spacing: 8
 
-            Repeater {
-                model: [
-                    { label: root.runCurrentLabelText, enabled: root.runCurrentEnabled, signalName: "current" },
-                    { label: root.runPendingLabelText, enabled: root.runPendingEnabled, signalName: "pending" },
-                    { label: root.saveLabelText, enabled: root.saveEnabled, signalName: "save" }
-                ]
+            Rectangle {
+                width: Math.max(runCurrentText.implicitWidth + 28, 88)
+                height: 36
+                radius: 12
+                color: root.actionButtonColor(root.runCurrentEnabled)
 
-                delegate: Rectangle {
-                    width: index === 1 ? 196 : (index === 0 ? 204 : 88)
-                    height: 36
+                Text {
+                    id: runCurrentText
+                    anchors.centerIn: parent
+                    text: root.runCurrentLabelText
+                    color: root.actionLabelColor(root.runCurrentEnabled)
+                    font.pixelSize: 12
+                    font.bold: true
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: root.runCurrentEnabled
+                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: root.runCurrentRequested()
+                }
+            }
+
+            Rectangle {
+                width: Math.max(runPendingText.implicitWidth + 28, 88)
+                height: 36
+                radius: 12
+                color: root.actionButtonColor(root.runPendingEnabled)
+
+                Text {
+                    id: runPendingText
+                    anchors.centerIn: parent
+                    text: root.runPendingLabelText
+                    color: root.actionLabelColor(root.runPendingEnabled)
+                    font.pixelSize: 12
+                    font.bold: true
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: root.runPendingEnabled
+                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: root.runPendingRequested()
+                }
+            }
+
+            Rectangle {
+                width: Math.max(saveText.implicitWidth + 28, 88)
+                height: 36
+                radius: 12
+                color: root.actionButtonColor(root.saveEnabled)
+
+                Text {
+                    id: saveText
+                    anchors.centerIn: parent
+                    text: root.saveLabelText
+                    color: root.actionLabelColor(root.saveEnabled)
+                    font.pixelSize: 12
+                    font.bold: true
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: root.saveEnabled
+                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: root.saveRequested()
+                }
+            }
+        }
+
+        Rectangle {
+            id: progressRow
+            visible: root.progressVisible
+            height: 36
+            radius: 12
+            color: "#e4eefc"
+            border.color: "#b3cdf3"
+            border.width: 1
+            width: Math.max(180, progressText.width + cancelText.width + 48)
+
+            Row {
+                anchors.fill: parent
+                anchors.margins: 10
+                spacing: 10
+
+                Text {
+                    id: progressText
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.progressLabelText
+                    color: "#1d4b8f"
+                    font.pixelSize: 12
+                    font.bold: true
+                }
+
+                Rectangle {
+                    visible: root.progressCanCancel
+                    width: cancelText.width + 18
+                    height: 24
                     radius: 12
-                    color: root.actionButtonColor(modelData.enabled)
+                    color: "#dbeafe"
 
                     Text {
+                        id: cancelText
                         anchors.centerIn: parent
-                        text: modelData.label
-                        color: root.actionLabelColor(modelData.enabled)
-                        font.pixelSize: 12
+                        text: root.cancelLabelText
+                        color: "#1d4b8f"
+                        font.pixelSize: 11
                         font.bold: true
                     }
 
                     MouseArea {
                         anchors.fill: parent
-                        enabled: modelData.enabled
+                        enabled: root.progressCanCancel
                         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                        onClicked: {
-                            if (modelData.signalName === "current") {
-                                root.runCurrentRequested()
-                            } else if (modelData.signalName === "pending") {
-                                root.runPendingRequested()
-                            } else {
-                                root.saveRequested()
-                            }
-                        }
+                        onClicked: root.cancelRequested()
                     }
                 }
             }
+        }
 
-            Rectangle {
-                visible: root.progressVisible
-                height: 36
-                radius: 12
-                color: "#e4eefc"
-                border.color: "#b3cdf3"
-                border.width: 1
-                width: Math.max(180, progressText.width + cancelText.width + 48)
+        Text {
+            id: messageTextItem
+            visible: root.messageText.length > 0
+            text: root.messageText
+            color: "#2563eb"
+            font.pixelSize: 12
+            font.bold: true
+            verticalAlignment: Text.AlignVCenter
+        }
 
-                Row {
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    spacing: 10
-
-                    Text {
-                        id: progressText
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: root.progressLabelText
-                        color: "#1d4b8f"
-                        font.pixelSize: 12
-                        font.bold: true
-                    }
-
-                    Rectangle {
-                        visible: root.progressCanCancel
-                        width: cancelText.width + 18
-                        height: 24
-                        radius: 12
-                        color: "#dbeafe"
-
-                        Text {
-                            id: cancelText
-                            anchors.centerIn: parent
-                            text: root.cancelLabelText
-                            color: "#1d4b8f"
-                            font.pixelSize: 11
-                            font.bold: true
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            enabled: root.progressCanCancel
-                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                            onClicked: root.cancelRequested()
-                        }
-                    }
-                }
-            }
-
-            Text {
-                visible: root.messageText.length > 0
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.messageText
-                color: "#2563eb"
-                font.pixelSize: 12
-                font.bold: true
-            }
-
-            Text {
-                visible: root.emptyVisible
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.emptyText
-                color: "#5e5144"
-                font.pixelSize: 12
-            }
+        Text {
+            id: emptyStateText
+            visible: root.emptyVisible
+            text: root.emptyText
+            color: "#5e5144"
+            font.pixelSize: 12
+            verticalAlignment: Text.AlignVCenter
         }
     }
 }

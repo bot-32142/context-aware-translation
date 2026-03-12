@@ -36,7 +36,7 @@ Rectangle {
             anchors.left: parent.left
             anchors.leftMargin: 22
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 16
+            spacing: 10
 
             Column {
                 spacing: 3
@@ -52,34 +52,6 @@ Rectangle {
                     text: root.surfaceTitle
                     color: "#786b5e"
                     font.pixelSize: 12
-                }
-            }
-
-            Rectangle {
-                width: 1
-                height: 36
-                color: "#d9d0c4"
-            }
-
-            Rectangle {
-                width: projectsLabel.implicitWidth + 28
-                height: 38
-                radius: 19
-                color: "#2f251d"
-
-                Text {
-                    id: projectsLabel
-                    anchors.centerIn: parent
-                    text: root.projectsLabel
-                    color: "#fcfaf6"
-                    font.pixelSize: 14
-                    font.bold: true
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.projectsRequested()
                 }
             }
         }

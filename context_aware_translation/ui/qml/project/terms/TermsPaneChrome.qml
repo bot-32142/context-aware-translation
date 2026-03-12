@@ -4,7 +4,8 @@ Rectangle {
     id: root
     objectName: "termsPaneChrome"
     color: "#f4efe6"
-    implicitHeight: 170
+    width: parent ? parent.width : 960
+    implicitHeight: contentColumn.implicitHeight + 36
 
     signal buildRequested
     signal translateRequested
@@ -41,6 +42,7 @@ Rectangle {
     }
 
     Column {
+        id: contentColumn
         anchors.fill: parent
         anchors.margins: 18
         spacing: 12
@@ -79,7 +81,7 @@ Rectangle {
                     required property var modelData
 
                     visible: modelData.visible === undefined ? true : modelData.visible
-                    width: buttonLabel.implicitWidth + 28
+                    width: Math.max(buttonLabel.implicitWidth + 28, 152)
                     height: 40
                     radius: 14
                     color: root.buttonColor(modelData.enabled)

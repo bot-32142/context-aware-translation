@@ -285,6 +285,37 @@ def test_document_workspace_terms_context_menu_preserves_multi_selection_and_ope
         view.cleanup()
 
 
+def test_document_workspace_terms_bulk_updates_stay_local_first():
+    view, bus, document_service, terms_service = _make_view()
+    original_bulk_update = terms_service.bulk_update_terms
+
+    def _bulk_update(request):  # noqa: ANN001
+        result = original_bulk_update(request)
+        bus.publish(TermsInvalidatedEvent(project_id="proj-1", document_id=4))
+        return result
+
+    terms_service.bulk_update_terms = _bulk_update
+    try:
+        view.show()
+        QApplication.processEvents()
+        view.show_section(DocumentSection.TERMS)
+        terms_tab = _current_section_widget(view)
+        initial_workspace_calls = len([name for name, _payload in document_service.calls if name == "get_workspace"])
+        initial_terms_calls = len([name for name, _payload in terms_service.calls if name == "get_document_terms"])
+
+        terms_tab.table_panel._toggle_row_selection(0)
+        QApplication.processEvents()
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
+            terms_tab.mark_reviewed_action.trigger()
+
+        workspace_calls = [name for name, _payload in document_service.calls if name == "get_workspace"]
+        terms_calls = [name for name, _payload in terms_service.calls if name == "get_document_terms"]
+        assert len(workspace_calls) == initial_workspace_calls
+        assert len(terms_calls) == initial_terms_calls
+    finally:
+        view.cleanup()
+
+
 def test_document_workspace_ocr_tab_routes_save_and_run_actions():
     view, _bus, document_service, _terms_service = _make_view()
     try:
@@ -336,8 +367,8 @@ def test_document_workspace_refreshes_on_invalidations():
         workspace_calls = [name for name, _payload in document_service.calls if name == "get_workspace"]
         ocr_calls = [name for name, _payload in document_service.calls if name == "get_ocr"]
         terms_calls = [name for name, _payload in terms_service.calls if name == "get_document_terms"]
-        assert len(workspace_calls) == 4
-        assert len(ocr_calls) == 4
+        assert len(workspace_calls) == 3
+        assert len(ocr_calls) == 3
         assert len(terms_calls) == 4
     finally:
         view.cleanup()
@@ -393,6 +424,7 @@ def test_document_workspace_export_tab_runs_document_service():
         assert request.project_id == "proj-1"
         assert request.document_id == 4
         assert request.options["preserve_structure"] is True
+        assert "background-color: #fdfaf5" in export_tab.controls_card.styleSheet()
         assert not export_tab.result_label.isHidden()
         assert export_tab.result_label.text() == "Export complete."
     finally:

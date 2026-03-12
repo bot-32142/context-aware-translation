@@ -128,10 +128,20 @@ def test_document_ocr_tab_loads_qml_chrome_and_qml_navigation_signals() -> None:
         assert root.objectName() == "documentOcrPaneChrome"
         assert root.property("pageLabelText") == "Page 1 of 2"
         assert root.property("pageStatusText") == "OCR Done"
+        assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
 
         root.nextRequested.emit()
         assert view.page_label.text() == "Page 2 of 2"
         assert root.property("pageStatusText") == "Pending OCR"
+
+        root.setProperty("width", 280)
+        root.setProperty("runCurrentLabelText", "Run OCR For The Current Page With A Much Longer Label")
+        root.setProperty("runPendingLabelText", "Run OCR For All Pending Pages With A Much Longer Label")
+        root.setProperty("messageText", "Queued work is still running in the background.")
+        QApplication.processEvents()
+
+        assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
+        assert float(root.property("implicitHeight")) > 168.0
     finally:
         view.deleteLater()
 

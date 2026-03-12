@@ -141,6 +141,7 @@ def test_document_images_view_renders_backend_state_and_runs_actions():
         assert root.objectName() == "documentImagesPaneChrome"
         assert root.property("pageLabelText") == "Image 1 of 2"
         assert root.property("statusText") == "Pending"
+        assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
         assert root.property("runSelectedEnabled") is True
         assert root.property("runPendingEnabled") is True
         assert root.property("forceAllEnabled") is True
@@ -170,6 +171,15 @@ def test_document_images_view_renders_backend_state_and_runs_actions():
         assert force_request.source_id is None
         assert force_request.force_all is True
         assert root.property("messageText") == "Queued."
+
+        root.setProperty("width", 280)
+        root.setProperty("runSelectedLabelText", "Reembed Only This Image With A Much Longer Label")
+        root.setProperty("runPendingLabelText", "Reembed Every Pending Image With A Much Longer Label")
+        root.setProperty("forceAllLabelText", "Force Reembed Every Image In This Document")
+        QApplication.processEvents()
+
+        assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
+        assert float(root.property("implicitHeight")) > 208.0
     finally:
         view.deleteLater()
 

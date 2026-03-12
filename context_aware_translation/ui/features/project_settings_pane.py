@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, Qt, Signal
-from PySide6.QtWidgets import QGroupBox, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
+from PySide6.QtWidgets import QComboBox, QGroupBox, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.application.contracts.app_setup import (
@@ -54,7 +54,7 @@ class ProjectSettingsPane(QWidget):
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setSpacing(12)
 
         self.chrome_host = QmlChromeHost(
             "dialogs/project_settings/ProjectSettingsPane.qml",
@@ -62,6 +62,26 @@ class ProjectSettingsPane(QWidget):
             parent=self,
         )
         layout.addWidget(self.chrome_host)
+
+        self.profile_section = QWidget(self)
+        profile_layout = QVBoxLayout(self.profile_section)
+        profile_layout.setContentsMargins(18, 0, 18, 0)
+        profile_layout.setSpacing(6)
+        self.profile_label = QLabel(self.tr("Workflow profile"), self.profile_section)
+        self.profile_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #2f251d;")
+        profile_layout.addWidget(self.profile_label)
+        self.profile_combo = QComboBox(self.profile_section)
+        self.profile_combo.setObjectName("projectWorkflowProfileCombo")
+        self.profile_combo.setMinimumWidth(420)
+        self.profile_combo.setMaximumWidth(560)
+        self.profile_combo.setMinimumHeight(40)
+        self.profile_combo.currentIndexChanged.connect(self._on_profile_index_requested)
+        profile_layout.addWidget(self.profile_combo)
+        self.profile_detail_label = QLabel(self.profile_section)
+        self.profile_detail_label.setWordWrap(True)
+        self.profile_detail_label.setStyleSheet("color: #6e6154; font-size: 12px;")
+        profile_layout.addWidget(self.profile_detail_label)
+        layout.addWidget(self.profile_section)
 
         self.routes_group = QGroupBox(self.tr("Step routes"), self)
         self.routes_group.setContentsMargins(18, 16, 18, 18)
@@ -87,6 +107,7 @@ class ProjectSettingsPane(QWidget):
         self.routes_group.hide()
 
         self._connect_qml_signals()
+        self._schedule_chrome_resize()
 
     def refresh(self) -> None:
         self._apply_state(self._service.get_state(self.project_id))
@@ -100,9 +121,15 @@ class ProjectSettingsPane(QWidget):
         super().changeEvent(event)
 
     def retranslateUi(self) -> None:
+        self.profile_label.setText(self.tr("Workflow profile"))
         self.routes_group.setTitle(self.tr("Step routes"))
         self.viewmodel.retranslate()
         self._sync_viewmodel()
+        self._schedule_chrome_resize()
+
+    def resizeEvent(self, event) -> None:  # noqa: ANN001
+        super().resizeEvent(event)
+        self._schedule_chrome_resize()
 
     def _apply_state(self, state: ProjectSetupState) -> None:
         self._state = state
@@ -112,6 +139,7 @@ class ProjectSettingsPane(QWidget):
         self._sync_routes_editor()
         self._sync_viewmodel()
         self.viewmodel.clear_message()
+        self._schedule_chrome_resize()
 
     def _initial_selected_profile_id(self, state: ProjectSetupState) -> str | None:
         if state.project_profile is not None:
@@ -128,7 +156,6 @@ class ProjectSettingsPane(QWidget):
         root = self.chrome_host.rootObject()
         if root is None:
             return
-        root.profileIndexRequested.connect(self._on_profile_index_requested)
         root.saveRequested.connect(self._save)
         root.openAppSetupRequested.connect(self.open_app_setup_requested.emit)
 
@@ -150,6 +177,7 @@ class ProjectSettingsPane(QWidget):
     def _sync_viewmodel(self) -> None:
         state = self._state
         if state is None:
+            self._sync_profile_selector([], -1)
             self.viewmodel.apply_state(
                 project_name="",
                 blocker_text="",
@@ -159,6 +187,7 @@ class ProjectSettingsPane(QWidget):
                 show_open_app_setup=False,
                 can_save=False,
             )
+            self._schedule_chrome_resize()
             return
 
         options: list[dict[str, object]] = []
@@ -183,6 +212,8 @@ class ProjectSettingsPane(QWidget):
             )
             option_values.append(_CUSTOM_PROFILE_ID)
         self._profile_option_values = option_values
+        selected_profile_index = option_values.index(self._selected_profile_id) if self._selected_profile_id in option_values else -1
+        self._sync_profile_selector(options, selected_profile_index)
 
         can_save = False
         if self._is_custom_selected():
@@ -199,6 +230,25 @@ class ProjectSettingsPane(QWidget):
             show_open_app_setup=state.blocker is not None,
             can_save=can_save,
         )
+        self._schedule_chrome_resize()
+
+    def _sync_profile_selector(self, options: list[dict[str, object]], selected_index: int) -> None:
+        self.profile_combo.blockSignals(True)
+        self.profile_combo.clear()
+        for option in options:
+            self.profile_combo.addItem(str(option.get("label", "")), str(option.get("detail", "")))
+        self.profile_combo.setCurrentIndex(selected_index)
+        self.profile_combo.blockSignals(False)
+        has_options = bool(options)
+        self.profile_section.setVisible(has_options)
+        self.profile_combo.setEnabled(has_options)
+        if not has_options or selected_index < 0 or selected_index >= len(options):
+            self.profile_detail_label.clear()
+            self.profile_detail_label.hide()
+            return
+        detail = str(options[selected_index].get("detail", "")).strip()
+        self.profile_detail_label.setText(detail)
+        self.profile_detail_label.setVisible(bool(detail))
 
     def _sync_routes_editor(self) -> None:
         profile = self._effective_profile()
@@ -206,6 +256,7 @@ class ProjectSettingsPane(QWidget):
             self.routes_editor.hide()
             self.routes_group.hide()
             self.routes_group.setMinimumHeight(0)
+            self._schedule_chrome_resize()
             return
         self.routes_group.show()
         self.routes_editor.show()
@@ -214,6 +265,26 @@ class ProjectSettingsPane(QWidget):
         self.routes_editor.adjustSize()
         self.routes_group.adjustSize()
         self.routes_group.setMinimumHeight(self.routes_group.sizeHint().height())
+        self._schedule_chrome_resize()
+
+    def _schedule_chrome_resize(self) -> None:
+        self._sync_chrome_height()
+        QTimer.singleShot(0, self._sync_chrome_height)
+
+    def _sync_chrome_height(self) -> None:
+        root = self.chrome_host.rootObject()
+        if root is None:
+            return
+        implicit_height = root.property("implicitHeight")
+        try:
+            chrome_height = max(int(float(implicit_height)), 0)
+        except (TypeError, ValueError):
+            return
+        if chrome_height <= 0:
+            return
+        self.chrome_host.setMinimumHeight(chrome_height)
+        self.chrome_host.setMaximumHeight(chrome_height)
+        self.chrome_host.updateGeometry()
 
     def _save(self) -> None:
         shared_profile_id = self._selected_shared_profile_id()

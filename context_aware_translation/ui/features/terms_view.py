@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QPoint, Qt
+from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
 from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.application.contracts.common import UserMessageSeverity
@@ -71,7 +72,8 @@ class TermsView(QWidget):
         if events is not None:
             self._event_bridge = QtApplicationEventBridge(events, parent=self)
             self._event_bridge.terms_invalidated.connect(self._on_terms_invalidated)
-            self._event_bridge.setup_invalidated.connect(self._on_setup_invalidated)
+            if not (self._is_document_scope and self._embedded):
+                self._event_bridge.setup_invalidated.connect(self._on_setup_invalidated)
         self._init_ui()
         if not self._embedded:
             self.refresh()
@@ -83,6 +85,7 @@ class TermsView(QWidget):
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
 
         self.chrome_host: QmlChromeHost | None = None
         if self._use_qml_chrome:
@@ -118,25 +121,25 @@ class TermsView(QWidget):
         toolbar_layout.addWidget(self.search_input, 1)
         toolbar_layout.addWidget(self.filter_combo)
 
-        self.build_button = QPushButton(self.tr("Build Terms"))
+        self.build_button = QPushButton(self.tr("Build Terms"), self)
         self.build_button.clicked.connect(self._on_build_terms)
         self.build_button.setVisible(self._is_document_scope and not self._use_qml_chrome)
         if self._is_document_scope and not self._use_qml_chrome:
             toolbar_layout.addWidget(self.build_button)
 
-        self.translate_button = QPushButton(self.tr("Translate Untranslated"))
+        self.translate_button = QPushButton(self.tr("Translate Untranslated"), self)
         self.translate_button.clicked.connect(self._on_translate_pending)
         self.translate_button.setVisible(not self._use_qml_chrome)
         if not self._use_qml_chrome:
             toolbar_layout.addWidget(self.translate_button)
 
-        self.review_button = QPushButton(self.tr("Review Terms"))
+        self.review_button = QPushButton(self.tr("Review Terms"), self)
         self.review_button.clicked.connect(self._on_review_terms)
         self.review_button.setVisible(not self._use_qml_chrome)
         if not self._use_qml_chrome:
             toolbar_layout.addWidget(self.review_button)
 
-        self.filter_noise_button = QPushButton(self.tr("Filter Rare"))
+        self.filter_noise_button = QPushButton(self.tr("Filter Rare"), self)
         self.filter_noise_button.clicked.connect(self._on_filter_noise)
         self.filter_noise_button.setVisible(not self._use_qml_chrome)
         if not self._use_qml_chrome:
@@ -160,15 +163,15 @@ class TermsView(QWidget):
         self.unmark_ignored_action = self.bulk_unmark_ignored_action
         self.delete_selected_action = self.bulk_delete_action
 
-        self.import_button = QPushButton(self.tr("Import Terms"))
+        self.import_button = QPushButton(self.tr("Import Terms"), self)
         self.import_button.clicked.connect(self._on_import_terms)
-        self.import_button.setVisible(not self._is_document_scope)
+        self.import_button.setVisible(not self._is_document_scope and not self._use_qml_chrome)
         if not self._is_document_scope and not self._use_qml_chrome:
             toolbar_layout.addWidget(self.import_button)
 
-        self.export_button = QPushButton(self.tr("Export Terms"))
+        self.export_button = QPushButton(self.tr("Export Terms"), self)
         self.export_button.clicked.connect(self._on_export_terms)
-        self.export_button.setVisible(not self._is_document_scope)
+        self.export_button.setVisible(not self._is_document_scope and not self._use_qml_chrome)
         if not self._is_document_scope and not self._use_qml_chrome:
             toolbar_layout.addWidget(self.export_button)
 
@@ -176,6 +179,7 @@ class TermsView(QWidget):
         layout.addWidget(self.table_panel, 1)
         if self._use_qml_chrome:
             self._connect_qml_signals()
+            self._schedule_chrome_resize()
 
     def refresh(self) -> None:
         if self._is_document_scope:
@@ -212,12 +216,21 @@ class TermsView(QWidget):
             self.viewmodel.retranslate()
         if self._state is not None:
             self._apply_toolbar_state(self._state.toolbar)
+        if self._use_qml_chrome:
+            self._schedule_chrome_resize()
+
+    def resizeEvent(self, event) -> None:  # noqa: ANN001
+        super().resizeEvent(event)
+        if self._use_qml_chrome:
+            self._schedule_chrome_resize()
 
     def _apply_state(self, state: TermsTableState) -> None:
         self._state = state
         self._apply_toolbar_state(state.toolbar)
         self.table_panel.set_state(state)
         self._update_bulk_button_state()
+        if self._use_qml_chrome:
+            self._schedule_chrome_resize()
 
     def _apply_toolbar_state(self, toolbar) -> None:  # noqa: ANN001
         self.build_button.setEnabled(toolbar.can_build)
@@ -284,6 +297,27 @@ class TermsView(QWidget):
         root.filterRequested.connect(self._on_filter_noise)
         root.importRequested.connect(self._on_import_terms)
         root.exportRequested.connect(self._on_export_terms)
+
+    def _schedule_chrome_resize(self) -> None:
+        self._sync_chrome_height()
+        QTimer.singleShot(0, self._sync_chrome_height)
+
+    def _sync_chrome_height(self) -> None:
+        if self.chrome_host is None or not isValid(self.chrome_host):
+            return
+        root = self.chrome_host.rootObject()
+        if root is None:
+            return
+        implicit_height = root.property("implicitHeight")
+        try:
+            chrome_height = max(int(float(implicit_height)), 0)
+        except (TypeError, ValueError):
+            return
+        if chrome_height <= 0:
+            return
+        self.chrome_host.setMinimumHeight(chrome_height)
+        self.chrome_host.setMaximumHeight(chrome_height)
+        self.chrome_host.updateGeometry()
 
     def _on_build_terms(self) -> None:
         if self.document_id is None:

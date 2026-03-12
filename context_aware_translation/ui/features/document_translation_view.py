@@ -87,14 +87,14 @@ class DocumentTranslationView(QWidget):
         self.progress_label.setStyleSheet("color: #666666;")
         self.progress_label.hide()
 
-        self.enable_polish_cb = QCheckBox(self.tr("Enable polish pass"))
+        self.enable_polish_cb = QCheckBox(self.tr("Enable polish pass"), self)
         self.enable_polish_cb.setChecked(True)
         self.enable_polish_cb.toggled.connect(self.refresh)
         self.enable_polish_cb.hide()
-        self.translate_button = QPushButton(self.tr("Translate"))
+        self.translate_button = QPushButton(self.tr("Translate"), self)
         self.translate_button.clicked.connect(self._translate_document)
         self.translate_button.hide()
-        self.batch_translate_button = QPushButton(self.tr("Submit Batch Task"))
+        self.batch_translate_button = QPushButton(self.tr("Submit Batch Task"), self)
         self.batch_translate_button.clicked.connect(self._submit_batch_translation)
         self.batch_translate_button.hide()
 
@@ -533,7 +533,7 @@ class DocumentTranslationView(QWidget):
             progress_text=self.progress_label.text().strip(),
             polish_enabled=self.enable_polish_cb.isChecked(),
             can_translate=self.translate_button.isEnabled(),
-            supports_batch=self.batch_translate_button.isVisible(),
+            supports_batch=not self.batch_translate_button.isHidden(),
             can_batch=self.batch_translate_button.isEnabled(),
         )
 

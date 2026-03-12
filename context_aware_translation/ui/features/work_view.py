@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -75,6 +75,43 @@ _TARGET_TO_SECTION: dict[NavigationTargetKind, DocumentSection] = {
 
 class WorkView(QWidget):
     _TABLE_MAX_VISIBLE_ROWS = 10
+    _TOOLBAR_BUTTON_STYLE = """
+        QPushButton {
+            min-width: 150px;
+            min-height: 38px;
+            padding: 0 16px;
+            border-radius: 14px;
+            border: 1px solid #d9d0c4;
+            background: #f8f3ea;
+            color: #2f251d;
+            font-weight: 600;
+        }
+        QPushButton:hover:enabled {
+            background: #efe7da;
+        }
+        QPushButton:disabled {
+            background: #efe7da;
+            color: #8b8174;
+        }
+    """
+    _ROW_ACTION_BUTTON_STYLE = """
+        QPushButton {
+            min-height: 34px;
+            padding: 0 14px;
+            border-radius: 12px;
+            border: none;
+            background: #2f251d;
+            color: #fcfaf6;
+            font-weight: 600;
+        }
+        QPushButton:hover:enabled {
+            background: #43362b;
+        }
+        QPushButton:disabled {
+            background: #d7cebf;
+            color: #786b5e;
+        }
+    """
 
     open_app_setup_requested = Signal()
     open_project_setup_requested = Signal()
@@ -139,15 +176,41 @@ class WorkView(QWidget):
         configure_readonly_row_table(self.rows_table)
         self.rows_table.itemSelectionChanged.connect(self._on_selection_changed)
         self.rows_table.cellDoubleClicked.connect(self._on_cell_double_clicked)
+        self.rows_table.verticalHeader().setDefaultSectionSize(44)
+        self.rows_table.verticalHeader().setMinimumSectionSize(44)
+        self.rows_table.setStyleSheet(
+            """
+            QTableWidget {
+                background: #fcfaf6;
+                alternate-background-color: #f7f1e8;
+                border: 1px solid #d9d0c4;
+                border-radius: 12px;
+                gridline-color: #e7ddd0;
+                selection-background-color: #efe7da;
+                selection-color: #2f251d;
+            }
+            QHeaderView::section {
+                background: #efe7da;
+                color: #2f251d;
+                border: none;
+                border-bottom: 1px solid #d9d0c4;
+                padding: 8px;
+                font-weight: 600;
+            }
+            """
+        )
+        self.rows_table.setAlternatingRowColors(True)
         home_layout.addWidget(self.rows_table)
 
         row_actions = QHBoxLayout()
         self.reset_document_button = QPushButton(self.tr("Reset Document"))
         self.reset_document_button.setEnabled(False)
+        self.reset_document_button.setStyleSheet(self._TOOLBAR_BUTTON_STYLE)
         self.reset_document_button.clicked.connect(self._reset_selected_document)
         row_actions.addWidget(self.reset_document_button)
         self.delete_document_button = QPushButton(self.tr("Delete Document"))
         self.delete_document_button.setEnabled(False)
+        self.delete_document_button.setStyleSheet(self._TOOLBAR_BUTTON_STYLE)
         self.delete_document_button.clicked.connect(self._delete_selected_document)
         row_actions.addWidget(self.delete_document_button)
         row_actions.addStretch()
@@ -160,6 +223,7 @@ class WorkView(QWidget):
 
         self.stack.addWidget(self.home_page)
         layout.addWidget(self.stack)
+        self._schedule_chrome_resize()
 
     def _init_home_compatibility_controls(self) -> None:
         self.tip_label = create_tip_label(
@@ -199,6 +263,7 @@ class WorkView(QWidget):
         self.context_strip.setFrameShape(QFrame.Shape.StyledPanel)
         self.context_label = QLabel(self.home_page)
         self.context_label.setStyleSheet("font-weight: 600;")
+        self.context_label.hide()
         self.blocker_label = QLabel(self.home_page)
         self.blocker_label.setWordWrap(True)
         self.blocker_label.setStyleSheet("color: #b42318;")
@@ -209,6 +274,7 @@ class WorkView(QWidget):
         self.setup_strip.setFrameShape(QFrame.Shape.StyledPanel)
         self.setup_label = QLabel(self.home_page)
         self.setup_label.setWordWrap(True)
+        self.setup_label.hide()
         self.setup_action_button = QPushButton(self.home_page)
         self.setup_action_button.clicked.connect(self._on_setup_action_clicked)
         self.setup_action_button.hide()
@@ -269,6 +335,11 @@ class WorkView(QWidget):
         self._sync_import_chrome_state()
         if self._document_view is not None:
             self._document_view.retranslateUi()
+        self._schedule_chrome_resize()
+
+    def resizeEvent(self, event) -> None:  # noqa: ANN001
+        super().resizeEvent(event)
+        self._schedule_chrome_resize()
 
     def _apply_state(self, state: WorkboardState) -> None:
         self._state = state
@@ -282,20 +353,17 @@ class WorkView(QWidget):
             else ""
         )
         self.blocker_label.setText(blocker_text)
-        self.blocker_label.setVisible(bool(blocker_text))
         self.viewmodel.set_context(context_summary, blocker_text)
 
         if state.setup_blocker is not None:
             setup_action_label = self._setup_action_label(state.setup_blocker)
             self.setup_label.setText(state.setup_blocker.message)
             self.setup_action_button.setText(setup_action_label)
-            self.setup_action_button.setVisible(True)
-            self.setup_strip.setVisible(True)
             self.viewmodel.set_setup(state.setup_blocker.message, setup_action_label)
         else:
-            self.setup_strip.hide()
-            self.setup_action_button.hide()
             self.viewmodel.clear_setup()
+        self.setup_strip.hide()
+        self.setup_action_button.hide()
 
         self.rows_table.setRowCount(0)
         self._row_states = list(state.rows)
@@ -309,8 +377,10 @@ class WorkView(QWidget):
             column_widths=((1, 260), (6, 260)),
         )
         self.rows_table.horizontalHeader().setStretchLastSection(False)
+        self._ensure_row_heights()
         self._fit_table_height()
         self._on_selection_changed()
+        self._schedule_chrome_resize()
 
     def _append_row(self, row_state: WorkDocumentRow) -> None:
         row = self.rows_table.rowCount()
@@ -332,11 +402,17 @@ class WorkView(QWidget):
 
         button = QPushButton(row_state.primary_action.label)
         button.setEnabled(row_state.primary_action.kind is not DocumentRowActionKind.BLOCKED)
+        button.setStyleSheet(self._ROW_ACTION_BUTTON_STYLE)
         button.clicked.connect(lambda _checked=False, item=row_state: self._handle_row_action(item))
         self.rows_table.setCellWidget(row, 7, button)
 
     def _fit_table_height(self) -> None:
         fit_table_height_to_rows(self.rows_table, max_visible_rows=self._TABLE_MAX_VISIBLE_ROWS)
+
+    def _ensure_row_heights(self) -> None:
+        self.rows_table.resizeRowsToContents()
+        for row in range(self.rows_table.rowCount()):
+            self.rows_table.setRowHeight(row, max(self.rows_table.rowHeight(row), 44))
 
     def _select_files(self) -> None:
         file_paths, _selected = QFileDialog.getOpenFileNames(
@@ -409,14 +485,12 @@ class WorkView(QWidget):
     def _set_import_message(self, text: str, *, is_error: bool) -> None:
         self._import_message_is_error = is_error
         if not text:
-            self.import_message_label.hide()
             self.import_message_label.clear()
             self._sync_import_chrome_state()
             return
         color = "#b42318" if is_error else "#027a48"
         self.import_message_label.setStyleSheet(f"QLabel {{ color: {color}; font-weight: 600; }}")
         self.import_message_label.setText(text)
-        self.import_message_label.show()
         self._sync_import_chrome_state()
 
     def _on_import_type_changed(self, _index: int) -> None:
@@ -448,12 +522,32 @@ class WorkView(QWidget):
         selected = self.import_type_combo.currentData()
         self.viewmodel.set_import_state(
             summary=self.import_summary_label.text().strip() or self.tr("No file or folder selected"),
-            message=self.import_message_label.text().strip() if not self.import_message_label.isHidden() else "",
+            message=self.import_message_label.text().strip(),
             is_error=self._import_message_is_error,
             can_import=self.import_button.isEnabled(),
             options=options,
             selected_import_type=str(selected) if selected else None,
         )
+        self._schedule_chrome_resize()
+
+    def _schedule_chrome_resize(self) -> None:
+        self._sync_chrome_height()
+        QTimer.singleShot(0, self._sync_chrome_height)
+
+    def _sync_chrome_height(self) -> None:
+        root = self.chrome_host.rootObject()
+        if root is None:
+            return
+        implicit_height = root.property("implicitHeight")
+        try:
+            chrome_height = max(int(float(implicit_height)), 0)
+        except (TypeError, ValueError):
+            return
+        if chrome_height <= 0:
+            return
+        self.chrome_host.setMinimumHeight(chrome_height)
+        self.chrome_host.setMaximumHeight(chrome_height)
+        self.chrome_host.updateGeometry()
 
     def _selected_row_state(self) -> WorkDocumentRow | None:
         row = self.rows_table.currentRow()

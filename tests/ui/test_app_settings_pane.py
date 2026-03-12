@@ -138,6 +138,7 @@ def test_app_settings_pane_renders_backend_state():
     assert view.profiles_table.rowCount() == 1
     assert view.viewmodel.current_tab == "connections"
     assert view.viewmodel.action_buttons[0]["label"] == "Open Setup Wizard"
+    assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
 
 
 def test_app_settings_pane_switches_tabs_and_updates_actions():
@@ -151,6 +152,9 @@ def test_app_settings_pane_switches_tabs_and_updates_actions():
     assert view.viewmodel.current_tab == "profiles"
     assert view.content_stack.currentWidget() is view.profiles_page
     assert view.viewmodel.action_buttons[0]["action"] == "add_profile"
+    root = view.chrome_host.rootObject()
+    assert root is not None
+    assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
 
 
 def test_app_settings_pane_add_delete_test_and_edit_profile_calls_service():

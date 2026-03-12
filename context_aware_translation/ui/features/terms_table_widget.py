@@ -175,6 +175,12 @@ class _TermsFilterProxyModel(QSortFilterProxyModel):
 
 class TermsTableWidget(QWidget):
     term_rows_update_requested = Signal(object)
+    _COMPACT_COLUMN_MIN_WIDTHS = {
+        _COLUMN_OCCURRENCES: 108,
+        _COLUMN_VOTES: 108,
+        _COLUMN_IGNORED: 92,
+        _COLUMN_REVIEWED: 92,
+    }
 
     def __init__(self, *, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -220,16 +226,8 @@ class TermsTableWidget(QWidget):
         self.table_view.horizontalHeader().setSectionResizeMode(_COLUMN_TERM, QHeaderView.ResizeMode.Stretch)
         self.table_view.horizontalHeader().setSectionResizeMode(_COLUMN_TRANSLATION, QHeaderView.ResizeMode.Stretch)
         self.table_view.horizontalHeader().setSectionResizeMode(_COLUMN_DESCRIPTION, QHeaderView.ResizeMode.Stretch)
-        self.table_view.horizontalHeader().setSectionResizeMode(
-            _COLUMN_OCCURRENCES, QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.table_view.horizontalHeader().setSectionResizeMode(_COLUMN_VOTES, QHeaderView.ResizeMode.ResizeToContents)
-        self.table_view.horizontalHeader().setSectionResizeMode(
-            _COLUMN_IGNORED, QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.table_view.horizontalHeader().setSectionResizeMode(
-            _COLUMN_REVIEWED, QHeaderView.ResizeMode.ResizeToContents
-        )
+        for column in self._COMPACT_COLUMN_MIN_WIDTHS:
+            self.table_view.horizontalHeader().setSectionResizeMode(column, QHeaderView.ResizeMode.Interactive)
         self.table_view.setItemDelegateForColumn(_COLUMN_TRANSLATION, _TranslationDelegate(self.table_view))
         self.table_view.viewport().installEventFilter(self)
         layout.addWidget(self.table_view, 1)
@@ -297,6 +295,7 @@ class TermsTableWidget(QWidget):
             self.table_model.appendRow(self._build_items_for_row(row, order=order))
         self._suppress_item_changed = False
         self.table_view.sortByColumn(_COLUMN_TERM, Qt.SortOrder.AscendingOrder)
+        self._sync_compact_column_widths()
 
     def _build_items_for_row(self, row: TermTableRow, *, order: int) -> list[QStandardItem]:
         term_item = QStandardItem(row.term)
@@ -405,6 +404,11 @@ class TermsTableWidget(QWidget):
         rows[row_index] = row
         self._state = self._state.model_copy(update={"rows": rows})
         self.summary_label.setText(self._summary_text(rows))
+
+    def _sync_compact_column_widths(self) -> None:
+        for column, minimum_width in self._COMPACT_COLUMN_MIN_WIDTHS.items():
+            self.table_view.resizeColumnToContents(column)
+            self.table_view.setColumnWidth(column, max(self.table_view.columnWidth(column), minimum_width))
 
     @staticmethod
     def _sort_value(column: int, row: TermTableRow) -> str | int | bool:

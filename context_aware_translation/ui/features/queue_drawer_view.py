@@ -46,7 +46,12 @@ class _QueueItemCard(QFrame):
 
     def _init_ui(self) -> None:
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setStyleSheet("QFrame { border: 1px solid #d8dee9; border-radius: 6px; }")
+        self.setStyleSheet(
+            "QFrame { background: #fcfaf6; border: 1px solid #d9d0c4; border-radius: 14px; }"
+            "QPushButton { background: #e7ddd0; border: none; border-radius: 14px; padding: 8px 14px;"
+            " color: #2f251d; font-weight: 600; }"
+            "QPushButton:disabled { background: #d7cebf; color: #786b5e; }"
+        )
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -57,17 +62,17 @@ class _QueueItemCard(QFrame):
         self.title_label.setStyleSheet("font-weight: 600;")
         top_row.addWidget(self.title_label, 1)
         self.status_label = QLabel()
-        self.status_label.setStyleSheet("color: #475467;")
+        self.status_label.setStyleSheet("color: #675b4e; font-weight: 600;")
         top_row.addWidget(self.status_label)
         layout.addLayout(top_row)
 
         self.scope_label = QLabel()
-        self.scope_label.setStyleSheet("color: #475467;")
+        self.scope_label.setStyleSheet("color: #675b4e;")
         layout.addWidget(self.scope_label)
 
         self.detail_label = QLabel()
         self.detail_label.setWordWrap(True)
-        self.detail_label.setStyleSheet("color: #667085;")
+        self.detail_label.setStyleSheet("color: #786b5e;")
         layout.addWidget(self.detail_label)
 
         self.blocker_label = create_tip_label("")
@@ -179,9 +184,11 @@ class QueueDrawerView(QWidget):
 
         self.title_label = QLabel()
         self.title_label.setStyleSheet("font-size: 18px; font-weight: 600;")
+        self.title_label.hide()
         layout.addWidget(self.title_label)
 
         self.tip_label = create_tip_label("")
+        self.tip_label.hide()
         layout.addWidget(self.tip_label)
 
         self.message_label = QLabel()

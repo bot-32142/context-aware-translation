@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtWidgets import (
     QDialog,
     QHeaderView,
@@ -64,7 +64,7 @@ class AppSettingsPane(QWidget):
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setSpacing(12)
 
         self.chrome_host = QmlChromeHost(
             "dialogs/app_settings/AppSettingsPane.qml",
@@ -121,6 +121,7 @@ class AppSettingsPane(QWidget):
         self.content_stack.addWidget(self.profiles_page)
 
         self._connect_qml_signals()
+        self._schedule_chrome_resize()
 
     def refresh(self) -> None:
         self._state = self._service.get_state()
@@ -128,6 +129,7 @@ class AppSettingsPane(QWidget):
         self._populate_profiles(self._state)
         self._sync_tab_widget()
         self._sync_viewmodel()
+        self._schedule_chrome_resize()
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:
@@ -144,6 +146,11 @@ class AppSettingsPane(QWidget):
             self._populate_profiles(self._state)
         self.viewmodel.retranslate()
         self._sync_viewmodel()
+        self._schedule_chrome_resize()
+
+    def resizeEvent(self, event) -> None:  # noqa: ANN001
+        super().resizeEvent(event)
+        self._schedule_chrome_resize()
 
     def _connect_qml_signals(self) -> None:
         root = self.chrome_host.rootObject()
@@ -161,9 +168,30 @@ class AppSettingsPane(QWidget):
 
     def _sync_tab_widget(self) -> None:
         self.content_stack.setCurrentWidget(self.connections_page if self._current_tab == "connections" else self.profiles_page)
+        self._schedule_chrome_resize()
 
     def _sync_viewmodel(self) -> None:
         self.viewmodel.apply_state(current_tab=self._current_tab, action_buttons=self._action_buttons())
+        self._schedule_chrome_resize()
+
+    def _schedule_chrome_resize(self) -> None:
+        self._sync_chrome_height()
+        QTimer.singleShot(0, self._sync_chrome_height)
+
+    def _sync_chrome_height(self) -> None:
+        root = self.chrome_host.rootObject()
+        if root is None:
+            return
+        implicit_height = root.property("implicitHeight")
+        try:
+            chrome_height = max(int(float(implicit_height)), 0)
+        except (TypeError, ValueError):
+            return
+        if chrome_height <= 0:
+            return
+        self.chrome_host.setMinimumHeight(chrome_height)
+        self.chrome_host.setMaximumHeight(chrome_height)
+        self.chrome_host.updateGeometry()
 
     def _action_buttons(self) -> list[dict[str, object]]:
         if self._current_tab == "profiles":

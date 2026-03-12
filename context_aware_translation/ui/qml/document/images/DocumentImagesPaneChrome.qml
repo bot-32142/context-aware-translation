@@ -5,7 +5,11 @@ Rectangle {
     objectName: "documentImagesPaneChrome"
     color: "#f8f2ea"
     width: parent ? parent.width : 960
-    implicitHeight: 208
+    implicitHeight: tipCard.implicitHeight + navigationRow.implicitHeight + actionFlow.implicitHeight + 52
+        + (blockerCard.visible ? blockerCard.implicitHeight + 10 : 0)
+        + (messageTextItem.visible ? messageTextItem.implicitHeight + 10 : 0)
+        + (progressTextItem.visible ? progressTextItem.implicitHeight + 10 : 0)
+        + (emptyTextItem.visible ? emptyTextItem.implicitHeight + 10 : 0)
 
     signal blockerActionRequested
     signal firstRequested
@@ -78,6 +82,7 @@ Rectangle {
         spacing: 10
 
         Rectangle {
+            id: tipCard
             width: parent.width
             radius: 10
             color: "#efe6d8"
@@ -97,6 +102,7 @@ Rectangle {
         }
 
         Rectangle {
+            id: blockerCard
             width: parent.width
             visible: root.blockerText.length > 0
             radius: 10
@@ -147,6 +153,7 @@ Rectangle {
         }
 
         Row {
+            id: navigationRow
             width: parent.width
             spacing: 8
 
@@ -293,47 +300,77 @@ Rectangle {
             }
         }
 
-        Row {
+        Flow {
+            id: actionFlow
             width: parent.width
             spacing: 8
 
-            Repeater {
-                model: [
-                    { label: root.runSelectedLabelText, enabled: root.runSelectedEnabled, signalName: "selected" },
-                    { label: root.runPendingLabelText, enabled: root.runPendingEnabled, signalName: "pending" },
-                    { label: root.forceAllLabelText, enabled: root.forceAllEnabled, signalName: "force" }
-                ]
+            Rectangle {
+                width: Math.max(runSelectedText.implicitWidth + 28, 148)
+                height: 36
+                radius: 12
+                color: root.primaryButtonColor(root.runSelectedEnabled)
 
-                delegate: Rectangle {
-                    required property var modelData
-                    height: 36
-                    radius: 12
-                    color: root.primaryButtonColor(modelData.enabled)
-                    implicitWidth: delegateText.implicitWidth + 28
+                Text {
+                    id: runSelectedText
+                    anchors.centerIn: parent
+                    text: root.runSelectedLabelText
+                    color: root.primaryLabelColor(root.runSelectedEnabled)
+                    font.pixelSize: 12
+                    font.bold: true
+                }
 
-                    Text {
-                        id: delegateText
-                        anchors.centerIn: parent
-                        text: parent.modelData.label
-                        color: root.primaryLabelColor(parent.modelData.enabled)
-                        font.pixelSize: 12
-                        font.bold: true
-                    }
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: root.runSelectedEnabled
+                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: root.runSelectedRequested()
+                }
+            }
 
-                    MouseArea {
-                        anchors.fill: parent
-                        enabled: parent.modelData.enabled
-                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                        onClicked: {
-                            if (parent.modelData.signalName === "selected") {
-                                root.runSelectedRequested()
-                            } else if (parent.modelData.signalName === "pending") {
-                                root.runPendingRequested()
-                            } else {
-                                root.forceAllRequested()
-                            }
-                        }
-                    }
+            Rectangle {
+                width: Math.max(runPendingText.implicitWidth + 28, 148)
+                height: 36
+                radius: 12
+                color: root.primaryButtonColor(root.runPendingEnabled)
+
+                Text {
+                    id: runPendingText
+                    anchors.centerIn: parent
+                    text: root.runPendingLabelText
+                    color: root.primaryLabelColor(root.runPendingEnabled)
+                    font.pixelSize: 12
+                    font.bold: true
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: root.runPendingEnabled
+                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: root.runPendingRequested()
+                }
+            }
+
+            Rectangle {
+                width: Math.max(forceAllText.implicitWidth + 28, 148)
+                height: 36
+                radius: 12
+                color: root.primaryButtonColor(root.forceAllEnabled)
+
+                Text {
+                    id: forceAllText
+                    anchors.centerIn: parent
+                    text: root.forceAllLabelText
+                    color: root.primaryLabelColor(root.forceAllEnabled)
+                    font.pixelSize: 12
+                    font.bold: true
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: root.forceAllEnabled
+                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: root.forceAllRequested()
                 }
             }
 
@@ -364,6 +401,7 @@ Rectangle {
         }
 
         Text {
+            id: messageTextItem
             width: parent.width
             text: root.messageText
             visible: root.messageVisible
@@ -373,6 +411,7 @@ Rectangle {
         }
 
         Text {
+            id: progressTextItem
             width: parent.width
             text: root.progressText
             visible: root.progressVisible
@@ -382,6 +421,7 @@ Rectangle {
         }
 
         Text {
+            id: emptyTextItem
             width: parent.width
             text: root.emptyText
             visible: root.emptyVisible

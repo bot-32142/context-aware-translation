@@ -32,10 +32,12 @@ class AppShellHost(HybridShellHost):
 
     def show_projects_view(self) -> None:
         self.viewmodel.show_projects_home()
+        self.chrome_host.show()
         self.show_content("projects")
 
     def show_project_view(self, key: str, project_id: str, project_name: str) -> None:
         self.viewmodel.set_active_project(project_id, project_name)
+        self.chrome_host.hide()
         self.show_content(key)
 
     def remove_project_widget(self, key: str) -> QWidget | None:
@@ -57,7 +59,15 @@ class AppShellHost(HybridShellHost):
         root = self.chrome_host.rootObject()
         if root is None:
             return
-        root.projectsRequested.connect(self.projects_requested.emit)
-        root.appSettingsRequested.connect(self.app_settings_requested.emit)
-        root.queueRequested.connect(self.queue_requested.emit)
-        root.closeProjectRequested.connect(self.close_project_requested.emit)
+        projects_requested = getattr(root, "projectsRequested", None)
+        if projects_requested is not None:
+            projects_requested.connect(self.projects_requested.emit)
+        app_settings_requested = getattr(root, "appSettingsRequested", None)
+        if app_settings_requested is not None:
+            app_settings_requested.connect(self.app_settings_requested.emit)
+        queue_requested = getattr(root, "queueRequested", None)
+        if queue_requested is not None:
+            queue_requested.connect(self.queue_requested.emit)
+        close_project_requested = getattr(root, "closeProjectRequested", None)
+        if close_project_requested is not None:
+            close_project_requested.connect(self.close_project_requested.emit)

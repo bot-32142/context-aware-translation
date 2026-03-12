@@ -6,20 +6,17 @@ Rectangle {
     color: "#fcfaf6"
     implicitHeight: contentColumn.implicitHeight + 36
 
-    signal profileIndexRequested(int index)
     signal saveRequested
     signal openAppSetupRequested
 
     property string titleText: projectSettingsPane ? projectSettingsPane.title_text : "Project Setup"
     property string tipText: projectSettingsPane ? projectSettingsPane.tip_text : ""
-    property string workflowProfileLabel: projectSettingsPane ? projectSettingsPane.workflow_profile_label : "Workflow profile"
     property string customProfileLabel: projectSettingsPane ? projectSettingsPane.custom_profile_label : "Custom profile"
     property string blockerText: projectSettingsPane ? projectSettingsPane.blocker_text : ""
     property bool hasBlocker: projectSettingsPane ? projectSettingsPane.has_blocker : false
     property string messageText: projectSettingsPane ? projectSettingsPane.message_text : ""
     property bool hasMessage: projectSettingsPane ? projectSettingsPane.has_message : false
     property string messageKind: projectSettingsPane ? projectSettingsPane.message_kind : ""
-    property var profileOptions: projectSettingsPane ? projectSettingsPane.profile_options : []
     property string customProfileText: projectSettingsPane ? projectSettingsPane.custom_profile_text : ""
     property bool showCustomProfile: projectSettingsPane ? projectSettingsPane.show_custom_profile : false
     property bool showOpenAppSetup: projectSettingsPane ? projectSettingsPane.show_open_app_setup : false
@@ -42,22 +39,6 @@ Rectangle {
 
     function secondaryLabelColor() {
         return "#2f251d"
-    }
-
-    function profileFill(selected) {
-        return selected ? "#2f251d" : "#efe7da"
-    }
-
-    function profileStroke(selected) {
-        return selected ? "#2f251d" : "#d9d0c4"
-    }
-
-    function profileTitleColor(selected) {
-        return selected ? "#fcfaf6" : "#2f251d"
-    }
-
-    function profileDetailColor(selected) {
-        return selected ? "#e7ddd0" : "#6e6154"
     }
 
     function messageFill(kind) {
@@ -166,65 +147,6 @@ Rectangle {
             }
         }
 
-        Text {
-            text: root.workflowProfileLabel
-            color: "#2f251d"
-            font.pixelSize: 14
-            font.bold: true
-        }
-
-        Column {
-            id: profileColumn
-            width: parent.width
-            spacing: 8
-
-            Repeater {
-                model: root.profileOptions
-
-                delegate: Rectangle {
-                    required property var modelData
-
-                    width: profileColumn.width
-                    implicitHeight: profileDetails.visible ? 62 : 48
-                    radius: 16
-                    color: root.profileFill(modelData.selected)
-                    border.width: 1
-                    border.color: root.profileStroke(modelData.selected)
-
-                    Column {
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        spacing: 2
-
-                        Text {
-                            width: parent.width
-                            text: modelData.label
-                            color: root.profileTitleColor(modelData.selected)
-                            font.pixelSize: 13
-                            font.bold: true
-                            wrapMode: Text.WordWrap
-                        }
-
-                        Text {
-                            id: profileDetails
-                            width: parent.width
-                            text: modelData.detail || ""
-                            color: root.profileDetailColor(modelData.selected)
-                            font.pixelSize: 11
-                            wrapMode: Text.WordWrap
-                            visible: text.length > 0
-                        }
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.profileIndexRequested(index)
-                    }
-                }
-            }
-        }
-
         Rectangle {
             visible: root.showCustomProfile
             width: parent.width
@@ -269,29 +191,6 @@ Rectangle {
 
         Row {
             spacing: 8
-
-            Rectangle {
-                visible: root.showOpenAppSetup
-                width: actionAppSetupLabel.implicitWidth + 28
-                height: 40
-                radius: 14
-                color: root.secondaryButtonColor()
-
-                Text {
-                    id: actionAppSetupLabel
-                    anchors.centerIn: parent
-                    text: root.openAppSetupLabel
-                    color: root.secondaryLabelColor()
-                    font.pixelSize: 12
-                    font.bold: true
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.openAppSetupRequested()
-                }
-            }
 
             Rectangle {
                 width: saveButtonLabel.implicitWidth + 28

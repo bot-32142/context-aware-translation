@@ -4,7 +4,8 @@ Rectangle {
     id: root
     objectName: "workHomeChrome"
     color: "#f3efe7"
-    implicitHeight: 278
+    implicitHeight: tipLabel.implicitHeight + importCard.implicitHeight + 48
+        + (root.hasSetupBlocker ? setupCard.implicitHeight + 12 : 0)
 
     signal selectFilesRequested
     signal selectFolderRequested
@@ -42,6 +43,7 @@ Rectangle {
         spacing: 12
 
         Text {
+            id: tipLabel
             width: parent.width
             text: root.tipText
             color: "#5d5349"
@@ -50,6 +52,7 @@ Rectangle {
         }
 
         Rectangle {
+            id: importCard
             width: parent.width
             radius: 18
             color: "#fcfaf6"
@@ -161,40 +164,7 @@ Rectangle {
         }
 
         Rectangle {
-            width: parent.width
-            radius: 16
-            color: "#fcfaf6"
-            border.color: "#d9d0c4"
-            border.width: 1
-            implicitHeight: contextColumn.implicitHeight + 24
-
-            Column {
-                id: contextColumn
-                anchors.fill: parent
-                anchors.margins: 12
-                spacing: 6
-
-                Text {
-                    width: parent.width
-                    text: root.contextSummaryText
-                    color: "#2f251d"
-                    font.pixelSize: 14
-                    font.bold: true
-                    wrapMode: Text.WordWrap
-                }
-
-                Text {
-                    visible: root.hasContextBlocker
-                    width: parent.width
-                    text: root.contextBlockerText
-                    color: "#b42318"
-                    font.pixelSize: 12
-                    wrapMode: Text.WordWrap
-                }
-            }
-        }
-
-        Rectangle {
+            id: setupCard
             visible: root.hasSetupBlocker
             width: parent.width
             radius: 16

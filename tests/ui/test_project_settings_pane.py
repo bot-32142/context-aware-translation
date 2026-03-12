@@ -119,7 +119,12 @@ def test_project_settings_pane_renders_backend_state():
         assert root is not None
         assert root.objectName() == "projectSettingsPaneChrome"
         assert view.viewmodel.title_text == "Setup for One Piece"
+        assert view.profile_combo.objectName() == "projectWorkflowProfileCombo"
+        assert view.profile_combo.currentIndex() == 0
+        assert view.profile_combo.currentText() == "Recommended"
+        assert view.profile_detail_label.text() == "Shared workflow profile"
         assert view.routes_group.isHidden()
+        assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
         assert service.calls == [("get_state", "proj-1")]
     finally:
         view.cleanup()
@@ -156,14 +161,20 @@ def test_project_settings_pane_can_select_custom_profile():
         custom_index = next(
             index for index, option in enumerate(view.viewmodel.profile_options) if option["label"] == "Custom profile"
         )
-        view._on_profile_index_requested(custom_index)
+        view.profile_combo.setCurrentIndex(custom_index)
+        QApplication.processEvents()
 
+        assert view.profile_combo.currentIndex() == custom_index
+        assert view.profile_detail_label.text() == "Project-specific overrides"
         assert not view.routes_group.isHidden()
         assert view.routes_table.rowCount() == 2
         assert view.routes_table.columnCount() == 4
         assert view.routes_table.item(0, 0).text() == "Translator"
         assert view.routes_table.item(1, 0).text() == "OCR"
         assert view.viewmodel.show_custom_profile is True
+        root = view.chrome_host.rootObject()
+        assert root is not None
+        assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
 
         translator_row = next(
             index for index, row in enumerate(view._custom_rows) if row.route.step_id is WorkflowStepId.TRANSLATOR

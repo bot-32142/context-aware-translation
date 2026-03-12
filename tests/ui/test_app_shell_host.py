@@ -37,11 +37,13 @@ def test_app_shell_host_loads_qml_chrome_and_tracks_project_state():
     assert root.property("hasCurrentProject") is True
     assert root.property("surfaceTitle") == "One Piece"
     assert host.current_content_key() == "project_1"
+    assert host.chrome_host.isHidden() is True
 
     host.show_projects_view()
     assert root.property("hasCurrentProject") is False
     assert root.property("surfaceTitle") == "Projects"
     assert host.current_content_key() == "projects"
+    assert host.chrome_host.isHidden() is False
 
 
 def test_app_shell_host_retranslate_updates_live_qml_labels():

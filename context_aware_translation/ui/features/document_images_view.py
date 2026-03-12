@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
 from context_aware_translation.application.contracts.common import NavigationTargetKind
 from context_aware_translation.application.contracts.document import (
@@ -56,6 +57,9 @@ class DocumentImagesView(QWidget):
         self._refit_timer = QTimer(self)
         self._refit_timer.setSingleShot(True)
         self._refit_timer.timeout.connect(self._refit_viewers)
+        self._chrome_resize_timer = QTimer(self)
+        self._chrome_resize_timer.setSingleShot(True)
+        self._chrome_resize_timer.timeout.connect(self._sync_chrome_height)
         self.viewmodel = DocumentImagesPaneViewModel(self)
         self._init_ui()
 
@@ -64,20 +68,15 @@ class DocumentImagesView(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        self.chrome_host = QmlChromeHost(
-            "document/images/DocumentImagesPaneChrome.qml",
-            context_objects={"imagesPane": self.viewmodel},
-            parent=self,
-        )
-        layout.addWidget(self.chrome_host)
         self._init_compatibility_controls()
 
         self._content_widget = QWidget(self)
         content_layout = QVBoxLayout(self._content_widget)
-        content_layout.setContentsMargins(0, 12, 0, 0)
+        content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setChildrenCollapsible(False)
 
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
@@ -116,6 +115,8 @@ class DocumentImagesView(QWidget):
         self.right_stack.setCurrentWidget(self.reembedded_viewer)
         right_layout.addWidget(self.right_stack, 1)
         splitter.addWidget(right_panel)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 1)
         splitter.setSizes([500, 500])
         content_layout.addWidget(splitter, 1)
 
@@ -124,8 +125,15 @@ class DocumentImagesView(QWidget):
         content_layout.addWidget(self.empty_label)
 
         layout.addWidget(self._content_widget, 1)
+        self.chrome_host = QmlChromeHost(
+            "document/images/DocumentImagesPaneChrome.qml",
+            context_objects={"imagesPane": self.viewmodel},
+            parent=self,
+        )
+        layout.addWidget(self.chrome_host)
         self._connect_qml_signals()
         self._sync_chrome_state()
+        self._schedule_chrome_resize()
 
     def _init_compatibility_controls(self) -> None:
         self.tip_label = create_tip_label(
@@ -626,16 +634,39 @@ class DocumentImagesView(QWidget):
 
     def showEvent(self, event) -> None:  # type: ignore[override]
         super().showEvent(event)
+        self._schedule_chrome_resize()
         self._schedule_refit()
 
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)
+        self._schedule_chrome_resize()
         self._schedule_refit()
 
     def _schedule_refit(self) -> None:
         if self.isVisible():
             self._refit_viewers()
         self._refit_timer.start(75)
+
+    def _schedule_chrome_resize(self) -> None:
+        self._sync_chrome_height()
+        self._chrome_resize_timer.start(0)
+
+    def _sync_chrome_height(self) -> None:
+        if not isValid(self.chrome_host):
+            return
+        root = self.chrome_host.rootObject()
+        if root is None:
+            return
+        implicit_height = root.property("implicitHeight")
+        try:
+            chrome_height = max(int(float(implicit_height)), 0)
+        except (TypeError, ValueError):
+            return
+        if chrome_height <= 0:
+            return
+        self.chrome_host.setMinimumHeight(chrome_height)
+        self.chrome_host.setMaximumHeight(chrome_height)
+        self.chrome_host.updateGeometry()
 
     def _refit_viewers(self) -> None:
         if not self.isVisible():
@@ -694,6 +725,7 @@ class DocumentImagesView(QWidget):
             progress_can_cancel=not self.progress_widget.cancel_button.isHidden(),
             empty_visible=not self.empty_label.isHidden(),
         )
+        self._schedule_chrome_resize()
 
 
 __all__ = ["DocumentImagesView"]
