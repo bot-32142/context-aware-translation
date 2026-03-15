@@ -318,183 +318,183 @@
         <translation type="vanished">图像操作均需显式触发。你可以检查单张图片、重新嵌入待处理图片，或为此文档重新运行全部图片。</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="111"/>
-        <location filename="../features/document_images_view.py" line="239"/>
+        <location filename="../features/document_images_view.py" line="112"/>
+        <location filename="../features/document_images_view.py" line="240"/>
         <source>Translated text for the selected image appears here.</source>
         <translation>所选图片的译文会显示在这里。</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="214"/>
+        <location filename="../features/document_images_view.py" line="215"/>
         <source>Put text back into images</source>
         <translation>将文字重新放回图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="348"/>
+        <location filename="../features/document_images_view.py" line="349"/>
         <source>Pending</source>
         <translation>待处理</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="82"/>
-        <location filename="../features/document_images_view.py" line="231"/>
+        <location filename="../features/document_images_view.py" line="83"/>
+        <location filename="../features/document_images_view.py" line="232"/>
         <source>Original</source>
         <translation>原文</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="345"/>
-        <location filename="../features/document_images_view.py" line="401"/>
+        <location filename="../features/document_images_view.py" line="346"/>
+        <location filename="../features/document_images_view.py" line="397"/>
         <source>Translated Text</source>
         <translation>翻译文本</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="98"/>
-        <location filename="../features/document_images_view.py" line="307"/>
-        <location filename="../features/document_images_view.py" line="338"/>
-        <location filename="../features/document_images_view.py" line="398"/>
+        <location filename="../features/document_images_view.py" line="99"/>
+        <location filename="../features/document_images_view.py" line="308"/>
+        <location filename="../features/document_images_view.py" line="339"/>
+        <location filename="../features/document_images_view.py" line="394"/>
         <source>Show Text</source>
         <translation>显示文本</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="99"/>
-        <location filename="../features/document_images_view.py" line="232"/>
+        <location filename="../features/document_images_view.py" line="100"/>
+        <location filename="../features/document_images_view.py" line="233"/>
         <source>Toggle between reembedded image and translated text</source>
         <translation>在重新嵌入的图片和翻译文本之间切换</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="156"/>
-        <location filename="../features/document_images_view.py" line="233"/>
+        <location filename="../features/document_images_view.py" line="157"/>
+        <location filename="../features/document_images_view.py" line="234"/>
         <source>First image</source>
         <translation>第一张图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="160"/>
-        <location filename="../features/document_images_view.py" line="234"/>
+        <location filename="../features/document_images_view.py" line="161"/>
+        <location filename="../features/document_images_view.py" line="235"/>
         <source>Previous image</source>
         <translation>上一张图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="163"/>
-        <location filename="../features/document_images_view.py" line="300"/>
+        <location filename="../features/document_images_view.py" line="164"/>
+        <location filename="../features/document_images_view.py" line="301"/>
         <source>Image 0 of 0</source>
         <translation>图片 0 / 0</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="167"/>
+        <location filename="../features/document_images_view.py" line="168"/>
         <location filename="../viewmodels/document_images_pane.py" line="66"/>
         <source>Go to:</source>
         <translation>跳转到：</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="170"/>
-        <location filename="../features/document_images_view.py" line="235"/>
+        <location filename="../features/document_images_view.py" line="171"/>
+        <location filename="../features/document_images_view.py" line="236"/>
         <source>Next image</source>
         <translation>下一张图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="174"/>
-        <location filename="../features/document_images_view.py" line="236"/>
+        <location filename="../features/document_images_view.py" line="175"/>
+        <location filename="../features/document_images_view.py" line="237"/>
         <source>Last image</source>
         <translation>最后一张图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="181"/>
-        <location filename="../features/document_images_view.py" line="237"/>
+        <location filename="../features/document_images_view.py" line="182"/>
+        <location filename="../features/document_images_view.py" line="238"/>
         <source>Enter image number</source>
         <translation>输入图片编号</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="183"/>
+        <location filename="../features/document_images_view.py" line="184"/>
         <location filename="../viewmodels/document_images_pane.py" line="70"/>
         <source>Go</source>
         <translation>跳转</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="418"/>
-        <location filename="../features/document_images_view.py" line="425"/>
+        <location filename="../features/document_images_view.py" line="414"/>
+        <location filename="../features/document_images_view.py" line="421"/>
         <source>Reembedding</source>
         <translation>重新嵌入</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="121"/>
-        <location filename="../features/document_images_view.py" line="240"/>
+        <location filename="../features/document_images_view.py" line="122"/>
+        <location filename="../features/document_images_view.py" line="241"/>
         <location filename="../viewmodels/document_images_pane.py" line="190"/>
         <source>No reembeddable images are available for this document.</source>
         <translation>此文档没有可重嵌的图片。</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="184"/>
-        <location filename="../features/document_images_view.py" line="238"/>
+        <location filename="../features/document_images_view.py" line="185"/>
+        <location filename="../features/document_images_view.py" line="239"/>
         <source>Jump to image</source>
         <translation>跳转到图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="188"/>
+        <location filename="../features/document_images_view.py" line="189"/>
         <location filename="../viewmodels/document_images_pane.py" line="78"/>
         <source>Reembed This Image</source>
         <translation>重新嵌入此图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="191"/>
+        <location filename="../features/document_images_view.py" line="192"/>
         <location filename="../viewmodels/document_images_pane.py" line="82"/>
         <source>Reembed Pending</source>
         <translation>重新嵌入待处理项</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="194"/>
+        <location filename="../features/document_images_view.py" line="195"/>
         <location filename="../viewmodels/document_images_pane.py" line="86"/>
         <source>Force Reembed All</source>
         <translation>强制全部重新嵌入</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="315"/>
+        <location filename="../features/document_images_view.py" line="316"/>
         <source>Image %1 of %2</source>
         <translation>图片 %1 / %2</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="346"/>
+        <location filename="../features/document_images_view.py" line="347"/>
         <source>Show Image</source>
         <translation>显示图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="402"/>
+        <location filename="../features/document_images_view.py" line="398"/>
         <source>Show Reembedded</source>
         <translation>显示重嵌结果</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="94"/>
-        <location filename="../features/document_images_view.py" line="306"/>
-        <location filename="../features/document_images_view.py" line="337"/>
-        <location filename="../features/document_images_view.py" line="340"/>
-        <location filename="../features/document_images_view.py" line="397"/>
+        <location filename="../features/document_images_view.py" line="95"/>
+        <location filename="../features/document_images_view.py" line="307"/>
+        <location filename="../features/document_images_view.py" line="338"/>
+        <location filename="../features/document_images_view.py" line="341"/>
+        <location filename="../features/document_images_view.py" line="393"/>
         <source>Reembedded</source>
         <translation>重新嵌入后</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="467"/>
+        <location filename="../features/document_images_view.py" line="463"/>
         <source>Open App Setup</source>
         <translation>打开应用设置</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="470"/>
+        <location filename="../features/document_images_view.py" line="466"/>
         <source>Open Setup</source>
         <translation>打开设置</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="562"/>
+        <location filename="../features/document_images_view.py" line="558"/>
         <source>Image reinsertion queued.</source>
         <translation>图片重新嵌入已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="570"/>
+        <location filename="../features/document_images_view.py" line="566"/>
         <source>Pending image reinsertion queued.</source>
         <translation>待处理图片重新嵌入已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="578"/>
+        <location filename="../features/document_images_view.py" line="574"/>
         <source>Full image reinsertion queued.</source>
         <translation>全量图片重新嵌入已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="586"/>
+        <location filename="../features/document_images_view.py" line="582"/>
         <source>Cancellation requested.</source>
         <translation>已请求取消。</translation>
     </message>
@@ -2267,14 +2267,14 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>WorkView</name>
     <message>
-        <location filename="../features/work_view.py" line="140"/>
-        <location filename="../features/work_view.py" line="242"/>
+        <location filename="../features/work_view.py" line="141"/>
+        <location filename="../features/work_view.py" line="243"/>
         <source>#</source>
         <translation>#</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="141"/>
-        <location filename="../features/work_view.py" line="243"/>
+        <location filename="../features/work_view.py" line="142"/>
+        <location filename="../features/work_view.py" line="244"/>
         <source>Document</source>
         <translation>文档</translation>
     </message>
@@ -2298,33 +2298,33 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation>导入</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="457"/>
+        <location filename="../features/work_view.py" line="458"/>
         <source>No file or folder selected</source>
         <translation>未选择文件或文件夹</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="142"/>
-        <location filename="../features/work_view.py" line="244"/>
+        <location filename="../features/work_view.py" line="143"/>
+        <location filename="../features/work_view.py" line="245"/>
         <source>Sources</source>
         <translation>源文件</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="143"/>
-        <location filename="../features/work_view.py" line="245"/>
+        <location filename="../features/work_view.py" line="144"/>
+        <location filename="../features/work_view.py" line="246"/>
         <location filename="../viewmodels/document_shell.py" line="43"/>
         <source>OCR</source>
         <translation>OCR</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="144"/>
-        <location filename="../features/work_view.py" line="246"/>
+        <location filename="../features/work_view.py" line="145"/>
+        <location filename="../features/work_view.py" line="247"/>
         <location filename="../viewmodels/document_shell.py" line="47"/>
         <source>Terms</source>
         <translation>术语</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="145"/>
-        <location filename="../features/work_view.py" line="247"/>
+        <location filename="../features/work_view.py" line="146"/>
+        <location filename="../features/work_view.py" line="248"/>
         <location filename="../viewmodels/document_shell.py" line="51"/>
         <source>Translation</source>
         <translation>翻译</translation>
@@ -2338,90 +2338,90 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation type="vanished">操作</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="179"/>
-        <location filename="../features/work_view.py" line="250"/>
-        <location filename="../features/work_view.py" line="484"/>
-        <location filename="../features/work_view.py" line="498"/>
+        <location filename="../features/work_view.py" line="180"/>
+        <location filename="../features/work_view.py" line="251"/>
+        <location filename="../features/work_view.py" line="485"/>
+        <location filename="../features/work_view.py" line="499"/>
         <source>Reset Document</source>
         <translation>重置文档</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="184"/>
-        <location filename="../features/work_view.py" line="251"/>
-        <location filename="../features/work_view.py" line="509"/>
-        <location filename="../features/work_view.py" line="523"/>
+        <location filename="../features/work_view.py" line="185"/>
+        <location filename="../features/work_view.py" line="252"/>
+        <location filename="../features/work_view.py" line="510"/>
+        <location filename="../features/work_view.py" line="524"/>
         <source>Delete Document</source>
         <translation>删除文档</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="192"/>
-        <location filename="../features/work_view.py" line="252"/>
+        <location filename="../features/work_view.py" line="193"/>
+        <location filename="../features/work_view.py" line="253"/>
         <source>No documents imported yet.</source>
         <translation>尚未导入文档。</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="266"/>
+        <location filename="../features/work_view.py" line="267"/>
         <source>Context not ready yet.</source>
         <translation>上下文尚未就绪。</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="351"/>
+        <location filename="../features/work_view.py" line="352"/>
         <source>Double-click or press Enter to %1.</source>
         <translation>双击或按 Enter 以执行 %1。</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="364"/>
+        <location filename="../features/work_view.py" line="365"/>
         <source>Select Document File(s)</source>
         <translation>选择文档文件（可多选）</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="366"/>
+        <location filename="../features/work_view.py" line="367"/>
         <source>All Files (*.*)</source>
         <translation>所有文件 (*.*)</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="374"/>
+        <location filename="../features/work_view.py" line="375"/>
         <source>Select Document Folder</source>
         <translation>选择文档文件夹</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="413"/>
+        <location filename="../features/work_view.py" line="414"/>
         <source>Import complete.</source>
         <translation>导入完成。</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="486"/>
+        <location filename="../features/work_view.py" line="487"/>
         <source>This will reset the selected document and all documents added after it. Glossary data, translations, and OCR state for affected documents will be cleared. Continue?</source>
         <translation>这将重置所选文档及其之后添加的所有文档。受影响文档的术语、翻译和 OCR 状态都会被清除。是否继续？</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="500"/>
+        <location filename="../features/work_view.py" line="501"/>
         <source>Reset Complete</source>
         <translation>重置完成</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="511"/>
+        <location filename="../features/work_view.py" line="512"/>
         <source>This will permanently delete the selected document and all documents added after it. This cannot be undone. Continue?</source>
         <translation>这将永久删除所选文档及其之后添加的所有文档。此操作无法撤销。是否继续？</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="525"/>
+        <location filename="../features/work_view.py" line="526"/>
         <source>Delete Complete</source>
         <translation>删除完成</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="597"/>
+        <location filename="../features/work_view.py" line="596"/>
         <location filename="../viewmodels/document_shell.py" line="59"/>
         <source>Export</source>
         <translation>导出</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="604"/>
+        <location filename="../features/work_view.py" line="603"/>
         <source>Open App Setup</source>
         <translation>打开应用设置</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="605"/>
+        <location filename="../features/work_view.py" line="604"/>
         <source>Open Setup</source>
         <translation>打开设置</translation>
     </message>

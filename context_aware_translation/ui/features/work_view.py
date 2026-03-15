@@ -28,6 +28,7 @@ from context_aware_translation.application.contracts.work import (
     DeleteDocumentStackRequest,
     ImportDocumentsRequest,
     InspectImportPathsRequest,
+    PrepareExportRequest,
     ResetDocumentStackRequest,
     WorkboardState,
     WorkDocumentRow,
@@ -587,8 +588,6 @@ class WorkView(QWidget):
         return _TARGET_TO_SECTION.get(target.kind)
 
     def _open_export_dialog(self, document_id: int) -> None:
-        from context_aware_translation.application.contracts.work import PrepareExportRequest
-
         try:
             state = self._work_service.prepare_export(
                 PrepareExportRequest(project_id=self._project_id, document_ids=[document_id])

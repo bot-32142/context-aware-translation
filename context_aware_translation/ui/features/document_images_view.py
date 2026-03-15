@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
+from PIL import Image
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
@@ -372,11 +373,6 @@ class DocumentImagesView(QWidget):
 
     @staticmethod
     def _trim_transparent_margins_fast(data: bytes) -> bytes | None:
-        try:
-            from PIL import Image
-        except Exception:
-            return None
-
         try:
             with Image.open(io.BytesIO(data)) as image:
                 if "A" not in image.getbands():

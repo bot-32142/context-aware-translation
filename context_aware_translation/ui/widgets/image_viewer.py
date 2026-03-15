@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPixmap, QWheelEvent
 from PySide6.QtWidgets import (
     QGraphicsPixmapItem,
@@ -183,9 +183,6 @@ class ImageViewer(QGraphicsView):
             py = bbox.y * pixmap_h
             pw = bbox.width * pixmap_w
             ph = bbox.height * pixmap_h
-
-            # Create clickable rect item
-            from PySide6.QtCore import QRectF
 
             rect_item = ClickableRectItem(
                 QRectF(px, py, pw, ph),

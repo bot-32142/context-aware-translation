@@ -1,22 +1,22 @@
 """Repository-style storage interfaces."""
 
-from .document_repository import DocumentRepository
-from .llm_batch_store import (
+from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+from context_aware_translation.storage.repositories.llm_batch_store import (
     STATUS_COMPLETED as LLM_STATUS_COMPLETED,
 )
-from .llm_batch_store import (
+from context_aware_translation.storage.repositories.llm_batch_store import (
     STATUS_FAILED as LLM_STATUS_FAILED,
 )
-from .llm_batch_store import (
+from context_aware_translation.storage.repositories.llm_batch_store import (
     STATUS_SUBMITTED as LLM_STATUS_SUBMITTED,
 )
-from .llm_batch_store import (
+from context_aware_translation.storage.repositories.llm_batch_store import (
     LLMBatchRecord,
     LLMBatchStore,
 )
-from .task_store import TaskRecord, TaskStore
-from .term_repository import BatchUpdate, StorageManager, TermRepository
-from .translation_batch_task_store import (
+from context_aware_translation.storage.repositories.task_store import TaskRecord, TaskStore
+from context_aware_translation.storage.repositories.term_repository import BatchUpdate, StorageManager, TermRepository
+from context_aware_translation.storage.repositories.translation_batch_task_store import (
     PHASE_APPLY,
     PHASE_DONE,
     PHASE_POLISH_FALLBACK,
