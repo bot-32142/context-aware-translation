@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field, fields
 from pathlib import Path
@@ -7,6 +8,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import yaml
 
+from context_aware_translation import configure_logging
 from context_aware_translation.llm.image_generator import ImageBackend
 
 if TYPE_CHECKING:
@@ -898,8 +900,6 @@ class Config:
 
         # Ensure directories exist and configure logging
         ensure_dirs(self)
-        from context_aware_translation import configure_logging
-
         configure_logging(self)
 
     @classmethod
@@ -1148,8 +1148,6 @@ def load_config_from_yaml(
     ]
     for field_name in cmdline_only_fields + hardcoded_fields:
         if field_name in data:
-            import warnings
-
             warnings.warn(
                 f"Field '{field_name}' in YAML config is ignored as it must be set via command line or detected dynamically. "
                 f"Remove it from the YAML file.",

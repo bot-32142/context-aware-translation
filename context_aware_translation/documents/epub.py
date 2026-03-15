@@ -8,6 +8,7 @@ formats (md/docx/html).
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -18,6 +19,7 @@ import zipfile
 from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import unquote
 
@@ -55,6 +57,7 @@ from context_aware_translation.documents.epub_xhtml_utils import (
     inject_translations_into_xhtml,
 )
 from context_aware_translation.llm.epub_ocr import ocr_epub_images
+from context_aware_translation.llm.image_generator import build_text_replacements, create_image_generator
 from context_aware_translation.utils.compression_marker import decode_compressed_lines
 from context_aware_translation.utils.image_utils import (
     compress_image_for_ocr,
@@ -1300,8 +1303,6 @@ class EPUBDocument(Document):
             cls._export_native_epub(doc, output_path)
             return
 
-        from tempfile import TemporaryDirectory
-
         with TemporaryDirectory(prefix="cat-epub-export-") as tmp_dir:
             intermediate_epub = Path(tmp_dir) / "intermediate.epub"
             cls._export_native_epub(doc, intermediate_epub)
@@ -1547,13 +1548,6 @@ class EPUBDocument(Document):
         Uses existing DB cache to skip already-done items unless force=True.
         Returns count of images newly generated.
         """
-        import asyncio
-
-        from context_aware_translation.llm.image_generator import (
-            build_text_replacements,
-            create_image_generator,
-        )
-
         sources = self.repo.get_document_sources(self.document_id)
         sources_sorted = sorted(sources, key=lambda s: s["sequence_number"])
 

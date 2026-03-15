@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from context_aware_translation.core.progress import ProgressCallback, ProgressUpdate, WorkflowStep
 from context_aware_translation.documents.base import Document
+from context_aware_translation.documents.epub import EPUBDocument
 from context_aware_translation.workflow.ops import bootstrap_ops
 
 if TYPE_CHECKING:
@@ -58,11 +59,8 @@ async def materialize_document_translation_state(
         document,
         allow_original_fallback=allow_original_fallback,
     )
-    if document.document_type == "epub":
-        from context_aware_translation.documents.epub import EPUBDocument
-
-        if isinstance(document, EPUBDocument):
-            document.set_translation_target_language(workflow.config.translation_target_language)
+    if document.document_type == "epub" and isinstance(document, EPUBDocument):
+        document.set_translation_target_language(workflow.config.translation_target_language)
 
     await document.set_text(
         all_lines,

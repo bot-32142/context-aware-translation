@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import posixpath
+import xml.etree.ElementTree as _ET
 import zipfile
 from typing import Any
 from urllib.parse import unquote, urljoin, urlparse, urlsplit
@@ -27,8 +28,6 @@ def xml_base(elem: Any | None) -> str:
 def serialize_section(elem: Any | None) -> str:
     if elem is None:
         return ""
-    import xml.etree.ElementTree as _ET
-
     return _ET.tostring(elem, encoding="unicode")
 
 

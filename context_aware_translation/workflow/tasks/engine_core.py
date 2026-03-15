@@ -6,13 +6,14 @@ import threading
 import time
 from typing import TYPE_CHECKING
 
+from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import ClaimArbiter, ResourceClaim
 from context_aware_translation.workflow.tasks.exceptions import CancelDispatchRaceError, RunValidationError
-from context_aware_translation.workflow.tasks.handlers.base import TaskTypeHandler
+from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy, TaskTypeHandler
 from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, ActionSnapshot, Decision, TaskAction
 
 if TYPE_CHECKING:
-    from context_aware_translation.storage.repositories.task_store import TaskRecord, TaskStore
+    from context_aware_translation.storage.repositories.task_store import TaskStore
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
 # TTL in seconds for the config snapshot viability probe cache (per book)
@@ -176,8 +177,6 @@ class EngineCore:
         document_ids_json: str | None,
         payload_json: str | None,
     ) -> TaskRecord:
-        from context_aware_translation.storage.repositories.task_store import TaskRecord
-
         now = time.time()
         return TaskRecord(
             task_id="__draft__",
@@ -499,7 +498,6 @@ class EngineCore:
                 return
             handler = self._handler_or_raise(record.task_type)
             payload = handler.decode_payload(record)
-            from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy
 
             policy = handler.cancel_dispatch_policy(record, payload)
             if policy == CancelDispatchPolicy.LOCAL_TERMINALIZE:

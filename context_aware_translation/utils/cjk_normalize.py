@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import unicodedata
+from collections import Counter
 from collections.abc import Iterable
 from functools import lru_cache
 from pathlib import Path
@@ -125,8 +126,6 @@ def build_normalized_key_mapping(
     norm_to_llm = {normalize_for_matching(k): k for k in llm_key_set}
 
     # Detect ambiguous normalized forms among expected keys
-    from collections import Counter
-
     expected_norms = Counter(normalize_for_matching(k) for k in expected_keys)
     ambiguous_norms = {norm for norm, count in expected_norms.items() if count > 1}
 

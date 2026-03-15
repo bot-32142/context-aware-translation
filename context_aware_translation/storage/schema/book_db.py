@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import contextlib
 import json
 import sqlite3
@@ -8,6 +9,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from context_aware_translation.utils.cjk_normalize import normalize_for_matching
 
 
 @dataclass
@@ -146,7 +149,6 @@ class SQLiteBookDB:
         cur = self.conn.cursor()
         if from_version < 2:
             cur.execute("ALTER TABLE chunks ADD COLUMN normalized_text TEXT")
-            from context_aware_translation.utils.cjk_normalize import normalize_for_matching
 
             rows = cur.execute("SELECT chunk_id, text FROM chunks WHERE text IS NOT NULL").fetchall()
             for row in rows:
@@ -609,8 +611,6 @@ class SQLiteBookDB:
                 document_id = getattr(chunk, "document_id", None)
                 normalized_text = getattr(chunk, "normalized_text", None)
                 if normalized_text is None and chunk.text:
-                    from context_aware_translation.utils.cjk_normalize import normalize_for_matching
-
                     normalized_text = normalize_for_matching(chunk.text)
                 cur.execute(
                     """
@@ -1399,8 +1399,6 @@ class SQLiteBookDB:
 
     def save_reembedded_image(self, document_id: int, element_idx: int, image_bytes: bytes, mime_type: str) -> None:
         """Persist a single reembedded image using atomic JSON update."""
-        import base64
-
         b64_data = base64.b64encode(image_bytes).decode("utf-8")
         value_json = json.dumps({"bytes": b64_data, "mime": mime_type})
 
@@ -1425,8 +1423,6 @@ class SQLiteBookDB:
         Returns:
             Dictionary mapping element_idx to (image_bytes, mime_type) tuples
         """
-        import base64
-
         row = self.conn.execute(
             "SELECT reembedded_images_json FROM document_sources WHERE document_id = ?",
             (document_id,),

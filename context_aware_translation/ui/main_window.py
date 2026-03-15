@@ -1,6 +1,6 @@
 """Main application window with QML app and project shell chrome."""
 
-from PySide6.QtCore import QEvent, QSettings, QTimer
+from PySide6.QtCore import QEvent, QSettings, QTimer, QUrl
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
@@ -275,8 +275,6 @@ class MainWindow(QMainWindow):
 
     def _on_open_data_folder(self) -> None:
         """Open the data folder in the system file manager."""
-        from PySide6.QtCore import QUrl
-
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.book_manager.library_root)))
 
     def _on_about(self) -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import tempfile
 from collections.abc import Callable
@@ -10,6 +11,8 @@ from context_aware_translation.core.cancellation import OperationCancelledError,
 from context_aware_translation.core.progress import ProgressCallback, ProgressUpdate, WorkflowStep
 from context_aware_translation.documents.base import Document
 from context_aware_translation.documents.content.ocr_content import MergedOCRContent
+from context_aware_translation.documents.content.ocr_items import ImageItem
+from context_aware_translation.llm.image_generator import build_text_replacements, create_image_generator
 from context_aware_translation.llm.ocr import ocr_images
 from context_aware_translation.utils.file_utils import classify_file, get_mime_type, scan_folder
 from context_aware_translation.utils.image_utils import (
@@ -248,8 +251,6 @@ class ScannedBookDocument(Document):
         self._merged_content = merged
 
         # Load cached reembedded images from DB so export applies them
-        from context_aware_translation.documents.content.ocr_items import ImageItem
-
         existing = self.repo.load_reembedded_images(self.document_id)
         for idx, elem in enumerate(self._merged_content.elements):
             if isinstance(elem, ImageItem) and idx in existing:
@@ -271,14 +272,6 @@ class ScannedBookDocument(Document):
         Uses existing DB cache to skip already-done items unless force=True.
         Returns count of items newly generated.
         """
-        import asyncio
-
-        from context_aware_translation.documents.content.ocr_items import ImageItem
-        from context_aware_translation.llm.image_generator import (
-            build_text_replacements,
-            create_image_generator,
-        )
-
         if self._merged_content is None:
             return 0
 

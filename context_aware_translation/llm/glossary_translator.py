@@ -10,6 +10,7 @@ from context_aware_translation.core.cancellation import OperationCancelledError,
 from context_aware_translation.llm.client import LLMClient
 from context_aware_translation.llm.session_trace import llm_session_scope
 from context_aware_translation.llm.translator import TranslationValidationError
+from context_aware_translation.utils.cjk_normalize import build_normalized_key_mapping
 from context_aware_translation.utils.llm_json_cleaner import clean_llm_response
 
 logger = logging.getLogger(__name__)
@@ -127,8 +128,6 @@ def _validate_batch_response(
         }
 
     # Slow path: normalize CJK variants and remap
-    from context_aware_translation.utils.cjk_normalize import build_normalized_key_mapping
-
     key_map = build_normalized_key_mapping(translations.keys(), expected_keys)
 
     remapped: dict[str, str] = {}

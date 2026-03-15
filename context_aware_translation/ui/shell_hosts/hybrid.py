@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
 
-from context_aware_translation.ui.main import qml_root_path, qml_source
+from context_aware_translation.ui.qml_resources import qml_root_path, qml_source
 
 
 class QmlChromeHost(QQuickWidget):

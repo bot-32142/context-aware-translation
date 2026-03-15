@@ -9,6 +9,8 @@ import os
 import tempfile
 from typing import Any
 
+from google import genai
+
 from context_aware_translation.config import TranslatorBatchConfig
 from context_aware_translation.llm.batch_jobs.base import (
     POLL_STATUS_CANCELLED,
@@ -276,8 +278,6 @@ class GeminiBatchJobGateway(BatchJobGateway):
         cached = self._client_cache.get(cache_key)
         if cached is not None:
             return cached
-
-        from google import genai
 
         client_kwargs: dict[str, Any] = {
             "api_key": batch_config.api_key,

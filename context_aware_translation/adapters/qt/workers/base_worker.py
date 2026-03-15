@@ -6,6 +6,7 @@ from PySide6.QtCore import QThread, Signal
 
 from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.core.progress import ProgressUpdate
+from context_aware_translation.ui import sleep_inhibitor
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +39,7 @@ class BaseWorker(QThread):
 
         Subclasses should override _execute() instead of run().
         """
-        from context_aware_translation.ui.sleep_inhibitor import SleepInhibitor
-
-        SleepInhibitor.acquire()
+        sleep_inhibitor.SleepInhibitor.acquire()
         try:
             self._raise_if_cancelled()
             self._execute()
@@ -51,7 +50,7 @@ class BaseWorker(QThread):
             logger.exception(f"{self.__class__.__name__} failed")
             self.error.emit(f"{type(e).__name__}: {e}")
         finally:
-            SleepInhibitor.release()
+            sleep_inhibitor.SleepInhibitor.release()
 
     def _execute(self) -> None:
         """Execute the worker's main task.

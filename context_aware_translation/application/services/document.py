@@ -59,10 +59,17 @@ from context_aware_translation.application.runtime import (
     raise_application_error,
 )
 from context_aware_translation.application.services._export_support import prepare_export, run_export
+from context_aware_translation.application.services.terms import DefaultTermsService
 from context_aware_translation.documents.base import Document
 from context_aware_translation.documents.content.ocr_content import SinglePageOCRContent
 from context_aware_translation.documents.content.ocr_items import ImageItem
-from context_aware_translation.documents.manga_alignment import align_sources_to_chunks, extract_ocr_text
+from context_aware_translation.documents.epub import EPUBDocument
+from context_aware_translation.documents.manga import MangaDocument
+from context_aware_translation.documents.manga_alignment import (
+    align_sources_to_chunks,
+    extract_ocr_text,
+    get_sources_with_nonempty_ocr_text,
+)
 from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
@@ -274,8 +281,6 @@ class DefaultDocumentService:
         )
 
     def get_terms(self, project_id: str, document_id: int) -> TermsTableState:
-        from context_aware_translation.application.services.terms import DefaultTermsService
-
         return DefaultTermsService(self._runtime).get_document_terms(project_id, document_id)
 
     def get_translation(
@@ -1014,9 +1019,6 @@ class DefaultDocumentService:
         *,
         active_task: TaskRecord | None,
     ) -> list[ImageAssetState]:
-        from context_aware_translation.documents.manga import MangaDocument
-        from context_aware_translation.documents.manga_alignment import get_sources_with_nonempty_ocr_text
-
         if not isinstance(document, MangaDocument):
             return []
         persisted = document_repo.load_reembedded_images(document.document_id)
@@ -1060,8 +1062,6 @@ class DefaultDocumentService:
         *,
         active_task: TaskRecord | None,
     ) -> list[ImageAssetState]:
-        from context_aware_translation.documents.epub import EPUBDocument
-
         if not isinstance(document, EPUBDocument):
             return []
         persisted = document_repo.load_reembedded_images(document.document_id)

@@ -4,6 +4,8 @@ import asyncio
 import io
 import json
 import logging
+import tempfile
+import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -25,8 +27,10 @@ from context_aware_translation.documents.manga_reembed_planner import (
     render_live_crop,
     stitch_plan,
 )
-from context_aware_translation.utils.file_utils import IMAGE_EXTENSIONS
+from context_aware_translation.llm import image_generator, manga_ocr
+from context_aware_translation.utils.file_utils import IMAGE_EXTENSIONS, classify_file, get_mime_type, scan_folder
 from context_aware_translation.utils.image_utils import compress_image_for_ocr, validate_image_bytes
+from context_aware_translation.utils.pandoc_export import export_pandoc
 from context_aware_translation.utils.symbol_check import symbol_only
 
 if TYPE_CHECKING:
@@ -99,8 +103,6 @@ class MangaDocument(Document):
         if path.is_file():
             return path.suffix.lower() == ".cbz"
         elif path.is_dir():
-            from context_aware_translation.utils.file_utils import classify_file, scan_folder
-
             files = scan_folder(path)
             if not files:
                 return False
@@ -129,8 +131,6 @@ class MangaDocument(Document):
         cancel_check: Callable[[], bool] | None = None,
     ) -> dict[str, int]:
         """Import manga from a folder of images (same logic as ScannedBookDocument)."""
-        from context_aware_translation.utils.file_utils import get_mime_type, scan_folder
-
         raise_if_cancelled(cancel_check)
         files = scan_folder(path)
         imported = 0
@@ -181,8 +181,6 @@ class MangaDocument(Document):
         path: Path,
         cancel_check: Callable[[], bool] | None = None,
     ) -> dict[str, int]:
-        import zipfile
-
         raise_if_cancelled(cancel_check)
         with zipfile.ZipFile(path, "r") as zf:
             image_entries = sorted(
@@ -266,8 +264,6 @@ class MangaDocument(Document):
 
         ocr_config = self._ocr_config
 
-        from context_aware_translation.llm.manga_ocr import ocr_manga_image_with_regions
-
         if source_ids is None:
             sources = self.repo.get_document_sources_needing_ocr(self.document_id)
         else:
@@ -291,7 +287,7 @@ class MangaDocument(Document):
             raise_if_cancelled(cancel_check)
             async with semaphore:
                 raise_if_cancelled(cancel_check)
-                ocr_payload = await ocr_manga_image_with_regions(
+                ocr_payload = await manga_ocr.ocr_manga_image_with_regions(
                     image_bytes=img_bytes,
                     mime_type=mime_type,
                     llm_client=llm_client,
@@ -391,12 +387,7 @@ class MangaDocument(Document):
         Uses existing DB cache to skip already-done items unless force=True.
         Returns count of pages newly generated.
         """
-        from context_aware_translation.llm.image_generator import (
-            build_text_replacements,
-            create_image_generator,
-        )
-
-        generator = create_image_generator(image_reembedding_config)
+        generator = image_generator.create_image_generator(image_reembedding_config)
         semaphore = asyncio.Semaphore(image_reembedding_config.concurrency)
 
         sources = self.repo.get_document_sources(self.document_id)
@@ -439,7 +430,7 @@ class MangaDocument(Document):
             original_text: str,
             translated_text: str,
         ) -> bytes:
-            text_replacements = build_text_replacements(original_text, translated_text)
+            text_replacements = image_generator.build_text_replacements(original_text, translated_text)
             return await generator.edit_image(
                 image_bytes,
                 mime_type,
@@ -489,7 +480,7 @@ class MangaDocument(Document):
 
                 live_crop = render_live_crop(stitched, plan)
                 crop_png_bytes = crop_to_png_bytes(live_crop)
-                text_replacements = build_text_replacements(original_group_text, translated_group_text)
+                text_replacements = image_generator.build_text_replacements(original_group_text, translated_group_text)
                 edited_bytes = await generator.edit_image(
                     crop_png_bytes,
                     "image/png",
@@ -583,8 +574,6 @@ class MangaDocument(Document):
 
     @classmethod
     def _export_cbz(cls, documents: list[Document], output_path: Path) -> None:
-        import zipfile
-
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(output_path, "w", zipfile.ZIP_STORED) as zf:
@@ -608,10 +597,6 @@ class MangaDocument(Document):
     @classmethod
     def _export_markdown_based(cls, documents: list[Document], export_format: str, output_path: Path) -> None:
         """Export manga as markdown/epub: each page's translation as a text block."""
-        import tempfile
-
-        from context_aware_translation.utils.pandoc_export import export_pandoc
-
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 

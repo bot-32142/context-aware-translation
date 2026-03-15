@@ -1087,7 +1087,7 @@ This will permanently remove all project data including documents, translations,
     <name>MainWindow</name>
     <message>
         <location filename="../main_window.py" line="57"/>
-        <location filename="../main_window.py" line="447"/>
+        <location filename="../main_window.py" line="445"/>
         <location filename="../viewmodels/app_shell.py" line="32"/>
         <source>Context-Aware Translation</source>
         <translation>上下文感知翻译</translation>
@@ -1117,43 +1117,43 @@ This will permanently remove all project data including documents, translations,
     </message>
     <message>
         <location filename="../main_window.py" line="154"/>
-        <location filename="../main_window.py" line="454"/>
+        <location filename="../main_window.py" line="452"/>
         <source>&amp;File</source>
         <translation>文件(&amp;F)</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="156"/>
-        <location filename="../main_window.py" line="458"/>
+        <location filename="../main_window.py" line="456"/>
         <source>Open &amp;Data Folder</source>
         <translation>打开数据文件夹(&amp;D)</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="160"/>
-        <location filename="../main_window.py" line="459"/>
+        <location filename="../main_window.py" line="457"/>
         <source>App &amp;Settings</source>
         <translation>应用设置(&amp;S)</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="164"/>
-        <location filename="../main_window.py" line="455"/>
+        <location filename="../main_window.py" line="453"/>
         <source>&amp;Language</source>
         <translation>语言(&amp;L)</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="179"/>
-        <location filename="../main_window.py" line="456"/>
+        <location filename="../main_window.py" line="454"/>
         <source>&amp;Help</source>
         <translation>帮助(&amp;H)</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="181"/>
-        <location filename="../main_window.py" line="460"/>
+        <location filename="../main_window.py" line="458"/>
         <source>&amp;About</source>
         <translation>关于(&amp;A)</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="189"/>
-        <location filename="../main_window.py" line="464"/>
+        <location filename="../main_window.py" line="462"/>
         <source>Ready</source>
         <translation>就绪</translation>
     </message>
@@ -1175,17 +1175,17 @@ All completed results are already saved and won&apos;t be lost.</source>
 所有已完成的结果都已保存，不会丢失。</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="326"/>
+        <location filename="../main_window.py" line="324"/>
         <source>Opened project: %1</source>
         <translation>已打开项目：%1</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="339"/>
+        <location filename="../main_window.py" line="337"/>
         <source>Closed project: %1</source>
         <translation>已关闭项目：%1</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="364"/>
+        <location filename="../main_window.py" line="362"/>
         <source>Project setup saved.</source>
         <translation>项目设置已保存。</translation>
     </message>
@@ -1195,17 +1195,17 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation>操作进行中</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="286"/>
+        <location filename="../main_window.py" line="284"/>
         <source>About Context-Aware Translation</source>
         <translation>关于上下文感知翻译</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="289"/>
+        <location filename="../main_window.py" line="287"/>
         <source>&lt;h3&gt;Context-Aware Translation&lt;/h3&gt;&lt;p&gt;Version %1&lt;/p&gt;&lt;p&gt;A desktop application for context-aware document translation with glossary management and OCR support.&lt;/p&gt;&lt;p&gt;Built with PySide6 (Qt for Python)&lt;/p&gt;</source>
         <translation>&lt;h3&gt;上下文感知翻译&lt;/h3&gt;&lt;p&gt;版本 %1&lt;/p&gt;&lt;p&gt;一款支持术语表管理和OCR的上下文感知文档翻译桌面应用。&lt;/p&gt;&lt;p&gt;基于 PySide6（Qt for Python）构建&lt;/p&gt;</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="319"/>
+        <location filename="../main_window.py" line="317"/>
         <source>View &apos;%1&apos; not found</source>
         <translation>未找到视图“%1”</translation>
     </message>

@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from context_aware_translation.documents.base import is_ocr_required_for_type
+from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
+
 if TYPE_CHECKING:
     from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
@@ -59,8 +62,6 @@ class DocumentRepository:
         where OCR is optional (e.g. EPUB) are allowed through regardless of
         image OCR status.
         """
-        from context_aware_translation.documents.base import is_ocr_required_for_type
-
         candidates = self.db.list_documents_pending_glossary()
         results = []
         for doc in candidates:
@@ -212,8 +213,6 @@ class DocumentRepository:
 
         if cutoff is not None and context_tree_db_path is not None:
             # Step 2: Clean context tree (separate DB -- do first for fail-safety)
-            from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
-
             ct_db = ContextTreeDB(context_tree_db_path)
             try:
                 ct_db.delete_nodes_from_index(cutoff)
@@ -288,8 +287,6 @@ class DocumentRepository:
 
         if cutoff is not None and context_tree_db_path is not None:
             # Step 2: Clean context tree (separate DB -- do first for fail-safety)
-            from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
-
             ct_db = ContextTreeDB(context_tree_db_path)
             try:
                 ct_db.delete_nodes_from_index(cutoff)

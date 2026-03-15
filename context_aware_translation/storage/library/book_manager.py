@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import time
@@ -11,10 +12,17 @@ from typing import Any
 
 from platformdirs import user_data_dir
 
-from context_aware_translation.config import ensure_valid_persisted_config_payload
+from context_aware_translation.config import (
+    CONFIG_SNAPSHOT_VERSION,
+    Config,
+    ensure_valid_persisted_config_payload,
+)
 from context_aware_translation.storage.models.book import Book, BookStatus
 from context_aware_translation.storage.models.config_profile import ConfigProfile
 from context_aware_translation.storage.models.endpoint_profile import EndpointProfile
+from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+from context_aware_translation.storage.repositories.term_repository import TermRepository
+from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 from context_aware_translation.storage.schema.registry_db import RegistryDB
 
 # Platform-specific data directory:
@@ -624,17 +632,11 @@ class BookManager:
         Raises:
             ValueError: If the book is not found or has no valid config.
         """
-        import json
-
-        from context_aware_translation.config import Config
-
         book = self.registry.get_book(book_id)
         if book is None:
             raise ValueError(f"Book not found: {book_id}")
 
         config = Config.from_book(book, self.library_root, self.registry)
-        from context_aware_translation.config import CONFIG_SNAPSHOT_VERSION
-
         envelope = {
             "snapshot_version": CONFIG_SNAPSHOT_VERSION,
             "config": config.to_dict(),
@@ -716,10 +718,6 @@ class BookManager:
         book_db_path = self.get_book_db_path(book_id)
         if not book_db_path.exists():
             return None
-
-        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
-        from context_aware_translation.storage.repositories.term_repository import TermRepository
-        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         db = None
         try:

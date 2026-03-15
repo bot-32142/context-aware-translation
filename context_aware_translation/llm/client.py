@@ -18,6 +18,7 @@ from tenacity import (
 from context_aware_translation.config import LLMConfig
 from context_aware_translation.core.cancellation import OperationCancelledError, raise_if_cancelled
 from context_aware_translation.llm.session_trace import get_llm_session_id, llm_session_scope
+from context_aware_translation.llm.token_tracker import TokenTracker
 
 logger = logging.getLogger(__name__)
 
@@ -299,8 +300,6 @@ class LLMClient:
 
         # Record token usage for endpoint profile tracking
         if token_usage:
-            from context_aware_translation.llm.token_tracker import TokenTracker
-
             tracker = TokenTracker.get()
             if tracker is not None:
                 tracker.record_usage(endpoint_profile_name, token_usage)
@@ -359,8 +358,6 @@ class LLMClient:
             merged_kwargs = _sanitize_openai_create_kwargs({**step_config.kwargs, **kwargs})
 
             # Check token limit before making the call
-            from context_aware_translation.llm.token_tracker import TokenTracker
-
             tracker = TokenTracker.get()
             if tracker is not None:
                 tracker.check_limit(step_config.endpoint_profile)

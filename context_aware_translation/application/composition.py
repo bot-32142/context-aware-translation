@@ -4,7 +4,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from context_aware_translation.application.events import ApplicationEventPayload, InMemoryApplicationEventBus
+from context_aware_translation.application.events import (
+    ApplicationEventPayload,
+    DocumentInvalidatedEvent,
+    InMemoryApplicationEventBus,
+    ProjectsInvalidatedEvent,
+    QueueChangedEvent,
+    TermsInvalidatedEvent,
+    WorkboardInvalidatedEvent,
+)
 from context_aware_translation.application.runtime import ApplicationRuntime
 from context_aware_translation.application.services.app_setup import AppSetupService, DefaultAppSetupService
 from context_aware_translation.application.services.document import DefaultDocumentService, DocumentService
@@ -87,14 +95,6 @@ def build_application_context(
 
 
 def runtime_task_events(project_id: str) -> list[ApplicationEventPayload]:
-    from context_aware_translation.application.events import (
-        DocumentInvalidatedEvent,
-        ProjectsInvalidatedEvent,
-        QueueChangedEvent,
-        TermsInvalidatedEvent,
-        WorkboardInvalidatedEvent,
-    )
-
     return [
         QueueChangedEvent(project_id=project_id),
         WorkboardInvalidatedEvent(project_id=project_id),

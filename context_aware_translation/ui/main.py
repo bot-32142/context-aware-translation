@@ -1,25 +1,28 @@
 """Entry point for the PySide6 desktop application."""
 
-import atexit
 import importlib.resources as importlib_resources
 import os
 import sys
 import traceback
-from contextlib import ExitStack
-from functools import cache
+from contextlib import suppress
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Qt, QUrl
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication
-from PySide6.QtWidgets import QApplication, QStyleFactory
+from PySide6.QtWidgets import QApplication, QMessageBox, QStyleFactory
 
-_RESOURCE_STACK = ExitStack()
-_QML_DIR_NAME = "qml"
+from context_aware_translation.ui import i18n
+from context_aware_translation.ui.main_window import MainWindow
+from context_aware_translation.ui.qml_resources import create_qml_engine, load_qml_component, qml_root_path, qml_source
 
-
-@atexit.register
-def _close_resource_stack() -> None:
-    _RESOURCE_STACK.close()
+__all__ = [
+    "create_qml_engine",
+    "load_qml_component",
+    "load_stylesheet",
+    "main",
+    "qml_root_path",
+    "qml_source",
+]
 
 
 def load_stylesheet() -> str:
@@ -41,60 +44,14 @@ def load_stylesheet() -> str:
     return ""
 
 
-@cache
-def _resource_path(package: str, resource_name: str) -> Path:
-    resource = importlib_resources.files(package).joinpath(resource_name)
-    return _RESOURCE_STACK.enter_context(importlib_resources.as_file(resource))
-
-
-def qml_root_path() -> Path:
-    """Return a stable filesystem path to bundled QML resources."""
-    try:
-        return _resource_path("context_aware_translation.ui", _QML_DIR_NAME)
-    except Exception:
-        qml_path = Path(__file__).parent / _QML_DIR_NAME
-        if qml_path.exists():
-            return qml_path
-        raise
-
-
-def qml_source(relative_path: str) -> QUrl:
-    """Resolve a QML file under the bundled QML root into a local-file URL."""
-    qml_path = qml_root_path() / relative_path
-    if not qml_path.exists():
-        raise FileNotFoundError(f"QML resource not found: {qml_path}")
-    return QUrl.fromLocalFile(str(qml_path))
-
-
-def create_qml_engine(*, parent: QObject | None = None):
-    """Create a QQmlEngine with the packaged QML root on its import path."""
-    from PySide6.QtQml import QQmlEngine
-
-    engine = QQmlEngine(parent)
-    engine.addImportPath(str(qml_root_path()))
-    return engine
-
-
-def load_qml_component(engine, relative_path: str):
-    """Create a QQmlComponent for a bundled QML file."""
-    from PySide6.QtQml import QQmlComponent
-
-    return QQmlComponent(engine, qml_source(relative_path))
-
-
 def _show_startup_error(detail: str) -> None:
     """Surface startup failures in packaged GUI runs where stderr is hidden."""
-    try:
-        from PySide6.QtWidgets import QMessageBox
-
+    with suppress(Exception):
         QMessageBox.critical(
             None,
             "Startup Error",
             f"Context-Aware Translation failed to start.\n\nPlease send this traceback to support:\n\n{detail}",
         )
-    except Exception:
-        # If the message box path also fails, preserve the original exception.
-        pass
 
 
 def main() -> None:
@@ -117,9 +74,6 @@ def main() -> None:
             app.setStyle(mac_style)
 
     try:
-        from context_aware_translation.ui import i18n
-        from context_aware_translation.ui.main_window import MainWindow
-
         stylesheet = load_stylesheet()
         if stylesheet:
             app.setStyleSheet(stylesheet)
