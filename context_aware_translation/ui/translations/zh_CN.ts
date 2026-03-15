@@ -781,68 +781,68 @@
     </message>
     <message>
         <location filename="../features/document_translation_view.py" line="149"/>
-        <location filename="../features/document_translation_view.py" line="513"/>
+        <location filename="../features/document_translation_view.py" line="558"/>
         <source>Source</source>
         <translation>原文</translation>
     </message>
     <message>
         <location filename="../features/document_translation_view.py" line="158"/>
-        <location filename="../features/document_translation_view.py" line="514"/>
+        <location filename="../features/document_translation_view.py" line="559"/>
         <source>Translation</source>
         <translation>翻译</translation>
     </message>
     <message>
         <location filename="../features/document_translation_view.py" line="164"/>
-        <location filename="../features/document_translation_view.py" line="515"/>
+        <location filename="../features/document_translation_view.py" line="560"/>
         <source>Find...</source>
         <translation>查找...</translation>
     </message>
     <message>
         <location filename="../features/document_translation_view.py" line="168"/>
-        <location filename="../features/document_translation_view.py" line="516"/>
+        <location filename="../features/document_translation_view.py" line="561"/>
         <source>Replace with...</source>
         <translation>替换为...</translation>
     </message>
     <message>
         <location filename="../features/document_translation_view.py" line="169"/>
-        <location filename="../features/document_translation_view.py" line="517"/>
+        <location filename="../features/document_translation_view.py" line="562"/>
         <source>Find Next</source>
         <translation>查找下一个</translation>
     </message>
     <message>
         <location filename="../features/document_translation_view.py" line="171"/>
-        <location filename="../features/document_translation_view.py" line="518"/>
+        <location filename="../features/document_translation_view.py" line="563"/>
         <source>Replace</source>
         <translation>替换</translation>
     </message>
     <message>
         <location filename="../features/document_translation_view.py" line="173"/>
-        <location filename="../features/document_translation_view.py" line="519"/>
+        <location filename="../features/document_translation_view.py" line="564"/>
         <source>Replace All</source>
         <translation>全部替换</translation>
     </message>
     <message>
         <location filename="../features/document_translation_view.py" line="191"/>
-        <location filename="../features/document_translation_view.py" line="520"/>
+        <location filename="../features/document_translation_view.py" line="565"/>
         <source>Save</source>
         <translation>保存</translation>
     </message>
     <message>
         <location filename="../features/document_translation_view.py" line="195"/>
         <location filename="../features/document_translation_view.py" line="370"/>
-        <location filename="../features/document_translation_view.py" line="521"/>
+        <location filename="../features/document_translation_view.py" line="566"/>
         <source>Retranslate</source>
         <translation>重新翻译</translation>
     </message>
     <message>
         <location filename="../features/document_translation_view.py" line="198"/>
-        <location filename="../features/document_translation_view.py" line="522"/>
+        <location filename="../features/document_translation_view.py" line="567"/>
         <source>Previous</source>
         <translation>上一个</translation>
     </message>
     <message>
         <location filename="../features/document_translation_view.py" line="201"/>
-        <location filename="../features/document_translation_view.py" line="523"/>
+        <location filename="../features/document_translation_view.py" line="568"/>
         <source>Next</source>
         <translation>下一个</translation>
     </message>

@@ -469,16 +469,33 @@ class DocumentTranslationView(QWidget):
 
     def _find_next(self) -> None:
         search_text = self.find_input.text()
-        if not search_text:
+        if not search_text or self._state is None or not self._state.units:
             return
         self._clear_find_highlight()
-        self.translation_text.setFocus(Qt.FocusReason.OtherFocusReason)
-        if self.translation_text.find(search_text):
+        current_row = self.unit_list.currentRow()
+        if current_row < 0:
+            current_row = 0
+        start_position = self._find_start_position()
+        match_start = self._find_in_unit_row(current_row, search_text, start_position=start_position)
+        if match_start is not None:
+            self._select_find_match(current_row, match_start, len(search_text))
             return
-        cursor = self.translation_text.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.Start)
-        self.translation_text.setTextCursor(cursor)
-        self.translation_text.find(search_text)
+
+        for row in range(current_row + 1, len(self._state.units)):
+            match_start = self._find_in_unit_row(row, search_text)
+            if match_start is not None:
+                self._select_find_match(row, match_start, len(search_text))
+                return
+
+        for row in range(0, current_row):
+            match_start = self._find_in_unit_row(row, search_text)
+            if match_start is not None:
+                self._select_find_match(row, match_start, len(search_text))
+                return
+
+        wrapped_match = self._find_in_unit_row(current_row, search_text)
+        if wrapped_match is not None and wrapped_match < start_position:
+            self._select_find_match(current_row, wrapped_match, len(search_text))
 
     def _replace_current(self) -> None:
         search_text = self.find_input.text()
@@ -500,6 +517,34 @@ class DocumentTranslationView(QWidget):
 
     def _clear_find_highlight(self) -> None:
         self.translation_text.setExtraSelections([])
+
+    def _find_start_position(self) -> int:
+        cursor = self.translation_text.textCursor()
+        if cursor.hasSelection():
+            return cursor.selectionEnd()
+        return cursor.position()
+
+    def _find_in_unit_row(self, row: int, search_text: str, *, start_position: int = 0) -> int | None:
+        text = self._translation_text_for_row(row)
+        match_start = text.find(search_text, max(0, start_position))
+        return match_start if match_start >= 0 else None
+
+    def _translation_text_for_row(self, row: int) -> str:
+        if self._state is None or row < 0 or row >= len(self._state.units):
+            return ""
+        if row == self.unit_list.currentRow():
+            return self.translation_text.toPlainText()
+        return self._state.units[row].translated_text or ""
+
+    def _select_find_match(self, row: int, start: int, length: int) -> None:
+        if row != self.unit_list.currentRow():
+            self.unit_list.setCurrentRow(row)
+        self.translation_text.setFocus(Qt.FocusReason.OtherFocusReason)
+        cursor = self.translation_text.textCursor()
+        cursor.setPosition(start)
+        cursor.setPosition(start + length, QTextCursor.MoveMode.KeepAnchor)
+        self.translation_text.setTextCursor(cursor)
+        self.translation_text.ensureCursorVisible()
 
     def _normalized_selected_text(self, cursor: QTextCursor) -> str:
         return cursor.selectedText().replace("\u2029", "\n")

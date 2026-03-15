@@ -212,3 +212,48 @@ def test_document_translation_view_find_next_uses_live_cursor_position_and_wraps
         assert _selected_range(view) == (0, 5, "alpha")
     finally:
         view.deleteLater()
+
+
+def test_document_translation_view_find_next_advances_across_units_and_wraps():
+    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
+
+    state = _make_state()
+    state = state.model_copy(
+        update={
+            "units": [
+                state.units[0].model_copy(update={"translated_text": "alpha beta alpha beta"}),
+                state.units[1].model_copy(
+                    update={
+                        "status": SurfaceStatus.READY,
+                        "source_text": "Three",
+                        "translated_text": "gamma alpha",
+                        "blocker": None,
+                        "actions": TranslationUnitActionState(can_save=True, can_retranslate=True),
+                    }
+                ),
+            ]
+        }
+    )
+    service = FakeDocumentService(workspace=state.workspace, translation=state)
+    view = DocumentTranslationView(service, "proj-1", 4)
+    try:
+        view.refresh()
+        view.find_input.setText("alpha")
+
+        view.find_next_button.click()
+        assert view.unit_list.currentRow() == 0
+        assert _selected_range(view) == (0, 5, "alpha")
+
+        view.find_next_button.click()
+        assert view.unit_list.currentRow() == 0
+        assert _selected_range(view) == (11, 16, "alpha")
+
+        view.find_next_button.click()
+        assert view.unit_list.currentRow() == 1
+        assert _selected_range(view) == (6, 11, "alpha")
+
+        view.find_next_button.click()
+        assert view.unit_list.currentRow() == 0
+        assert _selected_range(view) == (0, 5, "alpha")
+    finally:
+        view.deleteLater()
