@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
@@ -324,6 +323,8 @@ class _DocumentExportTab(QWidget):
         self._service = service
         self.viewmodel = DocumentExportPaneViewModel(self)
         self._state: DocumentExportState | None = None
+        self._can_export = False
+        self._result_text = ""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.chrome_host = QmlChromeHost(
@@ -332,13 +333,6 @@ class _DocumentExportTab(QWidget):
             parent=self,
         )
         layout.addWidget(self.chrome_host)
-        self.tip_label = create_tip_label(
-            self.tr(
-                "Export applies only to the current document. You can also start export directly from the Work list when that row is exportable."
-            ),
-        )
-        self.tip_label.setParent(self)
-        self.tip_label.hide()
         self.controls_card = QFrame(self)
         self.controls_card.setFrameShape(QFrame.Shape.StyledPanel)
         self.controls_card.setStyleSheet(
@@ -360,19 +354,9 @@ class _DocumentExportTab(QWidget):
         self.controls = _ExportControls(parent=self.controls_card)
         self.controls.changed.connect(self._update_export_enabled)
         controls_layout.addWidget(self.controls)
-        self.export_button = QPushButton(self.tr("Export This Document"))
-        self.export_button.clicked.connect(self._run_export)
-        self.export_button.hide()
-        controls_layout.addWidget(self.export_button, 0, Qt.AlignmentFlag.AlignLeft)
-        self.result_label = QLabel()
-        self.result_label.setWordWrap(True)
-        self.result_label.setStyleSheet("color: #15803d; font-weight: 600;")
-        self.result_label.hide()
-        controls_layout.addWidget(self.result_label)
         layout.addWidget(self.controls_card)
         layout.addStretch()
         apply_hybrid_control_theme(self.controls_card)
-        set_button_tone(self.export_button, "primary")
         self._connect_qml_signals()
         self._sync_chrome_state()
 
@@ -383,16 +367,16 @@ class _DocumentExportTab(QWidget):
             QMessageBox.warning(self, self.tr("Export"), exc.payload.message)
             return
         self.controls.apply_state(self._state)
-        self.result_label.hide()
-        self.export_button.setEnabled(self._state.can_export and self.controls.can_submit(self._state))
+        self._result_text = ""
+        self._can_export = self._state.can_export and self.controls.can_submit(self._state)
         self._sync_chrome_state()
 
     def _update_export_enabled(self) -> None:
         if self._state is None:
-            self.export_button.setEnabled(False)
+            self._can_export = False
             self._sync_chrome_state()
             return
-        self.export_button.setEnabled(self._state.can_export and self.controls.can_submit(self._state))
+        self._can_export = self._state.can_export and self.controls.can_submit(self._state)
         self._sync_chrome_state()
 
     def _run_export(self) -> None:
@@ -418,17 +402,10 @@ class _DocumentExportTab(QWidget):
 
     def _show_result(self, result: DocumentExportResult) -> None:
         message = result.message.text if result.message is not None else result.output_path
-        self.result_label.setText(message)
-        self.result_label.show()
+        self._result_text = message
         self._sync_chrome_state()
 
     def retranslate(self) -> None:
-        self.tip_label.setText(
-            self.tr(
-                "Export applies only to the current document. You can also start export directly from the Work list when that row is exportable."
-            ),
-        )
-        self.export_button.setText(self.tr("Export This Document"))
         self.viewmodel.retranslate()
         self._sync_chrome_state()
 
@@ -440,8 +417,8 @@ class _DocumentExportTab(QWidget):
 
     def _sync_chrome_state(self) -> None:
         self.viewmodel.apply_state(
-            can_export=self.export_button.isEnabled(),
-            result_text=self.result_label.text().strip() if not self.result_label.isHidden() else "",
+            can_export=self._can_export,
+            result_text=self._result_text.strip(),
         )
 
 

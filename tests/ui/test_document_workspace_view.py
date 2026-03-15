@@ -341,13 +341,15 @@ def test_document_workspace_translation_tab_uses_migrated_translation_widget():
     try:
         view.show_section(DocumentSection.TRANSLATION)
         translation_tab = _current_section_widget(view)
+        root = translation_tab.chrome_host.rootObject()
+        assert root is not None
         assert hasattr(translation_tab, "unit_list")
         assert translation_tab.unit_list.count() == 1
-        assert translation_tab.translate_button.isEnabled()
+        assert translation_tab.viewmodel.can_translate is True
 
         translation_tab.translation_text.setPlainText("Everyone get down now!!!")
         translation_tab.save_button.click()
-        translation_tab.translate_button.click()
+        root.translateRequested.emit()
 
         call_names = [name for name, _payload in document_service.calls]
         assert "get_translation" in call_names
@@ -425,8 +427,9 @@ def test_document_workspace_export_tab_runs_document_service():
         assert request.document_id == 4
         assert request.options["preserve_structure"] is True
         assert "background-color: #fdfaf5" in export_tab.controls_card.styleSheet()
-        assert not export_tab.result_label.isHidden()
-        assert export_tab.result_label.text() == "Export complete."
+        assert root.property("hasResult") is True
+        assert root.property("resultText") == "Export complete."
+        assert export_tab.viewmodel.result_text == "Export complete."
     finally:
         view.cleanup()
 

@@ -370,10 +370,12 @@ def test_work_view_inspects_paths_and_imports_document():
     view, _bus, work_service, _document_service, _terms_service = _make_view(work_state=_make_workboard(action=action))
     try:
         view._inspect_import_paths(["/tmp/04.png"])
-        assert view.import_type_combo.count() == 1
-        assert view.import_button.isEnabled()
+        root = view.chrome_host.rootObject()
+        assert root is not None
+        assert view.viewmodel.import_type_options == [{"documentType": "manga", "label": "Manga", "selected": True}]
+        assert view.viewmodel.can_import is True
 
-        view.import_button.click()
+        root.importRequested.emit()
 
         assert (
             "inspect_import_paths",
@@ -383,7 +385,7 @@ def test_work_view_inspects_paths_and_imports_document():
             "import_documents",
             ImportDocumentsRequest(project_id="proj-1", paths=["/tmp/04.png"], document_type="manga"),
         ) in work_service.calls
-        assert view.import_summary_label.text() == "No file or folder selected"
+        assert view.viewmodel.import_summary == "No file or folder selected"
     finally:
         view.cleanup()
 

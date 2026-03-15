@@ -4,11 +4,9 @@ from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
-    QComboBox,
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
-    QLabel,
     QMessageBox,
     QPushButton,
     QStackedWidget,
@@ -17,7 +15,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from superqt import QElidingLabel
 
 from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.application.contracts.common import (
@@ -137,7 +134,12 @@ class WorkView(QWidget):
         self._row_states: list[WorkDocumentRow] = []
         self._document_view: DocumentWorkspaceView | None = None
         self._selected_import_paths: list[str] = []
+        self._import_options: list[tuple[str, str]] = []
+        self._selected_import_type: str | None = None
+        self._import_summary = ""
+        self._import_message = ""
         self._import_message_is_error = False
+        self._can_import = False
         self.viewmodel = WorkHomeViewModel(self)
         self._event_bridge = QtApplicationEventBridge(events, parent=self)
         self._event_bridge.workboard_invalidated.connect(self._on_workboard_invalidated)
@@ -158,7 +160,6 @@ class WorkView(QWidget):
             parent=self.home_page,
         )
         home_layout.addWidget(self.chrome_host)
-        self._init_home_compatibility_controls()
         self._connect_qml_signals()
 
         self.rows_table = QTableWidget(0, 8)
@@ -224,30 +225,8 @@ class WorkView(QWidget):
 
         self.stack.addWidget(self.home_page)
         layout.addWidget(self.stack)
+        self._sync_import_chrome_state()
         self._schedule_chrome_resize()
-
-    def _init_home_compatibility_controls(self) -> None:
-        self.select_files_button = QPushButton(self.tr("Select Files"), self.home_page)
-        self.select_files_button.clicked.connect(self._select_files)
-        self.select_files_button.hide()
-        self.select_folder_button = QPushButton(self.tr("Select Folder"), self.home_page)
-        self.select_folder_button.clicked.connect(self._select_folder)
-        self.select_folder_button.hide()
-        self.import_type_combo = QComboBox(self.home_page)
-        self.import_type_combo.setEnabled(False)
-        self.import_type_combo.currentIndexChanged.connect(self._on_import_type_changed)
-        self.import_type_combo.hide()
-        self.import_button = QPushButton(self.tr("Import"), self.home_page)
-        self.import_button.setEnabled(False)
-        self.import_button.clicked.connect(self._run_import)
-        self.import_button.hide()
-        self.import_summary_label = QElidingLabel(self.tr("No file or folder selected"), self.home_page)
-        self.import_summary_label.setElideMode(Qt.TextElideMode.ElideMiddle)
-        self.import_summary_label.setToolTip(self.import_summary_label.text())
-        self.import_summary_label.hide()
-        self.import_message_label = QLabel(self.home_page)
-        self.import_message_label.setWordWrap(True)
-        self.import_message_label.hide()
 
     def refresh(self) -> None:
         self._apply_state(self._work_service.get_workboard(self._project_id))
@@ -272,15 +251,8 @@ class WorkView(QWidget):
         super().changeEvent(event)
 
     def retranslateUi(self) -> None:
-        self.select_files_button.setText(self.tr("Select Files"))
-        self.select_folder_button.setText(self.tr("Select Folder"))
-        self.import_button.setText(self.tr("Import"))
-        self.import_summary_label.setText(
-            self.tr("No file or folder selected")
-            if not self._selected_import_paths
-            else self.import_summary_label.text()
-        )
-        self.import_summary_label.setToolTip(self.import_summary_label.text())
+        if not self._selected_import_paths:
+            self._import_summary = self._default_import_summary()
         self.rows_table.setHorizontalHeaderLabels(
             [
                 self.tr("#"),
@@ -410,23 +382,19 @@ class WorkView(QWidget):
         state = self._work_service.inspect_import_paths(
             InspectImportPathsRequest(project_id=self._project_id, paths=paths)
         )
-        self.import_type_combo.clear()
-        for option in state.available_types:
-            self.import_type_combo.addItem(option.label, option.document_type)
-        self.import_type_combo.setEnabled(bool(state.available_types))
-        self.import_button.setEnabled(bool(state.available_types))
-        self.import_summary_label.setText(state.summary or self.tr("No file or folder selected"))
-        self.import_summary_label.setToolTip(self.import_summary_label.text())
+        self._import_options = [(option.document_type, option.label) for option in state.available_types]
+        self._selected_import_type = self._import_options[0][0] if self._import_options else None
+        self._can_import = bool(self._import_options)
+        self._import_summary = state.summary or self._default_import_summary()
         if state.error_message:
             self._set_import_message(state.error_message, is_error=True)
         else:
             self._set_import_message("", is_error=False)
-        self._sync_import_chrome_state()
 
     def _run_import(self) -> None:
         if not self._selected_import_paths:
             return
-        document_type = self.import_type_combo.currentData()
+        document_type = self._selected_import_type
         try:
             result = self._work_service.import_documents(
                 ImportDocumentsRequest(
@@ -446,28 +414,17 @@ class WorkView(QWidget):
             is_error=False,
         )
         self._selected_import_paths = []
-        self.import_type_combo.clear()
-        self.import_type_combo.setEnabled(False)
-        self.import_button.setEnabled(False)
-        self.import_summary_label.setText(self.tr("No file or folder selected"))
-        self.import_summary_label.setToolTip(self.import_summary_label.text())
+        self._import_options = []
+        self._selected_import_type = None
+        self._can_import = False
+        self._import_summary = self._default_import_summary()
         self._sync_import_chrome_state()
         self.refresh()
 
     def _set_import_message(self, text: str, *, is_error: bool) -> None:
         self._import_message_is_error = is_error
-        if not text:
-            self.import_message_label.clear()
-            self._sync_import_chrome_state()
-            return
-        color = "#b42318" if is_error else "#027a48"
-        self.import_message_label.setStyleSheet(f"QLabel {{ color: {color}; font-weight: 600; }}")
-        self.import_message_label.setText(text)
+        self._import_message = text
         self._sync_import_chrome_state()
-
-    def _on_import_type_changed(self, _index: int) -> None:
-        selected = self.import_type_combo.currentData()
-        self.viewmodel.select_import_type(str(selected) if selected else "")
 
     def _connect_qml_signals(self) -> None:
         root = self.chrome_host.rootObject()
@@ -480,27 +437,24 @@ class WorkView(QWidget):
         root.importTypeSelected.connect(self._on_import_type_selected)
 
     def _on_import_type_selected(self, document_type: str) -> None:
-        index = self.import_type_combo.findData(document_type)
-        if index < 0:
+        if document_type not in {option[0] for option in self._import_options}:
             return
-        self.import_type_combo.setCurrentIndex(index)
+        self._selected_import_type = document_type
         self._sync_import_chrome_state()
 
     def _sync_import_chrome_state(self) -> None:
-        options = [
-            (str(self.import_type_combo.itemData(index) or ""), self.import_type_combo.itemText(index))
-            for index in range(self.import_type_combo.count())
-        ]
-        selected = self.import_type_combo.currentData()
         self.viewmodel.set_import_state(
-            summary=self.import_summary_label.text().strip() or self.tr("No file or folder selected"),
-            message=self.import_message_label.text().strip(),
+            summary=self._import_summary.strip() or self._default_import_summary(),
+            message=self._import_message.strip(),
             is_error=self._import_message_is_error,
-            can_import=self.import_button.isEnabled(),
-            options=options,
-            selected_import_type=str(selected) if selected else None,
+            can_import=self._can_import,
+            options=self._import_options,
+            selected_import_type=self._selected_import_type,
         )
         self._schedule_chrome_resize()
+
+    def _default_import_summary(self) -> str:
+        return self.tr("No file or folder selected")
 
     def _schedule_chrome_resize(self) -> None:
         self._sync_chrome_height()
