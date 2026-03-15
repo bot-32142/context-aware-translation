@@ -262,10 +262,7 @@ class FakeTermsService:
         rows_by_key = {row.term_key: row for row in request.rows}
         updated_state = (self.document_state or self.project_state).model_copy(
             update={
-                "rows": [
-                    rows_by_key.get(row.term_key, row)
-                    for row in (self.document_state or self.project_state).rows
-                ]
+                "rows": [rows_by_key.get(row.term_key, row) for row in (self.document_state or self.project_state).rows]
             }
         )
         if self.document_state is not None:
@@ -369,7 +366,9 @@ class FakeDocumentService:
     def get_terms(self, project_id: str, document_id: int) -> TermsTableState:
         raise NotImplementedError
 
-    def get_translation(self, project_id: str, document_id: int, *, enable_polish: bool = True) -> DocumentTranslationState:
+    def get_translation(
+        self, project_id: str, document_id: int, *, enable_polish: bool = True
+    ) -> DocumentTranslationState:
         self.calls.append(("get_translation", (project_id, document_id, enable_polish)))
         if self.translation is None:
             raise NotImplementedError

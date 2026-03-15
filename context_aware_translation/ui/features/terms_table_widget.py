@@ -283,7 +283,9 @@ class TermsTableWidget(QWidget):
             ]
         )
         for column, tooltip in _HEADER_TOOLTIPS.items():
-            self.table_model.setHeaderData(column, Qt.Orientation.Horizontal, self.tr(tooltip), Qt.ItemDataRole.ToolTipRole)
+            self.table_model.setHeaderData(
+                column, Qt.Orientation.Horizontal, self.tr(tooltip), Qt.ItemDataRole.ToolTipRole
+            )
         if self._state is not None:
             self.scope_label.setText(self._scope_text(self._state))
             self.summary_label.setText(self._summary_text(self._state.rows))

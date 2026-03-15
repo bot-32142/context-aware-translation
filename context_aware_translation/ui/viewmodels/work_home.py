@@ -5,8 +5,7 @@ from PySide6.QtCore import Property, QCoreApplication, Signal
 from context_aware_translation.ui.viewmodels.base import ViewModelBase
 
 _TIP_TEXT = (
-    "Import documents here, review project-wide progress, and open the next "
-    "document tool directly from the table."
+    "Import documents here, review project-wide progress, and open the next document tool directly from the table."
 )
 
 

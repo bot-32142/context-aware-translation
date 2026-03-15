@@ -505,6 +505,7 @@ def _make_window():
         raise
     return window, context, patch_stack
 
+
 def test_main_window_routes_projects_into_project_shell():
     window, context, patch_stack = _make_window()
     try:
@@ -763,7 +764,9 @@ def test_main_window_queue_close_after_multiple_deletes_clears_project_modal_sta
         def _apply_action(request):  # noqa: ANN001
             context.services.queue.calls.append(("apply_action", request))
             context.services.queue.state = QueueState(
-                items=[item for item in context.services.queue.state.items if item.queue_item_id != request.queue_item_id]
+                items=[
+                    item for item in context.services.queue.state.items if item.queue_item_id != request.queue_item_id
+                ]
             )
             return AcceptedCommand(command_name="delete")
 

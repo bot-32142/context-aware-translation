@@ -78,7 +78,10 @@ def test_workflow_profile_editor_uses_scrollable_dialog_layout():
     assert dialog.routes_table.cellWidget(0, 3) is not None
     route_row = dialog._rows[0]
     assert route_row.connection_combo is not None
-    assert route_row.connection_combo.sizePolicy().horizontalPolicy() == route_row.connection_combo.sizePolicy().Policy.Expanding
+    assert (
+        route_row.connection_combo.sizePolicy().horizontalPolicy()
+        == route_row.connection_combo.sizePolicy().Policy.Expanding
+    )
     assert route_row.model_edit.sizePolicy().horizontalPolicy() == route_row.model_edit.sizePolicy().Policy.Expanding
     assert route_row.connection_combo.minimumHeight() >= route_row.connection_combo.sizeHint().height()
     assert route_row.model_edit.minimumHeight() >= route_row.model_edit.sizeHint().height()

@@ -48,9 +48,7 @@ def _qapp():
     yield app
 
 
-def _make_state(
-    *, can_review: bool = False, can_export: bool = False, document_scope: bool = False
-) -> TermsTableState:
+def _make_state(*, can_review: bool = False, can_export: bool = False, document_scope: bool = False) -> TermsTableState:
     return TermsTableState(
         scope=TermsScope(
             kind=TermsScopeKind.DOCUMENT if document_scope else TermsScopeKind.PROJECT,
@@ -213,7 +211,10 @@ def test_terms_view_export_warns_and_mentions_background_queue():
             view.export_button.click()
 
         question.assert_called_once()
-        assert ("export_terms", ExportTermsRequest(project_id="proj-1", output_path="/tmp/out.json", document_id=None)) in service.calls
+        assert (
+            "export_terms",
+            ExportTermsRequest(project_id="proj-1", output_path="/tmp/out.json", document_id=None),
+        ) in service.calls
         show_message.assert_called_once()
         severity, text = show_message.call_args.args
         assert severity is UserMessageSeverity.INFO
@@ -362,9 +363,7 @@ def test_terms_view_routes_edits_and_toolbar_actions_through_service():
             reviewed_item = view.table_model.item(0, 6)
             reviewed_item.setCheckState(Qt.CheckState.Checked)
             bulk_proxy_row = next(
-                row
-                for row in range(view.proxy_model.rowCount())
-                if view.proxy_model.index(row, 0).data() == "ニカ"
+                row for row in range(view.proxy_model.rowCount()) if view.proxy_model.index(row, 0).data() == "ニカ"
             )
             view.table_view.selectRow(bulk_proxy_row)
             assert view.edit_selected_action.isEnabled()
@@ -384,9 +383,7 @@ def test_terms_view_routes_edits_and_toolbar_actions_through_service():
         assert any(payload.rows[0].ignored is True for payload in update_requests)
         assert any(payload.rows[0].reviewed is True for payload in update_requests)
         nika_source_row = next(
-            row
-            for row in range(view.table_model.rowCount())
-            if view.table_model.item(row, 0).text() == "ニカ"
+            row for row in range(view.table_model.rowCount()) if view.table_model.item(row, 0).text() == "ニカ"
         )
         assert view.table_model.item(nika_source_row, 6).checkState() == Qt.CheckState.Checked
     finally:
@@ -501,12 +498,7 @@ def test_terms_view_sorting_and_live_updates_follow_legacy_glossary_behavior():
         service.calls.append(("update_term_rows", request))
         updates_by_key = {row.term_key: row for row in request.rows}
         service.project_state = service.project_state.model_copy(
-            update={
-                "rows": [
-                    updates_by_key.get(row.term_key, row)
-                    for row in service.project_state.rows
-                ]
-            }
+            update={"rows": [updates_by_key.get(row.term_key, row) for row in service.project_state.rows]}
         )
         return None
 

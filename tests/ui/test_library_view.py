@@ -40,7 +40,12 @@ def _projects_service() -> FakeProjectsService:
         progress_summary="25.0% (5/20)",
         modified_at=1_700_000_000.0,
     )
-    return FakeProjectsService(list_state=ProjectsScreenState(items=[summary]), project_summary=summary, create_result=summary, update_result=summary)
+    return FakeProjectsService(
+        list_state=ProjectsScreenState(items=[summary]),
+        project_summary=summary,
+        create_result=summary,
+        update_result=summary,
+    )
 
 
 def test_library_view_renders_projects_from_service() -> None:
@@ -64,6 +69,7 @@ def test_library_view_runs_create_edit_and_delete_through_service() -> None:
     service = _projects_service()
     view = LibraryView(service)
     try:
+
         class _FakeCreateDialog:
             def __init__(self, *args, **kwargs):  # noqa: ANN002, ANN003
                 pass
@@ -83,11 +89,15 @@ def test_library_view_runs_create_edit_and_delete_through_service() -> None:
             emitted: list[tuple[str, str]] = []
             view.book_opened.connect(lambda project_id, name: emitted.append((project_id, name)))
             view._on_new_project()
-        assert any(name == "create_project" and payload == CreateProjectRequest(name="New Project", target_language="Chinese") for name, payload in service.calls)
+        assert any(
+            name == "create_project" and payload == CreateProjectRequest(name="New Project", target_language="Chinese")
+            for name, payload in service.calls
+        )
         assert emitted == [("project-1", "One Piece")]
 
         view.table_view.selectRow(0)
         QApplication.processEvents()
+
         class _FakeEditDialog:
             def __init__(self, *args, **kwargs):  # noqa: ANN002, ANN003
                 pass
@@ -105,10 +115,17 @@ def test_library_view_runs_create_edit_and_delete_through_service() -> None:
 
         with patch("context_aware_translation.ui.features.library_view._ProjectDialog", _FakeEditDialog):
             view._on_edit_project()
-        assert any(name == "update_project" and payload == UpdateProjectRequest(project_id="project-1", name="Edited Project", target_language="Japanese") for name, payload in service.calls)
+        assert any(
+            name == "update_project"
+            and payload
+            == UpdateProjectRequest(project_id="project-1", name="Edited Project", target_language="Japanese")
+            for name, payload in service.calls
+        )
 
-        with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes), \
-             patch.object(QMessageBox, "information"):
+        with (
+            patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes),
+            patch.object(QMessageBox, "information"),
+        ):
             view.table_view.selectRow(0)
             QApplication.processEvents()
             view._on_delete_project()

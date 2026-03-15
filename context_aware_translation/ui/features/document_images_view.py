@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from shiboken6 import isValid
 
 from context_aware_translation.application.contracts.common import NavigationTargetKind
 from context_aware_translation.application.contracts.document import (
@@ -27,6 +26,7 @@ from context_aware_translation.application.contracts.document import (
 )
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.services.document import DocumentService
+from context_aware_translation.ui.chrome_sizing import sync_qml_host_height
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.viewmodels.document_images_pane import DocumentImagesPaneViewModel
@@ -609,28 +609,17 @@ class DocumentImagesView(QWidget):
         self._chrome_resize_timer.start(0)
 
     def _sync_chrome_height(self) -> None:
-        if not isValid(self.chrome_host):
-            return
-        root = self.chrome_host.rootObject()
-        if root is None:
-            return
-        implicit_height = root.property("implicitHeight")
-        try:
-            chrome_height = max(int(float(implicit_height)), 0)
-        except (TypeError, ValueError):
-            return
-        if chrome_height <= 0:
-            return
-        self.chrome_host.setMinimumHeight(chrome_height)
-        self.chrome_host.setMaximumHeight(chrome_height)
-        self.chrome_host.updateGeometry()
+        sync_qml_host_height(self.chrome_host)
 
     def _refit_viewers(self) -> None:
         if not self.isVisible():
             return
         if self.image_viewer.pixmap_item is not None:
             self.image_viewer.fit_to_window()
-        if self.right_stack.currentWidget() is self.reembedded_viewer and self.reembedded_viewer.pixmap_item is not None:
+        if (
+            self.right_stack.currentWidget() is self.reembedded_viewer
+            and self.reembedded_viewer.pixmap_item is not None
+        ):
             self.reembedded_viewer.fit_to_window()
 
     def _connect_qml_signals(self) -> None:

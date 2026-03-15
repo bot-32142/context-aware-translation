@@ -84,7 +84,9 @@ def test_import_worker_late_interrupt_still_emits_success(monkeypatch: pytest.Mo
     fake_repo = MagicMock()
     fake_repo.list_documents.side_effect = [[], [{"document_id": 1}]]
 
-    monkeypatch.setattr("context_aware_translation.adapters.qt.workers.import_worker.SQLiteBookDB", lambda *_a, **_k: fake_db)
+    monkeypatch.setattr(
+        "context_aware_translation.adapters.qt.workers.import_worker.SQLiteBookDB", lambda *_a, **_k: fake_db
+    )
     monkeypatch.setattr(
         "context_aware_translation.adapters.qt.workers.import_worker.DocumentRepository",
         lambda *_a, **_k: fake_repo,
@@ -134,7 +136,9 @@ def test_import_worker_multiple_files_imports_as_staged_folder(monkeypatch: pyte
     fake_repo = MagicMock()
     fake_repo.list_documents.side_effect = [[], [{"document_id": 7}]]
 
-    monkeypatch.setattr("context_aware_translation.adapters.qt.workers.import_worker.SQLiteBookDB", lambda *_a, **_k: fake_db)
+    monkeypatch.setattr(
+        "context_aware_translation.adapters.qt.workers.import_worker.SQLiteBookDB", lambda *_a, **_k: fake_db
+    )
     monkeypatch.setattr(
         "context_aware_translation.adapters.qt.workers.import_worker.DocumentRepository",
         lambda *_a, **_k: fake_repo,
@@ -230,7 +234,9 @@ def test_import_worker_does_not_emit_success_when_import_fails(monkeypatch: pyte
     fake_repo = MagicMock()
     fake_repo.list_documents.return_value = []
 
-    monkeypatch.setattr("context_aware_translation.adapters.qt.workers.import_worker.SQLiteBookDB", lambda *_a, **_k: fake_db)
+    monkeypatch.setattr(
+        "context_aware_translation.adapters.qt.workers.import_worker.SQLiteBookDB", lambda *_a, **_k: fake_db
+    )
     monkeypatch.setattr(
         "context_aware_translation.adapters.qt.workers.import_worker.DocumentRepository",
         lambda *_a, **_k: fake_repo,
@@ -276,7 +282,9 @@ def test_import_worker_forwards_progress_callback_when_supported(monkeypatch: py
     fake_repo = MagicMock()
     fake_repo.list_documents.side_effect = [[], [{"document_id": 1}]]
 
-    monkeypatch.setattr("context_aware_translation.adapters.qt.workers.import_worker.SQLiteBookDB", lambda *_a, **_k: fake_db)
+    monkeypatch.setattr(
+        "context_aware_translation.adapters.qt.workers.import_worker.SQLiteBookDB", lambda *_a, **_k: fake_db
+    )
     monkeypatch.setattr(
         "context_aware_translation.adapters.qt.workers.import_worker.DocumentRepository",
         lambda *_a, **_k: fake_repo,

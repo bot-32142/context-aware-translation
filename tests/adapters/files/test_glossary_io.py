@@ -460,6 +460,7 @@ class TestGuards:
 
         from context_aware_translation.core.context_manager import TranslationContextManager
         from context_aware_translation.core.context_tree import ContextTree
+
         # Create a term with both imported and chunk descriptions
         term = _make_term(
             "hero",

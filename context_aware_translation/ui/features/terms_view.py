@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from shiboken6 import isValid
 
 from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.application.contracts.common import UserMessageSeverity
@@ -36,6 +35,7 @@ from context_aware_translation.application.events import (
     TermsInvalidatedEvent,
 )
 from context_aware_translation.application.services.terms import TermsService
+from context_aware_translation.ui.chrome_sizing import sync_qml_host_height
 from context_aware_translation.ui.features.terms_table_widget import TermsTableWidget
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
@@ -260,9 +260,7 @@ class TermsView(QWidget):
         self.export_button.setEnabled(toolbar.can_export)
 
         self.build_button.setToolTip(
-            toolbar.build_blocker.message
-            if toolbar.build_blocker
-            else self.tr("Extract terms from this document.")
+            toolbar.build_blocker.message if toolbar.build_blocker else self.tr("Extract terms from this document.")
         )
         self.translate_button.setToolTip(
             toolbar.translate_pending_blocker.message
@@ -322,27 +320,15 @@ class TermsView(QWidget):
         QTimer.singleShot(0, self._sync_chrome_height)
 
     def _sync_chrome_height(self) -> None:
-        if self.chrome_host is None or not isValid(self.chrome_host):
-            return
-        root = self.chrome_host.rootObject()
-        if root is None:
-            return
-        implicit_height = root.property("implicitHeight")
-        try:
-            chrome_height = max(int(float(implicit_height)), 0)
-        except (TypeError, ValueError):
-            return
-        if chrome_height <= 0:
-            return
-        self.chrome_host.setMinimumHeight(chrome_height)
-        self.chrome_host.setMaximumHeight(chrome_height)
-        self.chrome_host.updateGeometry()
+        sync_qml_host_height(self.chrome_host)
 
     def _on_build_terms(self) -> None:
         if self.document_id is None:
             return
         self._run_command(
-            lambda: self._service.build_terms(BuildTermsRequest(project_id=self.project_id, document_id=self.document_id)),
+            lambda: self._service.build_terms(
+                BuildTermsRequest(project_id=self.project_id, document_id=self.document_id)
+            ),
             title=self.tr("Build Terms"),
             success_message=self.tr("Terms extraction queued for this document."),
         )
@@ -378,7 +364,9 @@ class TermsView(QWidget):
         ):
             return
         try:
-            state = self._service.filter_noise(FilterNoiseRequest(project_id=self.project_id, document_id=self.document_id))
+            state = self._service.filter_noise(
+                FilterNoiseRequest(project_id=self.project_id, document_id=self.document_id)
+            )
         except BlockedOperationError as exc:
             self._show_application_error(self.tr("Filter Rare Terms"), exc)
             return
@@ -388,7 +376,9 @@ class TermsView(QWidget):
         self._apply_state(state)
         self._show_message(
             UserMessageSeverity.SUCCESS,
-            self.tr("Rare document terms were filtered.") if self._is_document_scope else self.tr("Rare terms were filtered."),
+            self.tr("Rare document terms were filtered.")
+            if self._is_document_scope
+            else self.tr("Rare terms were filtered."),
         )
 
     def _on_import_terms(self) -> None:
@@ -470,7 +460,9 @@ class TermsView(QWidget):
         except ApplicationError as exc:
             self._show_application_error(title, exc)
             return
-        message = accepted.message.text if accepted.message is not None else (success_message or self.tr("Task queued."))
+        message = (
+            accepted.message.text if accepted.message is not None else (success_message or self.tr("Task queued."))
+        )
         severity = accepted.message.severity if accepted.message is not None else UserMessageSeverity.INFO
         self._show_message(severity, message)
         self.refresh()
@@ -594,10 +586,7 @@ class TermsView(QWidget):
             clipboard.setText(text)
 
     def _show_application_error(self, title: str, exc: ApplicationError) -> None:
-        if isinstance(exc, BlockedOperationError):
-            QMessageBox.warning(self, title, exc.payload.message)
-        else:
-            QMessageBox.warning(self, title, exc.payload.message)
+        QMessageBox.warning(self, title, exc.payload.message)
         self._show_message(UserMessageSeverity.ERROR, exc.payload.message, show_dialog=False)
 
     def _show_message(self, severity: UserMessageSeverity, text: str, *, show_dialog: bool = False) -> None:
@@ -606,21 +595,18 @@ class TermsView(QWidget):
             QMessageBox.information(self, self.tr("Terms"), text)
 
     def _persist_local_terms_write(self, action, *, title: str) -> bool:  # noqa: ANN001
-        if self._event_bridge is not None:
+        tracks_invalidation = self._event_bridge is not None
+        if tracks_invalidation:
             self._pending_local_terms_invalidations += 1
         try:
             action()
-        except BlockedOperationError as exc:
-            self._pending_local_terms_invalidations = max(0, self._pending_local_terms_invalidations - 1)
-            self._show_application_error(title, exc)
-            self.refresh()
-            return False
         except ApplicationError as exc:
-            self._pending_local_terms_invalidations = max(0, self._pending_local_terms_invalidations - 1)
             self._show_application_error(title, exc)
             self.refresh()
             return False
-        self._pending_local_terms_invalidations = max(0, self._pending_local_terms_invalidations - 1)
+        finally:
+            if tracks_invalidation:
+                self._pending_local_terms_invalidations = max(0, self._pending_local_terms_invalidations - 1)
         if self._state is not None:
             self._state = self._state.model_copy(update={"rows": self.table_panel.rows_snapshot()})
         self._update_bulk_button_state()

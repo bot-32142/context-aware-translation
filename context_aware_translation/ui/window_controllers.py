@@ -155,7 +155,11 @@ class ProjectSessionManager:
         self.view_registry[name] = widget
         if name == "projects":
             self._app_shell.set_projects_widget(widget)
-        elif name.startswith("project_") and self.current_project_id is not None and self.current_project_name is not None:
+        elif (
+            name.startswith("project_")
+            and self.current_project_id is not None
+            and self.current_project_name is not None
+        ):
             self._app_shell.set_project_widget(name, widget)
 
     def switch_view(self, view_name: str) -> bool:
@@ -279,7 +283,9 @@ class ProjectSessionManager:
         work_view.open_app_setup_requested.connect(self._open_app_setup_callback)
         work_view.open_project_setup_requested.connect(lambda: self.open_project_settings(project_shell))
         project_settings_pane.open_app_setup_requested.connect(self._open_app_setup_callback)
-        project_settings_pane.save_completed.connect(lambda _project_id: self._project_setup_saved_callback(project_shell))
+        project_settings_pane.save_completed.connect(
+            lambda _project_id: self._project_setup_saved_callback(project_shell)
+        )
         self.project_settings_dialog = project_settings_dialog
         return project_shell
 

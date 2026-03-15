@@ -5,8 +5,7 @@ from PySide6.QtCore import Property, QCoreApplication, Signal
 from context_aware_translation.ui.viewmodels.base import ViewModelBase
 
 _PROJECT_SETTINGS_SUBTITLE = (
-    "Choose a shared workflow profile, or select Custom profile to edit "
-    "connection and model choices for this project."
+    "Choose a shared workflow profile, or select Custom profile to edit connection and model choices for this project."
 )
 
 

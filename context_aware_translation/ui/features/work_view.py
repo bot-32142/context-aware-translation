@@ -46,6 +46,7 @@ from context_aware_translation.application.events import (
 from context_aware_translation.application.services.document import DocumentService
 from context_aware_translation.application.services.terms import TermsService
 from context_aware_translation.application.services.work import WorkService
+from context_aware_translation.ui.chrome_sizing import sync_qml_host_height
 from context_aware_translation.ui.features.document_workspace_view import DocumentWorkspaceView, WorkExportDialog
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
@@ -549,19 +550,7 @@ class WorkView(QWidget):
         QTimer.singleShot(0, self._sync_chrome_height)
 
     def _sync_chrome_height(self) -> None:
-        root = self.chrome_host.rootObject()
-        if root is None:
-            return
-        implicit_height = root.property("implicitHeight")
-        try:
-            chrome_height = max(int(float(implicit_height)), 0)
-        except (TypeError, ValueError):
-            return
-        if chrome_height <= 0:
-            return
-        self.chrome_host.setMinimumHeight(chrome_height)
-        self.chrome_host.setMaximumHeight(chrome_height)
-        self.chrome_host.updateGeometry()
+        sync_qml_host_height(self.chrome_host)
 
     def _selected_row_state(self) -> WorkDocumentRow | None:
         row = self.rows_table.currentRow()

@@ -1513,7 +1513,9 @@ class DefaultDocumentService:
             )
         if batch and document_type == "manga":
             return False, None
-        task_type = "batch_translation" if batch else ("translation_manga" if document_type == "manga" else "translation_text")
+        task_type = (
+            "batch_translation" if batch else ("translation_manga" if document_type == "manga" else "translation_text")
+        )
         decision = self._runtime.task_engine.preflight(
             task_type,
             project_id,

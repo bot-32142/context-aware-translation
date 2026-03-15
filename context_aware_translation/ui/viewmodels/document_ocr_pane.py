@@ -48,9 +48,11 @@ class DocumentOcrPaneViewModel(ViewModelBase):
 
     @Property(str, notify=chrome_state_changed)
     def page_label(self) -> str:
-        return QCoreApplication.translate("DocumentOCRTab", "Page %1 of %2").replace(
-            "%1", str(self._state.page_number)
-        ).replace("%2", str(self._state.page_count))
+        return (
+            QCoreApplication.translate("DocumentOCRTab", "Page %1 of %2")
+            .replace("%1", str(self._state.page_number))
+            .replace("%2", str(self._state.page_count))
+        )
 
     @Property(str, notify=chrome_state_changed)
     def page_status_text(self) -> str:

@@ -5,8 +5,7 @@ from PySide6.QtCore import Property, QCoreApplication, Signal
 from context_aware_translation.ui.viewmodels.base import ViewModelBase
 
 _TIP_TEXT = (
-    "Image actions are explicit. Review one image, reinsert pending images, "
-    "or rerun everything for this document."
+    "Image actions are explicit. Review one image, reinsert pending images, or rerun everything for this document."
 )
 
 
@@ -188,7 +187,9 @@ class DocumentImagesPaneViewModel(ViewModelBase):
 
     @Property(str, notify=labels_changed)
     def empty_text(self) -> str:
-        return QCoreApplication.translate("DocumentImagesView", "No reembeddable images are available for this document.")
+        return QCoreApplication.translate(
+            "DocumentImagesView", "No reembeddable images are available for this document."
+        )
 
     def apply_state(
         self,

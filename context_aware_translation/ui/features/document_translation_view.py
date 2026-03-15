@@ -85,6 +85,7 @@ class _TranslationUnitListDelegate(QStyledItemDelegate):
         style = item_option.widget.style() if item_option.widget is not None else QApplication.style()
         style.drawControl(QStyle.ControlElement.CE_ItemViewItem, item_option, painter, item_option.widget)
 
+
 class DocumentTranslationView(QWidget):
     def __init__(
         self,

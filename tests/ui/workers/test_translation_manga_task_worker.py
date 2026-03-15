@@ -41,7 +41,9 @@ def test_worker_run_sets_running_status():
     fake_session.__exit__ = MagicMock(return_value=False)
 
     with (
-        patch("context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession"
+        ) as mock_session_cls,
         patch(
             "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.translation_ops.translate",
             new=_async_none,
@@ -62,7 +64,9 @@ def test_worker_run_sets_completed_status():
     fake_session.__exit__ = MagicMock(return_value=False)
 
     with (
-        patch("context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession"
+        ) as mock_session_cls,
         patch(
             "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.translation_ops.translate",
             new=_async_none,
@@ -84,7 +88,9 @@ def test_worker_run_does_not_auto_enqueue_reembedding():
     fake_session.__exit__ = MagicMock(return_value=False)
 
     with (
-        patch("context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession"
+        ) as mock_session_cls,
         patch(
             "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.translation_ops.translate",
             new=_async_none,
@@ -108,7 +114,9 @@ def test_worker_run_uses_snapshot_when_provided():
     fake_session.__exit__ = MagicMock(return_value=False)
 
     with (
-        patch("context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession"
+        ) as mock_session_cls,
         patch(
             "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.translation_ops.translate",
             new=_async_none,
@@ -130,7 +138,9 @@ def test_worker_run_uses_from_book_when_no_snapshot():
     fake_session.__exit__ = MagicMock(return_value=False)
 
     with (
-        patch("context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession"
+        ) as mock_session_cls,
         patch(
             "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.translation_ops.translate",
             new=_async_none,
@@ -156,7 +166,9 @@ def test_worker_run_passes_document_ids():
         calls.append((args, kwargs))
 
     with (
-        patch("context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession"
+        ) as mock_session_cls,
         patch(
             "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.translation_ops.translate",
             new=_translate,
@@ -182,7 +194,9 @@ def test_worker_run_passes_source_ids():
         calls.append((args, kwargs))
 
     with (
-        patch("context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession"
+        ) as mock_session_cls,
         patch(
             "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.translation_ops.translate",
             new=_translate,
@@ -204,7 +218,9 @@ def test_worker_run_sets_failed_status_on_exception():
     fake_session.__exit__ = MagicMock(return_value=False)
 
     with (
-        patch("context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession"
+        ) as mock_session_cls,
         patch(
             "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.translation_ops.translate",
             new=_raise_runtime_error,
@@ -230,7 +246,9 @@ def test_worker_run_sets_cancelled_status_on_cancel():
     fake_session.__exit__ = MagicMock(return_value=False)
 
     with (
-        patch("context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession") as mock_session_cls,
+        patch(
+            "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.WorkflowSession"
+        ) as mock_session_cls,
         patch(
             "context_aware_translation.adapters.qt.workers.translation_manga_task_worker.translation_ops.translate",
             new=_raise_cancelled,

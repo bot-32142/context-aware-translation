@@ -93,6 +93,7 @@ def _provider_defaults(provider: ProviderKind) -> tuple[str, str | None, str | N
     base_url, default_model = _PROVIDER_DEFAULTS[provider]
     return _PROVIDER_LABELS[provider], (base_url or None), (default_model or None)
 
+
 @dataclass(frozen=True)
 class _SpinFieldSpec:
     label: str
@@ -471,7 +472,9 @@ class SetupWizardDialog(QDialog):
         self.resize(780, 680)
         self._init_ui()
         self._available_providers = [
-            provider for provider in initial_state.available_providers if provider.provider is not ProviderKind.OPENAI_COMPATIBLE
+            provider
+            for provider in initial_state.available_providers
+            if provider.provider is not ProviderKind.OPENAI_COMPATIBLE
         ]
         self._build_page()
         self._update_buttons()

@@ -12,6 +12,7 @@ from context_aware_translation.application.contracts.project_setup import Projec
 from context_aware_translation.application.errors import ApplicationError, BlockedOperationError
 from context_aware_translation.application.events import ApplicationEventSubscriber, SetupInvalidatedEvent
 from context_aware_translation.application.services.project_setup import ProjectSetupService
+from context_aware_translation.ui.chrome_sizing import sync_qml_host_height
 from context_aware_translation.ui.features.workflow_profile_editor import (
     ADVANCED_STEP_IDS,
     ConnectionChoice,
@@ -44,7 +45,6 @@ class ProjectSettingsPane(QWidget):
         self._service = service
         self._state: ProjectSetupState | None = None
         self._selected_profile_id: str | None = None
-        self._pending_profile_id: str | None = None
         self._profile_option_values: list[str] = []
         self._profile_option_signature: tuple[tuple[str, str], ...] = ()
         self._draft_project_profile: WorkflowProfileDetail | None = None
@@ -83,7 +83,9 @@ class ProjectSettingsPane(QWidget):
         self.profile_combo.setMinimumHeight(40)
         self.profile_combo.setMaxVisibleItems(10)
         self.profile_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
-        self.profile_combo.view().setMinimumWidth(self.profile_combo.minimumWidth())
+        profile_popup = self.profile_combo.view()
+        profile_popup.setMinimumWidth(self.profile_combo.minimumWidth())
+        profile_popup.clicked.connect(self._on_profile_popup_clicked)
         self.profile_combo.currentIndexChanged.connect(self._on_profile_index_requested)
         profile_layout.addWidget(self.profile_combo)
         self.profile_detail_label = QLabel(self.profile_section)
@@ -158,8 +160,6 @@ class ProjectSettingsPane(QWidget):
             return state.selected_shared_profile_id
         if state.shared_profiles:
             return state.shared_profiles[0].profile_id
-        if state.project_profile is not None:
-            return _CUSTOM_PROFILE_ID
         return None
 
     def _connect_qml_signals(self) -> None:
@@ -172,14 +172,14 @@ class ProjectSettingsPane(QWidget):
     def _on_profile_index_requested(self, index: int) -> None:
         if index < 0 or index >= len(self._profile_option_values):
             return
-        self._pending_profile_id = self._profile_option_values[index]
-        QTimer.singleShot(0, self._apply_pending_profile_selection)
+        self._apply_profile_index(index)
 
-    def _apply_pending_profile_selection(self) -> None:
-        profile_id = self._pending_profile_id
-        self._pending_profile_id = None
-        if profile_id is None:
-            return
+    def _on_profile_popup_clicked(self, model_index) -> None:  # noqa: ANN001
+        if model_index.isValid():
+            self.profile_combo.setCurrentIndex(model_index.row())
+
+    def _apply_profile_index(self, index: int) -> None:
+        profile_id = self._profile_option_values[index]
         if profile_id == _CUSTOM_PROFILE_ID:
             self._selected_profile_id = _CUSTOM_PROFILE_ID
             self._ensure_custom_profile()
@@ -229,7 +229,9 @@ class ProjectSettingsPane(QWidget):
             )
             option_values.append(_CUSTOM_PROFILE_ID)
         self._profile_option_values = option_values
-        selected_profile_index = option_values.index(self._selected_profile_id) if self._selected_profile_id in option_values else -1
+        selected_profile_index = (
+            option_values.index(self._selected_profile_id) if self._selected_profile_id in option_values else -1
+        )
         self._sync_profile_selector(options, selected_profile_index)
 
         can_save = False
@@ -302,19 +304,7 @@ class ProjectSettingsPane(QWidget):
         QTimer.singleShot(0, self._sync_chrome_height)
 
     def _sync_chrome_height(self) -> None:
-        root = self.chrome_host.rootObject()
-        if root is None:
-            return
-        implicit_height = root.property("implicitHeight")
-        try:
-            chrome_height = max(int(float(implicit_height)), 0)
-        except (TypeError, ValueError):
-            return
-        if chrome_height <= 0:
-            return
-        self.chrome_host.setMinimumHeight(chrome_height)
-        self.chrome_host.setMaximumHeight(chrome_height)
-        self.chrome_host.updateGeometry()
+        sync_qml_host_height(self.chrome_host)
 
     def _save(self) -> None:
         shared_profile_id = self._selected_shared_profile_id()

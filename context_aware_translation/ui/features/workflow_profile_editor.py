@@ -422,7 +422,9 @@ class WorkflowRoutesEditor(QWidget):
                     row.route.model_copy(
                         update={
                             "connection_label": (
-                                row.connection_label_widget.text().strip() if row.connection_label_widget is not None and has_provider else None
+                                row.connection_label_widget.text().strip()
+                                if row.connection_label_widget is not None and has_provider
+                                else None
                             ),
                             "model": (row.model_edit.text().strip() or None) if has_provider else None,
                             "step_config": dict(row.route.step_config),
@@ -550,7 +552,9 @@ class WorkflowRoutesEditor(QWidget):
         route_row.route = updated_route
         if updated_route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
             if route_row.connection_label_widget is not None:
-                route_row.connection_label_widget.setText(updated_route.connection_label or self.tr("Direct batch config"))
+                route_row.connection_label_widget.setText(
+                    updated_route.connection_label or self.tr("Direct batch config")
+                )
             if updated_route.step_config.get("provider"):
                 route_row.model_edit.setReadOnly(False)
             else:
@@ -609,7 +613,9 @@ class WorkflowRoutesEditor(QWidget):
                 row.row_widget.setFixedHeight(row.row_widget.sizeHint().height())
 
         row_heights = [self.rowHeight(index) for index in range(self.rowCount())]
-        visible_rows = len(row_heights) if self._max_visible_rows is None else min(len(row_heights), self._max_visible_rows)
+        visible_rows = (
+            len(row_heights) if self._max_visible_rows is None else min(len(row_heights), self._max_visible_rows)
+        )
         visible_height = sum(row_heights[:visible_rows])
         if visible_rows > 0:
             visible_height += self._rows_layout.spacing() * (visible_rows - 1)
@@ -647,10 +653,19 @@ class WorkflowRoutesEditor(QWidget):
                 *(max(widget.sizeHint().width(), widget.minimumSizeHint().width()) for widget in widgets),
             )
 
-        step_widgets = [self._header_columns[0], *(row.step_label_widget for row in self.rows if row.step_label_widget is not None)]
-        connection_widgets = [self._header_columns[1], *(self._cell_widgets[index, 1] for index in range(self.rowCount()))]
+        step_widgets = [
+            self._header_columns[0],
+            *(row.step_label_widget for row in self.rows if row.step_label_widget is not None),
+        ]
+        connection_widgets = [
+            self._header_columns[1],
+            *(self._cell_widgets[index, 1] for index in range(self.rowCount())),
+        ]
         model_widgets = [self._header_columns[2], *(self._cell_widgets[index, 2] for index in range(self.rowCount()))]
-        advanced_widgets = [self._header_columns[3], *(self._cell_widgets[index, 3] for index in range(self.rowCount()))]
+        advanced_widgets = [
+            self._header_columns[3],
+            *(self._cell_widgets[index, 3] for index in range(self.rowCount())),
+        ]
         return [
             _max_width(self._MIN_STEP_COLUMN_WIDTH, step_widgets),
             _max_width(self._MIN_CONNECTION_COLUMN_WIDTH, connection_widgets),
@@ -663,7 +678,12 @@ class WorkflowRoutesEditor(QWidget):
         available_width = max(self._scroll_area.viewport().width(), self._minimum_editor_width())
         step_width, connection_width, model_width, advanced_width = minimum_widths
         extra_width = max(
-            available_width - self._column_layout_overhead() - step_width - connection_width - model_width - advanced_width,
+            available_width
+            - self._column_layout_overhead()
+            - step_width
+            - connection_width
+            - model_width
+            - advanced_width,
             0,
         )
         connection_growth = int(extra_width * 0.55)
@@ -817,7 +837,9 @@ class WorkflowProfileEditorDialog(QDialog):
         for section in (self.general_section, self.routes_section):
             section.toggled.connect(self._refresh_body_layout)
         QTimer.singleShot(0, self._refresh_body_layout)
-        self.resize(max(self.minimumWidth(), min(self.sizeHint().width(), 920)), min(max(self.sizeHint().height(), 420), 720))
+        self.resize(
+            max(self.minimumWidth(), min(self.sizeHint().width(), 920)), min(max(self.sizeHint().height(), 420), 720)
+        )
 
     def profile(self) -> WorkflowProfileDetail:
         return WorkflowProfileDetail(

@@ -29,6 +29,7 @@ from context_aware_translation.application.contracts.app_setup import (
 )
 from context_aware_translation.application.contracts.common import CapabilityCode, UserMessageSeverity
 from context_aware_translation.application.services.app_setup import AppSetupService
+from context_aware_translation.ui.chrome_sizing import sync_qml_host_height
 from context_aware_translation.ui.features.app_setup_view import (
     _CAPABILITY_LABELS,
     _NEW_PROFILE_ROUTE_SPECS,
@@ -167,7 +168,9 @@ class AppSettingsPane(QWidget):
         self._sync_viewmodel()
 
     def _sync_tab_widget(self) -> None:
-        self.content_stack.setCurrentWidget(self.connections_page if self._current_tab == "connections" else self.profiles_page)
+        self.content_stack.setCurrentWidget(
+            self.connections_page if self._current_tab == "connections" else self.profiles_page
+        )
         self._schedule_chrome_resize()
 
     def _sync_viewmodel(self) -> None:
@@ -179,19 +182,7 @@ class AppSettingsPane(QWidget):
         QTimer.singleShot(0, self._sync_chrome_height)
 
     def _sync_chrome_height(self) -> None:
-        root = self.chrome_host.rootObject()
-        if root is None:
-            return
-        implicit_height = root.property("implicitHeight")
-        try:
-            chrome_height = max(int(float(implicit_height)), 0)
-        except (TypeError, ValueError):
-            return
-        if chrome_height <= 0:
-            return
-        self.chrome_host.setMinimumHeight(chrome_height)
-        self.chrome_host.setMaximumHeight(chrome_height)
-        self.chrome_host.updateGeometry()
+        sync_qml_host_height(self.chrome_host)
 
     def _action_buttons(self) -> list[dict[str, object]]:
         if self._current_tab == "profiles":
@@ -349,7 +340,9 @@ class AppSettingsPane(QWidget):
             return
         if not self._confirm(
             self.tr("Delete Connection"),
-            self.tr("Delete the selected connection? Existing profiles or projects may stop working until setup is fixed."),
+            self.tr(
+                "Delete the selected connection? Existing profiles or projects may stop working until setup is fixed."
+            ),
         ):
             return
         self._mutate(lambda: self._service.delete_connection(connection.connection_id))
@@ -454,7 +447,9 @@ class AppSettingsPane(QWidget):
 
     def _new_profile_template(self) -> WorkflowProfileDetail:
         assert self._state is not None
-        base_profile = self._selected_profile() or (self._state.shared_profiles[0] if self._state.shared_profiles else None)
+        base_profile = self._selected_profile() or (
+            self._state.shared_profiles[0] if self._state.shared_profiles else None
+        )
         if base_profile is not None:
             return base_profile.model_copy(
                 update={
@@ -470,8 +465,12 @@ class AppSettingsPane(QWidget):
             WorkflowStepRoute(
                 step_id=step_id,
                 step_label=label,
-                connection_id=(first_connection.connection_id if step_id is not WorkflowStepId.TRANSLATOR_BATCH else None),
-                connection_label=(first_connection.display_name if step_id is not WorkflowStepId.TRANSLATOR_BATCH else None),
+                connection_id=(
+                    first_connection.connection_id if step_id is not WorkflowStepId.TRANSLATOR_BATCH else None
+                ),
+                connection_label=(
+                    first_connection.display_name if step_id is not WorkflowStepId.TRANSLATOR_BATCH else None
+                ),
                 model=(first_connection.default_model if step_id is not WorkflowStepId.TRANSLATOR_BATCH else None),
                 step_config={},
             )
@@ -489,7 +488,9 @@ class AppSettingsPane(QWidget):
     def _show_test_result(self, result: ConnectionTestResult) -> None:
         lines = [result.connection_label]
         for capability in result.supported_capabilities:
-            label = _CAPABILITY_LABELS.get(capability, capability.value if isinstance(capability, CapabilityCode) else str(capability))
+            label = _CAPABILITY_LABELS.get(
+                capability, capability.value if isinstance(capability, CapabilityCode) else str(capability)
+            )
             lines.append(f"- {label}")
         if result.message is not None:
             self._show_message(result.message.severity, "\n".join(lines + ["", result.message.text]))

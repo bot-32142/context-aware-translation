@@ -156,7 +156,9 @@ class DefaultWorkService:
                 )
                 blocking_doc_id = document_id
                 blocking_message = summary
-            elif text_pending_ready > 0 or (total_chunks > 0 and (extracted_chunks < total_chunks or mapped_chunks < total_chunks)):
+            elif text_pending_ready > 0 or (
+                total_chunks > 0 and (extracted_chunks < total_chunks or mapped_chunks < total_chunks)
+            ):
                 status = SurfaceStatus.READY
                 summary = "Open Terms to build terms"
                 action = DocumentRowAction(

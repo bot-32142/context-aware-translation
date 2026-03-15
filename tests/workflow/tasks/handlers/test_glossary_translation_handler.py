@@ -49,7 +49,9 @@ def test_validate_submit_denied_when_only_ignored_terms(tmp_path):
 
     with (
         patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
-        patch("context_aware_translation.storage.repositories.term_repository.TermRepository", return_value=fake_term_repo),
+        patch(
+            "context_aware_translation.storage.repositories.term_repository.TermRepository", return_value=fake_term_repo
+        ),
     ):
         decision = handler.validate_submit("book-1", {}, deps)
 
@@ -71,7 +73,9 @@ def test_validate_submit_allowed_when_non_ignored_term_exists(tmp_path):
 
     with (
         patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
-        patch("context_aware_translation.storage.repositories.term_repository.TermRepository", return_value=fake_term_repo),
+        patch(
+            "context_aware_translation.storage.repositories.term_repository.TermRepository", return_value=fake_term_repo
+        ),
     ):
         decision = handler.validate_submit("book-1", {}, deps)
 
@@ -93,7 +97,9 @@ def test_validate_run_denied_when_only_ignored_terms(tmp_path):
 
     with (
         patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
-        patch("context_aware_translation.storage.repositories.term_repository.TermRepository", return_value=fake_term_repo),
+        patch(
+            "context_aware_translation.storage.repositories.term_repository.TermRepository", return_value=fake_term_repo
+        ),
     ):
         decision = handler.validate_run(record, {}, deps)
 
@@ -116,7 +122,9 @@ def test_validate_run_allowed_when_non_ignored_term_exists(tmp_path):
 
     with (
         patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
-        patch("context_aware_translation.storage.repositories.term_repository.TermRepository", return_value=fake_term_repo),
+        patch(
+            "context_aware_translation.storage.repositories.term_repository.TermRepository", return_value=fake_term_repo
+        ),
     ):
         decision = handler.validate_run(record, {}, deps)
 
