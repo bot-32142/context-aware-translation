@@ -398,6 +398,8 @@ def test_terms_view_refreshes_on_terms_and_setup_invalidations():
     bus = InMemoryApplicationEventBus()
     view = TermsView("proj-1", service, bus)
     try:
+        view.show()
+        QApplication.processEvents()
         bus.publish(TermsInvalidatedEvent(project_id="proj-1"))
         bus.publish(SetupInvalidatedEvent(project_id="proj-1"))
 
@@ -423,6 +425,36 @@ def test_terms_view_description_tooltip_and_header_tooltips_are_restored():
 
         header_tooltip = view.table_model.headerData(2, Qt.Orientation.Horizontal, Qt.ItemDataRole.ToolTipRole)
         assert "only context summaries ending at or before the current chunk are sent" in header_tooltip
+    finally:
+        view.cleanup()
+        view.deleteLater()
+
+
+def test_terms_view_defers_hidden_document_refresh_until_activated():
+    from context_aware_translation.ui.features.terms_view import TermsView
+
+    service = FakeTermsService(
+        project_state=_make_state(),
+        document_state=_make_state(document_scope=True),
+    )
+    bus = InMemoryApplicationEventBus()
+    view = TermsView("proj-1", service, bus, document_id=4, embedded=True)
+    try:
+        view.show()
+        view.refresh()
+        QApplication.processEvents()
+        assert [name for name, _payload in service.calls if name == "get_document_terms"] == ["get_document_terms"]
+
+        view.hide()
+        QApplication.processEvents()
+        bus.publish(TermsInvalidatedEvent(project_id="proj-1"))
+        assert [name for name, _payload in service.calls if name == "get_document_terms"] == ["get_document_terms"]
+
+        view.activate_view()
+        assert [name for name, _payload in service.calls if name == "get_document_terms"] == [
+            "get_document_terms",
+            "get_document_terms",
+        ]
     finally:
         view.cleanup()
         view.deleteLater()

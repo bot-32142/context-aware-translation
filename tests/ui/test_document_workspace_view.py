@@ -371,7 +371,7 @@ def test_document_workspace_refreshes_on_invalidations():
         terms_calls = [name for name, _payload in terms_service.calls if name == "get_document_terms"]
         assert len(workspace_calls) == 3
         assert len(ocr_calls) == 3
-        assert len(terms_calls) == 4
+        assert len(terms_calls) == 3
     finally:
         view.cleanup()
 

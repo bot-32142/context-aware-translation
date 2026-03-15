@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QColor, QPainter, QTextCharFormat, QTextCursor
+from PySide6.QtGui import QColor, QPainter, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -472,19 +472,13 @@ class DocumentTranslationView(QWidget):
         if not search_text:
             return
         self._clear_find_highlight()
-        start = self._find_start_position()
-        cursor = self.translation_text.document().find(search_text, start)
-        if cursor.isNull() and start > 0:
-            cursor = self.translation_text.document().find(search_text, 0)
-        if cursor.isNull():
+        self.translation_text.setFocus(Qt.FocusReason.OtherFocusReason)
+        if self.translation_text.find(search_text):
             return
+        cursor = self.translation_text.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.Start)
         self.translation_text.setTextCursor(cursor)
-        extra = QTextEdit.ExtraSelection()
-        extra.cursor = cursor
-        fmt = QTextCharFormat()
-        fmt.setBackground(Qt.GlobalColor.yellow)
-        extra.format = fmt
-        self.translation_text.setExtraSelections([extra])
+        self.translation_text.find(search_text)
 
     def _replace_current(self) -> None:
         search_text = self.find_input.text()
@@ -506,12 +500,6 @@ class DocumentTranslationView(QWidget):
 
     def _clear_find_highlight(self) -> None:
         self.translation_text.setExtraSelections([])
-
-    def _find_start_position(self) -> int:
-        cursor = self.translation_text.textCursor()
-        if cursor.hasSelection():
-            return cursor.selectionEnd()
-        return cursor.position()
 
     def _normalized_selected_text(self, cursor: QTextCursor) -> str:
         return cursor.selectedText().replace("\u2029", "\n")

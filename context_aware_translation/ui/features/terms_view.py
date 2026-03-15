@@ -65,6 +65,7 @@ class TermsView(QWidget):
         self._service = service
         self._state: TermsTableState | None = None
         self._loaded_once = False
+        self._needs_refresh = False
         self._event_bridge: QtApplicationEventBridge | None = None
         self._pending_local_terms_invalidations = 0
         self.viewmodel = (
@@ -200,11 +201,15 @@ class TermsView(QWidget):
         else:
             self._apply_state(self._service.get_project_terms(self.project_id))
         self._loaded_once = True
+        self._needs_refresh = False
 
     def ensure_loaded(self) -> None:
-        if self._loaded_once:
+        if self._loaded_once and not self._needs_refresh:
             return
         self.refresh()
+
+    def activate_view(self) -> None:
+        self.ensure_loaded()
 
     def cleanup(self) -> None:
         if self._event_bridge is not None:
@@ -620,10 +625,16 @@ class TermsView(QWidget):
         if self._pending_local_terms_invalidations > 0:
             self._pending_local_terms_invalidations -= 1
             return
+        if not self.isVisible():
+            self._needs_refresh = True
+            return
         self.refresh()
 
     def _on_setup_invalidated(self, event: SetupInvalidatedEvent) -> None:
         if event.project_id not in {None, self.project_id}:
+            return
+        if not self.isVisible():
+            self._needs_refresh = True
             return
         self.refresh()
 
