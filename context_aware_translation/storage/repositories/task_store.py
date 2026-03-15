@@ -50,6 +50,14 @@ _CREATE_IDX_BOOK_TYPE = """
 CREATE INDEX IF NOT EXISTS idx_tasks_book_type ON tasks(book_id, task_type, updated_at DESC);
 """
 
+_CREATE_IDX_BOOK_UPDATED = """
+CREATE INDEX IF NOT EXISTS idx_tasks_book_updated ON tasks(book_id, updated_at DESC);
+"""
+
+_CREATE_IDX_UPDATED = """
+CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at DESC);
+"""
+
 _CREATE_IDX_STATUS = """
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 """
@@ -96,6 +104,8 @@ class TaskStore:
             cur = self.conn.cursor()
             cur.execute(_CREATE_TASKS_TABLE)
             cur.execute(_CREATE_IDX_BOOK_TYPE)
+            cur.execute(_CREATE_IDX_BOOK_UPDATED)
+            cur.execute(_CREATE_IDX_UPDATED)
             cur.execute(_CREATE_IDX_STATUS)
             # Migration: add config_snapshot_json if missing (existing databases)
             existing_cols = {row[1] for row in cur.execute("PRAGMA table_info(tasks)").fetchall()}

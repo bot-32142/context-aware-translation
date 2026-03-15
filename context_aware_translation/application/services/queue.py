@@ -38,8 +38,6 @@ class DefaultQueueService:
     def apply_action(self, request: QueueActionRequest) -> AcceptedCommand:
         if request.action is QueueActionKind.OPEN_RELATED_ITEM:
             raise_application_error(ApplicationErrorCode.UNSUPPORTED, "Open-related-item is handled by UI navigation.")
-        existing = self._runtime.task_store.get(request.queue_item_id)
-        project_id = existing.book_id if existing is not None else None
         record = None
         if request.action is QueueActionKind.RUN:
             record = self._runtime.task_engine.run_task(request.queue_item_id)
@@ -57,7 +55,6 @@ class DefaultQueueService:
             command_name = "delete"
         else:
             raise_application_error(ApplicationErrorCode.UNSUPPORTED, f"Unsupported queue action: {request.action}")
-        self._runtime.invalidate_task_activity(record.book_id if record is not None else project_id)
         return AcceptedCommand(
             command_name=command_name,
             command_id=request.queue_item_id,

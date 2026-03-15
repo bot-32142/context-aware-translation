@@ -328,6 +328,35 @@ async def test_llm_client_model_default():
 
 
 @pytest.mark.asyncio
+async def test_llm_client_strips_provider_kwarg_from_openai_create():
+    from context_aware_translation.config import ExtractorConfig
+
+    config = LLMConfig(api_key="test-key")
+    step_config = ExtractorConfig(
+        api_key="test-key",
+        base_url="https://api.test.com/v1",
+        model="default-model",
+        kwargs={"provider": "deepseek", "top_p": 0.7},
+    )
+    with patch("context_aware_translation.llm.client.OpenAI") as mock_openai:
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message = MagicMock()
+        mock_response.choices[0].message.content = "Test"
+        mock_response.usage = None
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai.return_value = mock_client
+
+        client = LLMClient(config)
+        await client.chat(messages=[{"role": "user", "content": "test"}], step_config=step_config)
+
+        call_kwargs = mock_client.chat.completions.create.call_args[1]
+        assert "provider" not in call_kwargs
+        assert call_kwargs["top_p"] == 0.7
+
+
+@pytest.mark.asyncio
 async def test_llm_client_empty_response():
     from context_aware_translation.config import ExtractorConfig
 

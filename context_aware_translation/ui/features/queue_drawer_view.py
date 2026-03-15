@@ -308,15 +308,24 @@ class QueueDrawerView(QWidget):
         self.message_label.setText(self._summary_text(state))
         self.body_stack.setCurrentWidget(self.scroll_area if state.items else self.empty_page)
 
-        self._clear_rows()
         previous_status = dict(self._last_status)
+        previous_rows = dict(self._rows)
+        next_rows: dict[str, _QueueItemCard] = {}
         self._last_status = {}
-        for item in state.items:
+        for position, item in enumerate(state.items):
             self._last_status[item.queue_item_id] = item.status
-            row = _QueueItemCard(item, parent=self.rows_container)
-            row.action_requested.connect(self._on_action_requested)
-            self._rows[item.queue_item_id] = row
-            self.rows_layout.insertWidget(self.rows_layout.count() - 1, row)
+            row = previous_rows.pop(item.queue_item_id, None)
+            if row is None:
+                row = _QueueItemCard(item, parent=self.rows_container)
+                row.action_requested.connect(self._on_action_requested)
+            else:
+                row.set_item(item)
+            next_rows[item.queue_item_id] = row
+            self.rows_layout.insertWidget(position, row)
+        for stale_row in previous_rows.values():
+            stale_row.setParent(None)
+            stale_row.deleteLater()
+        self._rows = next_rows
         self._suppressed_transition_notifications.intersection_update(self._last_status)
 
         if self._loaded_once:
@@ -369,7 +378,7 @@ class QueueDrawerView(QWidget):
     def _on_queue_changed(self, event: QueueChangedEvent) -> None:
         if self._scope_project_id is not None and event.project_id not in {None, self._scope_project_id}:
             return
-        self.refresh()
+        self._queue_refresh()
 
     def _on_action_requested(self, item: QueueItem, action: QueueActionKind) -> None:
         if action is QueueActionKind.OPEN_RELATED_ITEM:

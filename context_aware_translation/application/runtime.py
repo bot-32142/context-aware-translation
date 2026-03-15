@@ -282,7 +282,6 @@ class ApplicationRuntime:
         if not decision.allowed:
             raise_blocked_decision(decision, project_id=project_id, task_type=task_type)
         record = self.task_engine.submit_and_start(task_type, project_id, **params)
-        self.invalidate_task_activity(project_id)
         return AcceptedCommand(
             command_name=task_type,
             command_id=record.task_id,

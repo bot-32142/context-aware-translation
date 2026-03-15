@@ -87,9 +87,49 @@ def test_queue_drawer_view_refreshes_on_matching_queue_event():
         view.set_scope("proj-1", project_name="One Piece")
         service.state = _make_state(status=QueueStatus.DONE)
         bus.publish(QueueChangedEvent(project_id="proj-1"))
+        QApplication.processEvents()
 
         assert service.calls == [("get_queue", None), ("get_queue", "proj-1"), ("get_queue", "proj-1")]
         assert view._rows["task-1"].status_label.text() == "Done"
+    finally:
+        view.cleanup()
+
+
+def test_queue_drawer_view_coalesces_repeated_queue_events_into_one_refresh():
+    from context_aware_translation.ui.features.queue_drawer_view import QueueDrawerView
+
+    service = FakeQueueService(state=_make_state())
+    bus = InMemoryApplicationEventBus()
+    view = QueueDrawerView(service, bus)
+    try:
+        view.set_scope("proj-1", project_name="One Piece")
+        service.calls.clear()
+        service.state = _make_state(status=QueueStatus.DONE)
+
+        bus.publish(QueueChangedEvent(project_id="proj-1"))
+        bus.publish(QueueChangedEvent(project_id="proj-1"))
+        QApplication.processEvents()
+
+        assert service.calls == [("get_queue", "proj-1")]
+    finally:
+        view.cleanup()
+
+
+def test_queue_drawer_view_reuses_existing_row_widgets_on_refresh():
+    from context_aware_translation.ui.features.queue_drawer_view import QueueDrawerView
+
+    service = FakeQueueService(state=_make_state())
+    bus = InMemoryApplicationEventBus()
+    view = QueueDrawerView(service, bus)
+    try:
+        original_row = view._rows["task-1"]
+        service.state = _make_state(status=QueueStatus.DONE)
+
+        bus.publish(QueueChangedEvent(project_id=None))
+        QApplication.processEvents()
+
+        assert view._rows["task-1"] is original_row
+        assert original_row.status_label.text() == "Done"
     finally:
         view.cleanup()
 
@@ -162,6 +202,7 @@ def test_queue_drawer_view_emits_completion_notification_after_refresh():
             ]
         )
         bus.publish(QueueChangedEvent(project_id="proj-1"))
+        QApplication.processEvents()
 
         assert notices[-1].severity is UserMessageSeverity.SUCCESS
         assert notices[-1].text == "Read text from images finished."

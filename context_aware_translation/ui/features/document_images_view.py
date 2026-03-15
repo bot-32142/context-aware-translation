@@ -230,10 +230,7 @@ class DocumentImagesView(QWidget):
             self._cancel()
 
     def activate_view(self) -> None:
-        self._render_current_asset()
-        self._update_action_buttons()
-        self._update_blocker_strip()
-        self._sync_chrome_state()
+        self._refresh_current_selection()
         self._schedule_refit()
 
     def changeEvent(self, event: QEvent) -> None:
@@ -263,6 +260,9 @@ class DocumentImagesView(QWidget):
         self._assets = list(state.assets)
         self._render_progress(state)
         self._update_current_index(previous_asset_id)
+        self._refresh_current_selection()
+
+    def _refresh_current_selection(self) -> None:
         self._render_current_asset()
         self._update_action_buttons()
         self._update_blocker_strip()
@@ -294,6 +294,16 @@ class DocumentImagesView(QWidget):
         asset = self._selected_asset()
         return asset.asset_id if asset is not None else None
 
+    def _update_navigation_controls(self) -> None:
+        has_asset = self._current_index is not None and bool(self._assets)
+        self.go_to_label.setEnabled(has_asset)
+        self.page_spinbox.setEnabled(has_asset)
+        self.go_button.setEnabled(has_asset)
+        self.first_button.setEnabled(has_asset and self._current_index > 0)
+        self.prev_button.setEnabled(has_asset and self._current_index > 0)
+        self.next_button.setEnabled(has_asset and self._current_index < len(self._assets) - 1)
+        self.last_button.setEnabled(has_asset and self._current_index < len(self._assets) - 1)
+
     def _render_current_asset(self) -> None:
         asset = self._selected_asset()
         if asset is None:
@@ -307,13 +317,7 @@ class DocumentImagesView(QWidget):
             self.right_label.setText(self.tr("Reembedded"))
             self.toggle_button.setText(self.tr("Show Text"))
             self.toggle_button.setEnabled(False)
-            self.go_to_label.setEnabled(False)
-            self.page_spinbox.setEnabled(False)
-            self.go_button.setEnabled(False)
-            self.first_button.setEnabled(False)
-            self.prev_button.setEnabled(False)
-            self.next_button.setEnabled(False)
-            self.last_button.setEnabled(False)
+            self._update_navigation_controls()
             return
 
         self.empty_label.hide()
@@ -321,13 +325,7 @@ class DocumentImagesView(QWidget):
         self.page_label.setText(
             self.tr("Image %1 of %2").replace("%1", str(self._current_index + 1)).replace("%2", str(len(self._assets)))
         )
-        self.go_to_label.setEnabled(True)
-        self.page_spinbox.setEnabled(True)
-        self.go_button.setEnabled(True)
-        self.first_button.setEnabled(self._current_index > 0)
-        self.prev_button.setEnabled(self._current_index > 0)
-        self.next_button.setEnabled(self._current_index < len(self._assets) - 1)
-        self.last_button.setEnabled(self._current_index < len(self._assets) - 1)
+        self._update_navigation_controls()
 
         image_bytes = asset.original_image_bytes
         if image_bytes is None and asset.source_id is not None:
@@ -460,17 +458,23 @@ class DocumentImagesView(QWidget):
             toolbar.force_all_blocker.message if toolbar.force_all_blocker is not None else ""
         )
 
-    def _update_blocker_strip(self) -> None:
-        blocker = None
+    def _toolbar_blocker(self):
+        if self._state is None:
+            return None
+        return (
+            self._state.toolbar.run_pending_blocker
+            or self._state.toolbar.force_all_blocker
+            or self._state.toolbar.cancel_blocker
+        )
+
+    def _current_blocker(self, *, require_asset_disabled: bool) -> object | None:
         asset = self._selected_asset()
-        if asset is not None and not asset.can_run:
-            blocker = asset.run_blocker
-        if blocker is None and self._state is not None:
-            blocker = (
-                self._state.toolbar.run_pending_blocker
-                or self._state.toolbar.force_all_blocker
-                or self._state.toolbar.cancel_blocker
-            )
+        if asset is not None and asset.run_blocker is not None and (not require_asset_disabled or not asset.can_run):
+            return asset.run_blocker
+        return self._toolbar_blocker()
+
+    def _update_blocker_strip(self) -> None:
+        blocker = self._current_blocker(require_asset_disabled=True)
         if blocker is None:
             self.blocker_strip.hide()
             return
@@ -487,16 +491,7 @@ class DocumentImagesView(QWidget):
         self.blocker_strip.show()
 
     def _open_blocker_target(self) -> None:
-        blocker = None
-        asset = self._selected_asset()
-        if asset is not None and asset.run_blocker is not None:
-            blocker = asset.run_blocker
-        if blocker is None and self._state is not None:
-            blocker = (
-                self._state.toolbar.run_pending_blocker
-                or self._state.toolbar.force_all_blocker
-                or self._state.toolbar.cancel_blocker
-            )
+        blocker = self._current_blocker(require_asset_disabled=False)
         if blocker is None or blocker.target is None:
             return
         if blocker.target.kind is NavigationTargetKind.APP_SETUP:
@@ -509,54 +504,31 @@ class DocumentImagesView(QWidget):
         self.message_label.show()
         self._sync_chrome_state()
 
-    def _go_first(self) -> None:
+    def _show_index(self, index: int) -> None:
         if not self._assets:
             return
-        self._current_index = 0
-        self.page_spinbox.setValue(1)
-        self._render_current_asset()
-        self._update_action_buttons()
-        self._update_blocker_strip()
-        self._sync_chrome_state()
+        self._current_index = max(0, min(len(self._assets) - 1, index))
+        self.page_spinbox.setValue(self._current_index + 1)
+        self._refresh_current_selection()
+
+    def _go_first(self) -> None:
+        self._show_index(0)
 
     def _go_prev(self) -> None:
         if self._current_index is None or self._current_index <= 0:
             return
-        self._current_index -= 1
-        self.page_spinbox.setValue(self._current_index + 1)
-        self._render_current_asset()
-        self._update_action_buttons()
-        self._update_blocker_strip()
-        self._sync_chrome_state()
+        self._show_index(self._current_index - 1)
 
     def _go_next(self) -> None:
         if self._current_index is None or self._current_index >= len(self._assets) - 1:
             return
-        self._current_index += 1
-        self.page_spinbox.setValue(self._current_index + 1)
-        self._render_current_asset()
-        self._update_action_buttons()
-        self._update_blocker_strip()
-        self._sync_chrome_state()
+        self._show_index(self._current_index + 1)
 
     def _go_last(self) -> None:
-        if not self._assets:
-            return
-        self._current_index = len(self._assets) - 1
-        self.page_spinbox.setValue(self._current_index + 1)
-        self._render_current_asset()
-        self._update_action_buttons()
-        self._update_blocker_strip()
-        self._sync_chrome_state()
+        self._show_index(len(self._assets) - 1)
 
     def _go_to_entered(self) -> None:
-        if not self._assets:
-            return
-        self._current_index = max(0, min(len(self._assets) - 1, self.page_spinbox.value() - 1))
-        self._render_current_asset()
-        self._update_action_buttons()
-        self._update_blocker_strip()
-        self._sync_chrome_state()
+        self._show_index(self.page_spinbox.value() - 1)
 
     def _go_to_requested(self, page_text: str) -> None:
         try:
@@ -566,64 +538,57 @@ class DocumentImagesView(QWidget):
         self.page_spinbox.setValue(page_number)
         self._go_to_entered()
 
+    def _queue_reinsertion(
+        self,
+        *,
+        source_id: int | None,
+        pending_only: bool,
+        force_all: bool,
+        fallback_message: str,
+    ) -> None:
+        try:
+            result = self._service.run_image_reinsertion(
+                RunImageReinsertionRequest(
+                    project_id=self._project_id,
+                    document_id=self._document_id,
+                    source_id=source_id,
+                    pending_only=pending_only,
+                    force_all=force_all,
+                )
+            )
+        except ApplicationError as exc:
+            self._set_message(exc.payload.message)
+            self.refresh()
+            return
+        self._set_message(result.message.text if result.message is not None else fallback_message)
+        self.refresh()
+
     def _run_selected(self) -> None:
         asset = self._selected_asset()
         if asset is None or asset.source_id is None:
             return
-        try:
-            result = self._service.run_image_reinsertion(
-                RunImageReinsertionRequest(
-                    project_id=self._project_id,
-                    document_id=self._document_id,
-                    source_id=asset.source_id,
-                    pending_only=False,
-                    force_all=True,
-                )
-            )
-        except ApplicationError as exc:
-            self._set_message(exc.payload.message)
-            self.refresh()
-            return
-        self._set_message(result.message.text if result.message is not None else self.tr("Image reinsertion queued."))
-        self.refresh()
+        self._queue_reinsertion(
+            source_id=asset.source_id,
+            pending_only=False,
+            force_all=True,
+            fallback_message=self.tr("Image reinsertion queued."),
+        )
 
     def _run_pending(self) -> None:
-        try:
-            result = self._service.run_image_reinsertion(
-                RunImageReinsertionRequest(
-                    project_id=self._project_id,
-                    document_id=self._document_id,
-                    pending_only=True,
-                    force_all=False,
-                )
-            )
-        except ApplicationError as exc:
-            self._set_message(exc.payload.message)
-            self.refresh()
-            return
-        self._set_message(
-            result.message.text if result.message is not None else self.tr("Pending image reinsertion queued.")
+        self._queue_reinsertion(
+            source_id=None,
+            pending_only=True,
+            force_all=False,
+            fallback_message=self.tr("Pending image reinsertion queued."),
         )
-        self.refresh()
 
     def _force_all(self) -> None:
-        try:
-            result = self._service.run_image_reinsertion(
-                RunImageReinsertionRequest(
-                    project_id=self._project_id,
-                    document_id=self._document_id,
-                    pending_only=False,
-                    force_all=True,
-                )
-            )
-        except ApplicationError as exc:
-            self._set_message(exc.payload.message)
-            self.refresh()
-            return
-        self._set_message(
-            result.message.text if result.message is not None else self.tr("Full image reinsertion queued.")
+        self._queue_reinsertion(
+            source_id=None,
+            pending_only=False,
+            force_all=True,
+            fallback_message=self.tr("Full image reinsertion queued."),
         )
-        self.refresh()
 
     def _cancel(self) -> None:
         if self._state is None or self._state.active_task_id is None:
