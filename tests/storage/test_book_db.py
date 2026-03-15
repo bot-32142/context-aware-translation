@@ -132,7 +132,10 @@ def test_translation_chunk_record_creation():
 def test_term_db_init(temp_db: SQLiteBookDB):
     """Test database initialization."""
     assert temp_db.db_path.exists()
-    assert temp_db.schema_version == 2
+    meta = temp_db.conn.execute("SELECT schema_version FROM meta").fetchone()
+    assert meta is not None
+    assert meta["schema_version"] == temp_db.schema_version
+    assert temp_db.schema_version == 3
 
 
 # --- Term Operations ---
