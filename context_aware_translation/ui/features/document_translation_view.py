@@ -1,9 +1,20 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QColor, QPainter, QTextCursor
+from bisect import bisect_right
+
+from PySide6.QtCore import QEvent, QSignalBlocker, Qt, QTimer
+from PySide6.QtGui import (
+    QColor,
+    QFontDatabase,
+    QKeySequence,
+    QPainter,
+    QShortcut,
+    QTextCursor,
+    QTextOption,
+)
 from PySide6.QtWidgets import (
     QApplication,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -105,6 +116,13 @@ class DocumentTranslationView(QWidget):
         self._polish_enabled = True
         self._can_translate = False
         self._can_batch = False
+        self._syncing_editor_scroll = False
+        self._line_height_sync_pending = False
+        self._source_block_tops: list[float] = []
+        self._source_block_heights: list[float] = []
+        self._translation_block_tops: list[float] = []
+        self._translation_block_heights: list[float] = []
+        self._shortcuts: list[QShortcut] = []
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -146,45 +164,92 @@ class DocumentTranslationView(QWidget):
         self.blocker_label.hide()
         right_layout.addWidget(self.blocker_label)
 
+        self.editor_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.editor_splitter.splitterMoved.connect(lambda *_args: self._schedule_wrapped_line_sync())
+
+        source_panel = QWidget()
+        source_layout = QVBoxLayout(source_panel)
+        source_layout.setContentsMargins(0, 0, 0, 0)
         self.source_label = QLabel(self.tr("Source"))
         self.source_label.setStyleSheet("font-weight: 600;")
-        right_layout.addWidget(self.source_label)
+        source_layout.addWidget(self.source_label)
 
         self.source_text = QTextEdit()
-        self.source_text.setReadOnly(True)
-        self.source_text.setMaximumHeight(180)
-        right_layout.addWidget(self.source_text)
+        self._configure_text_editor(self.source_text, read_only=True)
+        source_layout.addWidget(self.source_text, 1)
+        self.editor_splitter.addWidget(source_panel)
 
+        translation_panel = QWidget()
+        translation_layout = QVBoxLayout(translation_panel)
+        translation_layout.setContentsMargins(0, 0, 0, 0)
         self.translation_label = QLabel(self.tr("Translation"))
         self.translation_label.setStyleSheet("font-weight: 600;")
-        right_layout.addWidget(self.translation_label)
+        translation_layout.addWidget(self.translation_label)
 
-        find_replace_layout = QHBoxLayout()
         self.find_input = QLineEdit()
         self.find_input.setPlaceholderText(self.tr("Find..."))
         self.find_input.textChanged.connect(self._on_find_text_changed)
         self.find_input.returnPressed.connect(self._find_next)
         self.replace_input = QLineEdit()
         self.replace_input.setPlaceholderText(self.tr("Replace with..."))
+        self.replace_input.returnPressed.connect(self._replace_current)
         self.find_next_button = QPushButton(self.tr("Find Next"))
         self.find_next_button.clicked.connect(self._find_next)
+        self.show_replace_button = QPushButton(self.tr("Replace"))
+        self.show_replace_button.setCheckable(True)
+        self.show_replace_button.toggled.connect(self._toggle_replace_panel)
         self.replace_button = QPushButton(self.tr("Replace"))
         self.replace_button.clicked.connect(self._replace_current)
         self.replace_all_button = QPushButton(self.tr("Replace All"))
         self.replace_all_button.clicked.connect(self._replace_all)
-        find_replace_layout.addWidget(self.find_input, 1)
-        find_replace_layout.addWidget(self.replace_input, 1)
-        find_replace_layout.addWidget(self.find_next_button)
-        find_replace_layout.addWidget(self.replace_button)
-        find_replace_layout.addWidget(self.replace_all_button)
-        right_layout.addLayout(find_replace_layout)
+        self.close_find_button = QPushButton("\u00d7")
+        self.close_find_button.clicked.connect(self._hide_find_panel)
+
+        self.find_panel = QFrame(right_panel)
+        self.find_panel.setObjectName("translationFindPanel")
+        self.find_panel.setVisible(False)
+        self.find_panel.setStyleSheet(
+            """
+            QFrame#translationFindPanel {
+                border: 1px solid #d9d0c4;
+                border-radius: 14px;
+                background: #fcfaf6;
+            }
+            """
+        )
+        find_panel_layout = QVBoxLayout(self.find_panel)
+        find_panel_layout.setContentsMargins(12, 12, 12, 12)
+        find_panel_layout.setSpacing(8)
+
+        find_row = QHBoxLayout()
+        find_row.setContentsMargins(0, 0, 0, 0)
+        find_row.addWidget(self.find_input, 1)
+        find_row.addWidget(self.find_next_button)
+        find_row.addWidget(self.show_replace_button)
+        find_row.addWidget(self.close_find_button)
+        find_panel_layout.addLayout(find_row)
+
+        self.replace_panel = QWidget(self.find_panel)
+        replace_row = QHBoxLayout(self.replace_panel)
+        replace_row.setContentsMargins(0, 0, 0, 0)
+        replace_row.addWidget(self.replace_input, 1)
+        replace_row.addWidget(self.replace_button)
+        replace_row.addWidget(self.replace_all_button)
+        find_panel_layout.addWidget(self.replace_panel)
 
         self.translation_text = QTextEdit()
-        right_layout.addWidget(self.translation_text, 1)
+        self._configure_text_editor(self.translation_text, read_only=False)
+        self.translation_text.textChanged.connect(self._schedule_wrapped_line_sync)
+        translation_layout.addWidget(self.translation_text, 1)
 
         self.line_hint = QLabel()
         self.line_hint.setStyleSheet("color: #666666;")
         self.line_hint.hide()
+        self.editor_splitter.addWidget(translation_panel)
+        self.editor_splitter.setStretchFactor(0, 1)
+        self.editor_splitter.setStretchFactor(1, 1)
+        self.editor_splitter.setSizes([380, 420])
+        right_layout.addWidget(self.editor_splitter, 1)
         right_layout.addWidget(self.line_hint)
 
         button_row = QHBoxLayout()
@@ -209,12 +274,16 @@ class DocumentTranslationView(QWidget):
         layout.addWidget(splitter, 1)
         apply_hybrid_control_theme(self)
         set_button_tone(self.find_next_button, size="compact")
+        set_button_tone(self.show_replace_button, size="compact")
         set_button_tone(self.replace_button, size="compact")
         set_button_tone(self.replace_all_button, size="compact")
+        set_button_tone(self.close_find_button, "ghost", size="compact")
         set_button_tone(self.save_button, "primary")
         set_button_tone(self.retranslate_button)
         set_button_tone(self.previous_button, size="compact")
         set_button_tone(self.next_button, size="compact")
+        self._connect_editor_scrollbars()
+        self._connect_shortcuts()
         self._connect_qml_signals()
         self._sync_chrome_state()
 
@@ -303,6 +372,7 @@ class DocumentTranslationView(QWidget):
             self.line_hint.show()
         else:
             self.line_hint.hide()
+        self._schedule_wrapped_line_sync()
         self._update_navigation_buttons()
         self._sync_chrome_state()
 
@@ -471,6 +541,7 @@ class DocumentTranslationView(QWidget):
         search_text = self.find_input.text()
         if not search_text or self._state is None or not self._state.units:
             return
+        self._show_find_panel(show_replace=self.show_replace_button.isChecked())
         self._clear_find_highlight()
         current_row = self.unit_list.currentRow()
         if current_row < 0:
@@ -501,6 +572,7 @@ class DocumentTranslationView(QWidget):
         search_text = self.find_input.text()
         if not search_text:
             return
+        self._show_find_panel(show_replace=True)
         cursor = self.translation_text.textCursor()
         if cursor.hasSelection() and self._normalized_selected_text(cursor) == search_text:
             cursor.insertText(self.replace_input.text())
@@ -510,6 +582,7 @@ class DocumentTranslationView(QWidget):
         search_text = self.find_input.text()
         if not search_text:
             return
+        self._show_find_panel(show_replace=True)
         self.translation_text.setPlainText(
             self.translation_text.toPlainText().replace(search_text, self.replace_input.text())
         )
@@ -517,6 +590,169 @@ class DocumentTranslationView(QWidget):
 
     def _clear_find_highlight(self) -> None:
         self.translation_text.setExtraSelections([])
+
+    def _configure_text_editor(self, editor: QTextEdit, *, read_only: bool) -> None:
+        fixed_font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        editor.setFont(fixed_font)
+        editor.setAcceptRichText(False)
+        editor.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
+        editor.setWordWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+        editor.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        editor.setTabStopDistance(editor.fontMetrics().horizontalAdvance(" ") * 4)
+        editor.setReadOnly(read_only)
+
+    def _connect_editor_scrollbars(self) -> None:
+        self.source_text.verticalScrollBar().valueChanged.connect(
+            lambda value: self._sync_vertical_scroll(self.source_text, self.translation_text, value)
+        )
+        self.translation_text.verticalScrollBar().valueChanged.connect(
+            lambda value: self._sync_vertical_scroll(self.translation_text, self.source_text, value)
+        )
+
+    def _sync_vertical_scroll(self, source: QTextEdit, target: QTextEdit, value: int) -> None:
+        if self._syncing_editor_scroll:
+            return
+        target_bar = target.verticalScrollBar()
+        mapped_value = self._map_scroll_value(source, target, value)
+        if target_bar.value() == mapped_value:
+            return
+        self._syncing_editor_scroll = True
+        try:
+            target_bar.setValue(mapped_value)
+        finally:
+            self._syncing_editor_scroll = False
+
+    def _schedule_wrapped_line_sync(self) -> None:
+        if self._line_height_sync_pending:
+            return
+        self._line_height_sync_pending = True
+        QTimer.singleShot(0, self._sync_wrapped_line_heights)
+
+    def _sync_wrapped_line_heights(self) -> None:
+        self._line_height_sync_pending = False
+        try:
+            self._source_block_tops, self._source_block_heights = self._editor_block_metrics(self.source_text)
+            self._translation_block_tops, self._translation_block_heights = self._editor_block_metrics(
+                self.translation_text
+            )
+        except RuntimeError:
+            return
+        if not self._source_block_heights or not self._translation_block_heights:
+            self._position_find_panel()
+            return
+        if self.translation_text.hasFocus() or self.translation_text.textCursor().hasSelection():
+            self._sync_vertical_scroll(
+                self.translation_text, self.source_text, self.translation_text.verticalScrollBar().value()
+            )
+        elif self.source_text.hasFocus():
+            self._sync_vertical_scroll(
+                self.source_text, self.translation_text, self.source_text.verticalScrollBar().value()
+            )
+        self._ensure_active_translation_selection_visible()
+        self._position_find_panel()
+
+    def _editor_block_metrics(self, editor: QTextEdit) -> tuple[list[float], list[float]]:
+        tops: list[float] = []
+        heights: list[float] = []
+        block = editor.document().begin()
+        line_height = max(1, editor.fontMetrics().lineSpacing())
+        first_top: float | None = None
+        layout = editor.document().documentLayout()
+        while block.isValid():
+            top = float(len(tops) * line_height)
+            height = float(line_height)
+            rect = layout.blockBoundingRect(block)
+            if rect.isValid():
+                if first_top is None:
+                    first_top = rect.top()
+                top = rect.top() - first_top
+                height = max(line_height, rect.height())
+            tops.append(max(0.0, top))
+            heights.append(float(height))
+            block = block.next()
+        return tops, heights
+
+    def _map_scroll_value(self, source: QTextEdit, target: QTextEdit, value: int) -> int:
+        source_tops, source_heights = self._scroll_metrics_for_editor(source)
+        target_tops, target_heights = self._scroll_metrics_for_editor(target)
+        target_bar = target.verticalScrollBar()
+        if not source_tops or not target_tops:
+            source_bar = source.verticalScrollBar()
+            if source_bar.maximum() <= source_bar.minimum():
+                return target_bar.minimum()
+            ratio = (value - source_bar.minimum()) / (source_bar.maximum() - source_bar.minimum())
+            mapped = target_bar.minimum() + ratio * (target_bar.maximum() - target_bar.minimum())
+            return int(round(max(target_bar.minimum(), min(target_bar.maximum(), mapped))))
+        source_index = max(0, bisect_right(source_tops, float(value)) - 1)
+        source_index = min(source_index, len(source_heights) - 1, len(target_heights) - 1, len(target_tops) - 1)
+        source_height = max(1.0, source_heights[source_index])
+        target_height = max(1.0, target_heights[source_index])
+        offset = min(max(0.0, float(value) - source_tops[source_index]), source_height)
+        mapped = target_tops[source_index] + (offset / source_height) * target_height
+        return int(round(max(target_bar.minimum(), min(target_bar.maximum(), mapped))))
+
+    def _scroll_metrics_for_editor(self, editor: QTextEdit) -> tuple[list[float], list[float]]:
+        if editor is self.source_text:
+            return self._source_block_tops, self._source_block_heights
+        return self._translation_block_tops, self._translation_block_heights
+
+    def _connect_shortcuts(self) -> None:
+        self._shortcuts = [
+            QShortcut(QKeySequence.StandardKey.Find, self, activated=self._show_find_panel),
+            QShortcut(QKeySequence.StandardKey.Replace, self, activated=self._show_replace_panel),
+            QShortcut(QKeySequence(Qt.Key.Key_Escape), self.find_panel, activated=self._hide_find_panel),
+        ]
+
+    def _show_find_panel(self, *, show_replace: bool = False) -> None:
+        if not self.find_panel.isVisible():
+            self.find_panel.show()
+        self._set_replace_toggle_state(show_replace)
+        self.replace_panel.setVisible(show_replace)
+        self._position_find_panel()
+        self.find_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self.find_input.selectAll()
+
+    def _show_replace_panel(self) -> None:
+        self._show_find_panel(show_replace=True)
+        self.replace_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self.replace_input.selectAll()
+
+    def _toggle_replace_panel(self, checked: bool) -> None:
+        if checked:
+            self._show_find_panel(show_replace=True)
+            self.replace_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+            self.replace_input.selectAll()
+            return
+        if not self.find_panel.isVisible():
+            return
+        self.replace_panel.hide()
+        self._position_find_panel()
+        self.find_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+
+    def _hide_find_panel(self) -> None:
+        self.find_panel.hide()
+        self._set_replace_toggle_state(False)
+        self.replace_panel.hide()
+        self.translation_text.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def _set_replace_toggle_state(self, checked: bool) -> None:
+        blocker = QSignalBlocker(self.show_replace_button)
+        self.show_replace_button.setChecked(checked)
+        del blocker
+
+    def _position_find_panel(self) -> None:
+        try:
+            self.find_panel.adjustSize()
+            panel_width = self.find_panel.sizeHint().width()
+            panel_height = self.find_panel.sizeHint().height()
+            host_rect = self.editor_splitter.geometry()
+            margin = 12
+            x = max(margin, host_rect.right() - panel_width - margin)
+            y = host_rect.top() + margin
+            self.find_panel.setGeometry(x, y, panel_width, panel_height)
+            self.find_panel.raise_()
+        except RuntimeError:
+            return
 
     def _find_start_position(self) -> int:
         cursor = self.translation_text.textCursor()
@@ -545,6 +781,33 @@ class DocumentTranslationView(QWidget):
         cursor.setPosition(start + length, QTextCursor.MoveMode.KeepAnchor)
         self.translation_text.setTextCursor(cursor)
         self.translation_text.ensureCursorVisible()
+        self._ensure_find_match_clear_of_overlay()
+
+    def _ensure_active_translation_selection_visible(self) -> None:
+        if not self.translation_text.textCursor().hasSelection():
+            return
+        self.translation_text.ensureCursorVisible()
+        self._ensure_find_match_clear_of_overlay()
+
+    def _ensure_find_match_clear_of_overlay(self) -> None:
+        if not self.find_panel.isVisible():
+            return
+        try:
+            panel_bottom = (
+                self.translation_text.viewport()
+                .mapFromGlobal(self.find_panel.mapToGlobal(self.find_panel.rect().bottomLeft()))
+                .y()
+            )
+        except RuntimeError:
+            return
+        clearance_top = max(0, panel_bottom + 12)
+        cursor_top = self.translation_text.cursorRect().top()
+        if cursor_top >= clearance_top:
+            return
+        scroll_bar = self.translation_text.verticalScrollBar()
+        target_value = max(scroll_bar.minimum(), scroll_bar.value() - (clearance_top - cursor_top))
+        if target_value != scroll_bar.value():
+            scroll_bar.setValue(target_value)
 
     def _normalized_selected_text(self, cursor: QTextCursor) -> str:
         return cursor.selectedText().replace("\u2029", "\n")
@@ -554,14 +817,21 @@ class DocumentTranslationView(QWidget):
             self.retranslateUi()
         super().changeEvent(event)
 
+    def resizeEvent(self, event) -> None:  # noqa: ANN001
+        super().resizeEvent(event)
+        self._position_find_panel()
+        self._schedule_wrapped_line_sync()
+
     def retranslateUi(self) -> None:
         self.source_label.setText(self.tr("Source"))
         self.translation_label.setText(self.tr("Translation"))
         self.find_input.setPlaceholderText(self.tr("Find..."))
         self.replace_input.setPlaceholderText(self.tr("Replace with..."))
         self.find_next_button.setText(self.tr("Find Next"))
+        self.show_replace_button.setText(self.tr("Replace"))
         self.replace_button.setText(self.tr("Replace"))
         self.replace_all_button.setText(self.tr("Replace All"))
+        self.close_find_button.setToolTip(self.tr("Close find panel"))
         self.save_button.setText(self.tr("Save"))
         self.retranslate_button.setText(self.tr("Retranslate"))
         self.previous_button.setText("\u2190 " + self.tr("Previous"))

@@ -23,7 +23,8 @@ from context_aware_translation.application.contracts.document import (
 from tests.application.fakes import FakeDocumentService
 
 try:
-    from PySide6.QtWidgets import QApplication, QMessageBox
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtWidgets import QApplication, QMessageBox, QTextEdit
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -93,6 +94,15 @@ def _selected_row_color(view) -> tuple[int, int, int]:
     return color.red(), color.green(), color.blue()
 
 
+def _multiline_text(prefix: str, count: int) -> str:
+    return "\n".join(f"{prefix} {index:03d}" for index in range(count))
+
+
+def _top_visible_block_number(editor: QTextEdit) -> int:
+    cursor = editor.cursorForPosition(QPoint(8, 8))
+    return cursor.blockNumber()
+
+
 def test_document_translation_view_renders_units_and_routes_actions():
     from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
 
@@ -140,6 +150,51 @@ def test_document_translation_view_renders_units_and_routes_actions():
         view.next_button.click()
         assert view.unit_list.currentRow() == 1
     finally:
+        view.deleteLater()
+
+
+def test_document_translation_view_uses_side_by_side_plain_text_editors_and_hidden_find_panel():
+    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
+
+    state = _make_state()
+    service = FakeDocumentService(workspace=state.workspace, translation=state)
+    view = DocumentTranslationView(service, "proj-1", 4)
+    try:
+        view.resize(1280, 760)
+        view.show()
+        view.refresh()
+        QApplication.processEvents()
+
+        assert view.editor_splitter.orientation() == Qt.Orientation.Horizontal
+        assert view.source_text.lineWrapMode() == QTextEdit.LineWrapMode.WidgetWidth
+        assert view.translation_text.lineWrapMode() == QTextEdit.LineWrapMode.WidgetWidth
+        assert view.source_text.isReadOnly()
+        assert not view.find_panel.isVisible()
+
+        view.find_input.setText("needle")
+        view._show_find_panel()
+        QApplication.processEvents()
+        assert view.find_panel.isVisible()
+        assert not view.replace_panel.isVisible()
+        assert not view.show_replace_button.isChecked()
+        assert view.find_input.text() == "needle"
+
+        view._show_replace_panel()
+        QApplication.processEvents()
+        assert view.replace_panel.isVisible()
+        assert view.show_replace_button.isChecked()
+
+        view.show_replace_button.click()
+        QApplication.processEvents()
+        assert not view.replace_panel.isVisible()
+        assert not view.show_replace_button.isChecked()
+
+        view._hide_find_panel()
+        QApplication.processEvents()
+        assert not view.find_panel.isVisible()
+        assert not view.show_replace_button.isChecked()
+    finally:
+        view.close()
         view.deleteLater()
 
 
@@ -214,6 +269,37 @@ def test_document_translation_view_find_next_uses_live_cursor_position_and_wraps
         view.deleteLater()
 
 
+def test_document_translation_view_replace_mode_stays_open_while_finding_and_replacing():
+    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
+
+    state = _make_state()
+    service = FakeDocumentService(workspace=state.workspace, translation=state)
+    view = DocumentTranslationView(service, "proj-1", 4)
+    try:
+        view.show()
+        view.refresh()
+        QApplication.processEvents()
+        view.translation_text.setPlainText("alpha beta alpha beta")
+        view.find_input.setText("alpha")
+        view.replace_input.setText("omega")
+        view._show_replace_panel()
+        QApplication.processEvents()
+
+        view.find_next_button.click()
+        assert view.replace_panel.isVisible()
+        assert view.show_replace_button.isChecked()
+
+        view.replace_button.click()
+        QApplication.processEvents()
+        assert view.replace_panel.isVisible()
+        assert view.show_replace_button.isChecked()
+        assert view.translation_text.toPlainText() == "omega beta alpha beta"
+        assert _selected_range(view) == (11, 16, "alpha")
+    finally:
+        view.close()
+        view.deleteLater()
+
+
 def test_document_translation_view_find_next_advances_across_units_and_wraps():
     from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
 
@@ -256,4 +342,190 @@ def test_document_translation_view_find_next_advances_across_units_and_wraps():
         assert view.unit_list.currentRow() == 0
         assert _selected_range(view) == (0, 5, "alpha")
     finally:
+        view.deleteLater()
+
+
+def test_document_translation_view_find_next_keeps_match_below_floating_panel():
+    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
+
+    lines = [f"line {index:03d}" for index in range(120)]
+    lines[40] = "needle target line"
+    translation_text = "\n".join(lines)
+    state = _make_state()
+    state = state.model_copy(
+        update={
+            "units": [
+                state.units[0].model_copy(
+                    update={
+                        "source_text": _multiline_text("Source", 120),
+                        "translated_text": translation_text,
+                        "line_count": 120,
+                    }
+                ),
+                state.units[1],
+            ]
+        }
+    )
+    service = FakeDocumentService(workspace=state.workspace, translation=state)
+    view = DocumentTranslationView(service, "proj-1", 4)
+    try:
+        view.resize(1280, 760)
+        view.show()
+        view.refresh()
+        QApplication.processEvents()
+
+        view._show_find_panel()
+        view.find_input.setText("needle")
+        cursor = view.translation_text.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        view.translation_text.setTextCursor(cursor)
+
+        view.find_next_button.click()
+        QApplication.processEvents()
+
+        panel_bottom = (
+            view.translation_text.viewport()
+            .mapFromGlobal(view.find_panel.mapToGlobal(view.find_panel.rect().bottomLeft()))
+            .y()
+        )
+        assert view.translation_text.cursorRect().top() >= max(0, panel_bottom + 12)
+    finally:
+        view.close()
+        view.deleteLater()
+
+
+def test_document_translation_view_text_edits_remain_undoable_after_layout_sync():
+    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
+
+    state = _make_state()
+    state = state.model_copy(
+        update={
+            "units": [
+                state.units[0].model_copy(
+                    update={
+                        "source_text": "\n".join([("wrapped source " * 16).strip() for _ in range(8)]),
+                        "translated_text": _multiline_text("translation", 8),
+                        "line_count": 8,
+                    }
+                ),
+                state.units[1],
+            ]
+        }
+    )
+    service = FakeDocumentService(workspace=state.workspace, translation=state)
+    view = DocumentTranslationView(service, "proj-1", 4)
+    try:
+        view.resize(1280, 760)
+        view.show()
+        view.refresh()
+        QApplication.processEvents()
+
+        cursor = view.translation_text.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        view.translation_text.setTextCursor(cursor)
+        view.translation_text.insertPlainText("!")
+        QApplication.processEvents()
+        assert view.translation_text.toPlainText().endswith("!")
+
+        view.translation_text.undo()
+        QApplication.processEvents()
+        assert not view.translation_text.toPlainText().endswith("!")
+    finally:
+        view.close()
+        view.deleteLater()
+
+
+def test_document_translation_view_find_next_keeps_cross_unit_match_visible_after_line_sync():
+    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
+
+    long_source_lines = [("wrapped source " * 20).strip() for _ in range(40)] + ["needle source line"]
+    translated_lines = [f"line {index:03d}" for index in range(40)] + ["needle target line"]
+    state = _make_state()
+    state = state.model_copy(
+        update={
+            "units": [
+                state.units[0].model_copy(update={"translated_text": "alpha beta gamma"}),
+                state.units[1].model_copy(
+                    update={
+                        "status": SurfaceStatus.READY,
+                        "unit_kind": TranslationUnitKind.CHUNK,
+                        "source_text": "\n".join(long_source_lines),
+                        "translated_text": "\n".join(translated_lines),
+                        "line_count": len(translated_lines),
+                        "blocker": None,
+                        "actions": TranslationUnitActionState(can_save=True, can_retranslate=True),
+                    }
+                ),
+            ]
+        }
+    )
+    service = FakeDocumentService(workspace=state.workspace, translation=state)
+    view = DocumentTranslationView(service, "proj-1", 4)
+    try:
+        view.resize(1280, 760)
+        view.show()
+        view.refresh()
+        QApplication.processEvents()
+
+        view._show_find_panel()
+        view.find_input.setText("needle")
+        view.find_next_button.click()
+        QApplication.processEvents()
+
+        cursor_rect = view.translation_text.cursorRect()
+        viewport_rect = view.translation_text.viewport().rect()
+        panel_bottom = (
+            view.translation_text.viewport()
+            .mapFromGlobal(view.find_panel.mapToGlobal(view.find_panel.rect().bottomLeft()))
+            .y()
+        )
+        assert view.unit_list.currentRow() == 1
+        assert cursor_rect.top() >= max(0, panel_bottom + 12)
+        assert cursor_rect.bottom() <= viewport_rect.bottom()
+    finally:
+        view.close()
+        view.deleteLater()
+
+
+def test_document_translation_view_keeps_source_and_translation_scroll_in_sync():
+    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
+
+    state = _make_state()
+    dense_source = _multiline_text("Source", 120)
+    dense_translation = _multiline_text("Translation", 120)
+    state = state.model_copy(
+        update={
+            "units": [
+                state.units[0].model_copy(
+                    update={
+                        "source_text": dense_source,
+                        "translated_text": dense_translation,
+                    }
+                ),
+                state.units[1],
+            ]
+        }
+    )
+    service = FakeDocumentService(workspace=state.workspace, translation=state)
+    view = DocumentTranslationView(service, "proj-1", 4)
+    try:
+        view.resize(1280, 760)
+        view.show()
+        view.refresh()
+        QApplication.processEvents()
+
+        source_bar = view.source_text.verticalScrollBar()
+        translation_bar = view.translation_text.verticalScrollBar()
+        assert source_bar.maximum() > 0
+        assert translation_bar.maximum() > 0
+
+        translation_bar.setValue(translation_bar.maximum() // 2)
+        QApplication.processEvents()
+        assert abs(_top_visible_block_number(view.source_text) - _top_visible_block_number(view.translation_text)) <= 1
+
+        source_bar.setValue(source_bar.maximum())
+        QApplication.processEvents()
+        assert abs(_top_visible_block_number(view.source_text) - _top_visible_block_number(view.translation_text)) <= 1
+    finally:
+        view.close()
         view.deleteLater()

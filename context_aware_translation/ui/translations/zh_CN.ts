@@ -769,172 +769,179 @@
         <translation>提交批量任务</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="126"/>
+        <location filename="../features/document_translation_view.py" line="144"/>
         <source>Units</source>
         <translation>单元</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="141"/>
-        <location filename="../features/document_translation_view.py" line="271"/>
+        <location filename="../features/document_translation_view.py" line="159"/>
+        <location filename="../features/document_translation_view.py" line="340"/>
         <source>No unit selected</source>
         <translation>未选择单元</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="149"/>
-        <location filename="../features/document_translation_view.py" line="558"/>
+        <location filename="../features/document_translation_view.py" line="173"/>
+        <location filename="../features/document_translation_view.py" line="826"/>
         <source>Source</source>
         <translation>原文</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="158"/>
-        <location filename="../features/document_translation_view.py" line="559"/>
+        <location filename="../features/document_translation_view.py" line="185"/>
+        <location filename="../features/document_translation_view.py" line="827"/>
         <source>Translation</source>
         <translation>翻译</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="164"/>
-        <location filename="../features/document_translation_view.py" line="560"/>
+        <location filename="../features/document_translation_view.py" line="190"/>
+        <location filename="../features/document_translation_view.py" line="828"/>
         <source>Find...</source>
         <translation>查找...</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="168"/>
-        <location filename="../features/document_translation_view.py" line="561"/>
+        <location filename="../features/document_translation_view.py" line="194"/>
+        <location filename="../features/document_translation_view.py" line="829"/>
         <source>Replace with...</source>
         <translation>替换为...</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="169"/>
-        <location filename="../features/document_translation_view.py" line="562"/>
+        <location filename="../features/document_translation_view.py" line="196"/>
+        <location filename="../features/document_translation_view.py" line="830"/>
         <source>Find Next</source>
         <translation>查找下一个</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="171"/>
-        <location filename="../features/document_translation_view.py" line="563"/>
+        <location filename="../features/document_translation_view.py" line="198"/>
+        <location filename="../features/document_translation_view.py" line="201"/>
+        <location filename="../features/document_translation_view.py" line="831"/>
+        <location filename="../features/document_translation_view.py" line="832"/>
         <source>Replace</source>
         <translation>替换</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="173"/>
-        <location filename="../features/document_translation_view.py" line="564"/>
+        <location filename="../features/document_translation_view.py" line="203"/>
+        <location filename="../features/document_translation_view.py" line="833"/>
         <source>Replace All</source>
         <translation>全部替换</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="191"/>
-        <location filename="../features/document_translation_view.py" line="565"/>
+        <location filename="../features/document_translation_view.py" line="256"/>
+        <location filename="../features/document_translation_view.py" line="835"/>
         <source>Save</source>
         <translation>保存</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="195"/>
-        <location filename="../features/document_translation_view.py" line="370"/>
-        <location filename="../features/document_translation_view.py" line="566"/>
+        <location filename="../features/document_translation_view.py" line="260"/>
+        <location filename="../features/document_translation_view.py" line="440"/>
+        <location filename="../features/document_translation_view.py" line="836"/>
         <source>Retranslate</source>
         <translation>重新翻译</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="198"/>
-        <location filename="../features/document_translation_view.py" line="567"/>
+        <location filename="../features/document_translation_view.py" line="263"/>
+        <location filename="../features/document_translation_view.py" line="837"/>
         <source>Previous</source>
         <translation>上一个</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="201"/>
-        <location filename="../features/document_translation_view.py" line="568"/>
+        <location filename="../features/document_translation_view.py" line="266"/>
+        <location filename="../features/document_translation_view.py" line="838"/>
         <source>Next</source>
         <translation>下一个</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="302"/>
+        <location filename="../features/document_translation_view.py" line="371"/>
         <source>Line count must stay at %1.</source>
         <translation>行数必须保持为 %1。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="353"/>
+        <location filename="../features/document_translation_view.py" line="423"/>
         <source>Save Unavailable</source>
         <translation>无法保存</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="357"/>
+        <location filename="../features/document_translation_view.py" line="427"/>
         <source>Save Failed</source>
         <translation>保存失败</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="361"/>
+        <location filename="../features/document_translation_view.py" line="431"/>
         <source>Translation saved.</source>
         <translation>译文已保存。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="367"/>
+        <location filename="../features/document_translation_view.py" line="437"/>
         <source>page</source>
         <translation>页面</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="367"/>
+        <location filename="../features/document_translation_view.py" line="437"/>
         <source>chunk</source>
         <translation>分块</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="371"/>
+        <location filename="../features/document_translation_view.py" line="441"/>
         <source>Retranslate this %1? LLM API costs will be incurred.</source>
         <translation>要重新翻译此%1吗？这会产生 LLM API 成本。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="385"/>
+        <location filename="../features/document_translation_view.py" line="455"/>
         <source>Retranslate Unavailable</source>
         <translation>无法重新翻译</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="389"/>
+        <location filename="../features/document_translation_view.py" line="459"/>
         <source>Retranslate Failed</source>
         <translation>重新翻译失败</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="396"/>
+        <location filename="../features/document_translation_view.py" line="466"/>
         <source>Retranslate queued.</source>
         <translation>重新翻译已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="408"/>
+        <location filename="../features/document_translation_view.py" line="478"/>
         <source>Translate Unavailable</source>
         <translation>无法翻译</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="412"/>
+        <location filename="../features/document_translation_view.py" line="482"/>
         <source>Translate Failed</source>
         <translation>翻译失败</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="419"/>
+        <location filename="../features/document_translation_view.py" line="489"/>
         <source>Translation queued.</source>
         <translation>翻译已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="432"/>
+        <location filename="../features/document_translation_view.py" line="502"/>
         <source>Batch Translation Unavailable</source>
         <translation>批量翻译不可用</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="436"/>
+        <location filename="../features/document_translation_view.py" line="506"/>
         <source>Batch Translation Failed</source>
         <translation>批量翻译失败</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="443"/>
+        <location filename="../features/document_translation_view.py" line="513"/>
         <source>Async batch translation queued.</source>
         <translation>异步批量翻译已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="457"/>
+        <location filename="../features/document_translation_view.py" line="527"/>
         <source>Progress: %1/%2</source>
         <translation>进度：%1/%2</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="464"/>
+        <location filename="../features/document_translation_view.py" line="534"/>
         <source>Active task: %1</source>
         <translation>当前任务：%1</translation>
+    </message>
+    <message>
+        <location filename="../features/document_translation_view.py" line="834"/>
+        <source>Close find panel</source>
+        <translation>关闭查找面板</translation>
     </message>
 </context>
 <context>
