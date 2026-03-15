@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+
 import pytest
 
 from context_aware_translation.application.contracts.common import (
@@ -12,11 +14,13 @@ from context_aware_translation.application.contracts.common import (
     UserMessageSeverity,
 )
 from context_aware_translation.application.contracts.queue import QueueItem, QueueState
+from context_aware_translation.application.errors import ApplicationError, ApplicationErrorCode, ApplicationErrorPayload
 from context_aware_translation.application.events import InMemoryApplicationEventBus, QueueChangedEvent
 from tests.application.fakes import FakeQueueService
 
 try:
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication, QPushButton
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -56,6 +60,17 @@ def _make_state(*, status: QueueStatus = QueueStatus.RUNNING) -> QueueState:
     )
 
 
+def _wait_until(predicate, *, timeout_ms: int = 1000) -> None:  # noqa: ANN001
+    elapsed = 0
+    while elapsed < timeout_ms:
+        QApplication.processEvents()
+        if predicate():
+            return
+        QTest.qWait(10)
+        elapsed += 10
+    assert predicate()
+
+
 def test_queue_drawer_view_renders_backend_state():
     from context_aware_translation.ui.features.queue_drawer_view import QueueDrawerView
 
@@ -71,6 +86,7 @@ def test_queue_drawer_view_renders_backend_state():
         assert row.title_label.text() == "Read text from images"
         assert row.status_label.text() == "Running"
         assert "Document 4" in row.scope_label.text()
+        assert not any(button.text() == "Refresh" for button in view.findChildren(QPushButton))
     finally:
         view.cleanup()
 
@@ -252,7 +268,7 @@ def test_queue_drawer_view_deduplicates_local_action_and_transition_notification
         view.cleanup()
 
 
-def test_queue_drawer_view_deletes_rows_on_next_event_turn():
+def test_queue_drawer_view_marks_row_deleting_while_delete_runs_in_background():
     from context_aware_translation.ui.features.queue_drawer_view import QueueDrawerView
 
     service = FakeQueueService(
@@ -287,9 +303,13 @@ def test_queue_drawer_view_deletes_rows_on_next_event_turn():
             ]
         )
     )
+    started = threading.Event()
+    release = threading.Event()
 
     def _apply_action(request):  # noqa: ANN001
         service.calls.append(("apply_action", request))
+        started.set()
+        release.wait(timeout=1.0)
         service.state = QueueState(
             items=[item for item in service.state.items if item.queue_item_id != request.queue_item_id]
         )
@@ -302,20 +322,75 @@ def test_queue_drawer_view_deletes_rows_on_next_event_turn():
         first_row = view._rows["task-1"]
         first_row._buttons[QueueActionKind.DELETE].click()
 
+        assert started.wait(timeout=1.0)
         assert set(view._rows) == {"task-1", "task-2"}
+        assert first_row.status_label.text() == "Deleting..."
+        assert all(not button.isEnabled() for button in first_row._buttons.values() if button.isVisible())
 
-        QApplication.processEvents()
-
-        assert set(view._rows) == {"task-2"}
+        release.set()
+        _wait_until(lambda: set(view._rows) == {"task-2"})
 
         second_row = view._rows["task-2"]
+        started.clear()
+        release.clear()
         second_row._buttons[QueueActionKind.DELETE].click()
-
-        assert set(view._rows) == {"task-2"}
-
-        QApplication.processEvents()
-
-        assert view._rows == {}
+        assert started.wait(timeout=1.0)
+        assert second_row.status_label.text() == "Deleting..."
+        release.set()
+        _wait_until(lambda: view._rows == {})
         assert not view.empty_label.isHidden()
+    finally:
+        release.set()
+        view.cleanup()
+
+
+def test_queue_drawer_view_restores_row_after_failed_delete():
+    from context_aware_translation.ui.features.queue_drawer_view import QueueDrawerView
+
+    service = FakeQueueService(
+        state=QueueState(
+            items=[
+                QueueItem(
+                    queue_item_id="task-1",
+                    title="Read text from images",
+                    project_id="proj-1",
+                    document_id=4,
+                    status=QueueStatus.DONE,
+                    related_target=NavigationTarget(
+                        kind=NavigationTargetKind.DOCUMENT_OCR,
+                        project_id="proj-1",
+                        document_id=4,
+                    ),
+                    available_actions=[QueueActionKind.OPEN_RELATED_ITEM, QueueActionKind.DELETE],
+                )
+            ]
+        )
+    )
+
+    def _apply_action(request):  # noqa: ANN001
+        service.calls.append(("apply_action", request))
+        raise ApplicationError(
+            ApplicationErrorPayload(
+                code=ApplicationErrorCode.CONFLICT,
+                message="Still cleaning up remote artifacts.",
+            )
+        )
+
+    service.apply_action = _apply_action  # type: ignore[method-assign]
+    bus = InMemoryApplicationEventBus()
+    view = QueueDrawerView(service, bus)
+    notices: list[UserMessage] = []
+    view.notification_requested.connect(notices.append)
+    try:
+        row = view._rows["task-1"]
+        row._buttons[QueueActionKind.DELETE].click()
+
+        assert row.status_label.text() == "Deleting..."
+        _wait_until(lambda: view._rows["task-1"].status_label.text() == "Done")
+
+        restored_row = view._rows["task-1"]
+        assert restored_row.status_label.text() == "Done"
+        assert restored_row._buttons[QueueActionKind.DELETE].isEnabled()
+        assert notices[-1].text == "Still cleaning up remote artifacts."
     finally:
         view.cleanup()

@@ -1452,22 +1452,20 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>QueueDrawerView</name>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="232"/>
-        <location filename="../features/queue_drawer_view.py" line="283"/>
+        <location filename="../features/queue_drawer_view.py" line="266"/>
+        <location filename="../features/queue_drawer_view.py" line="316"/>
         <source>Queue is clear</source>
         <translation>队列为空</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="236"/>
-        <location filename="../features/queue_drawer_view.py" line="284"/>
+        <location filename="../features/queue_drawer_view.py" line="270"/>
+        <location filename="../features/queue_drawer_view.py" line="317"/>
         <source>No background actions right now.</source>
         <translation>当前没有后台操作。</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="255"/>
-        <location filename="../features/queue_drawer_view.py" line="285"/>
         <source>Refresh</source>
-        <translation>刷新</translation>
+        <translation type="vanished">刷新</translation>
     </message>
     <message>
         <location filename="../viewmodels/queue_shell.py" line="25"/>
@@ -1490,32 +1488,33 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation>正在显示当前项目的后台操作。</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="319"/>
+        <location filename="../features/queue_drawer_view.py" line="352"/>
         <source>Nothing is running or queued.</source>
         <translation>当前没有正在运行或排队的操作。</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="324"/>
+        <location filename="../features/queue_drawer_view.py" line="357"/>
         <source>Running {0} | Queued {1} | Blocked {2} | Failed {3}</source>
         <translation>运行中 {0} | 排队 {1} | 阻塞 {2} | 失败 {3}</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="342"/>
+        <location filename="../features/queue_drawer_view.py" line="375"/>
         <source>{0} finished.</source>
         <translation>{0} 已完成。</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="345"/>
+        <location filename="../features/queue_drawer_view.py" line="378"/>
         <source>{0} failed.</source>
         <translation>{0} 失败。</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="350"/>
+        <location filename="../features/queue_drawer_view.py" line="383"/>
         <source>{0} was cancelled.</source>
         <translation>{0} 已取消。</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="380"/>
+        <location filename="../features/queue_drawer_view.py" line="416"/>
+        <location filename="../features/queue_drawer_view.py" line="445"/>
         <source>Queue action &apos;{0}&apos; applied.</source>
         <translation>队列操作“{0}”已应用。</translation>
     </message>
@@ -2658,47 +2657,52 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>_QueueItemCard</name>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="130"/>
+        <location filename="../features/queue_drawer_view.py" line="153"/>
         <source>Open</source>
         <translation>打开</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="131"/>
+        <location filename="../features/queue_drawer_view.py" line="154"/>
         <source>Run</source>
         <translation>运行</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="132"/>
+        <location filename="../features/queue_drawer_view.py" line="155"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="133"/>
+        <location filename="../features/queue_drawer_view.py" line="156"/>
         <source>Retry</source>
         <translation>重试</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="134"/>
+        <location filename="../features/queue_drawer_view.py" line="157"/>
         <source>Delete</source>
         <translation>删除</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="150"/>
+        <location filename="../features/queue_drawer_view.py" line="160"/>
+        <source>Deleting...</source>
+        <translation>正在删除...</translation>
+    </message>
+    <message>
+        <location filename="../features/queue_drawer_view.py" line="182"/>
         <source>Project: {0}</source>
         <translation>项目：{0}</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="152"/>
+        <location filename="../features/queue_drawer_view.py" line="184"/>
         <source>Document {0}</source>
         <translation>文档 {0}</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="158"/>
+        <location filename="../features/queue_drawer_view.py" line="190"/>
         <source>Stage: {0}</source>
         <translation>阶段：{0}</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="160"/>
+        <location filename="../features/queue_drawer_view.py" line="192"/>
         <source>Progress: {0}/{1}</source>
         <translation>进度：{0}/{1}</translation>
     </message>

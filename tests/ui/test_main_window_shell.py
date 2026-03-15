@@ -36,6 +36,7 @@ from tests.application.fakes import (
 
 try:
     from PySide6.QtCore import QObject, Signal
+    from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QWidget
 
     HAS_PYSIDE6 = True
@@ -51,6 +52,17 @@ def _qapp():
     if app is None:
         app = QApplication([])
     yield app
+
+
+def _wait_until(predicate, *, timeout_ms: int = 1000) -> None:  # noqa: ANN001
+    elapsed = 0
+    while elapsed < timeout_ms:
+        QApplication.processEvents()
+        if predicate():
+            return
+        QTest.qWait(10)
+        elapsed += 10
+    assert predicate()
 
 
 class _FakeTaskEngine(QObject):
@@ -712,8 +724,7 @@ def test_main_window_queue_can_close_after_delete_empties_list():
 
         row = window._queue_drawer._rows["task-1"]
         row._buttons[QueueActionKind.DELETE].click()
-        QApplication.processEvents()
-        assert window._queue_drawer._rows == {}
+        _wait_until(lambda: window._queue_drawer._rows == {})
 
         window._queue_shell.close_requested.emit()
         QApplication.processEvents()
@@ -781,10 +792,9 @@ def test_main_window_queue_close_after_multiple_deletes_clears_project_modal_sta
         assert shell.current_surface == "queue"
 
         window._queue_drawer._rows["task-1"]._buttons[QueueActionKind.DELETE].click()
-        QApplication.processEvents()
+        _wait_until(lambda: "task-1" not in window._queue_drawer._rows)
         window._queue_drawer._rows["task-2"]._buttons[QueueActionKind.DELETE].click()
-        QApplication.processEvents()
-        assert window._queue_drawer._rows == {}
+        _wait_until(lambda: window._queue_drawer._rows == {})
 
         window._queue_shell.close_requested.emit()
         QApplication.processEvents()

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QEvent, Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -36,6 +36,29 @@ _STATUS_LABELS: dict[QueueStatus, str] = {
 }
 
 
+class _QueueDeleteWorker(QThread):
+    finished_success = Signal(str, object)  # task_id, AcceptedCommand
+    failed = Signal(str, str, str)  # task_id, message, code
+
+    def __init__(self, service: QueueService, task_id: str, *, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._service = service
+        self._task_id = task_id
+
+    def run(self) -> None:
+        try:
+            result = self._service.apply_action(
+                QueueActionRequest(queue_item_id=self._task_id, action=QueueActionKind.DELETE)
+            )
+        except ApplicationError as exc:
+            self.failed.emit(self._task_id, exc.payload.message, exc.payload.code.value)
+            return
+        except Exception as exc:  # noqa: BLE001
+            self.failed.emit(self._task_id, f"{type(exc).__name__}: {exc}", "")
+            return
+        self.finished_success.emit(self._task_id, result)
+
+
 class _QueueItemCard(QFrame):
     action_requested = Signal(object, object)  # QueueItem, QueueActionKind
 
@@ -43,6 +66,7 @@ class _QueueItemCard(QFrame):
         super().__init__(parent)
         self._item = item
         self._buttons: dict[QueueActionKind, QPushButton] = {}
+        self._pending_action: QueueActionKind | None = None
         self._init_ui()
         self.set_item(item)
 
@@ -115,7 +139,6 @@ class _QueueItemCard(QFrame):
     def set_item(self, item: QueueItem) -> None:
         self._item = item
         self.title_label.setText(item.title)
-        self.status_label.setText(_STATUS_LABELS[item.status])
         self.scope_label.setText(self._scope_text(item))
         self.scope_label.setVisible(bool(self.scope_label.text()))
         self.detail_label.setText(self._detail_text(item))
@@ -133,13 +156,22 @@ class _QueueItemCard(QFrame):
             QueueActionKind.RETRY: self.tr("Retry"),
             QueueActionKind.DELETE: self.tr("Delete"),
         }
+        self.status_label.setText(
+            self.tr("Deleting...") if self._pending_action is QueueActionKind.DELETE else _STATUS_LABELS[item.status]
+        )
         for action, button in self._buttons.items():
             button.setText(labels[action])
             enabled = action in item.available_actions and not (
                 action is QueueActionKind.OPEN_RELATED_ITEM and item.related_target is None
             )
             button.setVisible(enabled)
-            button.setEnabled(enabled)
+            button.setEnabled(enabled and self._pending_action is None)
+
+    def set_pending_action(self, action: QueueActionKind | None) -> None:
+        if self._pending_action is action:
+            return
+        self._pending_action = action
+        self.set_item(self._item)
 
     def retranslateUi(self) -> None:
         self.set_item(self._item)
@@ -181,6 +213,8 @@ class QueueDrawerView(QWidget):
         self._service = service
         self._scope_project_id: str | None = None
         self._rows: dict[str, _QueueItemCard] = {}
+        self._pending_delete_ids: set[str] = set()
+        self._delete_workers: dict[str, _QueueDeleteWorker] = {}
         self._last_status: dict[str, QueueStatus] = {}
         self._suppressed_transition_notifications: set[str] = set()
         self._loaded_once = False
@@ -252,11 +286,6 @@ class QueueDrawerView(QWidget):
         self.body_stack.addWidget(self.scroll_area)
         layout.addWidget(self.body_stack, 1)
 
-        self.refresh_button = QPushButton(self.tr("Refresh"))
-        self.refresh_button.clicked.connect(self.refresh)
-        set_button_tone(self.refresh_button, "ghost")
-        layout.addWidget(self.refresh_button)
-
         self.retranslateUi()
 
     def set_scope(self, project_id: str | None, *, project_name: str | None = None) -> None:
@@ -273,6 +302,10 @@ class QueueDrawerView(QWidget):
 
     def cleanup(self) -> None:
         self._event_bridge.close()
+        workers = list(self._delete_workers.values())
+        self._delete_workers.clear()
+        for worker in workers:
+            worker.wait()
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:
@@ -282,7 +315,6 @@ class QueueDrawerView(QWidget):
     def retranslateUi(self) -> None:
         self.empty_title_label.setText(self.tr("Queue is clear"))
         self.empty_label.setText(self.tr("No background actions right now."))
-        self.refresh_button.setText(self.tr("Refresh"))
         for row in self._rows.values():
             row.retranslateUi()
 
@@ -302,6 +334,7 @@ class QueueDrawerView(QWidget):
                 row.action_requested.connect(self._on_action_requested)
             else:
                 row.set_item(item)
+            row.set_pending_action(QueueActionKind.DELETE if item.queue_item_id in self._pending_delete_ids else None)
             next_rows[item.queue_item_id] = row
             self.rows_layout.insertWidget(position, row)
         for stale_row in previous_rows.values():
@@ -362,6 +395,9 @@ class QueueDrawerView(QWidget):
             if item.related_target is not None:
                 self.open_related_item_requested.emit(item.related_target)
             return
+        if action is QueueActionKind.DELETE:
+            self._start_delete(item.queue_item_id)
+            return
         try:
             result = self._service.apply_action(QueueActionRequest(queue_item_id=item.queue_item_id, action=action))
         except ApplicationError as exc:
@@ -381,6 +417,45 @@ class QueueDrawerView(QWidget):
                 )
             )
         self._queue_refresh()
+
+    def _start_delete(self, task_id: str) -> None:
+        if task_id in self._pending_delete_ids:
+            return
+        self._pending_delete_ids.add(task_id)
+        row = self._rows.get(task_id)
+        if row is not None:
+            row.set_pending_action(QueueActionKind.DELETE)
+        worker = _QueueDeleteWorker(self._service, task_id, parent=self)
+        worker.finished_success.connect(self._on_delete_succeeded)
+        worker.failed.connect(self._on_delete_failed)
+        worker.finished.connect(worker.deleteLater)
+        worker.finished.connect(lambda _task_id=task_id: self._delete_workers.pop(_task_id, None))
+        self._delete_workers[task_id] = worker
+        worker.start()
+
+    def _on_delete_succeeded(self, task_id: str, result: object) -> None:
+        self._pending_delete_ids.discard(task_id)
+        if result_message := getattr(result, "message", None):
+            self.notification_requested.emit(result_message)
+        else:
+            command_name = getattr(result, "command_name", "delete")
+            self.notification_requested.emit(
+                UserMessage(
+                    severity=UserMessageSeverity.INFO,
+                    text=self.tr("Queue action '{0}' applied.").format(command_name),
+                )
+            )
+        self.refresh()
+
+    def _on_delete_failed(self, task_id: str, error_text: str, error_code: str) -> None:
+        self._pending_delete_ids.discard(task_id)
+        message = UserMessage(
+            severity=UserMessageSeverity.ERROR,
+            text=error_text,
+            code=error_code or None,
+        )
+        self.notification_requested.emit(message)
+        self.refresh()
 
     def _queue_refresh(self) -> None:
         if self._refresh_pending:
