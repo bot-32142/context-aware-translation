@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 
 import pytest
 
@@ -26,7 +27,7 @@ from context_aware_translation.application.contracts.common import (
 from tests.application.fakes import FakeAppSetupService
 
 try:
-    from PySide6.QtWidgets import QApplication, QDialog
+    from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -395,10 +396,12 @@ def test_connection_editor_dialog_tests_inside_dialog():
     dialog.form.display_name_edit.setText("Gemini")
     dialog.form.api_key_edit.setText("secret")
 
-    dialog._on_test()
+    with patch.object(QMessageBox, "exec", return_value=QMessageBox.StandardButton.Ok) as exec_mock:
+        dialog._on_test()
 
     assert len(seen) == 1
     assert seen[0].display_name == "Gemini"
+    exec_mock.assert_called_once()
 
 
 def test_connection_editor_dialog_resets_token_usage_inside_dialog():

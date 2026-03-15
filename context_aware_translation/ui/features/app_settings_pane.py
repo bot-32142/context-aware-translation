@@ -27,11 +27,9 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowStepId,
     WorkflowStepRoute,
 )
-from context_aware_translation.application.contracts.common import CapabilityCode, UserMessageSeverity
 from context_aware_translation.application.services.app_setup import AppSetupService
 from context_aware_translation.ui.chrome_sizing import sync_qml_host_height
 from context_aware_translation.ui.features.app_setup_view import (
-    _CAPABILITY_LABELS,
     _NEW_PROFILE_ROUTE_SPECS,
     _PROVIDER_LABELS,
     ConnectionEditorDialog,
@@ -294,7 +292,11 @@ class AppSettingsPane(QWidget):
         return self._state.shared_profiles[row]
 
     def _on_run_wizard(self) -> None:
-        dialog = SetupWizardDialog(self._service, self._service.get_wizard_state(), self)
+        dialog = SetupWizardDialog(
+            self._service,
+            self._service.get_wizard_state(),
+            parent=self._dialog_parent(),
+        )
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.refresh()
 
@@ -305,7 +307,7 @@ class AppSettingsPane(QWidget):
         connection = connection or self._selected_connection()
         dialog_kwargs: dict[str, object] = {
             "test_callback": self._test_connection_draft,
-            "parent": self,
+            "parent": self._dialog_parent(),
         }
         if connection is None:
             dialog = ConnectionEditorDialog(**dialog_kwargs)
@@ -368,7 +370,7 @@ class AppSettingsPane(QWidget):
             profile=current_profile,
             connection_choices=self._connection_choices(),
             allow_name_edit=True,
-            parent=self,
+            parent=self._dialog_parent(),
         )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
@@ -424,9 +426,7 @@ class AppSettingsPane(QWidget):
         self._edit_connection(connection)
 
     def _test_connection_draft(self, draft: ConnectionDraft) -> ConnectionTestResult:
-        result = self._service.test_connection(ConnectionTestRequest(connection=draft))
-        self._show_test_result(result)
-        return result
+        return self._service.test_connection(ConnectionTestRequest(connection=draft))
 
     def _reset_connection_tokens(self, connection_id: str) -> ConnectionSummary:
         updated = self._service.reset_connection_tokens(connection_id)
@@ -485,26 +485,6 @@ class AppSettingsPane(QWidget):
             is_default=False,
         )
 
-    def _show_test_result(self, result: ConnectionTestResult) -> None:
-        lines = [result.connection_label]
-        for capability in result.supported_capabilities:
-            label = _CAPABILITY_LABELS.get(
-                capability, capability.value if isinstance(capability, CapabilityCode) else str(capability)
-            )
-            lines.append(f"- {label}")
-        if result.message is not None:
-            self._show_message(result.message.severity, "\n".join(lines + ["", result.message.text]))
-        else:
-            self._show_message(UserMessageSeverity.INFO, "\n".join(lines))
-
-    def _show_message(self, severity: UserMessageSeverity, text: str) -> None:
-        if severity is UserMessageSeverity.ERROR:
-            QMessageBox.critical(self, self.tr("App Setup"), text)
-        elif severity is UserMessageSeverity.WARNING:
-            QMessageBox.warning(self, self.tr("App Setup"), text)
-        else:
-            QMessageBox.information(self, self.tr("App Setup"), text)
-
     def _confirm(self, title: str, text: str) -> bool:
         return (
             QMessageBox.question(
@@ -516,6 +496,10 @@ class AppSettingsPane(QWidget):
             )
             == QMessageBox.StandardButton.Yes
         )
+
+    def _dialog_parent(self) -> QWidget:
+        parent = self.window()
+        return parent if isinstance(parent, QWidget) else self
 
     def _mutate(self, callback: Callable[[], object]) -> None:
         callback()

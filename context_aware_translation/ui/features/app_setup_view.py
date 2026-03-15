@@ -4,7 +4,7 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -44,6 +44,7 @@ from context_aware_translation.application.contracts.app_setup import (
 from context_aware_translation.application.contracts.common import (
     CapabilityCode,
     ProviderKind,
+    UserMessageSeverity,
 )
 from context_aware_translation.application.services.app_setup import AppSetupService
 from context_aware_translation.ui.tips import create_tip_label
@@ -348,6 +349,8 @@ class ConnectionEditorDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
+        if parent is not None:
+            self.setWindowModality(Qt.WindowModality.WindowModal)
         self._connection_id = connection_id
         self._connection_summary = connection_summary
         self._test_callback = test_callback
@@ -419,7 +422,8 @@ class ConnectionEditorDialog(QDialog):
         if not valid:
             QMessageBox.warning(self, self.tr("Missing Information"), message or self.tr("Please complete the form."))
             return
-        self._test_callback(self.form.to_draft(allow_empty_api_key=self._connection_id is not None))
+        result = self._test_callback(self.form.to_draft(allow_empty_api_key=self._connection_id is not None))
+        self._show_test_result(result)
 
     def _on_reset_tokens(self) -> None:
         if self._connection_id is None or self._reset_tokens_callback is None:
@@ -459,12 +463,43 @@ class ConnectionEditorDialog(QDialog):
             target_height = min(max(self.sizeHint().height(), 620), 760)
         self.resize(max(self.width(), self.minimumWidth(), target_width), max(self.minimumHeight(), target_height))
 
+    def _show_test_result(self, result: ConnectionTestResult) -> None:
+        lines = [result.connection_label]
+        for capability in result.supported_capabilities:
+            label = _CAPABILITY_LABELS.get(
+                capability, capability.value if isinstance(capability, CapabilityCode) else str(capability)
+            )
+            lines.append(f"- {label}")
+        if result.message is not None:
+            severity = result.message.severity
+            text = "\n".join(lines + ["", result.message.text])
+        else:
+            severity = UserMessageSeverity.INFO
+            text = "\n".join(lines)
+        box = QMessageBox(self)
+        box.setWindowTitle(self.tr("Connection Test"))
+        box.setText(text)
+        box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        box.setWindowModality(Qt.WindowModality.WindowModal)
+        if severity is UserMessageSeverity.ERROR:
+            box.setIcon(QMessageBox.Icon.Critical)
+        elif severity is UserMessageSeverity.WARNING:
+            box.setIcon(QMessageBox.Icon.Warning)
+        else:
+            box.setIcon(QMessageBox.Icon.Information)
+        box.exec()
+        self.raise_()
+        self.activateWindow()
+        self.button_box.button(QDialogButtonBox.StandardButton.Cancel).setFocus(Qt.FocusReason.OtherFocusReason)
+
 
 class SetupWizardDialog(QDialog):
     def __init__(
         self, service: AppSetupService, initial_state: SetupWizardState, parent: QWidget | None = None
     ) -> None:
         super().__init__(parent)
+        if parent is not None:
+            self.setWindowModality(Qt.WindowModality.WindowModal)
         self._service = service
         self._wizard_state = initial_state
         self._preview_state: SetupWizardState | None = None

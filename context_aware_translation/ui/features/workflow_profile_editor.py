@@ -102,6 +102,8 @@ class StepAdvancedConfigDialog(QDialog):
 
     def __init__(self, route: WorkflowStepRoute, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        if parent is not None:
+            self.setWindowModality(Qt.WindowModality.WindowModal)
         self._route = route
         self._serialize: Callable[[], WorkflowStepRoute] = lambda: self._route
         self.setWindowTitle(self.tr("Step Settings"))
@@ -233,6 +235,7 @@ class WorkflowRoutesEditor(QWidget):
     _COLUMN_COUNT = 4
     _COLUMN_SIDE_MARGIN = 12
     _COLUMN_SPACING = 8
+    _ROW_VIEWPORT_PADDING = 12
     _MIN_STEP_COLUMN_WIDTH = 100
     _MIN_ADVANCED_COLUMN_WIDTH = 88
     _MIN_CONNECTION_COLUMN_WIDTH = 180
@@ -545,7 +548,8 @@ class WorkflowRoutesEditor(QWidget):
         route_row = self.rows[row]
         if route_row.route.step_id not in self._advanced_step_ids:
             return
-        dialog = StepAdvancedConfigDialog(route_row.route, self)
+        parent = self.window()
+        dialog = StepAdvancedConfigDialog(route_row.route, parent if isinstance(parent, QWidget) else self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         updated_route = dialog.route()
@@ -625,7 +629,8 @@ class WorkflowRoutesEditor(QWidget):
             if self._max_visible_rows is None or len(row_heights) <= self._max_visible_rows
             else Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
-        self._scroll_area.setFixedHeight(max(visible_height + 2, 2))
+        viewport_padding = self._ROW_VIEWPORT_PADDING if visible_rows > 0 else 2
+        self._scroll_area.setFixedHeight(max(visible_height + viewport_padding, 2))
         self.setMinimumWidth(self._minimum_editor_width())
 
         editor_height = (
@@ -748,6 +753,8 @@ class WorkflowProfileEditorDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
+        if parent is not None:
+            self.setWindowModality(Qt.WindowModality.WindowModal)
         self._original_profile = profile
         self._connection_choices = connection_choices
         self._allow_name_edit = allow_name_edit
@@ -770,7 +777,7 @@ class WorkflowProfileEditorDialog(QDialog):
         body_widget = QWidget()
         self._body_layout = QVBoxLayout(body_widget)
         self._body_layout.setContentsMargins(0, 0, 0, 0)
-        self._body_layout.setSpacing(6)
+        self._body_layout.setSpacing(4)
         self._body_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         header = create_tip_label(
@@ -868,9 +875,36 @@ class WorkflowProfileEditorDialog(QDialog):
     def _refresh_body_layout(self, *_args: object) -> None:
         self.routes_editor.updateGeometry()
         self.routes_editor.adjustSize()
+        self._sync_section_height(self.general_section)
+        self._sync_section_height(self.routes_section)
         self._body_scroll.widget().adjustSize()
         self._body_layout.activate()
         self.layout().activate()
+
+    def _sync_section_height(self, section: QCollapsible) -> None:
+        content = section.content()
+        if section.isExpanded():
+            if not content.isVisible():
+                content.show()
+            content.updateGeometry()
+            content.adjustSize()
+            target_height = content.sizeHint().height() + 10
+        else:
+            target_height = 0
+            content.hide()
+        if content.maximumHeight() != target_height:
+            content.setMaximumHeight(target_height)
+        layout = section.layout()
+        margins = layout.contentsMargins()
+        total_height = (
+            margins.top()
+            + section.toggleButton().sizeHint().height()
+            + (layout.spacing() if section.isExpanded() else 0)
+            + target_height
+            + margins.bottom()
+        )
+        section.setFixedHeight(total_height)
+        section.updateGeometry()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)

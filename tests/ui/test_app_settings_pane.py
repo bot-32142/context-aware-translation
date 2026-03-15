@@ -25,7 +25,7 @@ from context_aware_translation.application.contracts.common import (
 from tests.application.fakes import FakeAppSetupService
 
 try:
-    from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
+    from PySide6.QtWidgets import QApplication, QDialog, QMessageBox, QWidget
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -238,3 +238,69 @@ def test_app_settings_pane_runs_wizard_through_service():
         view._on_run_wizard()
 
     assert any(call[0] == "get_wizard_state" for call in service.calls)
+
+
+def test_app_settings_pane_parents_child_dialogs_to_host_window():
+    from context_aware_translation.ui.features.app_settings_pane import AppSettingsPane
+    from context_aware_translation.ui.shell_hosts.app_settings_dialog_host import AppSettingsDialogHost
+
+    class _CaptureConnectionDialog:
+        parent_widget: QWidget | None = None
+
+        def __init__(self, *args, parent=None, **kwargs):
+            type(self).parent_widget = parent
+
+        def exec(self):
+            return QDialog.DialogCode.Rejected
+
+    class _CaptureProfileDialog:
+        parent_widget: QWidget | None = None
+
+        def __init__(self, *args, parent=None, profile=None, **kwargs):
+            type(self).parent_widget = parent
+
+        def exec(self):
+            return QDialog.DialogCode.Rejected
+
+    class _CaptureWizardDialog:
+        parent_widget: QWidget | None = None
+
+        def __init__(self, *args, parent=None, **kwargs):
+            type(self).parent_widget = parent
+
+        def exec(self):
+            return QDialog.DialogCode.Rejected
+
+    service = FakeAppSetupService(state=_make_state())
+    host = AppSettingsDialogHost()
+    try:
+        view = AppSettingsPane(service, parent=host)
+        host.set_app_settings_widget(view)
+        host.show()
+        QApplication.processEvents()
+
+        with (
+            patch(
+                "context_aware_translation.ui.features.app_settings_pane.ConnectionEditorDialog",
+                _CaptureConnectionDialog,
+            ),
+            patch(
+                "context_aware_translation.ui.features.app_settings_pane.WorkflowProfileEditorDialog",
+                _CaptureProfileDialog,
+            ),
+            patch("context_aware_translation.ui.features.app_settings_pane.SetupWizardDialog", _CaptureWizardDialog),
+        ):
+            view.connections_table.selectRow(0)
+            view._on_add_connection()
+            view._on_run_wizard()
+            view._on_tab_requested("profiles")
+            view.profiles_table.selectRow(0)
+            view._edit_profile()
+
+        assert _CaptureConnectionDialog.parent_widget is host
+        assert _CaptureWizardDialog.parent_widget is host
+        assert _CaptureProfileDialog.parent_widget is host
+    finally:
+        host.close()
+        host.deleteLater()
+        QApplication.processEvents()

@@ -9,12 +9,17 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowStepRoute,
 )
 from context_aware_translation.application.runtime import build_workflow_profile_payload
-from context_aware_translation.ui.features.workflow_profile_editor import ConnectionChoice, WorkflowProfileEditorDialog
+from context_aware_translation.ui.features.workflow_profile_editor import (
+    ADVANCED_STEP_IDS,
+    ConnectionChoice,
+    WorkflowProfileEditorDialog,
+    WorkflowRoutesEditor,
+)
 
 try:
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
-    from PySide6.QtWidgets import QApplication, QDialog, QPushButton, QScrollArea
+    from PySide6.QtWidgets import QApplication, QDialog, QPushButton, QScrollArea, QWidget
     from superqt import QCollapsible
 
     HAS_PYSIDE6 = True
@@ -89,6 +94,152 @@ def test_workflow_profile_editor_uses_scrollable_dialog_layout():
     assert dialog.routes_table.rowHeight(0) >= dialog.routes_table.cellWidget(0, 3).sizeHint().height()
     assert "background-color: white" in dialog.routes_table.styleSheet()
     assert "palette(base)" not in dialog.routes_table.styleSheet()
+
+
+def test_workflow_profile_editor_normalizes_initial_routes_height_and_collapsed_spacing():
+    profile = WorkflowProfileDetail(
+        profile_id="profile:recommended",
+        name="Recommended",
+        kind=WorkflowProfileKind.SHARED,
+        target_language="English",
+        routes=[
+            WorkflowStepRoute(
+                step_id=step_id,
+                step_label=step_id.value.replace("_", " ").title(),
+                connection_id="conn-gemini",
+                connection_label="Gemini",
+                model="gemini-3-flash-preview",
+            )
+            for step_id in (
+                WorkflowStepId.EXTRACTOR,
+                WorkflowStepId.SUMMARIZER,
+                WorkflowStepId.GLOSSARY_TRANSLATOR,
+                WorkflowStepId.TRANSLATOR,
+                WorkflowStepId.REVIEWER,
+                WorkflowStepId.OCR,
+                WorkflowStepId.IMAGE_REEMBEDDING,
+                WorkflowStepId.MANGA_TRANSLATOR,
+                WorkflowStepId.TRANSLATOR_BATCH,
+            )
+        ],
+    )
+    dialog = WorkflowProfileEditorDialog(
+        profile=profile,
+        connection_choices=[
+            ConnectionChoice(
+                connection_id="conn-gemini",
+                label="Gemini",
+                default_model="gemini-3-flash-preview",
+            )
+        ],
+        allow_name_edit=True,
+    )
+
+    dialog.show()
+    QTest.qWait(100)
+
+    assert dialog.routes_section.content().maximumHeight() >= dialog.routes_section.content().sizeHint().height()
+
+    dialog.routes_section.collapse(False)
+    dialog.general_section.collapse(False)
+    QTest.qWait(50)
+
+    gap = dialog.routes_section.geometry().top() - dialog.general_section.geometry().bottom() - 1
+    assert not dialog.routes_section.content().isVisible()
+    assert dialog.routes_section.height() <= dialog.routes_section.toggleButton().sizeHint().height() + 24
+    assert gap <= 4
+
+
+def test_workflow_profile_editor_keeps_last_route_row_fully_visible():
+    profile = WorkflowProfileDetail(
+        profile_id="profile:recommended",
+        name="Recommended",
+        kind=WorkflowProfileKind.SHARED,
+        target_language="English",
+        routes=[
+            WorkflowStepRoute(
+                step_id=step_id,
+                step_label=step_id.value.replace("_", " ").title(),
+                connection_id="conn-gemini",
+                connection_label="Gemini",
+                model="gemini-3-flash-preview",
+            )
+            for step_id in (
+                WorkflowStepId.EXTRACTOR,
+                WorkflowStepId.SUMMARIZER,
+                WorkflowStepId.GLOSSARY_TRANSLATOR,
+                WorkflowStepId.TRANSLATOR,
+                WorkflowStepId.REVIEWER,
+                WorkflowStepId.OCR,
+                WorkflowStepId.IMAGE_REEMBEDDING,
+                WorkflowStepId.MANGA_TRANSLATOR,
+                WorkflowStepId.TRANSLATOR_BATCH,
+            )
+        ],
+    )
+    dialog = WorkflowProfileEditorDialog(
+        profile=profile,
+        connection_choices=[
+            ConnectionChoice(
+                connection_id="conn-gemini",
+                label="Gemini",
+                default_model="gemini-3-flash-preview",
+            )
+        ],
+        allow_name_edit=True,
+    )
+
+    dialog.show()
+    QTest.qWait(100)
+
+    viewport = dialog.routes_editor._scroll_area.viewport()
+    last_row = dialog.routes_editor.rows[-1].row_widget
+    assert last_row is not None
+    assert last_row.geometry().bottom() <= viewport.height() - 4
+
+
+def test_workflow_routes_editor_leaves_bottom_clearance_for_last_visible_row():
+    routes = [
+        WorkflowStepRoute(
+            step_id=step_id,
+            step_label=step_id.value.replace("_", " ").title(),
+            connection_id="conn-gemini",
+            connection_label="Gemini",
+            model="gemini-3-flash-preview",
+        )
+        for step_id in (
+            WorkflowStepId.EXTRACTOR,
+            WorkflowStepId.SUMMARIZER,
+            WorkflowStepId.GLOSSARY_TRANSLATOR,
+            WorkflowStepId.TRANSLATOR,
+            WorkflowStepId.REVIEWER,
+            WorkflowStepId.OCR,
+            WorkflowStepId.IMAGE_REEMBEDDING,
+            WorkflowStepId.MANGA_TRANSLATOR,
+            WorkflowStepId.TRANSLATOR_BATCH,
+        )
+    ]
+    editor = WorkflowRoutesEditor(
+        routes,
+        [
+            ConnectionChoice(
+                connection_id="conn-gemini",
+                label="Gemini",
+                default_model="gemini-3-flash-preview",
+            )
+        ],
+        advanced_step_ids=ADVANCED_STEP_IDS,
+        hint_text="hint",
+        max_visible_rows=6,
+    )
+
+    editor.show()
+    QTest.qWait(100)
+
+    viewport = editor._scroll_area.viewport()
+    last_visible_row = editor.rows[5].row_widget
+    assert last_visible_row is not None
+    assert last_visible_row.geometry().bottom() <= viewport.height() - 4
 
 
 def test_workflow_profile_editor_is_resizable():
@@ -235,10 +386,12 @@ def test_workflow_profile_editor_only_shows_advanced_button_for_configurable_ste
     )
 
     opened: list[WorkflowStepId] = []
+    parent_widgets: list[QWidget | None] = []
 
     class _FakeStepDialog:
-        def __init__(self, route: WorkflowStepRoute, *_args, **_kwargs):
+        def __init__(self, route: WorkflowStepRoute, parent=None, **_kwargs):
             opened.append(route.step_id)
+            parent_widgets.append(parent)
 
         def exec(self):
             return QDialog.DialogCode.Rejected
@@ -255,6 +408,7 @@ def test_workflow_profile_editor_only_shows_advanced_button_for_configurable_ste
         editor_module.StepAdvancedConfigDialog = original
 
     assert opened == [WorkflowStepId.TRANSLATOR]
+    assert parent_widgets == [dialog]
     assert dialog.routes_table.item(1, 3).text() == "—"
 
 
