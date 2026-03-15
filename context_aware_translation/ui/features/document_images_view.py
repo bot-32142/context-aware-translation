@@ -55,9 +55,6 @@ class DocumentImagesView(QWidget):
         self._assets: list[ImageAssetState] = []
         self._current_index: int | None = None
         self._preview_cache: dict[tuple[str, str], bytes] = {}
-        self._refit_timer = QTimer(self)
-        self._refit_timer.setSingleShot(True)
-        self._refit_timer.timeout.connect(self._refit_viewers)
         self._chrome_resize_timer = QTimer(self)
         self._chrome_resize_timer.setSingleShot(True)
         self._chrome_resize_timer.timeout.connect(self._sync_chrome_height)
@@ -223,7 +220,7 @@ class DocumentImagesView(QWidget):
 
     def activate_view(self) -> None:
         self._refresh_current_selection()
-        self._schedule_refit()
+        self._schedule_viewer_auto_fit(delay_ms=75)
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:
@@ -350,7 +347,7 @@ class DocumentImagesView(QWidget):
             self.toggle_button.setEnabled(False)
             self.status_label.setText(self.tr("Pending"))
             self.status_label.setStyleSheet("color: #b54708; font-weight: 600;")
-        self._schedule_refit()
+        self._schedule_viewer_auto_fit(delay_ms=75)
 
     def _load_reembedded_image(self, asset: ImageAssetState) -> bytes | None:
         if not asset.output_path:
@@ -404,7 +401,7 @@ class DocumentImagesView(QWidget):
             self.right_label.setText(self.tr("Translated Text"))
             self.toggle_button.setText(self.tr("Show Reembedded"))
         self._sync_chrome_state()
-        self._schedule_refit()
+        self._schedule_viewer_auto_fit(delay_ms=75)
 
     def _render_progress(self, state: DocumentImagesState) -> None:
         if state.active_task_id is None:
@@ -592,17 +589,19 @@ class DocumentImagesView(QWidget):
     def showEvent(self, event) -> None:  # type: ignore[override]
         super().showEvent(event)
         self._schedule_chrome_resize()
-        self._schedule_refit()
+        self._schedule_viewer_auto_fit(delay_ms=75)
 
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)
         self._schedule_chrome_resize()
-        self._schedule_refit()
+        self._schedule_viewer_auto_fit()
 
-    def _schedule_refit(self) -> None:
-        if self.isVisible():
-            self._refit_viewers()
-        self._refit_timer.start(75)
+    def _schedule_viewer_auto_fit(self, *, delay_ms: int = 0) -> None:
+        if not self.isVisible():
+            return
+        self.image_viewer.schedule_auto_fit(delay_ms=delay_ms)
+        if self.right_stack.currentWidget() is self.reembedded_viewer:
+            self.reembedded_viewer.schedule_auto_fit(delay_ms=delay_ms)
 
     def _schedule_chrome_resize(self) -> None:
         self._sync_chrome_height()
@@ -610,17 +609,6 @@ class DocumentImagesView(QWidget):
 
     def _sync_chrome_height(self) -> None:
         sync_qml_host_height(self.chrome_host)
-
-    def _refit_viewers(self) -> None:
-        if not self.isVisible():
-            return
-        if self.image_viewer.pixmap_item is not None:
-            self.image_viewer.fit_to_window()
-        if (
-            self.right_stack.currentWidget() is self.reembedded_viewer
-            and self.reembedded_viewer.pixmap_item is not None
-        ):
-            self.reembedded_viewer.fit_to_window()
 
     def _connect_qml_signals(self) -> None:
         root = self.chrome_host.rootObject()

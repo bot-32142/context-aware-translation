@@ -57,6 +57,8 @@ from context_aware_translation.application.events import InMemoryApplicationEven
 from tests.application.fakes import FakeDocumentService, FakeTermsService, FakeWorkService
 
 try:
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QApplication, QMessageBox
 
     HAS_PYSIDE6 = True
@@ -206,9 +208,12 @@ def test_work_view_renders_workboard_from_service():
         assert view.rows_table.item(0, 3).text() == "Complete"
         assert view.rows_table.item(0, 4).text() == "In progress (1/2)"
         assert view.rows_table.item(0, 5).text() == "In progress (1/2)"
-        assert view.rows_table.cellWidget(0, 7).text() == "Open Translation"
-        assert view.rows_table.rowHeight(0) >= view.rows_table.cellWidget(0, 7).sizeHint().height()
-        assert view.rows_table.columnWidth(7) >= view.rows_table.cellWidget(0, 7).minimumWidth()
+        assert view.rows_table.columnCount() == 6
+        assert view.rows_table.item(0, 1).toolTip() == "Double-click or press Enter to Open Translation."
+        assert view.rows_table.cellWidget(0, 3) is not None
+        assert view.rows_table.cellWidget(0, 4) is not None
+        assert view.rows_table.cellWidget(0, 5) is not None
+        assert view.rows_table.rowHeight(0) >= 44
         assert work_service.calls == [("get_workboard", "proj-1")]
     finally:
         view.cleanup()
@@ -284,7 +289,8 @@ def test_work_view_opens_document_workspace_for_row_target():
     )
     view, _bus, _work_service, _document_service, _terms_service = _make_view(work_state=_make_workboard(action=action))
     try:
-        view.rows_table.cellWidget(0, 7).click()
+        view.rows_table.selectRow(0)
+        QTest.keyClick(view.rows_table, Qt.Key.Key_Return)
         assert view._document_view is not None
         assert view.stack.currentWidget() is view._document_view
         assert view._document_view.current_section() is DocumentSection.TRANSLATION
@@ -302,7 +308,7 @@ def test_work_view_routes_open_target_to_ocr_tab():
         work_state=_make_workboard(action=action, summary="Open")
     )
     try:
-        view.rows_table.cellWidget(0, 7).click()
+        view._on_cell_double_clicked(0, 0)
         assert view._document_view is not None
         assert view._document_view.current_section() is DocumentSection.OCR
     finally:
@@ -327,7 +333,10 @@ def test_work_view_refreshes_on_invalidation():
         work_service.state_by_project["proj-1"] = _make_workboard(action=second_action, summary="Open Terms")
         bus.publish(WorkboardInvalidatedEvent(project_id="proj-1"))
 
-        assert view.rows_table.cellWidget(0, 7).text() == "Open Terms"
+        assert view.rows_table.item(0, 1).toolTip() == "Double-click or press Enter to Open Terms."
+        view._on_cell_double_clicked(0, 0)
+        assert view._document_view is not None
+        assert view._document_view.current_section() is DocumentSection.TERMS
         assert work_service.calls == [("get_workboard", "proj-1"), ("get_workboard", "proj-1")]
     finally:
         view.cleanup()
@@ -351,7 +360,7 @@ def test_work_view_export_action_prepares_dialog():
     )
     try:
         with patch.object(view, "_open_export_dialog") as mock_open_export_dialog:
-            view.rows_table.cellWidget(0, 7).click()
+            view._on_cell_double_clicked(0, 0)
         mock_open_export_dialog.assert_called_once_with(4)
     finally:
         view.cleanup()

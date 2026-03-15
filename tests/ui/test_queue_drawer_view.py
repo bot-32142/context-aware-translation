@@ -20,7 +20,7 @@ from tests.application.fakes import FakeQueueService
 
 try:
     from PySide6.QtTest import QTest
-    from PySide6.QtWidgets import QApplication, QPushButton
+    from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -35,6 +35,16 @@ def _qapp():
     if app is None:
         app = QApplication([])
     yield app
+
+
+@pytest.fixture(autouse=True)
+def _close_queue_top_levels():
+    yield
+    for widget in QApplication.topLevelWidgets():
+        if isinstance(widget, QWidget):
+            widget.close()
+            widget.deleteLater()
+    QApplication.processEvents()
 
 
 def _make_state(*, status: QueueStatus = QueueStatus.RUNNING) -> QueueState:

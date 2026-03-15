@@ -40,10 +40,14 @@ def _qapp():
 
 
 def _png_1x1() -> bytes:
+    return _png(1, 1)
+
+
+def _png(width: int, height: int) -> bytes:
     from PySide6.QtCore import QBuffer, QByteArray, QIODevice
     from PySide6.QtGui import QColor, QImage
 
-    image = QImage(1, 1, QImage.Format.Format_RGBA8888)
+    image = QImage(width, height, QImage.Format.Format_RGBA8888)
     image.fill(QColor("white"))
     payload = QByteArray()
     buffer = QBuffer(payload)
@@ -397,6 +401,47 @@ def test_document_ocr_tab_uses_old_compact_navigation_and_boundary_enablement():
         assert view.last_button.isEnabled() is False
         assert view.page_status_label.text() == "Pending OCR"
     finally:
+        view.deleteLater()
+
+
+def test_document_ocr_tab_first_page_image_starts_at_stable_fit_scale():
+    from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
+
+    large_page = _png(1200, 1800)
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        ocr=DocumentOCRState(
+            workspace=_workspace_state(),
+            pages=[
+                OCRPageState(source_id=101, page_number=1, total_pages=2, status=SurfaceStatus.DONE),
+                OCRPageState(source_id=102, page_number=2, total_pages=2, status=SurfaceStatus.DONE),
+            ],
+            current_page_index=0,
+            actions=DocumentOCRActions(
+                save={"enabled": True}, run_current={"enabled": True}, run_pending={"enabled": True}
+            ),
+        ),
+        ocr_page_images={101: large_page, 102: large_page},
+    )
+    view = DocumentOCRTab(service, "proj-1", 4)
+    try:
+        view.resize(1200, 800)
+        view.refresh()
+        view.show()
+        _flush()
+
+        initial_zoom = view.image_viewer.transform().m11()
+
+        view._go_next()
+        _flush()
+        view._go_previous()
+        _flush()
+
+        roundtrip_zoom = view.image_viewer.transform().m11()
+        assert roundtrip_zoom > 0
+        assert abs(initial_zoom - roundtrip_zoom) < 0.01
+    finally:
+        view.close()
         view.deleteLater()
 
 

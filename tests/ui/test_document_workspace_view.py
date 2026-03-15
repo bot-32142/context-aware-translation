@@ -228,6 +228,30 @@ def test_document_workspace_view_renders_shell_tabs():
         view.cleanup()
 
 
+def test_document_workspace_only_builds_current_section_initially():
+    view, _bus, document_service, terms_service = _make_view()
+    try:
+        assert view.current_section() is DocumentSection.OCR
+        assert view.section_widget(DocumentSection.OCR) is not None
+        assert view.section_widget(DocumentSection.TERMS) is None
+        assert view.section_widget(DocumentSection.TRANSLATION) is None
+        assert view.section_widget(DocumentSection.IMAGES) is None
+        assert view.section_widget(DocumentSection.EXPORT) is None
+
+        workspace_calls = [name for name, _payload in document_service.calls if name == "get_workspace"]
+        ocr_calls = [name for name, _payload in document_service.calls if name == "get_ocr"]
+        translation_calls = [name for name, _payload in document_service.calls if name == "get_translation"]
+        images_calls = [name for name, _payload in document_service.calls if name == "get_images"]
+        terms_calls = [name for name, _payload in terms_service.calls if name == "get_document_terms"]
+        assert len(workspace_calls) == 1
+        assert len(ocr_calls) == 1
+        assert len(translation_calls) == 0
+        assert len(images_calls) == 0
+        assert len(terms_calls) == 0
+    finally:
+        view.cleanup()
+
+
 def test_document_workspace_terms_tab_uses_shared_terms_component():
     view, _bus, _document_service, terms_service = _make_view()
     try:
@@ -371,7 +395,13 @@ def test_document_workspace_refreshes_on_invalidations():
         terms_calls = [name for name, _payload in terms_service.calls if name == "get_document_terms"]
         assert len(workspace_calls) == 3
         assert len(ocr_calls) == 3
-        assert len(terms_calls) == 3
+        assert len(terms_calls) == 0
+
+        view.show_section(DocumentSection.TERMS)
+        QApplication.processEvents()
+
+        terms_calls = [name for name, _payload in terms_service.calls if name == "get_document_terms"]
+        assert len(terms_calls) == 1
     finally:
         view.cleanup()
 

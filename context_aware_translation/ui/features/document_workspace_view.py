@@ -447,6 +447,7 @@ class DocumentWorkspaceView(QWidget):
         self._events = events
         self._state = None
         self._section_widgets: dict[DocumentSection, QWidget] = {}
+        self._dirty_sections: set[DocumentSection] = set()
         self._event_bridge = QtApplicationEventBridge(events, parent=self)
         self._event_bridge.document_invalidated.connect(self._on_document_invalidated)
         self._event_bridge.setup_invalidated.connect(self._on_setup_invalidated)
@@ -461,6 +462,8 @@ class DocumentWorkspaceView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.shell_host = DocumentShellHost(self)
+        self.shell_host.set_section_widget_factory(self._create_section_widget)
+        self.shell_host.set_section_show_handler(self._prepare_section_widget)
         self.shell_host.back_requested.connect(self.back_requested.emit)
         layout.addWidget(self.shell_host, 1)
 
@@ -468,27 +471,13 @@ class DocumentWorkspaceView(QWidget):
         current_section = self.current_section()
         self._state = self._document_service.get_workspace(self._project_id, self._document_id)
         target_section = current_section or self._state.active_tab
-        self._sync_sections()
+        self._dirty_sections.update(self._section_widgets)
         self.shell_host.set_document_context(
             self._project_id,
             self._document_id,
             qarg(self.tr("%1"), self._state.document.label),
             section=target_section,
         )
-        for widget in self._section_widgets.values():
-            if widget is not None and hasattr(widget, "refresh"):
-                widget.refresh()
-        self.show_section(target_section)
-
-    def _sync_sections(self) -> None:
-        if self._state is None:
-            return
-        for section in _DOCUMENT_SECTIONS:
-            if section in self._section_widgets:
-                continue
-            widget = self._make_section_widget(section)
-            self._section_widgets[section] = widget
-            self.shell_host.set_section_widget(section, widget)
 
     def _make_section_widget(self, section: DocumentSection) -> QWidget:
         if section is DocumentSection.OCR:
@@ -512,6 +501,23 @@ class DocumentWorkspaceView(QWidget):
         if section is DocumentSection.EXPORT:
             return _DocumentExportTab(self._project_id, self._document_id, self._document_service, parent=self)
         raise ValueError(f"Unknown document section: {section}")
+
+    def _create_section_widget(self, section: DocumentSection) -> QWidget:
+        widget = self._section_widgets.get(section)
+        if widget is not None:
+            return widget
+        widget = self._make_section_widget(section)
+        self._section_widgets[section] = widget
+        self._dirty_sections.add(section)
+        return widget
+
+    def _prepare_section_widget(self, section: DocumentSection, widget: QWidget) -> None:
+        if section not in self._dirty_sections:
+            return
+        refresh = getattr(widget, "refresh", None)
+        if callable(refresh):
+            refresh()
+        self._dirty_sections.discard(section)
 
     def section_widget(self, section: DocumentSection) -> QWidget | None:
         return self._section_widgets.get(section)

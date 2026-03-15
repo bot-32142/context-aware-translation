@@ -31,7 +31,7 @@ from tests.application.fakes import FakeTermsService
 
 try:
     from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QApplication, QFileDialog, QHeaderView, QMessageBox
+    from PySide6.QtWidgets import QApplication, QFileDialog, QHeaderView, QMessageBox, QWidget
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -46,6 +46,16 @@ def _qapp():
     if app is None:
         app = QApplication([])
     yield app
+
+
+@pytest.fixture(autouse=True)
+def _close_terms_top_levels():
+    yield
+    for widget in QApplication.topLevelWidgets():
+        if isinstance(widget, QWidget):
+            widget.close()
+            widget.deleteLater()
+    QApplication.processEvents()
 
 
 def _make_state(*, can_review: bool = False, can_export: bool = False, document_scope: bool = False) -> TermsTableState:

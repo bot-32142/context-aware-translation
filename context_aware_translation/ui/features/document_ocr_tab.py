@@ -238,7 +238,7 @@ class _StructuredElementCard(QFrame):
             f" border: {border_width}px solid {border};"
             " border-radius: 10px;"
             f" background-color: {background};"
-            "}}"
+            "}"
         )
         self._editor.setStyleSheet(
             f"QTextEdit#ocrStructuredElementEditor {{"
@@ -247,7 +247,7 @@ class _StructuredElementCard(QFrame):
             " border-radius: 8px;"
             " padding: 6px 8px;"
             f" selection-background-color: {self._palette.badge_background};"
-            "}}"
+            "}"
         )
 
     @staticmethod

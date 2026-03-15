@@ -6,7 +6,7 @@ from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
-    QHeaderView,
+    QLabel,
     QMessageBox,
     QPushButton,
     QStackedWidget,
@@ -23,7 +23,6 @@ from context_aware_translation.application.contracts.common import (
     DocumentSection,
     NavigationTarget,
     NavigationTargetKind,
-    SurfaceStatus,
 )
 from context_aware_translation.application.contracts.work import (
     DeleteDocumentStackRequest,
@@ -53,15 +52,6 @@ from context_aware_translation.ui.widgets.table_support import (
     fit_table_height_to_rows,
 )
 
-_STATUS_LABELS: dict[SurfaceStatus, str] = {
-    SurfaceStatus.READY: "Ready",
-    SurfaceStatus.RUNNING: "Running",
-    SurfaceStatus.BLOCKED: "Blocked",
-    SurfaceStatus.FAILED: "Failed",
-    SurfaceStatus.DONE: "Done",
-    SurfaceStatus.CANCELLED: "Cancelled",
-}
-
 _TARGET_TO_SECTION: dict[NavigationTargetKind, DocumentSection] = {
     NavigationTargetKind.DOCUMENT_OCR: DocumentSection.OCR,
     NavigationTargetKind.DOCUMENT_TERMS: DocumentSection.TERMS,
@@ -90,24 +80,6 @@ class WorkView(QWidget):
         QPushButton:disabled {
             background: #efe7da;
             color: #8b8174;
-        }
-    """
-    _ROW_ACTION_BUTTON_STYLE = """
-        QPushButton {
-            min-height: 34px;
-            padding: 0 14px;
-            border-radius: 12px;
-            border: none;
-            background: #2f251d;
-            color: #fcfaf6;
-            font-weight: 600;
-        }
-        QPushButton:hover:enabled {
-            background: #43362b;
-        }
-        QPushButton:disabled {
-            background: #d7cebf;
-            color: #786b5e;
         }
     """
 
@@ -162,7 +134,7 @@ class WorkView(QWidget):
         home_layout.addWidget(self.chrome_host)
         self._connect_qml_signals()
 
-        self.rows_table = QTableWidget(0, 8)
+        self.rows_table = QTableWidget(0, 6)
         self.rows_table.setHorizontalHeaderLabels(
             [
                 self.tr("#"),
@@ -171,13 +143,12 @@ class WorkView(QWidget):
                 self.tr("OCR"),
                 self.tr("Terms"),
                 self.tr("Translation"),
-                self.tr("State"),
-                self.tr("Action"),
             ]
         )
         configure_readonly_row_table(self.rows_table)
         self.rows_table.itemSelectionChanged.connect(self._on_selection_changed)
         self.rows_table.cellDoubleClicked.connect(self._on_cell_double_clicked)
+        self.rows_table.installEventFilter(self)
         self.rows_table.verticalHeader().setDefaultSectionSize(44)
         self.rows_table.verticalHeader().setMinimumSectionSize(44)
         self.rows_table.setStyleSheet(
@@ -250,6 +221,19 @@ class WorkView(QWidget):
             self.retranslateUi()
         super().changeEvent(event)
 
+    def eventFilter(self, watched, event) -> bool:  # noqa: ANN001
+        if (
+            watched is self.rows_table
+            and event is not None
+            and event.type() == QEvent.Type.KeyPress
+            and event.key() in {Qt.Key.Key_Return, Qt.Key.Key_Enter}
+        ):
+            selected = self._selected_row_state()
+            if selected is not None:
+                self._handle_row_action(selected)
+                return True
+        return super().eventFilter(watched, event)
+
     def retranslateUi(self) -> None:
         if not self._selected_import_paths:
             self._import_summary = self._default_import_summary()
@@ -261,8 +245,6 @@ class WorkView(QWidget):
                 self.tr("OCR"),
                 self.tr("Terms"),
                 self.tr("Translation"),
-                self.tr("State"),
-                self.tr("Action"),
             ]
         )
         self.reset_document_button.setText(self.tr("Reset Document"))
@@ -302,12 +284,7 @@ class WorkView(QWidget):
         for row_state in state.rows:
             self._append_row(row_state)
         self.rows_table.resizeColumnsToContents()
-        apply_header_resize_modes(
-            self.rows_table,
-            ((7, QHeaderView.ResizeMode.Fixed),),
-            column_widths=((1, 260), (6, 260)),
-        )
-        self._sync_action_column_width()
+        apply_header_resize_modes(self.rows_table, (), column_widths=((1, 280), (3, 170), (4, 170), (5, 170)))
         self.rows_table.horizontalHeader().setStretchLastSection(False)
         self._ensure_row_heights()
         self._fit_table_height()
@@ -317,27 +294,61 @@ class WorkView(QWidget):
     def _append_row(self, row_state: WorkDocumentRow) -> None:
         row = self.rows_table.rowCount()
         self.rows_table.insertRow(row)
+        row_tooltip = self._row_tooltip(row_state)
         document_item = QTableWidgetItem(row_state.document.label)
         document_item.setData(Qt.ItemDataRole.UserRole, row_state.document.document_id)
+        document_item.setToolTip(row_tooltip)
         self.rows_table.setItem(row, 0, QTableWidgetItem(str(row_state.document.order_index)))
         self.rows_table.setItem(row, 1, document_item)
         self.rows_table.setItem(row, 2, QTableWidgetItem(str(row_state.source_count)))
-        self.rows_table.setItem(row, 3, QTableWidgetItem(row_state.ocr_status))
-        self.rows_table.setItem(row, 4, QTableWidgetItem(row_state.terms_status))
-        self.rows_table.setItem(row, 5, QTableWidgetItem(row_state.translation_status))
-        summary_text = row_state.state_summary
-        if row_state.blocker is not None and row_state.blocker.message not in summary_text:
-            summary_text = f"{summary_text}\n{row_state.blocker.message}"
-        summary_item = QTableWidgetItem(summary_text)
-        summary_item.setToolTip(row_state.blocker.message if row_state.blocker is not None else row_state.state_summary)
-        self.rows_table.setItem(row, 6, summary_item)
+        self._set_status_cell(row, 3, row_state.ocr_status, tooltip=row_tooltip)
+        self._set_status_cell(row, 4, row_state.terms_status, tooltip=row_tooltip)
+        self._set_status_cell(row, 5, row_state.translation_status, tooltip=row_tooltip)
 
-        button = QPushButton(row_state.primary_action.label)
-        button.setEnabled(row_state.primary_action.kind is not DocumentRowActionKind.BLOCKED)
-        button.setStyleSheet(self._ROW_ACTION_BUTTON_STYLE)
-        button.setMinimumWidth(button.sizeHint().width())
-        button.clicked.connect(lambda _checked=False, item=row_state: self._handle_row_action(item))
-        self.rows_table.setCellWidget(row, 7, button)
+    def _set_status_cell(self, row: int, column: int, text: str, *, tooltip: str) -> None:
+        item = QTableWidgetItem(text)
+        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        item.setToolTip(tooltip)
+        self.rows_table.setItem(row, column, item)
+        self.rows_table.setCellWidget(row, column, self._build_status_badge(text, tooltip=tooltip))
+
+    def _build_status_badge(self, text: str, *, tooltip: str) -> QWidget:
+        background, foreground = self._status_colors(text)
+        label = QLabel(text)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setToolTip(tooltip)
+        label.setStyleSheet(
+            "QLabel {"
+            f" background-color: {background};"
+            f" color: {foreground};"
+            " border-radius: 10px;"
+            " font-weight: 600;"
+            " padding: 4px 10px;"
+            "}"
+        )
+        container = QWidget(self.rows_table)
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(6, 2, 6, 2)
+        layout.setSpacing(0)
+        layout.addWidget(label, 0, Qt.AlignmentFlag.AlignCenter)
+        return container
+
+    def _status_colors(self, text: str) -> tuple[str, str]:
+        normalized = text.strip().lower()
+        if normalized in {"n/a", "not started"}:
+            return "#f2f4f7", "#475467"
+        if "fail" in normalized or "block" in normalized or "cancel" in normalized:
+            return "#fee4e2", "#b42318"
+        if "complete" in normalized or normalized in {"done", "ready"}:
+            return "#dcfae6", "#067647"
+        if "progress" in normalized or "pending" in normalized or "running" in normalized:
+            return "#fef3c7", "#b54708"
+        return "#eef2ff", "#3730a3"
+
+    def _row_tooltip(self, row_state: WorkDocumentRow) -> str:
+        if row_state.blocker is not None:
+            return row_state.blocker.message
+        return self.tr("Double-click or press Enter to %1.").replace("%1", row_state.primary_action.label)
 
     def _fit_table_height(self) -> None:
         fit_table_height_to_rows(self.rows_table, max_visible_rows=self._TABLE_MAX_VISIBLE_ROWS)
@@ -346,17 +357,6 @@ class WorkView(QWidget):
         self.rows_table.resizeRowsToContents()
         for row in range(self.rows_table.rowCount()):
             self.rows_table.setRowHeight(row, max(self.rows_table.rowHeight(row), 44))
-
-    def _sync_action_column_width(self) -> None:
-        required_width = 0
-        for row in range(self.rows_table.rowCount()):
-            widget = self.rows_table.cellWidget(row, 7)
-            if widget is None:
-                continue
-            required_width = max(required_width, widget.sizeHint().width())
-        if required_width <= 0:
-            return
-        self.rows_table.setColumnWidth(7, max(self.rows_table.columnWidth(7), required_width + 24))
 
     def _select_files(self) -> None:
         file_paths, _selected = QFileDialog.getOpenFileNames(

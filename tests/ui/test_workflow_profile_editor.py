@@ -37,6 +37,16 @@ def _qapp():
     yield app
 
 
+@pytest.fixture(autouse=True)
+def _close_workflow_top_levels():
+    yield
+    for widget in QApplication.topLevelWidgets():
+        if isinstance(widget, QWidget):
+            widget.close()
+            widget.deleteLater()
+    QApplication.processEvents()
+
+
 def test_workflow_profile_editor_uses_scrollable_dialog_layout():
     profile = WorkflowProfileDetail(
         profile_id="profile:recommended",

@@ -94,7 +94,6 @@ try:
         QLabel,
         QLineEdit,
         QMenu,
-        QPushButton,
         QWidget,
     )
 
@@ -692,9 +691,10 @@ def test_project_surface_smoke_keeps_controls_in_bounds_and_project_setup_dropdo
         assert chrome_root.property("importLabelText") == "Import"
         assert int(chrome_root.property("implicitHeight")) > 120
         assert _count_visible_text(work_view, "Context is not ready") <= 1
-        action_button = work_view.rows_table.cellWidget(0, 7)
-        assert isinstance(action_button, QPushButton)
-        _assert_widget_inside(action_button, work_view.rows_table.viewport())
+        assert work_view.rows_table.columnCount() == 6
+        assert work_view.rows_table.cellWidget(0, 3) is not None
+        assert work_view.rows_table.cellWidget(0, 4) is not None
+        assert work_view.rows_table.cellWidget(0, 5) is not None
 
         window._open_project_settings(shell)
         _flush(80)

@@ -107,6 +107,33 @@ def test_document_shell_host_handles_qml_navigation_and_back_signal() -> None:
     assert backs == [True]
 
 
+def test_document_shell_host_creates_missing_sections_on_demand() -> None:
+    host = DocumentShellHost()
+    created_sections: list[DocumentSection] = []
+    activations: list[DocumentSection] = []
+
+    def _factory(section: DocumentSection) -> QWidget:
+        created_sections.append(section)
+        return _DocumentPane(section.value)
+
+    def _on_show(section: DocumentSection, widget: QWidget) -> None:
+        activations.append(section)
+        assert widget.objectName() == section.value
+
+    host.set_section_widget_factory(_factory)
+    host.set_section_show_handler(_on_show)
+    host.set_document_context("proj-1", 13, "Chapter 13", section=DocumentSection.TRANSLATION)
+
+    assert created_sections == [DocumentSection.TRANSLATION]
+    assert activations == [DocumentSection.TRANSLATION]
+    assert host.current_content_key() == DocumentSection.TRANSLATION.value
+
+    host.show_images_view()
+    assert created_sections == [DocumentSection.TRANSLATION, DocumentSection.IMAGES]
+    assert activations == [DocumentSection.TRANSLATION, DocumentSection.IMAGES]
+    assert host.current_content_key() == DocumentSection.IMAGES.value
+
+
 def test_document_shell_host_delegates_running_operations_retranslate_and_cleanup() -> None:
     host = DocumentShellHost()
     ocr = _DocumentPane("ocr", running_operations=["ocr"])

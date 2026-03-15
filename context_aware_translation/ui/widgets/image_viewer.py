@@ -118,10 +118,8 @@ class ImageViewer(QGraphicsView):
 
         # Reset zoom and fit to window
         self.reset_zoom()
-        self._auto_fit_pending = True
-        self._user_zoomed = False
+        self.schedule_auto_fit(delay_ms=75)
         self.fit_to_window()
-        self._queue_fit(75)
 
     def zoom_in(self) -> None:
         """Zoom in by the zoom step factor."""
@@ -250,11 +248,22 @@ class ImageViewer(QGraphicsView):
 
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)
+        self._arm_auto_fit()
         self._queue_fit()
 
     def showEvent(self, event) -> None:  # type: ignore[override]
         super().showEvent(event)
-        self._queue_fit()
+        self.schedule_auto_fit()
+
+    def schedule_auto_fit(self, *, delay_ms: int = 0) -> None:
+        """Fit once after layout settles unless the user already zoomed manually."""
+        self._arm_auto_fit()
+        self._queue_fit(delay_ms)
+
+    def _arm_auto_fit(self) -> None:
+        if self.pixmap_item is None or self._user_zoomed:
+            return
+        self._auto_fit_pending = True
 
     def _queue_fit(self, delay_ms: int = 0) -> None:
         if self.pixmap_item is None or self._user_zoomed or not self._auto_fit_pending:

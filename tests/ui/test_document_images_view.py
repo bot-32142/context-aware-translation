@@ -120,6 +120,11 @@ def _transparent_png_with_center_dot(size: int = 64, dot: int = 8) -> bytes:
     return bytes(payload)
 
 
+def _flush() -> None:
+    QApplication.processEvents()
+    QApplication.processEvents()
+
+
 def test_document_images_view_renders_backend_state_and_runs_actions():
     from context_aware_translation.ui.features.document_images_view import DocumentImagesView
 
@@ -264,6 +269,57 @@ def test_document_images_view_trims_transparent_preview_padding():
         assert int(view.image_viewer.pixmap_item.pixmap().width()) == 8
         assert int(view.image_viewer.pixmap_item.pixmap().height()) == 8
     finally:
+        view.deleteLater()
+
+
+def test_document_images_view_preserves_manual_zoom_across_resize_and_toggle():
+    from context_aware_translation.ui.features.document_images_view import DocumentImagesView
+
+    preview = _transparent_png_with_center_dot(size=1200, dot=160)
+    state = _images_state().model_copy(
+        update={
+            "assets": [
+                _images_state().assets[0].model_copy(update={"original_image_bytes": preview}),
+                _images_state()
+                .assets[1]
+                .model_copy(
+                    update={
+                        "original_image_bytes": preview,
+                        "reembedded_image_bytes": preview,
+                    }
+                ),
+            ]
+        }
+    )
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        images=state,
+        ocr_page_images={101: None, 102: None},
+    )
+    view = DocumentImagesView("proj-1", 4, service)
+    try:
+        view.resize(1000, 700)
+        view.refresh()
+        view.show()
+        _flush()
+
+        view.image_viewer.zoom_in()
+        source_zoom = view.image_viewer.transform().m11()
+        view.resize(1120, 760)
+        _flush()
+        assert abs(view.image_viewer.transform().m11() - source_zoom) < 0.001
+
+        view._go_next()
+        _flush()
+        view.reembedded_viewer.zoom_in()
+        reembedded_zoom = view.reembedded_viewer.transform().m11()
+        view._toggle_right_panel()
+        _flush()
+        view._toggle_right_panel()
+        _flush()
+        assert abs(view.reembedded_viewer.transform().m11() - reembedded_zoom) < 0.001
+    finally:
+        view.close()
         view.deleteLater()
 
 

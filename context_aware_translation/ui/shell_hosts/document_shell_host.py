@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QSizePolicy, QWidget
@@ -17,6 +17,8 @@ class DocumentShellHost(HybridShellHost):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         self.viewmodel = DocumentShellViewModel(parent)
+        self._section_widget_factory: Callable[[DocumentSection], QWidget | None] | None = None
+        self._section_show_handler: Callable[[DocumentSection, QWidget], None] | None = None
         super().__init__(
             "document/DocumentShellChrome.qml",
             orientation=Qt.Orientation.Horizontal,
@@ -33,6 +35,18 @@ class DocumentShellHost(HybridShellHost):
         if self.viewmodel.current_section() is section or self.current_content_key() == section.value:
             self._show_section_content(section)
         return registered
+
+    def set_section_widget_factory(
+        self,
+        factory: Callable[[DocumentSection], QWidget | None] | None,
+    ) -> None:
+        self._section_widget_factory = factory
+
+    def set_section_show_handler(
+        self,
+        handler: Callable[[DocumentSection, QWidget], None] | None,
+    ) -> None:
+        self._section_show_handler = handler
 
     def remove_section_widget(self, section: DocumentSection) -> QWidget | None:
         return self.remove_content(section.value)
@@ -144,10 +158,23 @@ class DocumentShellHost(HybridShellHost):
                 yield widget
 
     def _show_section_content(self, section: DocumentSection) -> None:
-        widget = self.section_widget(section)
+        widget = self._ensure_section_widget(section)
         if widget is None:
             return
+        if self._section_show_handler is not None:
+            self._section_show_handler(section, widget)
         self.show_content(section.value)
         activate_view = getattr(widget, "activate_view", None)
         if callable(activate_view):
             activate_view()
+
+    def _ensure_section_widget(self, section: DocumentSection) -> QWidget | None:
+        widget = self.section_widget(section)
+        if widget is not None:
+            return widget
+        if self._section_widget_factory is None:
+            return None
+        created = self._section_widget_factory(section)
+        if created is None:
+            return None
+        return self.register_content(section.value, created)
