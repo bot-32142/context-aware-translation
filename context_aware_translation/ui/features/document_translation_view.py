@@ -4,7 +4,6 @@ from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QColor, QPainter, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
-    QCheckBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -102,6 +101,10 @@ class DocumentTranslationView(QWidget):
         self.viewmodel = DocumentTranslationPaneViewModel(self)
         self._state: DocumentTranslationState | None = None
         self._supports_batch = False
+        self._progress_text_value = ""
+        self._polish_enabled = True
+        self._can_translate = False
+        self._can_batch = False
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -114,24 +117,6 @@ class DocumentTranslationView(QWidget):
             parent=self,
         )
         layout.addWidget(self.chrome_host)
-        self.tip_label = create_tip_label(
-            self.tr("Translation review is scoped to this document only. Saving edits does not trigger hidden reruns."),
-        )
-        self.tip_label.hide()
-        self.progress_label = QLabel()
-        self.progress_label.setStyleSheet("color: #666666;")
-        self.progress_label.hide()
-
-        self.enable_polish_cb = QCheckBox(self.tr("Enable polish pass"), self)
-        self.enable_polish_cb.setChecked(True)
-        self.enable_polish_cb.toggled.connect(self.refresh)
-        self.enable_polish_cb.hide()
-        self.translate_button = QPushButton(self.tr("Translate"), self)
-        self.translate_button.clicked.connect(self._translate_document)
-        self.translate_button.hide()
-        self.batch_translate_button = QPushButton(self.tr("Submit Batch Task"), self)
-        self.batch_translate_button.clicked.connect(self._submit_batch_translation)
-        self.batch_translate_button.hide()
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
@@ -239,7 +224,7 @@ class DocumentTranslationView(QWidget):
             self._service.get_translation(
                 self._project_id,
                 self._document_id,
-                enable_polish=self.enable_polish_cb.isChecked(),
+                enable_polish=self._polish_enabled,
             ),
             previous_unit_id=previous_unit_id,
         )
@@ -253,12 +238,9 @@ class DocumentTranslationView(QWidget):
     def _apply_state(self, state: DocumentTranslationState, *, previous_unit_id: str | None) -> None:
         self._state = state
         self._supports_batch = state.supports_batch
-        self.progress_label.setText(self._progress_text(state))
-        self.translate_button.setEnabled(state.run_action.enabled)
-        self.translate_button.setToolTip(state.run_action.blocker.message if state.run_action.blocker else "")
-        self.batch_translate_button.hide()
-        self.batch_translate_button.setEnabled(state.batch_action.enabled)
-        self.batch_translate_button.setToolTip(state.batch_action.blocker.message if state.batch_action.blocker else "")
+        self._progress_text_value = self._progress_text(state)
+        self._can_translate = state.run_action.enabled
+        self._can_batch = state.batch_action.enabled
         self.unit_list.blockSignals(True)
         self.unit_list.clear()
         selected_row = 0
@@ -419,7 +401,7 @@ class DocumentTranslationView(QWidget):
                 RunDocumentTranslationRequest(
                     project_id=self._project_id,
                     document_id=self._document_id,
-                    enable_polish=self.enable_polish_cb.isChecked(),
+                    enable_polish=self._polish_enabled,
                 )
             )
         except BlockedOperationError as exc:
@@ -442,7 +424,7 @@ class DocumentTranslationView(QWidget):
                 RunDocumentTranslationRequest(
                     project_id=self._project_id,
                     document_id=self._document_id,
-                    enable_polish=self.enable_polish_cb.isChecked(),
+                    enable_polish=self._polish_enabled,
                     batch=True,
                 )
             )
@@ -461,13 +443,8 @@ class DocumentTranslationView(QWidget):
             self._set_message(UserMessageSeverity.INFO, self.tr("Async batch translation queued."))
 
     def _set_message(self, severity: UserMessageSeverity, text: str) -> None:
-        color = {
-            UserMessageSeverity.SUCCESS: "#15803d",
-            UserMessageSeverity.WARNING: "#b45309",
-            UserMessageSeverity.ERROR: "#b91c1c",
-        }.get(severity, "#2563eb")
-        self.progress_label.setStyleSheet(f"color: {color};")
-        self.progress_label.setText(text)
+        _ = severity
+        self._progress_text_value = text
         self._sync_chrome_state()
 
     def _row_text(self, unit: TranslationUnitState) -> str:
@@ -545,12 +522,6 @@ class DocumentTranslationView(QWidget):
         super().changeEvent(event)
 
     def retranslateUi(self) -> None:
-        self.tip_label.setText(
-            self.tr("Translation review is scoped to this document only. Saving edits does not trigger hidden reruns."),
-        )
-        self.enable_polish_cb.setText(self.tr("Enable polish pass"))
-        self.translate_button.setText(self.tr("Translate"))
-        self.batch_translate_button.setText(self.tr("Submit Batch Task"))
         self.source_label.setText(self.tr("Source"))
         self.translation_label.setText(self.tr("Translation"))
         self.find_input.setPlaceholderText(self.tr("Find..."))
@@ -574,16 +545,18 @@ class DocumentTranslationView(QWidget):
         root.batchRequested.connect(self._submit_batch_translation)
 
     def _on_polish_toggled(self, enabled: bool) -> None:
-        self.enable_polish_cb.setChecked(enabled)
-        self._sync_chrome_state()
+        if enabled == self._polish_enabled:
+            return
+        self._polish_enabled = enabled
+        self.refresh()
 
     def _sync_chrome_state(self) -> None:
         self.viewmodel.apply_state(
-            progress_text=self.progress_label.text().strip(),
-            polish_enabled=self.enable_polish_cb.isChecked(),
-            can_translate=self.translate_button.isEnabled(),
+            progress_text=self._progress_text_value.strip(),
+            polish_enabled=self._polish_enabled,
+            can_translate=self._can_translate,
             supports_batch=self._supports_batch,
-            can_batch=self.batch_translate_button.isEnabled(),
+            can_batch=self._can_batch,
         )
 
 

@@ -107,11 +107,10 @@ def test_document_translation_view_renders_units_and_routes_actions():
         assert root.property("translateLabelText") == "Translate"
         assert root.property("canTranslate") is True
         assert root.property("supportsBatch") is True
+        assert root.property("canBatch") is True
         assert view.unit_list.count() == 2
-        assert view.translate_button.isEnabled()
-        assert view.batch_translate_button.isEnabled()
-        assert view.batch_translate_button.isHidden()
-        assert not view.batch_translate_button.isWindow()
+        assert view.viewmodel.can_translate is True
+        assert view.viewmodel.can_batch is True
         assert view.save_button.isEnabled()
         assert view.retranslate_button.isEnabled()
         assert not view.previous_button.isEnabled()
@@ -132,9 +131,12 @@ def test_document_translation_view_renders_units_and_routes_actions():
         assert "run_translation" in call_names
         assert "save_translation" in call_names
         assert "retranslate" in call_names
+        assert view.viewmodel.polish_enabled is False
         assert len(translation_calls) == 2
         assert sum(1 for payload in translation_calls if not payload.batch) == 1
         assert sum(1 for payload in translation_calls if payload.batch) == 1
+        assert any(payload.enable_polish for payload in translation_calls if not payload.batch)
+        assert any(not payload.enable_polish for payload in translation_calls if payload.batch)
         view.next_button.click()
         assert view.unit_list.currentRow() == 1
     finally:
