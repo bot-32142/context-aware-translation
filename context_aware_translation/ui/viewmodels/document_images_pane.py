@@ -94,17 +94,13 @@ class DocumentImagesPaneViewModel(ViewModelBase):
     def has_blocker(self) -> bool:
         return self._has_blocker
 
-    @Property(str, notify=chrome_state_changed)
-    def blocker_action_label(self) -> str:
-        return self._blocker_action_label
-
-    @Property(bool, notify=chrome_state_changed)
-    def has_blocker_action(self) -> bool:
-        return self._has_blocker_action
-
     @Property(bool, notify=chrome_state_changed)
     def blocker_action_visible(self) -> bool:
         return self._has_blocker_action
+
+    @Property(str, notify=chrome_state_changed)
+    def blocker_action_label(self) -> str:
+        return self._blocker_action_label
 
     @Property(str, notify=chrome_state_changed)
     def page_label(self) -> str:
@@ -189,10 +185,6 @@ class DocumentImagesPaneViewModel(ViewModelBase):
     @Property(bool, notify=chrome_state_changed)
     def empty_visible(self) -> bool:
         return self._empty_visible
-
-    @Property(bool, notify=chrome_state_changed)
-    def has_assets(self) -> bool:
-        return not self._empty_visible
 
     @Property(str, notify=labels_changed)
     def empty_text(self) -> str:

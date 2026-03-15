@@ -180,7 +180,6 @@ class QueueDrawerView(QWidget):
         super().__init__(parent)
         self._service = service
         self._scope_project_id: str | None = None
-        self._scope_label: str | None = None
         self._rows: dict[str, _QueueItemCard] = {}
         self._last_status: dict[str, QueueStatus] = {}
         self._suppressed_transition_notifications: set[str] = set()
@@ -211,15 +210,6 @@ class QueueDrawerView(QWidget):
             }
             """,
         )
-
-        self.title_label = QLabel()
-        self.title_label.setStyleSheet("font-size: 18px; font-weight: 600;")
-        self.title_label.hide()
-        layout.addWidget(self.title_label)
-
-        self.tip_label = create_tip_label("")
-        self.tip_label.hide()
-        layout.addWidget(self.tip_label)
 
         self.message_label = QLabel()
         self.message_label.setWordWrap(True)
@@ -270,9 +260,8 @@ class QueueDrawerView(QWidget):
         self.retranslateUi()
 
     def set_scope(self, project_id: str | None, *, project_name: str | None = None) -> None:
-        scope_changed = project_id != self._scope_project_id or project_name != self._scope_label
+        scope_changed = project_id != self._scope_project_id
         self._scope_project_id = project_id
-        self._scope_label = project_name
         self.retranslateUi()
         if scope_changed:
             self.refresh()
@@ -291,13 +280,6 @@ class QueueDrawerView(QWidget):
         super().changeEvent(event)
 
     def retranslateUi(self) -> None:
-        self.title_label.setText(self.tr("Queue"))
-        if self._scope_project_id is None:
-            self.tip_label.setText(self.tr("Showing background actions across all projects."))
-        elif self._scope_label:
-            self.tip_label.setText(self.tr("Showing background actions for {0}.").format(self._scope_label))
-        else:
-            self.tip_label.setText(self.tr("Showing background actions for the current project."))
         self.empty_title_label.setText(self.tr("Queue is clear"))
         self.empty_label.setText(self.tr("No background actions right now."))
         self.refresh_button.setText(self.tr("Refresh"))
@@ -331,11 +313,6 @@ class QueueDrawerView(QWidget):
         if self._loaded_once:
             self._emit_transition_notifications(previous_status, state.items)
         self._loaded_once = True
-
-    def _clear_rows(self) -> None:
-        for row in self._rows.values():
-            row.deleteLater()
-        self._rows.clear()
 
     def _summary_text(self, state: QueueState) -> str:
         if not state.items:

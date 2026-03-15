@@ -528,7 +528,7 @@ def test_main_window_routes_projects_into_project_shell():
 
         shell.queue_requested.emit()
         assert not window._queue_dock.isHidden()
-        assert "One Piece" in window._queue_drawer.tip_label.text()
+        assert window._queue_drawer._scope_project_id == "project-1"
         assert window._app_shell.modal_route == "queue"
 
         shell.work_widget.open_project_setup_requested.emit()

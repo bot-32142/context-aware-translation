@@ -65,8 +65,6 @@ def test_queue_drawer_view_renders_backend_state():
     try:
         view.set_scope("proj-1", project_name="One Piece")
 
-        assert view.title_label.text() == view.tr("Queue")
-        assert "One Piece" in view.tip_label.text()
         assert "Running 1" in view.message_label.text()
         assert len(view._rows) == 1
         row = view._rows["task-1"]

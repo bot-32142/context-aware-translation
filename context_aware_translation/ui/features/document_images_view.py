@@ -140,14 +140,6 @@ class DocumentImagesView(QWidget):
         self._schedule_chrome_resize()
 
     def _init_compatibility_controls(self) -> None:
-        self.tip_label = create_tip_label(
-            self.tr(
-                "Image actions are explicit. Review one image, reinsert pending images, or rerun everything for this document."
-            )
-        )
-        self.tip_label.setParent(self)
-        self.tip_label.hide()
-
         self.blocker_strip = QFrame(self)
         self.blocker_strip.setFrameShape(QFrame.Shape.StyledPanel)
         self.blocker_strip.setStyleSheet(
@@ -458,20 +450,14 @@ class DocumentImagesView(QWidget):
             toolbar.force_all_blocker.message if toolbar.force_all_blocker is not None else ""
         )
 
-    def _toolbar_blocker(self):
-        if self._state is None:
-            return None
-        return (
-            self._state.toolbar.run_pending_blocker
-            or self._state.toolbar.force_all_blocker
-            or self._state.toolbar.cancel_blocker
-        )
-
     def _current_blocker(self, *, require_asset_disabled: bool) -> object | None:
         asset = self._selected_asset()
         if asset is not None and asset.run_blocker is not None and (not require_asset_disabled or not asset.can_run):
             return asset.run_blocker
-        return self._toolbar_blocker()
+        if self._state is None:
+            return None
+        toolbar = self._state.toolbar
+        return toolbar.run_pending_blocker or toolbar.force_all_blocker or toolbar.cancel_blocker
 
     def _update_blocker_strip(self) -> None:
         blocker = self._current_blocker(require_asset_disabled=True)
@@ -538,7 +524,16 @@ class DocumentImagesView(QWidget):
         self.page_spinbox.setValue(page_number)
         self._go_to_entered()
 
-    def _queue_reinsertion(
+    def _run_command(self, action, *, fallback_message: str) -> None:  # noqa: ANN001
+        try:
+            result = action()
+        except ApplicationError as exc:
+            self._set_message(exc.payload.message)
+        else:
+            self._set_message(result.message.text if result.message is not None else fallback_message)
+        self.refresh()
+
+    def _run_reinsertion(
         self,
         *,
         source_id: int | None,
@@ -546,8 +541,8 @@ class DocumentImagesView(QWidget):
         force_all: bool,
         fallback_message: str,
     ) -> None:
-        try:
-            result = self._service.run_image_reinsertion(
+        self._run_command(
+            lambda: self._service.run_image_reinsertion(
                 RunImageReinsertionRequest(
                     project_id=self._project_id,
                     document_id=self._document_id,
@@ -555,19 +550,15 @@ class DocumentImagesView(QWidget):
                     pending_only=pending_only,
                     force_all=force_all,
                 )
-            )
-        except ApplicationError as exc:
-            self._set_message(exc.payload.message)
-            self.refresh()
-            return
-        self._set_message(result.message.text if result.message is not None else fallback_message)
-        self.refresh()
+            ),
+            fallback_message=fallback_message,
+        )
 
     def _run_selected(self) -> None:
         asset = self._selected_asset()
         if asset is None or asset.source_id is None:
             return
-        self._queue_reinsertion(
+        self._run_reinsertion(
             source_id=asset.source_id,
             pending_only=False,
             force_all=True,
@@ -575,7 +566,7 @@ class DocumentImagesView(QWidget):
         )
 
     def _run_pending(self) -> None:
-        self._queue_reinsertion(
+        self._run_reinsertion(
             source_id=None,
             pending_only=True,
             force_all=False,
@@ -583,7 +574,7 @@ class DocumentImagesView(QWidget):
         )
 
     def _force_all(self) -> None:
-        self._queue_reinsertion(
+        self._run_reinsertion(
             source_id=None,
             pending_only=False,
             force_all=True,
@@ -593,14 +584,10 @@ class DocumentImagesView(QWidget):
     def _cancel(self) -> None:
         if self._state is None or self._state.active_task_id is None:
             return
-        try:
-            result = self._service.cancel_image_reinsertion(self._project_id, self._state.active_task_id)
-        except ApplicationError as exc:
-            self._set_message(exc.payload.message)
-            self.refresh()
-            return
-        self._set_message(result.message.text if result.message is not None else self.tr("Cancellation requested."))
-        self.refresh()
+        self._run_command(
+            lambda: self._service.cancel_image_reinsertion(self._project_id, self._state.active_task_id),
+            fallback_message=self.tr("Cancellation requested."),
+        )
 
     def showEvent(self, event) -> None:  # type: ignore[override]
         super().showEvent(event)

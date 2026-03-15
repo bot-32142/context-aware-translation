@@ -45,7 +45,6 @@ Rectangle {
     property string progressText: imagesPane ? imagesPane.progress_text : ""
     property string emptyText: imagesPane ? imagesPane.empty_text : ""
     property string pageInputText: imagesPane ? imagesPane.page_input_text : "1"
-    property bool hasAssets: imagesPane ? imagesPane.has_assets : false
     property bool firstEnabled: imagesPane ? imagesPane.first_enabled : false
     property bool previousEnabled: imagesPane ? imagesPane.previous_enabled : false
     property bool nextEnabled: imagesPane ? imagesPane.next_enabled : false
