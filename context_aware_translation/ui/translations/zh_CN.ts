@@ -2267,172 +2267,170 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>WorkView</name>
     <message>
-        <location filename="../features/work_view.py" line="168"/>
-        <location filename="../features/work_view.py" line="323"/>
+        <location filename="../features/work_view.py" line="167"/>
+        <location filename="../features/work_view.py" line="286"/>
         <source>#</source>
         <translation>#</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="169"/>
-        <location filename="../features/work_view.py" line="324"/>
+        <location filename="../features/work_view.py" line="168"/>
+        <location filename="../features/work_view.py" line="287"/>
         <source>Document</source>
         <translation>文档</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="233"/>
-        <location filename="../features/work_view.py" line="309"/>
         <source>Import documents here, review project-wide progress, and open the next document tool directly from the table.</source>
-        <translation>在此导入文档、查看项目范围的进度，并直接从表格中打开下一个文档工具。</translation>
+        <translation type="vanished">在此导入文档、查看项目范围的进度，并直接从表格中打开下一个文档工具。</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="241"/>
-        <location filename="../features/work_view.py" line="312"/>
+        <location filename="../features/work_view.py" line="230"/>
+        <location filename="../features/work_view.py" line="275"/>
         <location filename="../viewmodels/work_home.py" line="37"/>
         <source>Select Files</source>
         <translation>选择文件</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="244"/>
-        <location filename="../features/work_view.py" line="313"/>
+        <location filename="../features/work_view.py" line="233"/>
+        <location filename="../features/work_view.py" line="276"/>
         <location filename="../viewmodels/work_home.py" line="41"/>
         <source>Select Folder</source>
         <translation>选择文件夹</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="251"/>
-        <location filename="../features/work_view.py" line="314"/>
+        <location filename="../features/work_view.py" line="240"/>
+        <location filename="../features/work_view.py" line="277"/>
         <location filename="../viewmodels/work_home.py" line="45"/>
         <source>Import</source>
         <translation>导入</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="255"/>
-        <location filename="../features/work_view.py" line="316"/>
-        <location filename="../features/work_view.py" line="461"/>
-        <location filename="../features/work_view.py" line="495"/>
-        <location filename="../features/work_view.py" line="539"/>
+        <location filename="../features/work_view.py" line="244"/>
+        <location filename="../features/work_view.py" line="279"/>
+        <location filename="../features/work_view.py" line="418"/>
+        <location filename="../features/work_view.py" line="452"/>
+        <location filename="../features/work_view.py" line="496"/>
         <source>No file or folder selected</source>
         <translation>未选择文件或文件夹</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="170"/>
-        <location filename="../features/work_view.py" line="325"/>
+        <location filename="../features/work_view.py" line="169"/>
+        <location filename="../features/work_view.py" line="288"/>
         <source>Sources</source>
         <translation>源文件</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="171"/>
-        <location filename="../features/work_view.py" line="326"/>
+        <location filename="../features/work_view.py" line="170"/>
+        <location filename="../features/work_view.py" line="289"/>
         <location filename="../viewmodels/document_shell.py" line="43"/>
         <source>OCR</source>
         <translation>OCR</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="172"/>
-        <location filename="../features/work_view.py" line="327"/>
+        <location filename="../features/work_view.py" line="171"/>
+        <location filename="../features/work_view.py" line="290"/>
         <location filename="../viewmodels/document_shell.py" line="47"/>
         <source>Terms</source>
         <translation>术语</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="173"/>
-        <location filename="../features/work_view.py" line="328"/>
+        <location filename="../features/work_view.py" line="172"/>
+        <location filename="../features/work_view.py" line="291"/>
         <location filename="../viewmodels/document_shell.py" line="51"/>
         <source>Translation</source>
         <translation>翻译</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="174"/>
-        <location filename="../features/work_view.py" line="329"/>
+        <location filename="../features/work_view.py" line="173"/>
+        <location filename="../features/work_view.py" line="292"/>
         <source>State</source>
         <translation>状态说明</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="175"/>
-        <location filename="../features/work_view.py" line="330"/>
+        <location filename="../features/work_view.py" line="174"/>
+        <location filename="../features/work_view.py" line="293"/>
         <source>Action</source>
         <translation>操作</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="208"/>
-        <location filename="../features/work_view.py" line="333"/>
-        <location filename="../features/work_view.py" line="573"/>
-        <location filename="../features/work_view.py" line="587"/>
+        <location filename="../features/work_view.py" line="207"/>
+        <location filename="../features/work_view.py" line="296"/>
+        <location filename="../features/work_view.py" line="530"/>
+        <location filename="../features/work_view.py" line="544"/>
         <source>Reset Document</source>
         <translation>重置文档</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="213"/>
-        <location filename="../features/work_view.py" line="334"/>
-        <location filename="../features/work_view.py" line="598"/>
-        <location filename="../features/work_view.py" line="612"/>
+        <location filename="../features/work_view.py" line="212"/>
+        <location filename="../features/work_view.py" line="297"/>
+        <location filename="../features/work_view.py" line="555"/>
+        <location filename="../features/work_view.py" line="569"/>
         <source>Delete Document</source>
         <translation>删除文档</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="221"/>
-        <location filename="../features/work_view.py" line="335"/>
+        <location filename="../features/work_view.py" line="220"/>
+        <location filename="../features/work_view.py" line="298"/>
         <source>No documents imported yet.</source>
         <translation>尚未导入文档。</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="349"/>
+        <location filename="../features/work_view.py" line="312"/>
         <source>Context not ready yet.</source>
         <translation>上下文尚未就绪。</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="435"/>
+        <location filename="../features/work_view.py" line="392"/>
         <source>Select Document File(s)</source>
         <translation>选择文档文件（可多选）</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="437"/>
+        <location filename="../features/work_view.py" line="394"/>
         <source>All Files (*.*)</source>
         <translation>所有文件 (*.*)</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="445"/>
+        <location filename="../features/work_view.py" line="402"/>
         <source>Select Document Folder</source>
         <translation>选择文档文件夹</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="488"/>
+        <location filename="../features/work_view.py" line="445"/>
         <source>Import complete.</source>
         <translation>导入完成。</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="575"/>
+        <location filename="../features/work_view.py" line="532"/>
         <source>This will reset the selected document and all documents added after it. Glossary data, translations, and OCR state for affected documents will be cleared. Continue?</source>
         <translation>这将重置所选文档及其之后添加的所有文档。受影响文档的术语、翻译和 OCR 状态都会被清除。是否继续？</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="589"/>
+        <location filename="../features/work_view.py" line="546"/>
         <source>Reset Complete</source>
         <translation>重置完成</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="600"/>
+        <location filename="../features/work_view.py" line="557"/>
         <source>This will permanently delete the selected document and all documents added after it. This cannot be undone. Continue?</source>
         <translation>这将永久删除所选文档及其之后添加的所有文档。此操作无法撤销。是否继续？</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="614"/>
+        <location filename="../features/work_view.py" line="571"/>
         <source>Delete Complete</source>
         <translation>删除完成</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="692"/>
+        <location filename="../features/work_view.py" line="643"/>
         <location filename="../viewmodels/document_shell.py" line="59"/>
         <source>Export</source>
         <translation>导出</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="707"/>
+        <location filename="../features/work_view.py" line="650"/>
         <source>Open App Setup</source>
         <translation>打开应用设置</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="708"/>
+        <location filename="../features/work_view.py" line="651"/>
         <source>Open Setup</source>
         <translation>打开设置</translation>
     </message>

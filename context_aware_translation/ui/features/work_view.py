@@ -6,7 +6,6 @@ from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
-    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -228,16 +227,6 @@ class WorkView(QWidget):
         self._schedule_chrome_resize()
 
     def _init_home_compatibility_controls(self) -> None:
-        self.tip_label = create_tip_label(
-            self.tr(
-                "Import documents here, review project-wide progress, and open the next document tool directly from the table."
-            )
-        )
-        self.tip_label.hide()
-
-        self.import_strip = QFrame(self.home_page)
-        self.import_strip.hide()
-        self.import_strip.setFrameShape(QFrame.Shape.StyledPanel)
         self.select_files_button = QPushButton(self.tr("Select Files"), self.home_page)
         self.select_files_button.clicked.connect(self._select_files)
         self.select_files_button.hide()
@@ -259,27 +248,6 @@ class WorkView(QWidget):
         self.import_message_label = QLabel(self.home_page)
         self.import_message_label.setWordWrap(True)
         self.import_message_label.hide()
-
-        self.context_strip = QFrame(self.home_page)
-        self.context_strip.hide()
-        self.context_strip.setFrameShape(QFrame.Shape.StyledPanel)
-        self.context_label = QLabel(self.home_page)
-        self.context_label.setStyleSheet("font-weight: 600;")
-        self.context_label.hide()
-        self.blocker_label = QLabel(self.home_page)
-        self.blocker_label.setWordWrap(True)
-        self.blocker_label.setStyleSheet("color: #b42318;")
-        self.blocker_label.hide()
-
-        self.setup_strip = QFrame(self.home_page)
-        self.setup_strip.hide()
-        self.setup_strip.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setup_label = QLabel(self.home_page)
-        self.setup_label.setWordWrap(True)
-        self.setup_label.hide()
-        self.setup_action_button = QPushButton(self.home_page)
-        self.setup_action_button.clicked.connect(self._on_setup_action_clicked)
-        self.setup_action_button.hide()
 
     def refresh(self) -> None:
         self._apply_state(self._work_service.get_workboard(self._project_id))
@@ -304,11 +272,6 @@ class WorkView(QWidget):
         super().changeEvent(event)
 
     def retranslateUi(self) -> None:
-        self.tip_label.setText(
-            self.tr(
-                "Import documents here, review project-wide progress, and open the next document tool directly from the table."
-            )
-        )
         self.select_files_button.setText(self.tr("Select Files"))
         self.select_folder_button.setText(self.tr("Select Folder"))
         self.import_button.setText(self.tr("Import"))
@@ -348,24 +311,18 @@ class WorkView(QWidget):
         context_summary = (
             state.context_frontier.summary if state.context_frontier is not None else self.tr("Context not ready yet.")
         )
-        self.context_label.setText(context_summary)
         blocker_text = (
             state.context_frontier.blocker.message
             if state.context_frontier and state.context_frontier.blocker is not None
             else ""
         )
-        self.blocker_label.setText(blocker_text)
         self.viewmodel.set_context(context_summary, blocker_text)
 
         if state.setup_blocker is not None:
             setup_action_label = self._setup_action_label(state.setup_blocker)
-            self.setup_label.setText(state.setup_blocker.message)
-            self.setup_action_button.setText(setup_action_label)
             self.viewmodel.set_setup(state.setup_blocker.message, setup_action_label)
         else:
             self.viewmodel.clear_setup()
-        self.setup_strip.hide()
-        self.setup_action_button.hide()
 
         self.rows_table.setRowCount(0)
         self._row_states = list(state.rows)
@@ -626,15 +583,9 @@ class WorkView(QWidget):
         if action.kind is DocumentRowActionKind.EXPORT:
             self._open_export_dialog(row_state.document.document_id)
             return
-        if action.kind is DocumentRowActionKind.FIX_SETUP:
-            self._route_setup_target(action.target)
+        if action.target is None:
             return
-        if action.target is None or action.target.document_id is None:
-            return
-        section = self._section_for_target(action.target)
-        if section is None:
-            return
-        self._open_document_workspace(action.target.document_id, section)
+        self.open_navigation_target(action.target)
 
     def _open_document_workspace(self, document_id: int, section: DocumentSection) -> None:
         if self._document_view is None or self._document_view.document_id != document_id:
@@ -694,23 +645,16 @@ class WorkView(QWidget):
         dialog = WorkExportDialog(self._work_service, state, parent=self)
         dialog.exec()
 
-    def _route_setup_target(self, target: NavigationTarget | None) -> None:
-        if target is None:
-            return
-        if target.kind is NavigationTargetKind.APP_SETUP:
-            self.open_app_setup_requested.emit()
-        else:
-            self.open_project_setup_requested.emit()
-
     def _setup_action_label(self, blocker: BlockerInfo) -> str:
         if blocker.target is not None and blocker.target.kind is NavigationTargetKind.APP_SETUP:
             return self.tr("Open App Setup")
         return self.tr("Open Setup")
 
     def _on_setup_action_clicked(self) -> None:
-        if self._state is None:
+        target = self._state.setup_blocker.target if self._state is not None and self._state.setup_blocker else None
+        if target is None:
             return
-        self._route_setup_target(self._state.setup_blocker.target if self._state.setup_blocker is not None else None)
+        self.open_navigation_target(target)
 
     def _on_workboard_invalidated(self, event: WorkboardInvalidatedEvent) -> None:
         if event.project_id not in {None, self._project_id}:

@@ -197,10 +197,9 @@ def test_work_view_renders_workboard_from_service():
     )
     view, _bus, work_service, _document_service, _terms_service = _make_view(work_state=_make_workboard(action=action))
     try:
-        assert view.context_label.text() == "Context ready through 03"
-        assert view.context_label.isHidden()
-        assert view.blocker_label.isHidden()
-        assert view.setup_label.isHidden()
+        assert view.viewmodel.context_summary == "Context ready through 03"
+        assert view.viewmodel.context_blocker_text == ""
+        assert view.viewmodel.has_setup_blocker is False
         assert view.rows_table.rowCount() == 1
         assert view.rows_table.item(0, 1).text() == "04.png"
         assert view.rows_table.item(0, 2).text() == "2"
@@ -240,9 +239,8 @@ def test_work_view_loads_qml_home_chrome_and_routes_setup_signal():
         assert root.property("selectFilesLabelText") == "Select Files"
         assert int(root.property("implicitHeight")) > 180
         assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
-        assert view.setup_strip.isHidden()
-        assert view.setup_label.isHidden()
-        assert view.setup_action_button.isHidden()
+        assert view.viewmodel.setup_message == blocker.message
+        assert view.viewmodel.setup_action_label == "Open Setup"
 
         root.setupActionRequested.emit()
         assert opened == [True]
@@ -267,7 +265,7 @@ def test_work_view_routes_setup_blocker_to_project_setup():
     opened: list[bool] = []
     view.open_project_setup_requested.connect(lambda: opened.append(True))
     try:
-        assert view.setup_strip.isHidden()
+        assert view.viewmodel.has_setup_blocker is True
         view._on_setup_action_clicked()
         assert opened == [True]
     finally:

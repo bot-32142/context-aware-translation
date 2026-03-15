@@ -718,13 +718,15 @@ class DefaultDocumentService:
         decision: Any,
         *,
         document_id: int,
+        target_kind: NavigationTargetKind = NavigationTargetKind.DOCUMENT_OCR,
+        default_reason: str = "Operation is blocked.",
     ) -> tuple[bool, BlockerInfo | None]:
         if decision.allowed:
             return True, None
         return False, make_blocker(
             blocker_code_for_decision_code(decision.code or ""),
-            decision.reason or "Operation is blocked.",
-            target_kind=NavigationTargetKind.DOCUMENT_OCR,
+            decision.reason or default_reason,
+            target_kind=target_kind,
             project_id=project_id,
             document_id=document_id,
         )
@@ -1522,14 +1524,12 @@ class DefaultDocumentService:
             {"document_ids": [document_id], "enable_polish": enable_polish},
             TaskAction.RUN,
         )
-        if decision.allowed:
-            return True, None
-        return False, make_blocker(
-            blocker_code_for_decision_code(decision.code or ""),
-            decision.reason or ("Async batch translation is unavailable." if batch else "Translation is unavailable."),
-            target_kind=NavigationTargetKind.QUEUE,
-            project_id=project_id,
+        return self._decision_to_action_state(
+            project_id,
+            decision,
             document_id=document_id,
+            target_kind=NavigationTargetKind.QUEUE,
+            default_reason="Async batch translation is unavailable." if batch else "Translation is unavailable.",
         )
 
     def _retranslate_action_state_for_chunk(
@@ -1544,14 +1544,12 @@ class DefaultDocumentService:
             {"chunk_id": chunk_id, "document_id": document_id},
             TaskAction.RUN,
         )
-        if decision.allowed:
-            return True, None
-        return False, make_blocker(
-            blocker_code_for_decision_code(decision.code or ""),
-            decision.reason or "Retranslate is currently unavailable.",
-            target_kind=NavigationTargetKind.QUEUE,
-            project_id=project_id,
+        return self._decision_to_action_state(
+            project_id,
+            decision,
             document_id=document_id,
+            target_kind=NavigationTargetKind.QUEUE,
+            default_reason="Retranslate is currently unavailable.",
         )
 
     def _retranslate_action_state_for_manga_page(
@@ -1566,14 +1564,12 @@ class DefaultDocumentService:
             {"document_ids": [document_id], "source_ids": [source_id], "force": True},
             TaskAction.RUN,
         )
-        if decision.allowed:
-            return True, None
-        return False, make_blocker(
-            blocker_code_for_decision_code(decision.code or ""),
-            decision.reason or "Retranslate is currently unavailable.",
-            target_kind=NavigationTargetKind.QUEUE,
-            project_id=project_id,
+        return self._decision_to_action_state(
+            project_id,
+            decision,
             document_id=document_id,
+            target_kind=NavigationTargetKind.QUEUE,
+            default_reason="Retranslate is currently unavailable.",
         )
 
     def _active_translation_task(self, project_id: str, document_id: int) -> TaskRecord | None:
