@@ -328,7 +328,6 @@ class ApplicationRuntime:
                 QueueChangedEvent(project_id=project_id),
                 WorkboardInvalidatedEvent(project_id=project_id),
                 DocumentInvalidatedEvent(project_id=project_id),
-                TermsInvalidatedEvent(project_id=project_id),
                 ProjectsInvalidatedEvent(),
             ]
         )

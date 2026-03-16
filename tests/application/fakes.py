@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from context_aware_translation.application.contracts.app_setup import (
     AppSetupState,
@@ -48,6 +48,7 @@ from context_aware_translation.application.contracts.terms import (
     ImportTermsRequest,
     ReviewTermsRequest,
     TermsTableState,
+    TermsToolbarState,
     TranslatePendingTermsRequest,
     UpdateTermRequest,
     UpdateTermRowsRequest,
@@ -99,15 +100,24 @@ class FakeProjectsService:
 
     def get_project(self, project_id: str) -> ProjectSummary:
         self.calls.append(("get_project", project_id))
-        return self.project_summary or self.create_result or self.update_result
+        project = self.project_summary or self.create_result or self.update_result
+        if project is None:
+            raise NotImplementedError
+        return cast(ProjectSummary, project)
 
     def create_project(self, request: CreateProjectRequest) -> ProjectSummary:
         self.calls.append(("create_project", request))
-        return self.create_result or self.project_summary
+        project = self.create_result or self.project_summary
+        if project is None:
+            raise NotImplementedError
+        return cast(ProjectSummary, project)
 
     def update_project(self, request: UpdateProjectRequest) -> ProjectSummary:
         self.calls.append(("update_project", request))
-        return self.update_result or self.project_summary
+        project = self.update_result or self.project_summary
+        if project is None:
+            raise NotImplementedError
+        return cast(ProjectSummary, project)
 
     def delete_project(self, project_id: str, *, permanent: bool = True) -> None:
         self.calls.append(("delete_project", (project_id, permanent)))
@@ -245,6 +255,35 @@ class FakeTermsService:
     command_result: AcceptedCommand | None = None
     calls: list[tuple[str, Any]] = field(default_factory=list)
 
+    @staticmethod
+    def _with_recomputed_toolbar(state: TermsTableState) -> TermsTableState:
+        rows = state.rows
+        blocked = any(
+            blocker is not None and blocker.message == "Another terms task is already running for this project."
+            for blocker in (
+                state.toolbar.translate_pending_blocker,
+                state.toolbar.review_blocker,
+                state.toolbar.filter_noise_blocker,
+            )
+        )
+        toolbar = state.toolbar.model_copy(
+            update={
+                "can_translate_pending": (
+                    False if blocked else any(not (row.translation or "").strip() and not row.ignored for row in rows)
+                ),
+                "can_review": False if blocked else any(not row.reviewed for row in rows),
+                "can_filter_noise": (
+                    False
+                    if blocked
+                    else any(
+                        not row.ignored and not row.reviewed and (row.occurrences <= 1 or row.votes <= 1)
+                        for row in rows
+                    )
+                ),
+            }
+        )
+        return state.model_copy(update={"toolbar": toolbar})
+
     def get_project_terms(self, project_id: str) -> TermsTableState:
         self.calls.append(("get_project_terms", project_id))
         return self.project_state
@@ -252,6 +291,13 @@ class FakeTermsService:
     def get_document_terms(self, project_id: str, document_id: int) -> TermsTableState:
         self.calls.append(("get_document_terms", (project_id, document_id)))
         return self.document_state or self.project_state
+
+    def get_toolbar_state(self, project_id: str, *, document_id: int | None = None) -> TermsToolbarState:
+        self.calls.append(("get_toolbar_state", (project_id, document_id)))
+        state = (
+            self.document_state if document_id is not None and self.document_state is not None else self.project_state
+        )
+        return self._with_recomputed_toolbar(state).toolbar
 
     def update_term(self, request: UpdateTermRequest) -> TermsTableState:
         self.calls.append(("update_term", request))
@@ -265,6 +311,7 @@ class FakeTermsService:
                 "rows": [rows_by_key.get(row.term_key, row) for row in (self.document_state or self.project_state).rows]
             }
         )
+        updated_state = self._with_recomputed_toolbar(updated_state)
         if self.document_state is not None:
             self.document_state = updated_state
         else:
@@ -312,7 +359,7 @@ class FakeTermsService:
                 else row
                 for row in state.rows
             ]
-        updated_state = state.model_copy(update={"rows": updated_rows})
+        updated_state = self._with_recomputed_toolbar(state.model_copy(update={"rows": updated_rows}))
         if self.document_state is not None:
             self.document_state = updated_state
         else:

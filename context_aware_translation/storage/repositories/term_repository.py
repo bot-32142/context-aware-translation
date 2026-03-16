@@ -206,7 +206,7 @@ class TermRepository:
 
     def get_terms_to_translate(self) -> list[Term]:
         """
-        Get all terms where translated_name is None.
+        Get all terms where translated_name is missing or empty.
 
         Returns:
             List of Term objects that need translation

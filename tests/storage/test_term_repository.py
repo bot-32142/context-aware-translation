@@ -702,14 +702,21 @@ def test_get_terms_to_translate(temp_term_repository: TermRepository):
             total_api_calls=1,
             translated_name="翻译2",
         ),
+        Term(
+            key="term3",
+            descriptions={},
+            occurrence={},
+            votes=1,
+            total_api_calls=1,
+            translated_name="",
+        ),
     ]
 
     update = BatchUpdate(keyed_context=terms, chunk_records=[])
     temp_term_repository.apply_batch(update)
 
     to_translate = temp_term_repository.get_terms_to_translate()
-    assert len(to_translate) == 1
-    assert to_translate[0].key == "term1"
+    assert {term.key for term in to_translate} == {"term1", "term3"}
 
 
 # --- Source Language Operations ---

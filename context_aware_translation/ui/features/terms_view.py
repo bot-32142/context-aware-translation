@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
 from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
@@ -197,7 +199,10 @@ class TermsView(QWidget):
 
     def refresh(self) -> None:
         if self._is_document_scope:
-            self._apply_state(self._service.get_document_terms(self.project_id, self.document_id))
+            document_id = self.document_id
+            if document_id is None:
+                return
+            self._apply_state(self._service.get_document_terms(self.project_id, document_id))
         else:
             self._apply_state(self._service.get_project_terms(self.project_id))
         self._loaded_once = True
@@ -313,12 +318,16 @@ class TermsView(QWidget):
         root = self.chrome_host.rootObject()
         if root is None:
             return
-        root.buildRequested.connect(self._on_build_terms)
-        root.translateRequested.connect(self._on_translate_pending)
-        root.reviewRequested.connect(self._on_review_terms)
-        root.filterRequested.connect(self._on_filter_noise)
-        root.importRequested.connect(self._on_import_terms)
-        root.exportRequested.connect(self._on_export_terms)
+        root_obj = cast(Any, root)
+        for signal_name, handler in (
+            ("buildRequested", self._on_build_terms),
+            ("translateRequested", self._on_translate_pending),
+            ("reviewRequested", self._on_review_terms),
+            ("filterRequested", self._on_filter_noise),
+            ("importRequested", self._on_import_terms),
+            ("exportRequested", self._on_export_terms),
+        ):
+            getattr(root_obj, signal_name).connect(handler)
 
     def _schedule_chrome_resize(self) -> None:
         self._sync_chrome_height()
@@ -449,10 +458,12 @@ class TermsView(QWidget):
         self.refresh()
 
     def _on_term_rows_update_requested(self, rows: list[TermTableRow]) -> None:
-        if self._state is None or not rows:
+        state = self._state
+        if state is None or not rows:
             return
+        scope = state.scope
         self._persist_local_terms_write(
-            lambda: self._service.update_term_rows(UpdateTermRowsRequest(scope=self._state.scope, rows=rows)),
+            lambda: self._service.update_term_rows(UpdateTermRowsRequest(scope=scope, rows=rows)),
             title=self.tr("Terms"),
         )
 
@@ -478,7 +489,8 @@ class TermsView(QWidget):
         ignored: bool | None = None,
         reviewed: bool | None = None,
     ) -> None:
-        if self._state is None:
+        state = self._state
+        if state is None:
             return
         selected = self.table_panel.selected_rows()
         if not selected:
@@ -501,11 +513,12 @@ class TermsView(QWidget):
             updated_term_keys.append(row.term_key)
         if not updated_rows:
             return
+        scope = state.scope
         self.table_panel.apply_row_updates(updated_rows)
         self._persist_local_terms_write(
             lambda: self._service.bulk_update_terms(
                 BulkUpdateTermsRequest(
-                    scope=self._state.scope,
+                    scope=scope,
                     term_keys=updated_term_keys,
                     ignored=ignored,
                     reviewed=reviewed,
@@ -515,7 +528,8 @@ class TermsView(QWidget):
         )
 
     def _delete_selected_terms(self) -> None:
-        if self._state is None:
+        state = self._state
+        if state is None:
             return
         selected = self.table_panel.selected_rows()
         if not selected:
@@ -536,11 +550,12 @@ class TermsView(QWidget):
         ):
             return
         term_keys = [row.term_key for row in selected]
+        scope = state.scope
         self.table_panel.remove_rows(term_keys)
         if self._persist_local_terms_write(
             lambda: self._service.bulk_update_terms(
                 BulkUpdateTermsRequest(
-                    scope=self._state.scope,
+                    scope=scope,
                     term_keys=term_keys,
                     delete=True,
                 )
@@ -614,8 +629,16 @@ class TermsView(QWidget):
                 self._pending_local_terms_invalidations = max(0, self._pending_local_terms_invalidations - 1)
         if self._state is not None:
             self._state = self._state.model_copy(update={"rows": self.table_panel.rows_snapshot()})
+            self._refresh_toolbar_state()
         self._update_bulk_button_state()
         return True
+
+    def _refresh_toolbar_state(self) -> None:
+        if self._state is None:
+            return
+        toolbar = self._service.get_toolbar_state(self.project_id, document_id=self.document_id)
+        self._state = self._state.model_copy(update={"toolbar": toolbar})
+        self._apply_toolbar_state(toolbar)
 
     def _on_terms_invalidated(self, event: TermsInvalidatedEvent) -> None:
         if event.project_id != self.project_id:

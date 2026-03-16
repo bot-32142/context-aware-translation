@@ -392,8 +392,8 @@ class SQLiteBookDB:
         return [self._row_to_term(r) for r in rows]
 
     def get_terms_to_translate(self) -> list[TermRecord]:
-        """Get all terms where translated_name is None."""
-        rows = self.conn.execute("SELECT * FROM terms WHERE translated_name IS NULL").fetchall()
+        """Get all terms where translated_name is missing or empty."""
+        rows = self.conn.execute("SELECT * FROM terms WHERE translated_name IS NULL OR translated_name = ''").fetchall()
         return [self._row_to_term(r) for r in rows]
 
     def update_terms_bulk(

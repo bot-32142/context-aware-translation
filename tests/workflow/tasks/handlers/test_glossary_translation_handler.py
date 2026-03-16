@@ -82,6 +82,30 @@ def test_validate_submit_allowed_when_non_ignored_term_exists(tmp_path):
     assert decision.allowed
 
 
+def test_validate_submit_allowed_when_empty_translation_exists(tmp_path):
+    deps = MagicMock()
+    deps.book_manager.get_book.return_value = MagicMock()
+    deps.book_manager.get_book_db_path.return_value = tmp_path / "book.db"
+
+    pending_term = MagicMock()
+    pending_term.ignored = False
+    pending_term.translated_name = ""
+
+    fake_db = MagicMock()
+    fake_term_repo = MagicMock()
+    fake_term_repo.get_terms_to_translate.return_value = [pending_term]
+
+    with (
+        patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
+        patch(
+            "context_aware_translation.storage.repositories.term_repository.TermRepository", return_value=fake_term_repo
+        ),
+    ):
+        decision = handler.validate_submit("book-1", {}, deps)
+
+    assert decision.allowed
+
+
 def test_validate_run_denied_when_only_ignored_terms(tmp_path):
     deps = MagicMock()
     deps.book_manager.get_book.return_value = MagicMock()
@@ -115,6 +139,31 @@ def test_validate_run_allowed_when_non_ignored_term_exists(tmp_path):
 
     pending_term = MagicMock()
     pending_term.ignored = False
+
+    fake_db = MagicMock()
+    fake_term_repo = MagicMock()
+    fake_term_repo.get_terms_to_translate.return_value = [pending_term]
+
+    with (
+        patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
+        patch(
+            "context_aware_translation.storage.repositories.term_repository.TermRepository", return_value=fake_term_repo
+        ),
+    ):
+        decision = handler.validate_run(record, {}, deps)
+
+    assert decision.allowed
+
+
+def test_validate_run_allowed_when_empty_translation_exists(tmp_path):
+    deps = MagicMock()
+    deps.book_manager.get_book.return_value = MagicMock()
+    deps.book_manager.get_book_db_path.return_value = tmp_path / "book.db"
+    record = _make_record()
+
+    pending_term = MagicMock()
+    pending_term.ignored = False
+    pending_term.translated_name = ""
 
     fake_db = MagicMock()
     fake_term_repo = MagicMock()

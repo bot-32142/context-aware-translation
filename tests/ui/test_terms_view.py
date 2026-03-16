@@ -420,6 +420,33 @@ def test_terms_view_refreshes_on_terms_and_setup_invalidations():
         view.deleteLater()
 
 
+def test_terms_view_refreshes_toolbar_after_local_review_toggle_without_full_reload():
+    from context_aware_translation.ui.features.terms_view import TermsView
+
+    service = FakeTermsService(project_state=_make_state(can_review=True, can_export=True))
+    bus = InMemoryApplicationEventBus()
+    view = TermsView("proj-1", service, bus)
+    try:
+        initial_get_terms = [name for name, _payload in service.calls if name == "get_project_terms"]
+        assert len(initial_get_terms) == 1
+        assert view.review_button.isEnabled()
+        assert view.filter_noise_button.isEnabled()
+
+        reviewed_item = view.table_model.item(0, 6)
+        reviewed_item.setCheckState(Qt.CheckState.Checked)
+
+        assert view.review_button.isEnabled() == service.get_toolbar_state("proj-1").can_review
+        assert view.filter_noise_button.isEnabled()
+        assert [name for name, _payload in service.calls if name == "get_toolbar_state"] == [
+            "get_toolbar_state",
+            "get_toolbar_state",
+        ]
+        assert [name for name, _payload in service.calls if name == "get_project_terms"] == initial_get_terms
+    finally:
+        view.cleanup()
+        view.deleteLater()
+
+
 def test_terms_view_description_tooltip_and_header_tooltips_are_restored():
     from context_aware_translation.ui.features.terms_view import TermsView
 

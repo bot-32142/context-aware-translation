@@ -56,6 +56,8 @@ class TermsService(Protocol):
 
     def get_document_terms(self, project_id: str, document_id: int) -> TermsTableState: ...
 
+    def get_toolbar_state(self, project_id: str, *, document_id: int | None = None) -> TermsToolbarState: ...
+
     def update_term(self, request: UpdateTermRequest) -> TermsTableState: ...
 
     def update_term_rows(self, request: UpdateTermRowsRequest) -> UpdateTermRowsResult: ...
@@ -84,6 +86,16 @@ class DefaultTermsService:
 
     def get_document_terms(self, project_id: str, document_id: int) -> TermsTableState:
         return self._build_terms_table(project_id, document_id=document_id)
+
+    def get_toolbar_state(self, project_id: str, *, document_id: int | None = None) -> TermsToolbarState:
+        chunk_ids, term_records = self._load_scope_term_records(project_id, document_id=document_id)
+        return self._build_toolbar_state(
+            project_id,
+            document_id=document_id,
+            has_rows=bool(term_records),
+            term_records=term_records,
+            chunk_ids=chunk_ids,
+        )
 
     def update_term(self, request: UpdateTermRequest) -> TermsTableState:
         blocker = self._glossary_mutation_blocker(request.scope.project.project_id)
@@ -230,44 +242,8 @@ class DefaultTermsService:
 
     def _build_terms_table(self, project_id: str, document_id: int | None) -> TermsTableState:
         project = self._runtime.get_project_ref(project_id)
-        with self._runtime.open_book_db(project_id) as dbx:
-            chunk_ids = (
-                {chunk.chunk_id for chunk in dbx.term_repo.list_chunks(document_id=document_id)}
-                if document_id is not None
-                else None
-            )
-            rows = []
-            filtered_records = []
-            for record in dbx.term_repo.list_term_records():
-                if chunk_ids is not None:
-                    occurrence_chunk_ids = {int(key) for key in record.occurrence if str(key).isdigit()}
-                    if not occurrence_chunk_ids.intersection(chunk_ids):
-                        continue
-                filtered_records.append(record)
-                rows.append(
-                    TermTableRow(
-                        term_id=int(record.key) if record.key.isdigit() else hash(record.key),
-                        term_key=record.key,
-                        term=record.key,
-                        translation=record.translated_name,
-                        description=self._primary_description(record),
-                        description_tooltip=self._description_tooltip(record),
-                        description_sort_key=self._max_chunk_id(record),
-                        occurrences=len(record.occurrence),
-                        votes=self._recognized_chunk_count(record),
-                        ignored=record.ignored,
-                        reviewed=record.is_reviewed,
-                        status=(
-                            TermStatus.IGNORED
-                            if record.ignored
-                            else TermStatus.NEEDS_TRANSLATION
-                            if not record.translated_name
-                            else TermStatus.NEEDS_REVIEW
-                            if not record.is_reviewed
-                            else TermStatus.READY
-                        ),
-                    )
-                )
+        chunk_ids, filtered_records = self._load_scope_term_records(project_id, document_id=document_id)
+        rows = [self._term_record_to_row(record) for record in filtered_records]
         scope = TermsScope(
             kind=TermsScopeKind.DOCUMENT if document_id is not None else TermsScopeKind.PROJECT,
             project=project,
@@ -285,6 +261,51 @@ class DefaultTermsService:
             toolbar=toolbar,
             rows=rows,
             status=SurfaceStatus.READY,
+        )
+
+    def _load_scope_term_records(
+        self,
+        project_id: str,
+        *,
+        document_id: int | None,
+    ) -> tuple[set[int] | None, list[TermRecord]]:
+        with self._runtime.open_book_db(project_id) as dbx:
+            chunk_ids = (
+                {chunk.chunk_id for chunk in dbx.term_repo.list_chunks(document_id=document_id)}
+                if document_id is not None
+                else None
+            )
+            filtered_records = []
+            for record in dbx.term_repo.list_term_records():
+                if chunk_ids is not None:
+                    occurrence_chunk_ids = {int(key) for key in (record.occurrence or {}) if str(key).isdigit()}
+                    if not occurrence_chunk_ids.intersection(chunk_ids):
+                        continue
+                filtered_records.append(record)
+        return chunk_ids, filtered_records
+
+    def _term_record_to_row(self, record: TermRecord) -> TermTableRow:
+        return TermTableRow(
+            term_id=int(record.key) if record.key.isdigit() else hash(record.key),
+            term_key=record.key,
+            term=record.key,
+            translation=record.translated_name,
+            description=self._primary_description(record),
+            description_tooltip=self._description_tooltip(record),
+            description_sort_key=self._max_chunk_id(record),
+            occurrences=len(record.occurrence),
+            votes=self._recognized_chunk_count(record),
+            ignored=record.ignored,
+            reviewed=record.is_reviewed,
+            status=(
+                TermStatus.IGNORED
+                if record.ignored
+                else TermStatus.NEEDS_TRANSLATION
+                if not record.translated_name
+                else TermStatus.NEEDS_REVIEW
+                if not record.is_reviewed
+                else TermStatus.READY
+            ),
         )
 
     @staticmethod
@@ -376,6 +397,11 @@ class DefaultTermsService:
         )
 
         mutation_blocker = self._glossary_mutation_blocker(project_id)
+        if mutation_blocker is not None:
+            translate_allowed = False
+            translate_blocker = mutation_blocker
+            review_allowed = False
+            review_blocker = mutation_blocker
         has_rare_terms = bool(self._get_rare_term_keys(term_records, chunk_ids=chunk_ids))
         filter_noise_allowed = mutation_blocker is None and has_rare_terms
         filter_noise_blocker = None
