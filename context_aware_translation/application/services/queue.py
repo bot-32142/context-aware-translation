@@ -17,7 +17,7 @@ from context_aware_translation.application.runtime import (
     queue_item_from_record,
     raise_application_error,
 )
-from context_aware_translation.workflow.tasks.models import TaskAction
+from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, TaskAction
 
 
 class QueueService(Protocol):
@@ -48,6 +48,15 @@ class DefaultQueueService:
                 ApplicationErrorCode.NOT_FOUND,
                 f"Queue item not found: {request.queue_item_id}",
                 queue_item_id=request.queue_item_id,
+            )
+
+        if request.action is QueueActionKind.RETRY and record.status not in TERMINAL_TASK_STATUSES:
+            raise_application_error(
+                ApplicationErrorCode.BLOCKED,
+                f"Queue action '{command_name}' is unavailable.",
+                queue_item_id=request.queue_item_id,
+                project_id=record.book_id,
+                decision_code="invalid_state",
             )
 
         action = self._task_action_for_request(request.action)

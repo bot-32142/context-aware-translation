@@ -148,3 +148,36 @@ def test_queue_service_wraps_engine_errors() -> None:
 
     assert exc_info.value.payload.code == "conflict"
     assert exc_info.value.payload.message == "Queue action 'retry' could not be applied."
+
+
+def test_queue_service_blocks_retry_for_non_terminal_task_before_engine_call() -> None:
+    record = TaskRecord(
+        task_id="task-5",
+        book_id="proj-5",
+        task_type="ocr",
+        status="running",
+        phase="running",
+        document_ids_json="[4]",
+        payload_json=None,
+        config_snapshot_json=None,
+        cancel_requested=False,
+        total_items=1,
+        completed_items=0,
+        failed_items=0,
+        last_error=None,
+        created_at=1.0,
+        updated_at=2.0,
+    )
+    preflight_task = MagicMock(return_value=Decision(allowed=True))
+    runtime = SimpleNamespace(
+        task_store=SimpleNamespace(get=MagicMock(return_value=record)),
+        task_engine=SimpleNamespace(preflight_task=preflight_task),
+    )
+
+    service = DefaultQueueService(runtime)  # type: ignore[arg-type]
+
+    with pytest.raises(ApplicationError) as exc_info:
+        service.apply_action(QueueActionRequest(queue_item_id="task-5", action=QueueActionKind.RETRY))
+
+    assert exc_info.value.payload.code == "blocked"
+    preflight_task.assert_not_called()

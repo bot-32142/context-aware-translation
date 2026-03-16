@@ -45,9 +45,8 @@ class ApplicationContext:
     events: InMemoryApplicationEventBus
 
     def close(self) -> None:
-        try:
-            self.runtime.task_engine.close()
-        finally:
+        self.runtime.task_engine.close()
+        if not self.runtime.task_engine.has_running_work():
             self.runtime.task_store.close()
             self.runtime.book_manager.close()
 

@@ -467,6 +467,32 @@ def test_application_context_close_closes_task_engine_before_registry(
     assert close_order[:2] == ["engine", "book_manager"]
 
 
+def test_application_context_close_keeps_runtime_resources_open_while_workers_still_active(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _ensure_qt_app()
+    close_order: list[str] = []
+    context = build_application_context(library_root=tmp_path)
+
+    def _track_engine_close() -> None:
+        close_order.append("engine")
+
+    def _track_task_store_close() -> None:
+        close_order.append("task_store")
+
+    def _track_book_manager_close() -> None:
+        close_order.append("book_manager")
+
+    monkeypatch.setattr(context.runtime.task_engine, "close", _track_engine_close, raising=True)
+    monkeypatch.setattr(context.runtime.task_engine, "has_running_work", lambda: True, raising=True)
+    monkeypatch.setattr(context.runtime.task_store, "close", _track_task_store_close, raising=True)
+    monkeypatch.setattr(context.runtime.book_manager, "close", _track_book_manager_close, raising=True)
+
+    context.close()
+
+    assert close_order == ["engine"]
+
+
 def test_terms_update_missing_term_raises_not_found(tmp_path: Path) -> None:
     _ensure_qt_app()
     context = build_application_context(library_root=tmp_path)
