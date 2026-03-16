@@ -23,14 +23,14 @@ from context_aware_translation.core.translation_strategies import (
     SourceLanguageDetector,
     TermReviewer,
 )
-from context_aware_translation.storage.book_db import (
+from context_aware_translation.storage.repositories.term_repository import (
+    BatchUpdate,
+    TermRepository,
+)
+from context_aware_translation.storage.schema.book_db import (
     ChunkRecord,
     TermRecord,
     TranslationChunkRecord,
-)
-from context_aware_translation.storage.term_repository import (
-    BatchUpdate,
-    TermRepository,
 )
 from context_aware_translation.utils.cjk_normalize import normalize_for_matching
 from context_aware_translation.utils.hashing import compute_chunk_hash

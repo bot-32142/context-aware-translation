@@ -186,12 +186,14 @@ dependencies = [
     { name = "pillow" },
     { name = "platformdirs" },
     { name = "protobuf" },
+    { name = "pydantic" },
     { name = "pypandoc-binary" },
     { name = "pypdfium2" },
     { name = "pyside6" },
     { name = "pyyaml" },
     { name = "requests" },
     { name = "semchunk" },
+    { name = "superqt" },
     { name = "tenacity" },
     { name = "tokenizers" },
     { name = "torch" },
@@ -227,12 +229,14 @@ requires-dist = [
     { name = "pillow", specifier = ">=10.0.0" },
     { name = "platformdirs", specifier = ">=4.5.1" },
     { name = "protobuf", specifier = ">=4.25.0" },
+    { name = "pydantic", specifier = ">=2.9.2" },
     { name = "pypandoc-binary", specifier = ">=1.13" },
     { name = "pypdfium2", specifier = ">=4.0.0" },
     { name = "pyside6", specifier = ">=6.6.0" },
     { name = "pyyaml", specifier = ">=6.0.0" },
     { name = "requests", specifier = ">=2.31.0" },
     { name = "semchunk", specifier = ">=3.2.3" },
+    { name = "superqt", specifier = ">=0.8.0" },
     { name = "tenacity", specifier = ">=8.0.0" },
     { name = "tokenizers", specifier = ">=0.15.0" },
     { name = "torch", specifier = ">=2.0.0" },
@@ -1709,6 +1713,18 @@ wheels = [
 ]
 
 [[package]]
+name = "qtpy"
+version = "2.4.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/70/01/392eba83c8e47b946b929d7c46e0f04b35e9671f8bb6fc36b6f7945b4de8/qtpy-2.4.3.tar.gz", hash = "sha256:db744f7832e6d3da90568ba6ccbca3ee2b3b4a890c3d6fbbc63142f6e4cdf5bb", size = 66982, upload-time = "2025-02-11T15:09:25.759Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/69/76/37c0ccd5ab968a6a438f9c623aeecc84c202ab2fabc6a8fd927580c15b5a/QtPy-2.4.3-py3-none-any.whl", hash = "sha256:72095afe13673e017946cc258b8d5da43314197b741ed2890e563cf384b51aa1", size = 95045, upload-time = "2025-02-11T15:09:24.162Z" },
+]
+
+[[package]]
 name = "regex"
 version = "2025.11.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1902,6 +1918,20 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a2/87/a6771e1546d97e7e041b6ae58d80074f81b7d5121207425c964ddf5cfdbd/sniffio-1.3.1.tar.gz", hash = "sha256:f4324edc670a0f49750a81b895f35c3adb843cca46f0530f79fc1babb23789dc", size = 20372, upload-time = "2024-02-25T23:20:04.057Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e9/44/75a9c9421471a6c4805dbf2356f7c181a29c1879239abab1ea2cc8f38b40/sniffio-1.3.1-py3-none-any.whl", hash = "sha256:2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2", size = 10235, upload-time = "2024-02-25T23:20:01.196Z" },
+]
+
+[[package]]
+name = "superqt"
+version = "0.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pygments" },
+    { name = "qtpy" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/01/aa/d68a5c24dec5cce87aeacdf3aa9b4ab9b1171c6b03fe97bdd2e9521ae3b6/superqt-0.8.0.tar.gz", hash = "sha256:f3a8f51996862a13c9cb37d053065e3aad32a340fe9cd0cc23d5256b809b0a57", size = 108560, upload-time = "2026-03-04T16:13:47.299Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ba/37/02e0fc6532740ab6b62b5c805f569e4806b71823117d5c8c0e890446ae1a/superqt-0.8.0-py3-none-any.whl", hash = "sha256:040d3f98dc1f8cd34f5ad1640a00fa41d211edfde6aeb88dcb147615a7817af2", size = 100595, upload-time = "2026-03-04T16:13:45.642Z" },
 ]
 
 [[package]]

@@ -483,7 +483,7 @@ class TestExportPreserveStructure:
                 for chunk in chunks:
                     chunk.is_translated = True
                     chunk.translation = "翻译后的内容"
-                from context_aware_translation.storage.term_repository import (
+                from context_aware_translation.storage.repositories.term_repository import (
                     BatchUpdate,
                 )
 
@@ -536,7 +536,7 @@ class TestExportPreserveStructure:
                 for chunk in chunks:
                     chunk.is_translated = True
                     chunk.translation = "翻译"
-                from context_aware_translation.storage.term_repository import (
+                from context_aware_translation.storage.repositories.term_repository import (
                     BatchUpdate,
                 )
 
@@ -573,7 +573,7 @@ class TestExportPreserveStructure:
                 for i, chunk in enumerate(chunks):
                     chunk.is_translated = True
                     chunk.translation = f"翻译{i}"
-                from context_aware_translation.storage.term_repository import (
+                from context_aware_translation.storage.repositories.term_repository import (
                     BatchUpdate,
                 )
 

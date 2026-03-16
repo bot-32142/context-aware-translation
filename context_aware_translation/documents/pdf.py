@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import logging
@@ -17,6 +18,8 @@ from context_aware_translation.core.cancellation import OperationCancelledError,
 from context_aware_translation.core.progress import ProgressCallback, ProgressUpdate, WorkflowStep
 from context_aware_translation.documents.base import Document
 from context_aware_translation.documents.content.ocr_content import MergedOCRContent
+from context_aware_translation.documents.content.ocr_items import ImageItem
+from context_aware_translation.llm.image_generator import build_text_replacements, create_image_generator
 from context_aware_translation.llm.ocr import ocr_images
 from context_aware_translation.utils.image_utils import compress_image_for_ocr, detect_mime_type
 from context_aware_translation.utils.pandoc_export import export_pandoc
@@ -26,7 +29,7 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from context_aware_translation.config import ImageReembeddingConfig, OCRConfig
     from context_aware_translation.llm.client import LLMClient
-    from context_aware_translation.storage.document_repository import DocumentRepository
+    from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 
 
 def _rasterize_page_from_path(pdf_path: str, page_index: int, dpi: int) -> bytes:
@@ -495,11 +498,15 @@ class PDFDocument(Document):
         raise_if_cancelled(cancel_check)
         if self._ocr_config is None:
             raise ValueError("ocr_config is required for process_ocr")
-        sources = self.repo.get_document_sources_needing_ocr(self.document_id)
-
-        # Filter by source_ids if provided
-        if source_ids is not None:
-            sources = [s for s in sources if s["source_id"] in source_ids]
+        if source_ids is None:
+            sources = self.repo.get_document_sources_needing_ocr(self.document_id)
+        else:
+            source_ids_set = frozenset(source_ids)
+            sources = [
+                source
+                for source in self.repo.get_document_sources(self.document_id)
+                if source["source_type"] == "image" and source["source_id"] in source_ids_set
+            ]
 
         if not sources:
             return 0
@@ -592,8 +599,6 @@ class PDFDocument(Document):
         self._merged_content = merged
 
         # Load cached reembedded images from DB so export applies them
-        from context_aware_translation.documents.content.ocr_items import ImageItem
-
         existing = self.repo.load_reembedded_images(self.document_id)
         for idx, elem in enumerate(self._merged_content.elements):
             if isinstance(elem, ImageItem) and idx in existing:
@@ -615,14 +620,6 @@ class PDFDocument(Document):
         Uses existing DB cache to skip already-done items unless force=True.
         Returns count of items newly generated.
         """
-        import asyncio
-
-        from context_aware_translation.documents.content.ocr_items import ImageItem
-        from context_aware_translation.llm.image_generator import (
-            build_text_replacements,
-            create_image_generator,
-        )
-
         if self._merged_content is None:
             return 0
 

@@ -16,9 +16,9 @@ from context_aware_translation.llm.translation_strategies import (
     LLMSourceLanguageDetector,
     LLMTermReviewer,
 )
-from context_aware_translation.storage.book_db import SQLiteBookDB
-from context_aware_translation.storage.document_repository import DocumentRepository
-from context_aware_translation.storage.term_repository import TermRepository
+from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+from context_aware_translation.storage.repositories.term_repository import TermRepository
+from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 from context_aware_translation.utils.chunking import get_tokenizer
 from context_aware_translation.workflow.image_fetcher import RepoImageFetcher
 from context_aware_translation.workflow.runtime import WorkflowContext

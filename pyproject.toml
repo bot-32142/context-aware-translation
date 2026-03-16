@@ -23,6 +23,7 @@ dependencies = [
     "Pillow>=10.0.0",
     "platformdirs>=4.5.1",
     "pikepdf>=9.0.0",
+    "pydantic>=2.9.2",
     "pypandoc-binary>=1.13",
     "pypdfium2>=4.0.0",
     "pyside6>=6.6.0",
@@ -34,6 +35,7 @@ dependencies = [
     "torch>=2.0.0",
     "transformers>=4.57.3",
     "protobuf>=4.25.0",
+    "superqt>=0.8.0",
 ]
 
 [project.scripts]
@@ -114,6 +116,7 @@ ignore_missing_imports = false
 exclude = [
     "tests/",
     ".venv/",
+    "context_aware_translation/adapters/qt/",
     "context_aware_translation/ui/",
 ]
 

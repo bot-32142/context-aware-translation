@@ -160,8 +160,8 @@ from context_aware_translation.workflow.tasks.glossary_preflight import compute_
 
 def validate_run(self, record, payload, deps):
     # Load document repo
-    from context_aware_translation.storage.book_db import SQLiteBookDB
-    from context_aware_translation.storage.document_repository import DocumentRepository
+    from context_aware_translation.storage.schema.book_db import SQLiteBookDB
+    from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 
     db = SQLiteBookDB(Path(...) / "book.db")
     doc_repo = DocumentRepository(db)
@@ -215,8 +215,8 @@ def claims(self, record, payload):
 - `context_aware_translation.workflow.tasks.models` - Task statuses, Decision, TaskAction
 - `context_aware_translation.workflow.tasks.glossary_preflight` - Glossary preflight validation
 - `context_aware_translation.workflow.tasks.execution.batch_translation_ops` - Batch operations utilities
-- `context_aware_translation.storage.task_store` - TaskRecord interface
-- `context_aware_translation.storage.book_manager` - BookManager for config snapshots
+- `context_aware_translation.storage.repositories.task_store` - TaskRecord interface
+- `context_aware_translation.storage.library.book_manager` - BookManager for config snapshots
 - `context_aware_translation.workflow.ops` - Workflow operation modules for domain operations
 
 **External:**

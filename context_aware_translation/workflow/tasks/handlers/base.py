@@ -4,7 +4,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from context_aware_translation.storage.task_store import TaskRecord
+    from context_aware_translation.storage.repositories.task_store import TaskRecord
     from context_aware_translation.workflow.tasks.claims import DocumentScope, ResourceClaim
     from context_aware_translation.workflow.tasks.models import ActionSnapshot, Decision, TaskAction
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps

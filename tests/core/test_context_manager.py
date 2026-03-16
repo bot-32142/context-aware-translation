@@ -10,8 +10,8 @@ from context_aware_translation.core.context_manager import ContextManager, Trans
 from context_aware_translation.core.context_tree import ContextTree
 from context_aware_translation.core.models import Term
 from context_aware_translation.core.progress import WorkflowStep
-from context_aware_translation.storage.book_db import ChunkRecord, TranslationChunkRecord
-from context_aware_translation.storage.term_repository import StorageManager, TermRepository
+from context_aware_translation.storage.repositories.term_repository import StorageManager, TermRepository
+from context_aware_translation.storage.schema.book_db import ChunkRecord, TranslationChunkRecord
 
 
 class MockStorageManager(StorageManager):
@@ -493,7 +493,7 @@ def test_translation_context_manager_init_bug(tmp_path: Path):
     from context_aware_translation.config import Config
     from context_aware_translation.core.context_extractor import TermExtractor
     from context_aware_translation.llm.client import LLMClient
-    from context_aware_translation.storage.book_db import SQLiteBookDB
+    from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     sqlite_path = tmp_path / "test.db"
@@ -716,7 +716,7 @@ def test_translate_chunks_batch_size_edge_case():
     # BUG: Line 353: chunk.chunk_id == current_batch[-1].chunk_id + 1
     # This assumes consecutive chunk_ids, but if chunk_ids are not consecutive,
     # batches may not be formed correctly
-    from context_aware_translation.storage.book_db import TranslationChunkRecord
+    from context_aware_translation.storage.schema.book_db import TranslationChunkRecord
 
     chunks = [
         TranslationChunkRecord(chunk_id=0, hash="hash0", text="text0"),
@@ -844,7 +844,7 @@ def test_translation_context_manager_super_init_bug(tmp_path: Path):
     # Now the initialization order is correct
     from transformers import AutoTokenizer
 
-    from context_aware_translation.storage.book_db import SQLiteBookDB
+    from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     sqlite_path = tmp_path / "test.db"

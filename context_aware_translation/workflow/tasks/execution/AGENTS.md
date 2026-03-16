@@ -100,8 +100,8 @@ new_payload = new_payload_stage(
 
 **Internal:**
 - `context_aware_translation.workflow.ops` - Workflow operation modules for batch translation operations
-- `context_aware_translation.storage.task_store` - TaskStore, TaskRecord persistence
-- `context_aware_translation.storage.llm_batch_store` - LLMBatchStore for batch job persistence
+- `context_aware_translation.storage.repositories.task_store` - TaskStore, TaskRecord persistence
+- `context_aware_translation.storage.repositories.llm_batch_store` - LLMBatchStore for batch job persistence
 - `context_aware_translation.llm.batch_jobs` - GeminiBatchJobGateway for Gemini API
 - `context_aware_translation.core.progress` - ProgressCallback for progress reporting
 - `context_aware_translation.core.cancellation` - OperationCancelledError for cancellation handling

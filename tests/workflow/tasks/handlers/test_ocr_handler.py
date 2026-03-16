@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from context_aware_translation.storage.task_store import TaskRecord
+from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import (
     ClaimMode,
     NoDocuments,
@@ -345,9 +345,9 @@ def _make_deps_for_submit(
     fake_repo.get_document_sources_metadata.return_value = all_sources or []
 
     deps._patches = (
-        patch("context_aware_translation.storage.book_db.SQLiteBookDB", return_value=fake_db),
+        patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
         patch(
-            "context_aware_translation.storage.document_repository.DocumentRepository",
+            "context_aware_translation.storage.repositories.document_repository.DocumentRepository",
             return_value=fake_repo,
         ),
     )
@@ -499,11 +499,10 @@ def test_validate_submit_with_valid_explicit_source_ids(tmp_path):
     assert result.allowed
 
 
-def test_validate_submit_rejects_explicit_source_ids_all_completed(tmp_path):
-    """All explicitly specified sources are already OCR-completed."""
+def test_validate_submit_allows_explicit_source_ids_even_if_already_completed(tmp_path):
+    """Explicit source_ids allow rerun of already OCR-completed pages."""
     doc = {"document_id": 1, "document_type": "scanned_book"}
     all_sources = [{"source_id": 10}, {"source_id": 11}]
-    # pending = empty, so source 10 is already completed
     pending_sources: list[dict] = []
     deps = _make_deps_for_submit(
         tmp_path,
@@ -513,8 +512,7 @@ def test_validate_submit_rejects_explicit_source_ids_all_completed(tmp_path):
     )
     with deps._patches[0], deps._patches[1]:
         result = handler.validate_submit("book-1", {"document_ids": [1], "source_ids": [10]}, deps)
-    assert not result.allowed
-    assert "no pending" in result.reason.lower()
+    assert result.allowed
 
 
 # ---------------------------------------------------------------------------
@@ -546,9 +544,9 @@ def _make_deps_for_run(
     fake_repo.get_document_sources_metadata.return_value = all_sources or []
 
     deps._patches = (
-        patch("context_aware_translation.storage.book_db.SQLiteBookDB", return_value=fake_db),
+        patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
         patch(
-            "context_aware_translation.storage.document_repository.DocumentRepository",
+            "context_aware_translation.storage.repositories.document_repository.DocumentRepository",
             return_value=fake_repo,
         ),
     )
@@ -614,7 +612,7 @@ def test_validate_run_with_valid_source_ids_in_payload(tmp_path):
     record = _make_record(document_ids_json=json.dumps([1]))
     doc = {"document_id": 1, "document_type": "pdf"}
     all_sources = [{"source_id": 10}, {"source_id": 11}]
-    pending = [{"source_id": 10}]
+    pending = []
     deps = _make_deps_for_run(tmp_path, doc=doc, ocr_sources=pending, all_sources=all_sources)
     with deps._patches[0], deps._patches[1]:
         result = handler.validate_run(record, {"source_ids": [10]}, deps)
@@ -649,7 +647,7 @@ def test_build_worker_run_returns_ocr_task_worker():
     payload = handler.decode_payload(record)
     try:
         worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
-        from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+        from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
 
         assert isinstance(worker, OCRTaskWorker)
     except ImportError:
@@ -663,7 +661,7 @@ def test_build_worker_cancel_returns_ocr_task_worker():
     record = _make_record(status=STATUS_RUNNING, document_ids_json=json.dumps([1]))
     try:
         worker = handler.build_worker(TaskAction.CANCEL, record, {}, deps)
-        from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+        from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
 
         assert isinstance(worker, OCRTaskWorker)
     except ImportError:

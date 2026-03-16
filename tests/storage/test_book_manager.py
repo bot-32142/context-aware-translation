@@ -8,8 +8,8 @@ from typing import Any
 import pytest
 
 from context_aware_translation.config import Config
-from context_aware_translation.storage.book import BookStatus
-from context_aware_translation.storage.book_manager import BookManager
+from context_aware_translation.storage.library.book_manager import BookManager
+from context_aware_translation.storage.models.book import BookStatus
 
 # ============================================================================
 # Fixtures

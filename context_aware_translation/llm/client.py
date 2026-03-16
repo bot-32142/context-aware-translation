@@ -18,8 +18,11 @@ from tenacity import (
 from context_aware_translation.config import LLMConfig
 from context_aware_translation.core.cancellation import OperationCancelledError, raise_if_cancelled
 from context_aware_translation.llm.session_trace import get_llm_session_id, llm_session_scope
+from context_aware_translation.llm.token_tracker import TokenTracker
 
 logger = logging.getLogger(__name__)
+
+_UNSUPPORTED_OPENAI_CREATE_KWARGS = frozenset({"provider"})
 
 # Suppress OpenAI library's DEBUG/INFO/WARNING logging to avoid duplicate logs
 # Our custom logger already logs all necessary information
@@ -33,6 +36,15 @@ class LLMError(Exception):
 
 class LLMAuthError(LLMError):
     pass
+
+
+def _sanitize_openai_create_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
+    removed = _UNSUPPORTED_OPENAI_CREATE_KWARGS.intersection(kwargs)
+    if not removed:
+        return kwargs
+    sanitized = {key: value for key, value in kwargs.items() if key not in removed}
+    logger.debug("Dropping unsupported OpenAI create kwargs: %s", ", ".join(sorted(removed)))
+    return sanitized
 
 
 def _to_int(value: Any) -> int:
@@ -288,8 +300,6 @@ class LLMClient:
 
         # Record token usage for endpoint profile tracking
         if token_usage:
-            from context_aware_translation.llm.token_tracker import TokenTracker
-
             tracker = TokenTracker.get()
             if tracker is not None:
                 tracker.record_usage(endpoint_profile_name, token_usage)
@@ -345,11 +355,9 @@ class LLMClient:
             client = self._get_client_for_step(step_config)
             # Merge step_config.kwargs with passed kwargs (passed kwargs take precedence)
             # step_config is already resolved at config initialization time, so all values are filled
-            merged_kwargs = {**step_config.kwargs, **kwargs}
+            merged_kwargs = _sanitize_openai_create_kwargs({**step_config.kwargs, **kwargs})
 
             # Check token limit before making the call
-            from context_aware_translation.llm.token_tracker import TokenTracker
-
             tracker = TokenTracker.get()
             if tracker is not None:
                 tracker.check_limit(step_config.endpoint_profile)

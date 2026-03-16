@@ -56,9 +56,9 @@ None. Core is a flat module.
 - `WorkflowStep` enum: `GLEANING`, `EXTRACTION`, `REVIEW`, etc.
 
 **Key Dependencies:**
-- `context_aware_translation.storage.context_tree_db` - SQLite backend for trees
-- `context_aware_translation.storage.book_db` - term records, chunk records
-- `context_aware_translation.storage.term_repository` - term dedup and lookup
+- `context_aware_translation.storage.schema.context_tree_db` - SQLite backend for trees
+- `context_aware_translation.storage.schema.book_db` - term records, chunk records
+- `context_aware_translation.storage.repositories.term_repository` - term dedup and lookup
 - `context_aware_translation.utils.*` - chunking, hashing, string similarity, CJK normalization
 - `transformers.PreTrainedTokenizer` - tokenization for token counting
 
@@ -67,7 +67,7 @@ None. Core is a flat module.
 **Using ContextTree:**
 ```python
 from context_aware_translation.core.context_tree import ContextTree
-from context_aware_translation.storage.context_tree_db import ContextTreeDB
+from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 
 tree = ContextTree(
     summarizer=summarizer,  # DescriptionSummarizer instance
@@ -115,9 +115,9 @@ callback = ProgressCallback(on_progress)
 ## Dependencies
 
 ### Internal
-- `context_aware_translation.storage.context_tree_db` - SQLite persistence for context trees
-- `context_aware_translation.storage.book_db` - chunk and term records
-- `context_aware_translation.storage.term_repository` - term deduplication and batch updates
+- `context_aware_translation.storage.schema.context_tree_db` - SQLite persistence for context trees
+- `context_aware_translation.storage.schema.book_db` - chunk and term records
+- `context_aware_translation.storage.repositories.term_repository` - term deduplication and batch updates
 - `context_aware_translation.utils.chunking` - text chunking utilities
 - `context_aware_translation.utils.hashing` - content hashing for dedup
 - `context_aware_translation.utils.cjk_normalize` - CJK text normalization for matching

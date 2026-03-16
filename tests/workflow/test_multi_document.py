@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from context_aware_translation.config import Config
-from context_aware_translation.storage.term_repository import BatchUpdate
+from context_aware_translation.storage.repositories.term_repository import BatchUpdate
 from context_aware_translation.workflow.ops import export_ops, import_ops
 from context_aware_translation.workflow.session import WorkflowSession
 

@@ -4,7 +4,7 @@ import json
 import time
 from unittest.mock import MagicMock, patch
 
-from context_aware_translation.storage.task_store import TaskRecord
+from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import (
     AllDocuments,
     ClaimMode,
@@ -393,7 +393,7 @@ def test_validate_run_allows_manga_documents(tmp_path):
 
 
 def test_build_worker_run_returns_translation_manga_task_worker():
-    from context_aware_translation.ui.workers.translation_manga_task_worker import TranslationMangaTaskWorker
+    from context_aware_translation.adapters.qt.workers.translation_manga_task_worker import TranslationMangaTaskWorker
 
     deps = MagicMock()
     record = _make_record(status=STATUS_QUEUED, document_ids_json=json.dumps([1, 2]))
@@ -423,7 +423,7 @@ def test_build_worker_run_wires_source_ids_from_payload():
 
 
 def test_build_worker_run_passes_config_snapshot():
-    from context_aware_translation.ui.workers.translation_manga_task_worker import TranslationMangaTaskWorker
+    from context_aware_translation.adapters.qt.workers.translation_manga_task_worker import TranslationMangaTaskWorker
 
     snapshot = json.dumps({"snapshot_version": 1, "config": {"key": "val"}})
     deps = MagicMock()
@@ -436,7 +436,7 @@ def test_build_worker_run_passes_config_snapshot():
 
 
 def test_build_worker_cancel_returns_translation_manga_task_worker():
-    from context_aware_translation.ui.workers.translation_manga_task_worker import TranslationMangaTaskWorker
+    from context_aware_translation.adapters.qt.workers.translation_manga_task_worker import TranslationMangaTaskWorker
 
     deps = MagicMock()
     record = _make_record(status=STATUS_RUNNING)

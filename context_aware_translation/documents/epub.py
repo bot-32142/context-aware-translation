@@ -8,6 +8,7 @@ formats (md/docx/html).
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -18,6 +19,7 @@ import zipfile
 from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import unquote
 
@@ -55,6 +57,7 @@ from context_aware_translation.documents.epub_xhtml_utils import (
     inject_translations_into_xhtml,
 )
 from context_aware_translation.llm.epub_ocr import ocr_epub_images
+from context_aware_translation.llm.image_generator import build_text_replacements, create_image_generator
 from context_aware_translation.utils.compression_marker import decode_compressed_lines
 from context_aware_translation.utils.image_utils import (
     compress_image_for_ocr,
@@ -66,7 +69,7 @@ from context_aware_translation.utils.pandoc_export import export_pandoc_file
 if TYPE_CHECKING:
     from context_aware_translation.config import ImageReembeddingConfig, OCRConfig
     from context_aware_translation.llm.client import LLMClient
-    from context_aware_translation.storage.document_repository import DocumentRepository
+    from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 
 logger = logging.getLogger(__name__)
 
@@ -794,7 +797,7 @@ class EPUBDocument(Document):
             repo.insert_document_source(
                 document_id,
                 seq,
-                "image",
+                "asset",
                 relative_path=ORIGINAL_ARCHIVE_PATH,
                 binary_content=original_epub_bytes,
                 mime_type="application/epub+zip",
@@ -863,7 +866,7 @@ class EPUBDocument(Document):
                     repo.insert_document_source(
                         document_id,
                         seq,
-                        "image",
+                        "asset",
                         relative_path=item.file_name,
                         binary_content=item.content,
                         mime_type=item.media_type,
@@ -953,11 +956,11 @@ class EPUBDocument(Document):
                         "application/x-font-ttf",
                     }
                 ):
-                    # Font file: store as image, skip everything
+                    # Font file: preserve as binary asset, skip OCR/translation
                     repo.insert_document_source(
                         document_id,
                         seq,
-                        "image",
+                        "asset",
                         relative_path=rp,
                         binary_content=item.content,
                         mime_type=mt,
@@ -978,7 +981,7 @@ class EPUBDocument(Document):
                         auto_commit=False,
                     )
                 else:
-                    # Other binary resource
+                    # Other binary resource: preserve, but do not expose as OCR image
                     logger.info(
                         "Skipping OCR for unknown image format: %s (extension: %s)",
                         rp,
@@ -987,7 +990,7 @@ class EPUBDocument(Document):
                     repo.insert_document_source(
                         document_id,
                         seq,
-                        "image",
+                        "asset",
                         relative_path=rp,
                         binary_content=item.content,
                         mime_type=mt,
@@ -1035,10 +1038,15 @@ class EPUBDocument(Document):
         if self._ocr_config is None:
             raise ValueError("ocr_config is required for process_ocr")
 
-        sources = self.repo.get_document_sources_needing_ocr(self.document_id)
-
-        if source_ids is not None:
-            sources = [s for s in sources if s["source_id"] in source_ids]
+        if source_ids is None:
+            sources = self.repo.get_document_sources_needing_ocr(self.document_id)
+        else:
+            source_ids_set = frozenset(source_ids)
+            sources = [
+                source
+                for source in self.repo.get_document_sources(self.document_id)
+                if source["source_type"] == "image" and source["source_id"] in source_ids_set
+            ]
 
         if not sources:
             return 0
@@ -1295,8 +1303,6 @@ class EPUBDocument(Document):
             cls._export_native_epub(doc, output_path)
             return
 
-        from tempfile import TemporaryDirectory
-
         with TemporaryDirectory(prefix="cat-epub-export-") as tmp_dir:
             intermediate_epub = Path(tmp_dir) / "intermediate.epub"
             cls._export_native_epub(doc, intermediate_epub)
@@ -1542,13 +1548,6 @@ class EPUBDocument(Document):
         Uses existing DB cache to skip already-done items unless force=True.
         Returns count of images newly generated.
         """
-        import asyncio
-
-        from context_aware_translation.llm.image_generator import (
-            build_text_replacements,
-            create_image_generator,
-        )
-
         sources = self.repo.get_document_sources(self.document_id)
         sources_sorted = sorted(sources, key=lambda s: s["sequence_number"])
 

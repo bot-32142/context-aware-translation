@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from context_aware_translation.storage.task_store import TaskRecord, TaskStore
+from context_aware_translation.storage.repositories.task_store import TaskRecord, TaskStore
 from context_aware_translation.workflow.tasks.engine_core import EngineCore
 from context_aware_translation.workflow.tasks.models import (
     STATUS_CANCELLED,

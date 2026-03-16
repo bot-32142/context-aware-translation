@@ -87,12 +87,12 @@ QTableView::item {
 }
 
 QTableView::item:selected {
-    background-color: #0078d4;
-    color: white;
+    background-color: #eef2f6;
+    color: #333333;
 }
 
 QTableView::item:hover {
-    background-color: #e8f4fd;
+    background-color: transparent;
 }
 
 QHeaderView::section {
@@ -118,13 +118,14 @@ QListWidget::item {
 }
 
 QListWidget::item:selected {
-    background-color: #0078d4;
-    color: white;
+    background-color: #eef2f6;
+    color: #333333;
 }
 
 QListWidget::item:hover {
-    background-color: #e8f4fd;
+    background-color: transparent;
 }
+
 
 /* Tab widget */
 QTabWidget::pane {

@@ -10,7 +10,7 @@ Comprehensive test suite (107 tests) mirroring the main package structure. Tests
 | File | Description |
 |------|-------------|
 | `conftest.py` | Shared pytest fixtures: `temp_config` (Config with dummy API settings), `temp_db` (SQLiteBookDB), `temp_context_tree_db` (ContextTreeDB) |
-| `test_glossary_io.py` | Glossary import/export: consolidation, validation, round-trip I/O |
+| `adapters/files/test_glossary_io.py` | Glossary import/export: consolidation, validation, round-trip I/O |
 | `data/` | Test fixtures: `test_chunk.txt`, `test_chunk2.txt` for document parsing tests |
 
 ## Subdirectories
@@ -18,15 +18,16 @@ Comprehensive test suite (107 tests) mirroring the main package structure. Tests
 | Directory | Purpose | Key Tests |
 |-----------|---------|-----------|
 | `config/` | Config model validation | `test_endpoint_profiles.py` |
+| `adapters/` | Adapter boundary tests | `files/test_glossary_io.py` |
 | `core/` | Context tree, strategy, extraction | `test_context_tree.py` (1227 lines), `test_context_manager.py` (1235 lines), `test_translation_context_manager_strategy_api.py` (1343 lines), `test_context_extractor.py`, `test_noise_filtering_pipeline.py` |
 | `documents/` | Document type handlers (Text, PDF, EPUB, scanned books, manga) | `test_epub.py` (2085 lines), `test_epub_container.py` (1377 lines), `test_scanned_book.py` (802 lines), `test_pdf.py` (855 lines), `test_manga.py` |
 | `documents/content/` | Content preprocessing (xhtml utils, inline markers, OCR text embedding) | `test_epub_xhtml_utils.py` (743 lines), `test_epub_inline_markers.py`, `test_ocr_image_embedded_text.py` |
 | `integration/` | End-to-end workflows | `test_business_logic.py`, `test_multi_document.py`, `test_service_bootstrap_lock.py`, `test_service_cancellation_semantics.py` |
 | `llm/` | LLM clients, translators, extractors, OCR, batch gateways | `test_translator.py` (710 lines), `test_llm_client.py`, `test_extractor.py`, `test_ocr.py`, `test_gemini_backend.py`, `test_gemini_batch_gateway.py` |
-| `storage/` | SQLite repositories, book manager, context tree DB | `test_book_db.py` (1444 lines), `test_book_manager.py` (1021 lines), `test_term_repository.py` (868 lines), `test_context_tree_db.py`, `test_document_repository.py` |
+| `storage/` | SQLite repositories, storage models, book manager, context tree DB | `test_book_db.py` (1444 lines), `test_book_manager.py` (1021 lines), `test_term_repository.py` (868 lines), `test_context_tree_db.py`, `test_document_repository.py` |
 | `ui/` | PySide6 views, widgets, worker coordination | `test_glossary_view.py` (845 lines), `test_translation_view_refresh.py` (792 lines), `test_book_workspace_activity.py`, `test_config_editor.py`, `test_export_view.py` |
-| `ui/tasks/` | Task engine, view model mapping, task console | `test_task_engine.py` (13460 lines), `test_task_console.py` (14664 lines), `test_task_view_model_mapper.py` (5847 lines) |
-| `ui/workers/` | Worker tasks (translation, glossary export/review, config snapshot) | `test_translation_text_task_worker.py` (11834 lines), `test_translation_manga_task_worker.py` (8441 lines), `test_glossary_export_task_worker.py` (15956 lines), `test_config_snapshot_workers.py` (11104 lines) |
+| `ui/tasks/` | Qt adapter task-engine tests | `test_task_engine.py` (13460 lines) |
+| `ui/workers/` | Qt adapter worker tests (translation, glossary export/review, config snapshot) | `test_translation_text_task_worker.py` (11834 lines), `test_translation_manga_task_worker.py` (8441 lines), `test_glossary_export_task_worker.py` (15956 lines), `test_config_snapshot_workers.py` (11104 lines) |
 | `utils/` | Utility functions (chunking, hashing, markdown, JSON cleaning) | `test_chunking.py`, `test_semantic_chunker.py`, `test_string_similarity.py`, `test_symbol_check.py` |
 | `workflow/` | Workflow orchestration, session management, task handlers | `test_session.py`, `test_service_cancellation_semantics.py`, `test_translator_import_path.py` |
 | `workflow/tasks/execution/` | Task execution primitives | (Subdirectory for execution handlers) |

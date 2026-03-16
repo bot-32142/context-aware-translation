@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
-import context_aware_translation.storage.book_db as book_db
-import context_aware_translation.storage.document_repository as document_repository
-from context_aware_translation.ui.workers.ocr_task_worker import OCRTaskWorker
+import context_aware_translation.storage.repositories.document_repository as document_repository
+import context_aware_translation.storage.schema.book_db as book_db
+from context_aware_translation.adapters.qt.workers.ocr_task_worker import OCRTaskWorker
 from context_aware_translation.workflow.tasks.claims import (
     ClaimMode,
     DocumentScope,
@@ -29,7 +29,7 @@ from context_aware_translation.workflow.tasks.models import (
 )
 
 if TYPE_CHECKING:
-    from context_aware_translation.storage.task_store import TaskRecord
+    from context_aware_translation.storage.repositories.task_store import TaskRecord
     from context_aware_translation.workflow.tasks.models import ActionSnapshot
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
@@ -180,12 +180,10 @@ class OCRHandler:
                         )
                 explicit_source_ids = [int(s) for s in raw_source_ids]
 
-            # Resolve pending OCR sources
+            # Resolve sources to run. Explicit source_ids allow rerun of already-
+            # completed pages; default document runs remain pending-only.
             if explicit_source_ids is not None:
-                # Filter to only those that still need OCR
-                pending = doc_repo.get_document_sources_needing_ocr(doc_id)
-                pending_ids = {s["source_id"] for s in pending}
-                resolved = [sid for sid in explicit_source_ids if sid in pending_ids]
+                resolved = explicit_source_ids
             else:
                 resolved = [s["source_id"] for s in doc_repo.get_document_sources_needing_ocr(doc_id)]
 
@@ -252,9 +250,7 @@ class OCRHandler:
                             allowed=False,
                             reason=f"source_id {sid} does not belong to document {doc_id}.",
                         )
-                pending = doc_repo.get_document_sources_needing_ocr(doc_id)
-                pending_ids = {s["source_id"] for s in pending}
-                resolved = [sid for sid in source_ids if sid in pending_ids]
+                resolved = source_ids
             else:
                 resolved = [s["source_id"] for s in doc_repo.get_document_sources_needing_ocr(doc_id)]
 

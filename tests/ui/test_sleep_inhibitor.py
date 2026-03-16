@@ -329,7 +329,7 @@ def test_noop_on_unsupported_platform(mock_subprocess):
 @patch("context_aware_translation.ui.sleep_inhibitor.SleepInhibitor")
 def test_base_worker_acquires_and_releases(mock_inhibitor):
     """BaseWorker.run() calls acquire before work and release after."""
-    from context_aware_translation.ui.workers.base_worker import BaseWorker
+    from context_aware_translation.adapters.qt.workers.base_worker import BaseWorker
 
     class _TestWorker(BaseWorker):
         def _execute(self):
@@ -345,7 +345,7 @@ def test_base_worker_acquires_and_releases(mock_inhibitor):
 @patch("context_aware_translation.ui.sleep_inhibitor.SleepInhibitor")
 def test_base_worker_releases_on_exception(mock_inhibitor):
     """BaseWorker.run() releases even when _execute() raises."""
-    from context_aware_translation.ui.workers.base_worker import BaseWorker
+    from context_aware_translation.adapters.qt.workers.base_worker import BaseWorker
 
     class _ErrorWorker(BaseWorker):
         def _execute(self):
@@ -361,8 +361,8 @@ def test_base_worker_releases_on_exception(mock_inhibitor):
 @patch("context_aware_translation.ui.sleep_inhibitor.SleepInhibitor")
 def test_base_worker_releases_on_cancellation(mock_inhibitor):
     """BaseWorker.run() releases even on cancellation."""
+    from context_aware_translation.adapters.qt.workers.base_worker import BaseWorker
     from context_aware_translation.core.cancellation import OperationCancelledError
-    from context_aware_translation.ui.workers.base_worker import BaseWorker
 
     class _CancelWorker(BaseWorker):
         def _execute(self):
@@ -390,6 +390,7 @@ def test_update_sleep_inhibitor_acquires_when_task_engine_has_running_work():
         _task_engine=_make_fake_task_engine(has_running_work=True),
         _view_registry={},
         _sleep_inhibitor=mock_inhibitor,
+        _sleep_inhibitor_acquired=False,
     )
 
     MainWindow._update_sleep_inhibitor(fake_window)
@@ -404,8 +405,9 @@ def test_update_sleep_inhibitor_acquires_when_workspace_has_running_ops():
     workspace = SimpleNamespace(get_running_operations=MagicMock(return_value=["Translation"]))
     fake_window = SimpleNamespace(
         _task_engine=_make_fake_task_engine(has_running_work=False),
-        _view_registry={"book_abc": workspace},
+        _view_registry={"project_abc": workspace},
         _sleep_inhibitor=mock_inhibitor,
+        _sleep_inhibitor_acquired=False,
     )
 
     MainWindow._update_sleep_inhibitor(fake_window)
@@ -420,8 +422,9 @@ def test_update_sleep_inhibitor_releases_when_nothing_running():
     workspace = SimpleNamespace(get_running_operations=MagicMock(return_value=[]))
     fake_window = SimpleNamespace(
         _task_engine=_make_fake_task_engine(has_running_work=False),
-        _view_registry={"book_abc": workspace, "library": SimpleNamespace()},
+        _view_registry={"project_abc": workspace, "projects": SimpleNamespace()},
         _sleep_inhibitor=mock_inhibitor,
+        _sleep_inhibitor_acquired=True,
     )
 
     MainWindow._update_sleep_inhibitor(fake_window)

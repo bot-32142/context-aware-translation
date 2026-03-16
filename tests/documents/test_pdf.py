@@ -619,8 +619,8 @@ class TestDoImport:
 
     def test_imports_pdf_and_creates_document(self, tmp_path, temp_config):
         """Imports PDF file and creates document with type='pdf'."""
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         pdf_path = tmp_path / "test.pdf"
         db = SQLiteBookDB(temp_config.sqlite_path)
@@ -637,8 +637,8 @@ class TestDoImport:
 
     def test_extracts_pages_as_image_sources(self, tmp_path, temp_config):
         """Extracts PDF pages and stores as image sources."""
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         pdf_path = tmp_path / "test.pdf"
         db = SQLiteBookDB(temp_config.sqlite_path)
@@ -663,8 +663,8 @@ class TestDoImport:
 
     def test_rollback_on_error(self, tmp_path, temp_config):
         """Rolls back transaction if extraction fails."""
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         pdf_path = tmp_path / "test.pdf"
         pdf_path.write_bytes(b"invalid pdf bytes")
@@ -679,8 +679,8 @@ class TestDoImport:
 
     def test_stores_binary_content(self, tmp_path, temp_config):
         """Stores PNG binary content for each page."""
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         pdf_path = tmp_path / "test.pdf"
         db = SQLiteBookDB(temp_config.sqlite_path)
@@ -703,8 +703,8 @@ class TestDoImport:
 
     def test_reports_progress_during_import(self, tmp_path, temp_config):
         """Reports import progress from 0 to total pages."""
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         pdf_path = tmp_path / "test.pdf"
         db = SQLiteBookDB(temp_config.sqlite_path)

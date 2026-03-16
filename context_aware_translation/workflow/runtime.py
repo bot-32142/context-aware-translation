@@ -6,8 +6,8 @@ from context_aware_translation.config import Config
 from context_aware_translation.core.context_manager import TranslationContextManagerAdapter
 from context_aware_translation.core.context_tree import ContextTree
 from context_aware_translation.llm.client import LLMClient
-from context_aware_translation.storage.book_db import SQLiteBookDB
-from context_aware_translation.storage.document_repository import DocumentRepository
+from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
 
 @dataclass

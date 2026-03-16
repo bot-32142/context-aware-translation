@@ -31,9 +31,14 @@ async def run_ocr(
     all_sources = []
     for doc in documents:
         if workflow.config.ocr_config is not None:
-            sources = workflow.document_repo.get_document_sources_needing_ocr(doc.document_id)
             if source_ids is not None:
-                sources = [s for s in sources if s["source_id"] in source_ids]
+                sources = [
+                    source
+                    for source in workflow.document_repo.get_document_sources_metadata(doc.document_id)
+                    if source.get("source_type") == "image" and source["source_id"] in source_ids
+                ]
+            else:
+                sources = workflow.document_repo.get_document_sources_needing_ocr(doc.document_id)
             all_sources.extend(sources)
 
     total_sources = len(all_sources)

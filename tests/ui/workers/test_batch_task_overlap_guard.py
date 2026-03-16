@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from context_aware_translation.storage.task_store import TaskStore
-from context_aware_translation.ui.workers.batch_task_overlap_guard import has_any_batch_task_overlap
+from context_aware_translation.adapters.qt.workers.batch_task_overlap_guard import has_any_batch_task_overlap
+from context_aware_translation.storage.repositories.task_store import TaskStore
 
 
 @pytest.fixture

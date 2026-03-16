@@ -51,3 +51,31 @@ def test_set_image_invalid_data_clears_previous_pixmap():
 
     viewer.set_image(b"not-an-image")
     assert viewer.pixmap_item is None
+
+
+def test_deferred_auto_fit_remains_pending_until_post_layout_fit():
+    from context_aware_translation.ui.widgets.image_viewer import ImageViewer
+
+    viewer = ImageViewer()
+    viewer.resize(400, 300)
+    viewer.show()
+    viewer.set_image(_VALID_PNG)
+
+    assert viewer.pixmap_item is not None
+    assert viewer._auto_fit_pending is True
+
+    viewer._fit_pending_image()
+
+    assert viewer._auto_fit_pending is False
+
+
+def test_deferred_auto_fit_does_not_finalize_while_hidden():
+    from context_aware_translation.ui.widgets.image_viewer import ImageViewer
+
+    viewer = ImageViewer()
+    viewer.set_image(_VALID_PNG)
+    viewer.hide()
+
+    viewer._fit_pending_image()
+
+    assert viewer._auto_fit_pending is True

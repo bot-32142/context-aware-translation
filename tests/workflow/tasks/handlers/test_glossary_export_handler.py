@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from unittest.mock import MagicMock, patch
 
-from context_aware_translation.storage.task_store import TaskRecord
+from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import (
     ClaimMode,
     NoDocuments,
@@ -280,11 +280,11 @@ def test_validate_submit_denied_when_no_terms(tmp_path):
 
     with (
         patch(
-            "context_aware_translation.storage.book_db.SQLiteBookDB",
+            "context_aware_translation.storage.schema.book_db.SQLiteBookDB",
             return_value=fake_db,
         ),
         patch(
-            "context_aware_translation.storage.term_repository.TermRepository",
+            "context_aware_translation.storage.repositories.term_repository.TermRepository",
             return_value=fake_term_repo,
         ),
     ):
@@ -308,11 +308,11 @@ def test_validate_submit_allowed_when_terms_exist(tmp_path):
 
     with (
         patch(
-            "context_aware_translation.storage.book_db.SQLiteBookDB",
+            "context_aware_translation.storage.schema.book_db.SQLiteBookDB",
             return_value=fake_db,
         ),
         patch(
-            "context_aware_translation.storage.term_repository.TermRepository",
+            "context_aware_translation.storage.repositories.term_repository.TermRepository",
             return_value=fake_term_repo,
         ),
     ):
@@ -347,11 +347,11 @@ def test_validate_run_denied_when_no_terms(tmp_path):
 
     with (
         patch(
-            "context_aware_translation.storage.book_db.SQLiteBookDB",
+            "context_aware_translation.storage.schema.book_db.SQLiteBookDB",
             return_value=fake_db,
         ),
         patch(
-            "context_aware_translation.storage.term_repository.TermRepository",
+            "context_aware_translation.storage.repositories.term_repository.TermRepository",
             return_value=fake_term_repo,
         ),
     ):
@@ -376,11 +376,11 @@ def test_validate_run_allowed_when_terms_exist(tmp_path):
 
     with (
         patch(
-            "context_aware_translation.storage.book_db.SQLiteBookDB",
+            "context_aware_translation.storage.schema.book_db.SQLiteBookDB",
             return_value=fake_db,
         ),
         patch(
-            "context_aware_translation.storage.term_repository.TermRepository",
+            "context_aware_translation.storage.repositories.term_repository.TermRepository",
             return_value=fake_term_repo,
         ),
     ):
@@ -393,7 +393,7 @@ def test_validate_run_allowed_when_terms_exist(tmp_path):
 
 
 def test_build_worker_run_returns_glossary_export_task_worker():
-    from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 
     deps = MagicMock()
     record = _make_record(status=STATUS_QUEUED, payload_json='{"output_path": "/tmp/glossary.xlsx"}')
@@ -403,7 +403,7 @@ def test_build_worker_run_returns_glossary_export_task_worker():
 
 
 def test_build_worker_cancel_returns_glossary_export_task_worker():
-    from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 
     deps = MagicMock()
     record = _make_record(status=STATUS_RUNNING, payload_json='{"output_path": "/tmp/glossary.xlsx"}')
@@ -415,7 +415,7 @@ def test_build_worker_cancel_returns_glossary_export_task_worker():
 def test_build_worker_extracts_output_path_from_payload():
     from pathlib import Path
 
-    from context_aware_translation.ui.workers.glossary_export_task_worker import GlossaryExportTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 
     deps = MagicMock()
     record = _make_record(

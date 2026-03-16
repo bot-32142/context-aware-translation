@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 
-from context_aware_translation.storage.task_store import TaskRecord
+from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import (
     ClaimMode,
     ResourceClaim,
@@ -259,7 +259,7 @@ def test_validate_submit_allowed_with_both(tmp_path):
     fake_chunk = MagicMock()
     fake_chunk.document_id = 2
     fake_db.get_chunk_by_id.return_value = fake_chunk
-    with patch("context_aware_translation.storage.book_db.SQLiteBookDB", return_value=fake_db):
+    with patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db):
         result = handler.validate_submit("book-1", {"chunk_id": 1, "document_id": 2}, deps)
     assert result.allowed
 
@@ -271,7 +271,7 @@ def test_validate_submit_rejects_missing_chunk(tmp_path):
     deps.book_manager.get_book_db_path.return_value = tmp_path / "book.db"
     fake_db = MagicMock()
     fake_db.get_chunk_by_id.return_value = None
-    with patch("context_aware_translation.storage.book_db.SQLiteBookDB", return_value=fake_db):
+    with patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db):
         result = handler.validate_submit("book-1", {"chunk_id": 999, "document_id": 2}, deps)
     assert not result.allowed
     assert "not found" in result.reason.lower()
@@ -286,7 +286,7 @@ def test_validate_submit_rejects_wrong_document(tmp_path):
     fake_chunk = MagicMock()
     fake_chunk.document_id = 5  # chunk belongs to doc 5, not doc 2
     fake_db.get_chunk_by_id.return_value = fake_chunk
-    with patch("context_aware_translation.storage.book_db.SQLiteBookDB", return_value=fake_db):
+    with patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db):
         result = handler.validate_submit("book-1", {"chunk_id": 1, "document_id": 2}, deps)
     assert not result.allowed
     assert "belongs to document 5" in result.reason
@@ -334,7 +334,9 @@ def test_build_worker_run_returns_chunk_retranslation_task_worker():
     )
     payload = handler.decode_payload(record)
     worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
-    from context_aware_translation.ui.workers.chunk_retranslation_task_worker import ChunkRetranslationTaskWorker
+    from context_aware_translation.adapters.qt.workers.chunk_retranslation_task_worker import (
+        ChunkRetranslationTaskWorker,
+    )
 
     assert isinstance(worker, ChunkRetranslationTaskWorker)
 
@@ -349,7 +351,9 @@ def test_build_worker_cancel_returns_chunk_retranslation_task_worker():
     )
     payload = handler.decode_payload(record)
     worker = handler.build_worker(TaskAction.CANCEL, record, payload, deps)
-    from context_aware_translation.ui.workers.chunk_retranslation_task_worker import ChunkRetranslationTaskWorker
+    from context_aware_translation.adapters.qt.workers.chunk_retranslation_task_worker import (
+        ChunkRetranslationTaskWorker,
+    )
 
     assert isinstance(worker, ChunkRetranslationTaskWorker)
 

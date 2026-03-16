@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPixmap, QWheelEvent
 from PySide6.QtWidgets import (
     QGraphicsPixmapItem,
@@ -69,6 +69,11 @@ class ImageViewer(QGraphicsView):
         # Zoom state
         self._zoom_factor = 1.0
         self._zoom_step = 1.1  # 10% per step for smoother zooming
+        self._auto_fit_pending = False
+        self._user_zoomed = False
+        self._fit_timer = QTimer(self)
+        self._fit_timer.setSingleShot(True)
+        self._fit_timer.timeout.connect(self._fit_pending_image)
 
         # Configure view
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
@@ -113,14 +118,17 @@ class ImageViewer(QGraphicsView):
 
         # Reset zoom and fit to window
         self.reset_zoom()
+        self.schedule_auto_fit(delay_ms=75)
         self.fit_to_window()
 
     def zoom_in(self) -> None:
         """Zoom in by the zoom step factor."""
+        self._user_zoomed = True
         self._zoom(self._zoom_step)
 
     def zoom_out(self) -> None:
         """Zoom out by the zoom step factor."""
+        self._user_zoomed = True
         self._zoom(1.0 / self._zoom_step)
 
     def _zoom(self, factor: float) -> None:
@@ -148,6 +156,7 @@ class ImageViewer(QGraphicsView):
         """Reset zoom to 100%."""
         self.resetTransform()
         self._zoom_factor = 1.0
+        self._user_zoomed = False
 
     def set_bboxes(self, bboxes: list[object]) -> None:
         """Set bounding boxes to overlay on the image.
@@ -174,9 +183,6 @@ class ImageViewer(QGraphicsView):
             py = bbox.y * pixmap_h
             pw = bbox.width * pixmap_w
             ph = bbox.height * pixmap_h
-
-            # Create clickable rect item
-            from PySide6.QtCore import QRectF
 
             rect_item = ClickableRectItem(
                 QRectF(px, py, pw, ph),
@@ -235,6 +241,41 @@ class ImageViewer(QGraphicsView):
             self.pixmap_item = None
         self._scene.setSceneRect(0, 0, 0, 0)
         self.reset_zoom()
+        self._auto_fit_pending = False
+
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        self._arm_auto_fit()
+        self._queue_fit()
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        self.schedule_auto_fit()
+
+    def schedule_auto_fit(self, *, delay_ms: int = 0) -> None:
+        """Fit once after layout settles unless the user already zoomed manually."""
+        self._arm_auto_fit()
+        self._queue_fit(delay_ms)
+
+    def _arm_auto_fit(self) -> None:
+        if self.pixmap_item is None or self._user_zoomed:
+            return
+        self._auto_fit_pending = True
+
+    def _queue_fit(self, delay_ms: int = 0) -> None:
+        if self.pixmap_item is None or self._user_zoomed or not self._auto_fit_pending:
+            return
+        self._fit_timer.start(delay_ms)
+
+    def _fit_pending_image(self) -> None:
+        if self.pixmap_item is None or not self._auto_fit_pending or self._user_zoomed:
+            return
+        if not self.isVisible() or not self.viewport().isVisible():
+            return
+        if self.viewport().width() <= 1 or self.viewport().height() <= 1:
+            return
+        self.fit_to_window()
+        self._auto_fit_pending = False
 
     def wheelEvent(self, event: QWheelEvent) -> None:
         """Handle mouse wheel events for zooming.

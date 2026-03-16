@@ -9,10 +9,11 @@ from context_aware_translation.config import ReviewConfig
 from context_aware_translation.core.cancellation import OperationCancelledError, raise_if_cancelled
 from context_aware_translation.llm.client import LLMClient
 from context_aware_translation.llm.session_trace import llm_session_scope
+from context_aware_translation.utils.cjk_normalize import build_normalized_key_mapping
 from context_aware_translation.utils.llm_json_cleaner import clean_llm_response
 
 if TYPE_CHECKING:
-    from context_aware_translation.storage.book_db import TermRecord
+    from context_aware_translation.storage.schema.book_db import TermRecord
 
 logger = logging.getLogger(__name__)
 
@@ -103,8 +104,6 @@ Respond ONLY with the JSON object classifying these terms.
                 ignore_list = result.get("ignore", [])
 
                 # Remap CJK variant keys from LLM back to expected keys
-                from context_aware_translation.utils.cjk_normalize import build_normalized_key_mapping
-
                 llm_all = set(keep_list) | set(ignore_list)
                 key_map = build_normalized_key_mapping(llm_all, input_keys)
                 llm_to_expected = {v: k for k, v in key_map.items()}

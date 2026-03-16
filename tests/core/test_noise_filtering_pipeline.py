@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from context_aware_translation.core.context_manager import TranslationContextManager
-from context_aware_translation.storage.book_db import TermRecord
+from context_aware_translation.storage.schema.book_db import TermRecord
 
 
 @pytest.mark.asyncio

@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from context_aware_translation.config import ImageReembeddingConfig, OCRConfig
     from context_aware_translation.core.progress import ProgressCallback
     from context_aware_translation.llm.client import LLMClient
-    from context_aware_translation.storage.document_repository import DocumentRepository
+    from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 
 
 class Document(ABC):

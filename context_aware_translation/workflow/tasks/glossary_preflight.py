@@ -3,8 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from context_aware_translation.documents.base import (
+    can_build_glossary_without_prior_ocr_for_type,
+    is_ocr_required_for_type,
+)
+
 if TYPE_CHECKING:
-    from context_aware_translation.storage.document_repository import DocumentRepository
+    from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 
 
 @dataclass(frozen=True)
@@ -33,11 +38,6 @@ def compute_glossary_preflight(
         GlossaryPreflightResult with target docs, cutoff, preflight set,
         blocking OCR docs, and whether the run is blocked.
     """
-    from context_aware_translation.documents.base import (
-        can_build_glossary_without_prior_ocr_for_type,
-        is_ocr_required_for_type,
-    )
-
     # Step 1: filter pending_doc_ids to target set
     if selected_cutoff_doc_id is not None:
         target_doc_ids = [doc_id for doc_id in pending_doc_ids if doc_id <= selected_cutoff_doc_id]

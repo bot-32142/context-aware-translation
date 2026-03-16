@@ -382,8 +382,8 @@ class TestDoImport:
 
     def test_imports_single_text_file(self, tmp_path, temp_config):
         """Import single .txt file creates document and source."""
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         txt_file = tmp_path / "document.txt"
         txt_file.write_text("Line 1\nLine 2\nLine 3")
@@ -406,8 +406,8 @@ class TestDoImport:
 
     def test_imports_folder_of_text_files(self, tmp_path, temp_config):
         """Import folder creates document with multiple sources."""
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         (tmp_path / "file1.txt").write_text("Content 1")
         (tmp_path / "file2.md").write_text("Content 2")
@@ -427,8 +427,8 @@ class TestDoImport:
 
     def test_preserves_alphabetical_order(self, tmp_path, temp_config):
         """Sources are inserted in alphabetical order by filename."""
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         (tmp_path / "zebra.txt").write_text("Z")
         (tmp_path / "apple.txt").write_text("A")
@@ -453,8 +453,8 @@ class TestDoImport:
         """Transaction rolls back if error occurs during import."""
         from unittest.mock import patch
 
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         txt_file = tmp_path / "document.txt"
         txt_file.write_text("Content")
@@ -473,8 +473,8 @@ class TestDoImport:
 
     def test_import_can_be_cancelled_and_rolls_back(self, tmp_path, temp_config):
         """Cancellation during import rolls back all inserts."""
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         (tmp_path / "file1.txt").write_text("Content 1")
         (tmp_path / "file2.txt").write_text("Content 2")
@@ -497,8 +497,8 @@ class TestDoImport:
 
     def test_stores_text_content(self, tmp_path, temp_config):
         """Text content is stored correctly for each source."""
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         txt_file = tmp_path / "test.txt"
         content = "First line\nSecond line\nThird line"

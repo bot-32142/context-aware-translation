@@ -59,7 +59,7 @@ def _book_manager_with_db(tmp_path: Path) -> MagicMock:
 
 
 def test_import_worker_late_interrupt_still_emits_success(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    from context_aware_translation.ui.workers.import_worker import ImportWorker
+    from context_aware_translation.adapters.qt.workers.import_worker import ImportWorker
 
     source_path = tmp_path / "sample.txt"
     source_path.write_text("hello", encoding="utf-8")
@@ -84,12 +84,16 @@ def test_import_worker_late_interrupt_still_emits_success(monkeypatch: pytest.Mo
     fake_repo = MagicMock()
     fake_repo.list_documents.side_effect = [[], [{"document_id": 1}]]
 
-    monkeypatch.setattr("context_aware_translation.ui.workers.import_worker.SQLiteBookDB", lambda *_a, **_k: fake_db)
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.import_worker.DocumentRepository",
+        "context_aware_translation.adapters.qt.workers.import_worker.SQLiteBookDB", lambda *_a, **_k: fake_db
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.adapters.qt.workers.import_worker.DocumentRepository",
         lambda *_a, **_k: fake_repo,
     )
-    monkeypatch.setattr("context_aware_translation.ui.workers.import_worker.get_document_classes", lambda: [_TextDoc])
+    monkeypatch.setattr(
+        "context_aware_translation.workflow.ops.import_support.get_document_classes", lambda: [_TextDoc]
+    )
 
     success, cancelled, errors = _capture_signals(worker)
     worker.run()
@@ -101,7 +105,7 @@ def test_import_worker_late_interrupt_still_emits_success(monkeypatch: pytest.Mo
 
 
 def test_import_worker_multiple_files_imports_as_staged_folder(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    from context_aware_translation.ui.workers.import_worker import ImportWorker
+    from context_aware_translation.adapters.qt.workers.import_worker import ImportWorker
 
     file_a = tmp_path / "a.txt"
     file_b = tmp_path / "nested" / "b.txt"
@@ -132,12 +136,16 @@ def test_import_worker_multiple_files_imports_as_staged_folder(monkeypatch: pyte
     fake_repo = MagicMock()
     fake_repo.list_documents.side_effect = [[], [{"document_id": 7}]]
 
-    monkeypatch.setattr("context_aware_translation.ui.workers.import_worker.SQLiteBookDB", lambda *_a, **_k: fake_db)
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.import_worker.DocumentRepository",
+        "context_aware_translation.adapters.qt.workers.import_worker.SQLiteBookDB", lambda *_a, **_k: fake_db
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.adapters.qt.workers.import_worker.DocumentRepository",
         lambda *_a, **_k: fake_repo,
     )
-    monkeypatch.setattr("context_aware_translation.ui.workers.import_worker.get_document_classes", lambda: [_FolderDoc])
+    monkeypatch.setattr(
+        "context_aware_translation.workflow.ops.import_support.get_document_classes", lambda: [_FolderDoc]
+    )
 
     success, cancelled, errors = _capture_signals(worker)
     worker.run()
@@ -148,7 +156,7 @@ def test_import_worker_multiple_files_imports_as_staged_folder(monkeypatch: pyte
 
 
 def test_stage_selected_files_as_folder_falls_back_to_copy(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    from context_aware_translation.ui.workers import import_worker
+    from context_aware_translation.workflow.ops import import_support
 
     source = tmp_path / "sample.txt"
     source.write_text("hello", encoding="utf-8")
@@ -159,17 +167,17 @@ def test_stage_selected_files_as_folder_falls_back_to_copy(monkeypatch: pytest.M
     def _fail_symlink(*_args, **_kwargs):  # noqa: ANN002, ANN003
         raise OSError("symlink unavailable")
 
-    monkeypatch.setattr(import_worker.os, "link", _fail_link)
-    monkeypatch.setattr(import_worker.os, "symlink", _fail_symlink)
+    monkeypatch.setattr(import_support.os, "link", _fail_link)
+    monkeypatch.setattr(import_support.os, "symlink", _fail_symlink)
 
-    with import_worker.stage_selected_files_as_folder([source]) as staged_root:
+    with import_support.stage_selected_files_as_folder([source]) as staged_root:
         staged_files = [entry for entry in staged_root.rglob("*") if entry.is_file()]
         assert len(staged_files) == 1
         assert staged_files[0].read_text(encoding="utf-8") == "hello"
 
 
 def test_export_worker_late_interrupt_still_emits_success(monkeypatch: pytest.MonkeyPatch):
-    from context_aware_translation.ui.workers.export_worker import ExportWorker
+    from context_aware_translation.adapters.qt.workers.export_worker import ExportWorker
 
     worker = ExportWorker(
         book_manager=MagicMock(),
@@ -184,14 +192,14 @@ def test_export_worker_late_interrupt_still_emits_success(monkeypatch: pytest.Mo
         pass
 
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.export_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.export_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _TranslatorContext(_Session()),
     )
 
     async def _fake_export(*_args, **_kwargs):  # noqa: ANN003
         worker.requestInterruption()
 
-    monkeypatch.setattr("context_aware_translation.ui.workers.export_worker.export_ops.export", _fake_export)
+    monkeypatch.setattr("context_aware_translation.adapters.qt.workers.export_worker.export_ops.export", _fake_export)
 
     success, cancelled, errors = _capture_signals(worker)
     worker.run()
@@ -202,7 +210,7 @@ def test_export_worker_late_interrupt_still_emits_success(monkeypatch: pytest.Mo
 
 
 def test_import_worker_does_not_emit_success_when_import_fails(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    from context_aware_translation.ui.workers.import_worker import ImportWorker
+    from context_aware_translation.adapters.qt.workers.import_worker import ImportWorker
 
     source_path = tmp_path / "sample.txt"
     source_path.write_text("hello", encoding="utf-8")
@@ -226,12 +234,16 @@ def test_import_worker_does_not_emit_success_when_import_fails(monkeypatch: pyte
     fake_repo = MagicMock()
     fake_repo.list_documents.return_value = []
 
-    monkeypatch.setattr("context_aware_translation.ui.workers.import_worker.SQLiteBookDB", lambda *_a, **_k: fake_db)
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.import_worker.DocumentRepository",
+        "context_aware_translation.adapters.qt.workers.import_worker.SQLiteBookDB", lambda *_a, **_k: fake_db
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.adapters.qt.workers.import_worker.DocumentRepository",
         lambda *_a, **_k: fake_repo,
     )
-    monkeypatch.setattr("context_aware_translation.ui.workers.import_worker.get_document_classes", lambda: [_TextDoc])
+    monkeypatch.setattr(
+        "context_aware_translation.workflow.ops.import_support.get_document_classes", lambda: [_TextDoc]
+    )
 
     success, cancelled, errors = _capture_signals(worker)
     worker.run()
@@ -243,7 +255,7 @@ def test_import_worker_does_not_emit_success_when_import_fails(monkeypatch: pyte
 
 
 def test_import_worker_forwards_progress_callback_when_supported(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    from context_aware_translation.ui.workers.import_worker import ImportWorker
+    from context_aware_translation.adapters.qt.workers.import_worker import ImportWorker
 
     source_path = tmp_path / "sample.pdf"
     source_path.write_bytes(b"fake")
@@ -270,12 +282,14 @@ def test_import_worker_forwards_progress_callback_when_supported(monkeypatch: py
     fake_repo = MagicMock()
     fake_repo.list_documents.side_effect = [[], [{"document_id": 1}]]
 
-    monkeypatch.setattr("context_aware_translation.ui.workers.import_worker.SQLiteBookDB", lambda *_a, **_k: fake_db)
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.import_worker.DocumentRepository",
+        "context_aware_translation.adapters.qt.workers.import_worker.SQLiteBookDB", lambda *_a, **_k: fake_db
+    )
+    monkeypatch.setattr(
+        "context_aware_translation.adapters.qt.workers.import_worker.DocumentRepository",
         lambda *_a, **_k: fake_repo,
     )
-    monkeypatch.setattr("context_aware_translation.ui.workers.import_worker.get_document_classes", lambda: [_PDFDoc])
+    monkeypatch.setattr("context_aware_translation.workflow.ops.import_support.get_document_classes", lambda: [_PDFDoc])
 
     progress_events: list[tuple[int, int, str]] = []
     worker.progress.connect(lambda c, t, m: progress_events.append((c, t, m)))
@@ -292,7 +306,9 @@ def test_import_worker_forwards_progress_callback_when_supported(monkeypatch: py
 
 
 def test_glossary_translate_task_worker_does_not_emit_success_when_session_exit_fails(monkeypatch: pytest.MonkeyPatch):
-    from context_aware_translation.ui.workers.glossary_translation_task_worker import GlossaryTranslationTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_translation_task_worker import (
+        GlossaryTranslationTaskWorker,
+    )
 
     class _TranslateSession:
         async def translate_glossary(self, **kwargs) -> None:  # noqa: ANN003
@@ -300,7 +316,7 @@ def test_glossary_translate_task_worker_does_not_emit_success_when_session_exit_
 
     worker = GlossaryTranslationTaskWorker(MagicMock(), "book-id", action="run")
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_translation_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.glossary_translation_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _TranslatorContext(_TranslateSession(), exit_error=RuntimeError("close failed")),
     )
 
@@ -316,7 +332,7 @@ def test_glossary_translate_task_worker_does_not_emit_success_when_session_exit_
 def test_glossary_review_task_worker_does_not_emit_success_when_session_exit_fails(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
-    from context_aware_translation.ui.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
+    from context_aware_translation.adapters.qt.workers.glossary_review_task_worker import GlossaryReviewTaskWorker
 
     class _ReviewSession:
         async def review_terms(self, **kwargs) -> None:  # noqa: ANN003
@@ -326,7 +342,7 @@ def test_glossary_review_task_worker_does_not_emit_success_when_session_exit_fai
     book_manager.get_book_db_path.return_value = tmp_path / "book.db"
     worker = GlossaryReviewTaskWorker(book_manager, "book-id", action="run", task_id="task-1")
     monkeypatch.setattr(
-        "context_aware_translation.ui.workers.glossary_review_task_worker.WorkflowSession.from_book",
+        "context_aware_translation.adapters.qt.workers.glossary_review_task_worker.WorkflowSession.from_book",
         lambda *_args, **_kwargs: _TranslatorContext(_ReviewSession(), exit_error=RuntimeError("close failed")),
     )
 

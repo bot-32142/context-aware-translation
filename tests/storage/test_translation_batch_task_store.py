@@ -1,4 +1,4 @@
-from context_aware_translation.storage.translation_batch_task_store import (
+from context_aware_translation.storage.repositories.translation_batch_task_store import (
     PHASE_TRANSLATION_POLL,
     STATUS_CANCEL_REQUESTED,
     STATUS_RUNNING,

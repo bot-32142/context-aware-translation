@@ -128,7 +128,7 @@ inpainted = await backend.inpaint_image(image, translations)
 ### Internal
 - `context_aware_translation.config` - `LLMConfig`, `TranslatorConfig`, `ExtractorConfig`, etc.; `EndpointProfile`
 - `context_aware_translation.core.models` - `Term` and related data models
-- `context_aware_translation.storage.book_db` - `ChunkRecord` for extraction context
+- `context_aware_translation.storage.schema.book_db` - `ChunkRecord` for extraction context
 - `context_aware_translation.utils.*` - text/image processing utilities, JSON cleaning, compression markers
 - `context_aware_translation.documents.*` - document type handling for OCR/inpainting
 

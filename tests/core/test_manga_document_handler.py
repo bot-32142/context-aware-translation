@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from context_aware_translation.core.manga_document_handler import MangaDocumentHandler
-from context_aware_translation.storage.book_db import TranslationChunkRecord
+from context_aware_translation.storage.schema.book_db import TranslationChunkRecord
 
 
 class DummyImageFetcher:

@@ -20,7 +20,7 @@ from context_aware_translation.llm.summarizor import summarize_descriptions
 from context_aware_translation.llm.translator import translate_chunk
 
 if TYPE_CHECKING:
-    from context_aware_translation.storage.book_db import TermRecord
+    from context_aware_translation.storage.schema.book_db import TermRecord
 
 
 @final

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from context_aware_translation.core.context_manager import TranslationContextManager
     from context_aware_translation.core.progress import ProgressCallback
-    from context_aware_translation.storage.book_db import TermRecord
+    from context_aware_translation.storage.schema.book_db import TermRecord
 
 
 class SourceLanguageDetector(Protocol):

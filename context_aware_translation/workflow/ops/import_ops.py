@@ -4,6 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from context_aware_translation.documents import base as document_base
 from context_aware_translation.documents.base import Document
 from context_aware_translation.workflow.ops import bootstrap_ops
 
@@ -88,8 +89,6 @@ def import_path(
     cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, int | None]:
     """Import a file/folder path into the current book."""
-    from context_aware_translation.documents.base import get_document_classes
-
     bootstrap_ops.check_cancel(cancel_check)
     if not path.exists():
         raise ValueError(f"Path does not exist: {path}")
@@ -98,7 +97,7 @@ def import_path(
     if path.is_dir() and not any(path.iterdir()):
         raise ValueError(f"Cannot import empty folder: {path}")
 
-    classes = get_document_classes()
+    classes = document_base.get_document_classes()
     target_class = resolve_import_class(
         workflow,
         classes,

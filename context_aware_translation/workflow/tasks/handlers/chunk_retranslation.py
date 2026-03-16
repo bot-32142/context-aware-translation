@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
-import context_aware_translation.storage.book_db as book_db
-from context_aware_translation.ui.workers.chunk_retranslation_task_worker import ChunkRetranslationTaskWorker
+import context_aware_translation.storage.schema.book_db as book_db
+from context_aware_translation.adapters.qt.workers.chunk_retranslation_task_worker import ChunkRetranslationTaskWorker
 from context_aware_translation.workflow.tasks.claims import (
     AllDocuments,
     ClaimMode,
@@ -30,7 +30,7 @@ from context_aware_translation.workflow.tasks.models import (
 )
 
 if TYPE_CHECKING:
-    from context_aware_translation.storage.task_store import TaskRecord
+    from context_aware_translation.storage.repositories.task_store import TaskRecord
     from context_aware_translation.workflow.tasks.models import ActionSnapshot
     from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 

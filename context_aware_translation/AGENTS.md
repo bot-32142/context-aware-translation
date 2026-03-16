@@ -11,7 +11,7 @@ Core package for LLM-powered document translation with context-aware glossary ma
 | File | Description |
 |------|-------------|
 | `config.py` | All config dataclasses: `LLMConfig`, `ExtractorConfig`, `SummarizerConfig`, `TranslatorConfig`, `GlossaryConfig`, `ReviewConfig`, `OCRConfig`, `ImageReembeddingConfig`, `MangaTranslatorConfig`, `EndpointProfile`. Central config hub; note: `num_of_chunks_per_llm_call` must NOT exceed 10. |
-| `glossary_io.py` | Glossary import/export to/from JSON files; handles term consolidation and validation. |
+| `adapters/files/glossary_io.py` | Glossary import/export to/from JSON files; handles term consolidation and validation at the file boundary. |
 | `__init__.py` | Package initialization and logging configuration via `configure_logging()`. |
 
 ## Subdirectories
@@ -21,8 +21,9 @@ Core package for LLM-powered document translation with context-aware glossary ma
 | `core/` | Context tree and translation strategies: `context_tree.py` (hierarchical summarization), `context_manager.py` (context lifecycle), `translation_strategies.py` (strategy patterns), `context_extractor.py`, `progress.py`, `models.py`. |
 | `documents/` | Document type implementations: `text.py`, `pdf.py`, `scanned_book.py`, `manga.py`, `base.py` (abstract Document class), plus EPUB support and alignment utilities. |
 | `llm/` | LLM integration layer: `client.py` (OpenAI client with retry/timeout), `translator.py`, `extractor.py`, `glossary_translator.py`, `summarizor.py`, `reviewer.py`, `ocr.py`, `manga_ocr.py`, `language_detector.py`, `token_tracker.py`, `image_backends/` (PIL, DALL-E, etc.), `batch_jobs/` (batch processing). |
-| `storage/` | SQLite persistence layer: `book_db.py` (term records), `registry_db.py` (global registry), `book_manager.py` (book lifecycle), `task_store.py` (task records), `context_tree_db.py` (context tree storage), `document_repository.py`, `endpoint_profile.py`, `config_profile.py`, `term_repository.py`, plus batch task stores. |
-| `ui/` | PySide6 GUI: `main_window.py` (sidebar navigation), `main.py` (entry point), `views/` (translation_view, glossary_view, book_workspace, etc.), `widgets/` (task_status_card, task_activity_panel, config_editor, etc.), `workers/` (task workers), `tasks/` (Qt task engine), `dialogs/`, `models/`, `i18n.py` (zh_CN translations). |
+| `storage/` | SQLite persistence layer with `schema/` (raw DB/schema owners), `repositories/` (query/update services), `models/` (persisted records), `library/` (book lifecycle), and batch/task storage. |
+| `adapters/` | Boundary adapters: Qt event bridge, Qt task engine, and Qt workers live under `adapters/qt/`; file import/export adapters live under `adapters/files/`. |
+| `ui/` | PySide6 GUI surfaces: `main_window.py`, `features/`, `widgets/`, `resources/`, `translations/`, `i18n.py`. |
 | `workflow/` | Task orchestration and execution: `service.py` (WorkflowService), `runtime.py`, `bootstrap.py`, `session.py`, `tasks/` (EngineCore, task handlers, claims, execution), `__init__.py` (exports entry points). |
 | `utils/` | Helper utilities: `chunking.py`, `cjk_normalize.py`, `markdown_escape.py`, `image_utils.py`, `hashing.py`, `file_utils.py`, semantic chunking, string similarity, symbol checking. |
 | `resources/` | Static assets: tokenizer data and other resources. |
@@ -43,7 +44,7 @@ Core package for LLM-powered document translation with context-aware glossary ma
 - `workflow/ops/*.py` contains workflow domain operations (translation/glossary/ocr/export/bootstrap)
 - `workflow/tasks/engine_core.py` is the pure-Python task scheduling engine (no Qt)
 - Task handlers in `workflow/tasks/handlers/` implement task_type-specific logic
-- UI workers in `ui/workers/` bridge Qt signals to task engine
+- Qt adapter workers live in `adapters/qt/workers/` and bridge UI signals to workflow operations
 - SQLite with WAL mode everywhere (registry.db global, book.db per-book, context_tree.db)
 
 **Type Safety:**
@@ -92,11 +93,11 @@ Core package for LLM-powered document translation with context-aware glossary ma
 - Token tracking via `TokenTracker`
 
 **PySide6 UI:**
-- Main window navigation via `QListWidget` sidebar
-- Stacked widget for view switching
-- Translation strings in `.ts` / `.qm` files (zh_CN)
-- Workers for long-running operations (glossary extraction, OCR, translation)
-- Task status monitoring via `TaskStatusCard` and `TaskActivityPanel`
+- App/project/document chrome is migrating to hybrid QML hosts under `ui/qml/`, `ui/viewmodels/`, and `ui/shell_hosts/`
+- `MainWindow` is moving toward composition and lifetime management; shell policy should live in hosts/viewmodels instead of widget-local navigation code
+- Translation strings live in `.ts` / `.qm` files (zh_CN), and QML-backed chrome still depends on the same Qt translation pipeline
+- Workers handle long-running operations (glossary extraction, OCR, translation)
+- Task status monitoring still flows through `TaskStatusCard`, `TaskActivityPanel`, and the queue drawer surfaces
 
 **Task Execution:**
 - Pure-Python `EngineCore` in `workflow/tasks/engine_core.py`

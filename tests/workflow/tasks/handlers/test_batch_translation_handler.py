@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 
-from context_aware_translation.storage.task_store import TaskRecord
+from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import (
     AllDocuments,
     ClaimMode,
@@ -325,7 +325,7 @@ def test_build_worker_run_passes_config_snapshot_to_worker():
     payload = handler.decode_payload(record)
     worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
 
-    from context_aware_translation.ui.workers.batch_translation_task_worker import BatchTranslationTaskWorker
+    from context_aware_translation.adapters.qt.workers.batch_translation_task_worker import BatchTranslationTaskWorker
 
     assert isinstance(worker, BatchTranslationTaskWorker)
     assert worker.config_snapshot_json == snapshot
@@ -344,7 +344,7 @@ def test_build_worker_cancel_passes_config_snapshot_to_worker():
     )
     worker = handler.build_worker(TaskAction.CANCEL, record, {}, deps)
 
-    from context_aware_translation.ui.workers.batch_translation_task_worker import BatchTranslationTaskWorker
+    from context_aware_translation.adapters.qt.workers.batch_translation_task_worker import BatchTranslationTaskWorker
 
     assert isinstance(worker, BatchTranslationTaskWorker)
     assert worker.config_snapshot_json == snapshot

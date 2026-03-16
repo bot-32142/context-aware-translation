@@ -10,8 +10,8 @@ import pytest
 from PIL import Image
 
 from context_aware_translation.config import Config
-from context_aware_translation.storage.book_db import SQLiteBookDB
-from context_aware_translation.storage.document_repository import DocumentRepository
+from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 from context_aware_translation.workflow.ops import import_ops
 from context_aware_translation.workflow.session import WorkflowSession
 

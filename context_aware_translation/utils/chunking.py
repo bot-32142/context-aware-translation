@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -87,8 +88,6 @@ def get_tokenizer(model_name: str = DEFAULT_TOKENIZER) -> PreTrainedTokenizerBas
             else:
                 _tokenizer_cache[tokenizer_name] = AutoTokenizer.from_pretrained(tokenizer_name)
         except Exception as e:
-            import logging
-
             logger = logging.getLogger(__name__)
             logger.warning(
                 f"Failed to load tokenizer '{tokenizer_name}' ({e}). "

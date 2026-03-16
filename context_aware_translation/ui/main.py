@@ -4,11 +4,25 @@ import importlib.resources as importlib_resources
 import os
 import sys
 import traceback
+from contextlib import suppress
 from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication
-from PySide6.QtWidgets import QApplication, QStyleFactory
+from PySide6.QtWidgets import QApplication, QMessageBox, QStyleFactory
+
+from context_aware_translation.ui import i18n
+from context_aware_translation.ui.main_window import MainWindow
+from context_aware_translation.ui.qml_resources import create_qml_engine, load_qml_component, qml_root_path, qml_source
+
+__all__ = [
+    "create_qml_engine",
+    "load_qml_component",
+    "load_stylesheet",
+    "main",
+    "qml_root_path",
+    "qml_source",
+]
 
 
 def load_stylesheet() -> str:
@@ -28,6 +42,16 @@ def load_stylesheet() -> str:
     if style_path.exists():
         return style_path.read_text(encoding="utf-8")
     return ""
+
+
+def _show_startup_error(detail: str) -> None:
+    """Surface startup failures in packaged GUI runs where stderr is hidden."""
+    with suppress(Exception):
+        QMessageBox.critical(
+            None,
+            "Startup Error",
+            f"Context-Aware Translation failed to start.\n\nPlease send this traceback to support:\n\n{detail}",
+        )
 
 
 def main() -> None:
@@ -50,38 +74,23 @@ def main() -> None:
             app.setStyle(mac_style)
 
     try:
-        from context_aware_translation.ui import i18n
-        from context_aware_translation.ui.main_window import MainWindow
+        stylesheet = load_stylesheet()
+        if stylesheet:
+            app.setStyleSheet(stylesheet)
+
+        saved_lang = i18n.get_saved_language()
+        if saved_lang:
+            i18n.load_translation(app, saved_lang)
+        else:
+            system_lang = i18n.get_system_language()
+            i18n.load_translation(app, system_lang)
+
+        window = MainWindow()
+        window.show()
     except Exception:
-        # Surface startup failures when running as a packaged GUI app
-        # where stderr is typically not visible to end users.
-        detail = traceback.format_exc()
-        try:
-            from PySide6.QtWidgets import QMessageBox
+        _show_startup_error(traceback.format_exc())
+        raise
 
-            QMessageBox.critical(
-                None,
-                "Startup Error",
-                f"Context-Aware Translation failed to start.\n\nPlease send this traceback to support:\n\n{detail}",
-            )
-        finally:
-            raise
-
-    # Load stylesheet
-    stylesheet = load_stylesheet()
-    if stylesheet:
-        app.setStyleSheet(stylesheet)
-
-    # Load translations
-    saved_lang = i18n.get_saved_language()
-    if saved_lang:
-        i18n.load_translation(app, saved_lang)
-    else:
-        system_lang = i18n.get_system_language()
-        i18n.load_translation(app, system_lang)
-
-    window = MainWindow()
-    window.show()
     sys.exit(app.exec())
 
 

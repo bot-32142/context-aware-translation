@@ -635,8 +635,8 @@ class TestDoImport:
 
     def test_imports_single_image(self, tmp_path, temp_config):
         """Import single image file."""
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         image_file = tmp_path / "page.png"
         image_file.write_bytes(_png_bytes((120, 40, 90)))
@@ -657,8 +657,8 @@ class TestDoImport:
 
     def test_imports_folder_of_images(self, tmp_path, temp_config):
         """Import folder containing multiple image files."""
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         (tmp_path / "page1.png").write_bytes(_png_bytes((1, 2, 3)))
         (tmp_path / "page2.jpg").write_bytes(_jpeg_bytes((4, 5, 6)))
@@ -678,8 +678,8 @@ class TestDoImport:
 
     def test_preserves_alphabetical_order(self, tmp_path, temp_config):
         """Sources should be inserted in alphabetical order."""
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         c_bytes = _png_bytes((200, 1, 1))
         a_bytes = _png_bytes((1, 200, 1))
@@ -709,8 +709,8 @@ class TestDoImport:
         """Transaction should rollback on error."""
         from unittest.mock import patch
 
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         image_file = tmp_path / "page.png"
         image_file.write_bytes(_png_bytes((9, 8, 7)))
@@ -729,8 +729,8 @@ class TestDoImport:
 
     def test_stores_binary_content(self, tmp_path, temp_config):
         """Binary content and mime_type should be stored correctly."""
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         image_file = tmp_path / "page.png"
         test_data = _png_bytes((99, 88, 77))
@@ -751,8 +751,8 @@ class TestDoImport:
 
     def test_rejects_invalid_image_bytes(self, tmp_path, temp_config):
         """Import should fail fast when image bytes are not decodable."""
-        from context_aware_translation.storage.book_db import SQLiteBookDB
-        from context_aware_translation.storage.document_repository import DocumentRepository
+        from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+        from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
         image_file = tmp_path / "broken.png"
         image_file.write_bytes(b"not-a-real-image")

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from context_aware_translation.storage.context_tree_db import ContextTreeDB
+from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 
 # ============================================================================
 # Fixtures

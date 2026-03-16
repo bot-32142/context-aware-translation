@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import io
+
+from PIL import Image, UnidentifiedImageError
+
 
 def validate_image_bytes(image_bytes: bytes, source_name: str | None = None) -> None:
     """Validate that bytes represent a decodable raster image.
@@ -13,10 +17,6 @@ def validate_image_bytes(image_bytes: bytes, source_name: str | None = None) -> 
     Raises:
         ValueError: If bytes are empty or cannot be decoded as an image
     """
-    import io
-
-    from PIL import Image, UnidentifiedImageError
-
     source_label = f" '{source_name}'" if source_name else ""
 
     if not image_bytes:
@@ -43,10 +43,6 @@ def compress_image_for_ocr(image_bytes: bytes, max_dpi: int = 150) -> bytes:
     Returns:
         Compressed image bytes (PNG format), or original if already small enough
     """
-    import io
-
-    from PIL import Image
-
     img = Image.open(io.BytesIO(image_bytes))
     width, height = img.size
 

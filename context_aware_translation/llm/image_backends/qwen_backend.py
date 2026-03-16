@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import httpx
 
-from context_aware_translation.llm.image_generator import BaseImageGenerator
+from context_aware_translation.llm.image_backend_base import BaseImageGenerator
 
 if TYPE_CHECKING:
     from context_aware_translation.config import ImageReembeddingConfig

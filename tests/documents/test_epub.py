@@ -223,8 +223,8 @@ def _make_epub_with_inline_toc_nav_label(tmp_path: Path) -> Path:
 
 def _setup_repo(tmp_path: Path):
     """Create a DocumentRepository backed by a temporary SQLite DB."""
-    from context_aware_translation.storage.book_db import SQLiteBookDB
-    from context_aware_translation.storage.document_repository import DocumentRepository
+    from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+    from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 
     db = SQLiteBookDB(tmp_path / "book.db")
     return DocumentRepository(db)
@@ -368,7 +368,7 @@ class TestDoImport:
         assert css["is_ocr_completed"] == 1
 
         font = next(s for s in sources if s.get("relative_path") == "OEBPS/fonts/book.otf")
-        assert font["source_type"] == "image"
+        assert font["source_type"] == "asset"
         assert font["is_ocr_completed"] == 1
 
         image = next(s for s in sources if s.get("relative_path") == "OEBPS/images/fig.png")

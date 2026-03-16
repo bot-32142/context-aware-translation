@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from context_aware_translation.storage.book_db import (
+from context_aware_translation.storage.schema.book_db import (
     ChunkRecord,
     SQLiteBookDB,
     TermRecord,
@@ -132,7 +132,10 @@ def test_translation_chunk_record_creation():
 def test_term_db_init(temp_db: SQLiteBookDB):
     """Test database initialization."""
     assert temp_db.db_path.exists()
-    assert temp_db.schema_version == 2
+    meta = temp_db.conn.execute("SELECT schema_version FROM meta").fetchone()
+    assert meta is not None
+    assert meta["schema_version"] == temp_db.schema_version
+    assert temp_db.schema_version == 3
 
 
 # --- Term Operations ---
@@ -368,11 +371,18 @@ def test_get_terms_to_translate(temp_db: SQLiteBookDB):
         total_api_calls=1,
         translated_name="翻译2",  # Already translated
     )
-    temp_db.upsert_terms([term1, term2])
+    term3 = TermRecord(
+        key="term3",
+        descriptions={},
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        translated_name="",  # Also needs translation
+    )
+    temp_db.upsert_terms([term1, term2, term3])
 
     to_translate = temp_db.get_terms_to_translate()
-    assert len(to_translate) == 1
-    assert to_translate[0].key == "term1"
+    assert {term.key for term in to_translate} == {"term1", "term3"}
 
 
 def test_get_translation(temp_db: SQLiteBookDB):
@@ -636,8 +646,8 @@ def test_json_serialization_special_characters(temp_db: SQLiteBookDB):
     assert "\t tabs" in retrieved.descriptions["chunk2"]["nested"]
 
 
-def test_get_terms_to_translate_excludes_empty_string(temp_db: SQLiteBookDB):
-    """Test that empty string translated_name is treated differently from None."""
+def test_get_terms_to_translate_includes_empty_string(temp_db: SQLiteBookDB):
+    """Test that empty string translated_name is treated as untranslated."""
     term1 = TermRecord(
         key="term1",
         descriptions={},
@@ -652,14 +662,12 @@ def test_get_terms_to_translate_excludes_empty_string(temp_db: SQLiteBookDB):
         occurrence={},
         votes=1,
         total_api_calls=1,
-        translated_name="",  # Empty string, should NOT be in to_translate
+        translated_name="",  # Empty string, should be in to_translate
     )
     temp_db.upsert_terms([term1, term2])
 
     to_translate = temp_db.get_terms_to_translate()
-    # Only term1 should be in the list (translated_name IS NULL)
-    assert len(to_translate) == 1
-    assert to_translate[0].key == "term1"
+    assert {term.key for term in to_translate} == {"term1", "term2"}
 
 
 def test_get_translation_returns_empty_string(temp_db: SQLiteBookDB):

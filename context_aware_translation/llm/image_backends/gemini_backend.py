@@ -8,11 +8,12 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 from google import genai
 from google.genai import types
 
-from context_aware_translation.llm.image_generator import BaseImageGenerator
+from context_aware_translation.llm.image_backend_base import BaseImageGenerator
 
 if TYPE_CHECKING:
     from context_aware_translation.config import ImageReembeddingConfig
@@ -48,8 +49,6 @@ class GeminiImageGenerator(BaseImageGenerator):
         The google-genai SDK appends its own ``/v1beta/models/...`` path,
         so we only need the origin — any path component is discarded.
         """
-        from urllib.parse import urlparse
-
         parsed = urlparse(base_url)
         return f"{parsed.scheme}://{parsed.netloc}"
 
