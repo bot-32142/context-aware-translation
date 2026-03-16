@@ -422,6 +422,105 @@ def test_document_translation_view_preserves_dirty_drafts_across_unit_navigation
         view.deleteLater()
 
 
+def test_document_translation_view_retranslate_clears_only_target_unit_draft_on_refresh():
+    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
+
+    state = _make_state().model_copy(
+        update={
+            "units": [
+                _make_state().units[0].model_copy(update={"translated_text": "server chunk v1"}),
+                _make_state()
+                .units[1]
+                .model_copy(
+                    update={
+                        "status": SurfaceStatus.READY,
+                        "source_text": "Page source",
+                        "translated_text": "server page v1",
+                        "blocker": None,
+                        "actions": TranslationUnitActionState(can_save=True, can_retranslate=True),
+                    }
+                ),
+            ]
+        }
+    )
+    service = FakeDocumentService(workspace=state.workspace, translation=state)
+    view = DocumentTranslationView(service, "proj-1", 4)
+    try:
+        view.refresh()
+        view.translation_text.setPlainText("stale local chunk draft")
+
+        view.unit_list.setCurrentRow(1)
+        view.translation_text.setPlainText("keep local page draft")
+        view.unit_list.setCurrentRow(0)
+
+        service.translation = state.model_copy(
+            update={
+                "units": [
+                    state.units[0].model_copy(update={"translated_text": "fresh backend chunk result"}),
+                    state.units[1].model_copy(update={"translated_text": "fresh backend page result"}),
+                ]
+            }
+        )
+
+        with patch.object(_QMESSAGEBOX, "question", return_value=_QMESSAGEBOX.StandardButton.Yes):
+            view.retranslate_button.click()
+
+        assert view.translation_text.toPlainText() == "fresh backend chunk result"
+        view.unit_list.setCurrentRow(1)
+        assert view.translation_text.toPlainText() == "keep local page draft"
+    finally:
+        view.deleteLater()
+
+
+def test_document_translation_view_full_translate_clears_document_drafts_on_refresh():
+    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
+
+    state = _make_state().model_copy(
+        update={
+            "units": [
+                _make_state().units[0].model_copy(update={"translated_text": "server chunk v1"}),
+                _make_state()
+                .units[1]
+                .model_copy(
+                    update={
+                        "status": SurfaceStatus.READY,
+                        "source_text": "Page source",
+                        "translated_text": "server page v1",
+                        "blocker": None,
+                        "actions": TranslationUnitActionState(can_save=True, can_retranslate=True),
+                    }
+                ),
+            ]
+        }
+    )
+    service = FakeDocumentService(workspace=state.workspace, translation=state)
+    view = DocumentTranslationView(service, "proj-1", 4)
+    try:
+        view.refresh()
+        view.translation_text.setPlainText("stale local chunk draft")
+
+        view.unit_list.setCurrentRow(1)
+        view.translation_text.setPlainText("stale local page draft")
+        view.unit_list.setCurrentRow(0)
+
+        service.translation = state.model_copy(
+            update={
+                "units": [
+                    state.units[0].model_copy(update={"translated_text": "fresh backend chunk result"}),
+                    state.units[1].model_copy(update={"translated_text": "fresh backend page result"}),
+                ]
+            }
+        )
+
+        _chrome_signal(view, "translateRequested").emit()
+
+        assert view.translation_text.toPlainText() == "fresh backend chunk result"
+        view.unit_list.setCurrentRow(1)
+        assert view.translation_text.toPlainText() == "fresh backend page result"
+    finally:
+        view.deleteLater()
+
+
 def test_document_translation_view_shows_queue_message_over_progress_text():
     from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
 

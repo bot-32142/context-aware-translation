@@ -608,6 +608,156 @@ def test_document_ocr_tab_run_and_cancel_refresh_state_immediately():
         view.deleteLater()
 
 
+def test_document_ocr_tab_rerun_current_page_discards_local_draft_on_refresh():
+    from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
+
+    initial_state = DocumentOCRState(
+        workspace=_workspace_state(),
+        pages=[
+            OCRPageState(source_id=101, page_number=1, total_pages=1, status=SurfaceStatus.DONE, extracted_text="stale")
+        ],
+        current_page_index=0,
+        actions=DocumentOCRActions(
+            save=ActionState(enabled=True),
+            run_current=ActionState(enabled=True),
+            run_pending=ActionState(enabled=True),
+        ),
+    )
+    refreshed_state = initial_state.model_copy(
+        update={
+            "pages": [
+                initial_state.pages[0].model_copy(
+                    update={"status": SurfaceStatus.RUNNING, "extracted_text": "fresh ocr"}
+                )
+            ],
+            "actions": DocumentOCRActions(
+                save=ActionState(enabled=False),
+                run_current=ActionState(enabled=False),
+                run_pending=ActionState(enabled=False),
+            ),
+            "active_task_id": "ocr-task-1",
+        }
+    )
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        ocr=initial_state,
+        ocr_page_images={101: _png_1x1()},
+        command_result=AcceptedCommand(
+            command_name="run_ocr",
+            message=UserMessage(severity=UserMessageSeverity.INFO, text="Queued."),
+        ),
+    )
+
+    def _run(request):  # noqa: ANN001
+        service.calls.append(("run_ocr", request))
+        service.ocr = refreshed_state
+        return service.command_result or AcceptedCommand(command_name="run_ocr")
+
+    service.run_ocr = _run
+    view = DocumentOCRTab(service, "proj-1", 4)
+    try:
+        view.refresh()
+        view.text_edit.setPlainText("local draft")
+
+        view.run_current_button.click()
+
+        assert view.text_edit.toPlainText() == "fresh ocr"
+        assert 101 not in view._page_drafts
+    finally:
+        view.deleteLater()
+
+
+def test_document_ocr_tab_pending_rerun_only_clears_affected_page_drafts():
+    from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
+
+    initial_state = DocumentOCRState(
+        workspace=_workspace_state(),
+        pages=[
+            OCRPageState(
+                source_id=101, page_number=1, total_pages=3, status=SurfaceStatus.READY, extracted_text="pending one"
+            ),
+            OCRPageState(
+                source_id=102, page_number=2, total_pages=3, status=SurfaceStatus.DONE, extracted_text="done two"
+            ),
+            OCRPageState(
+                source_id=103,
+                page_number=3,
+                total_pages=3,
+                status=SurfaceStatus.READY,
+                elements=[OCRTextElement(text="pending three")],
+            ),
+        ],
+        current_page_index=0,
+        actions=DocumentOCRActions(
+            save=ActionState(enabled=True),
+            run_current=ActionState(enabled=True),
+            run_pending=ActionState(enabled=True),
+        ),
+    )
+    refreshed_state = initial_state.model_copy(
+        update={
+            "pages": [
+                initial_state.pages[0].model_copy(
+                    update={"status": SurfaceStatus.RUNNING, "extracted_text": "fresh one"}
+                ),
+                initial_state.pages[1].model_copy(update={"extracted_text": "done two"}),
+                initial_state.pages[2].model_copy(
+                    update={
+                        "status": SurfaceStatus.RUNNING,
+                        "elements": [OCRTextElement(text="fresh three")],
+                    }
+                ),
+            ],
+            "actions": DocumentOCRActions(
+                save=ActionState(enabled=False),
+                run_current=ActionState(enabled=False),
+                run_pending=ActionState(enabled=False),
+            ),
+            "active_task_id": "ocr-task-1",
+        }
+    )
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        ocr=initial_state,
+        ocr_page_images={101: _png_1x1(), 102: _png_1x1(), 103: _png_1x1()},
+        command_result=AcceptedCommand(
+            command_name="run_ocr",
+            message=UserMessage(severity=UserMessageSeverity.INFO, text="Queued."),
+        ),
+    )
+
+    def _run(request):  # noqa: ANN001
+        service.calls.append(("run_ocr", request))
+        service.ocr = refreshed_state
+        return service.command_result or AcceptedCommand(command_name="run_ocr")
+
+    service.run_ocr = _run
+    view = DocumentOCRTab(service, "proj-1", 4)
+    try:
+        view.refresh()
+        view.text_edit.setPlainText("draft one")
+        view._go_next()
+        view.text_edit.setPlainText("draft two")
+        view._go_next()
+        view.structured_list._cards[0]._editor.setPlainText("draft three")
+
+        view._go_to_page_number(1)
+        view.run_pending_button.click()
+
+        assert view.text_edit.toPlainText() == "fresh one"
+        assert 101 not in view._page_drafts
+        assert 103 not in view._page_drafts
+        assert view._page_drafts[102].extracted_text == "draft two"
+
+        view._go_to_page_number(2)
+        assert view.text_edit.toPlainText() == "draft two"
+
+        view._go_to_page_number(3)
+        assert view.structured_list._cards[0].text() == "fresh three"
+    finally:
+        view.deleteLater()
+
+
 def test_document_ocr_tab_refresh_handles_service_error_without_raising():
     from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
 

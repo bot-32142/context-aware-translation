@@ -553,221 +553,221 @@
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="379"/>
-        <location filename="../features/document_ocr_tab.py" line="902"/>
+        <location filename="../features/document_ocr_tab.py" line="920"/>
         <source>OCR text will appear here.</source>
         <translation>OCR 文本会显示在这里。</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="422"/>
-        <location filename="../features/document_ocr_tab.py" line="903"/>
+        <location filename="../features/document_ocr_tab.py" line="921"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="79"/>
         <source>|&lt;</source>
         <translation>|&lt;</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="432"/>
-        <location filename="../features/document_ocr_tab.py" line="556"/>
+        <location filename="../features/document_ocr_tab.py" line="559"/>
         <source>Page 0 of 0</source>
         <translation>第 0 页，共 0 页</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="443"/>
-        <location filename="../features/document_ocr_tab.py" line="909"/>
+        <location filename="../features/document_ocr_tab.py" line="927"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="91"/>
         <source>&gt;|</source>
         <translation>&gt;|</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="458"/>
-        <location filename="../features/document_ocr_tab.py" line="913"/>
+        <location filename="../features/document_ocr_tab.py" line="931"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="99"/>
         <source>Go</source>
         <translation>跳转</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="473"/>
-        <location filename="../features/document_ocr_tab.py" line="919"/>
+        <location filename="../features/document_ocr_tab.py" line="937"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="111"/>
         <source>Save</source>
         <translation>保存</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="468"/>
-        <location filename="../features/document_ocr_tab.py" line="917"/>
+        <location filename="../features/document_ocr_tab.py" line="935"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="107"/>
         <source>Run OCR for Pending Pages</source>
         <translation>对待处理页面运行 OCR</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="486"/>
-        <location filename="../features/document_ocr_tab.py" line="920"/>
+        <location filename="../features/document_ocr_tab.py" line="938"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="115"/>
         <source>No image pages are available for OCR in this document.</source>
         <translation>此文档中没有可供 OCR 的图片页面。</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="423"/>
-        <location filename="../features/document_ocr_tab.py" line="904"/>
+        <location filename="../features/document_ocr_tab.py" line="922"/>
         <source>First page</source>
         <translation>第一页</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="427"/>
-        <location filename="../features/document_ocr_tab.py" line="905"/>
+        <location filename="../features/document_ocr_tab.py" line="923"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="83"/>
         <source>&lt;</source>
         <translation>&lt;</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="428"/>
-        <location filename="../features/document_ocr_tab.py" line="906"/>
+        <location filename="../features/document_ocr_tab.py" line="924"/>
         <source>Previous page</source>
         <translation>上一页</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="438"/>
-        <location filename="../features/document_ocr_tab.py" line="907"/>
+        <location filename="../features/document_ocr_tab.py" line="925"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="87"/>
         <source>&gt;</source>
         <translation>&gt;</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="439"/>
-        <location filename="../features/document_ocr_tab.py" line="908"/>
+        <location filename="../features/document_ocr_tab.py" line="926"/>
         <source>Next page</source>
         <translation>下一页</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="444"/>
-        <location filename="../features/document_ocr_tab.py" line="910"/>
+        <location filename="../features/document_ocr_tab.py" line="928"/>
         <source>Last page</source>
         <translation>最后一页</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="448"/>
-        <location filename="../features/document_ocr_tab.py" line="911"/>
+        <location filename="../features/document_ocr_tab.py" line="929"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="95"/>
         <source>Go to:</source>
         <translation>跳转到：</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="455"/>
-        <location filename="../features/document_ocr_tab.py" line="912"/>
+        <location filename="../features/document_ocr_tab.py" line="930"/>
         <source>Enter page number</source>
         <translation>输入页码</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="459"/>
-        <location filename="../features/document_ocr_tab.py" line="914"/>
+        <location filename="../features/document_ocr_tab.py" line="932"/>
         <source>Jump to page</source>
         <translation>跳转到页面</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="463"/>
-        <location filename="../features/document_ocr_tab.py" line="915"/>
+        <location filename="../features/document_ocr_tab.py" line="933"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="103"/>
         <source>(Re)run OCR (Current Page)</source>
         <translation>（重新）运行OCR（当前页）</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="464"/>
-        <location filename="../features/document_ocr_tab.py" line="681"/>
-        <location filename="../features/document_ocr_tab.py" line="916"/>
+        <location filename="../features/document_ocr_tab.py" line="684"/>
+        <location filename="../features/document_ocr_tab.py" line="934"/>
         <source>Run or re-run OCR on the current page</source>
         <translation>在当前页运行或重新运行OCR</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="469"/>
-        <location filename="../features/document_ocr_tab.py" line="688"/>
-        <location filename="../features/document_ocr_tab.py" line="918"/>
+        <location filename="../features/document_ocr_tab.py" line="691"/>
+        <location filename="../features/document_ocr_tab.py" line="936"/>
         <source>Run OCR on all pending pages in this document</source>
         <translation>对此文档中所有待处理页面运行OCR</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="474"/>
-        <location filename="../features/document_ocr_tab.py" line="674"/>
+        <location filename="../features/document_ocr_tab.py" line="677"/>
         <source>Save edited OCR text</source>
         <translation>保存编辑后的OCR文本</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="588"/>
+        <location filename="../features/document_ocr_tab.py" line="591"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="52"/>
         <source>Page %1 of %2</source>
         <translation>第 %1 页，共 %2 页</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="619"/>
+        <location filename="../features/document_ocr_tab.py" line="622"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="60"/>
         <source>OCR Done</source>
         <translation>OCR已完成</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="622"/>
+        <location filename="../features/document_ocr_tab.py" line="625"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="62"/>
         <source>OCR Running</source>
         <translation>OCR 运行中</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="625"/>
+        <location filename="../features/document_ocr_tab.py" line="628"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="64"/>
         <source>OCR Failed</source>
         <translation>OCR 失败</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="628"/>
+        <location filename="../features/document_ocr_tab.py" line="631"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="65"/>
         <source>Pending OCR</source>
         <translation>待处理OCR</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="705"/>
-        <location filename="../features/document_ocr_tab.py" line="711"/>
+        <location filename="../features/document_ocr_tab.py" line="708"/>
+        <location filename="../features/document_ocr_tab.py" line="714"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="119"/>
         <source>OCR running...</source>
         <translation>OCR 运行中...</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="757"/>
+        <location filename="../features/document_ocr_tab.py" line="760"/>
         <source>Line Count Mismatch</source>
         <translation>行数不匹配</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="758"/>
+        <location filename="../features/document_ocr_tab.py" line="761"/>
         <source>Structured OCR text must keep the same number of lines as the original OCR result.</source>
         <translation>结构化 OCR 文本必须与原始 OCR 结果保持相同的行数。</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="779"/>
-        <location filename="../features/document_ocr_tab.py" line="791"/>
-        <location filename="../features/document_ocr_tab.py" line="810"/>
-        <location filename="../features/document_ocr_tab.py" line="822"/>
-        <location filename="../features/document_ocr_tab.py" line="836"/>
+        <location filename="../features/document_ocr_tab.py" line="782"/>
+        <location filename="../features/document_ocr_tab.py" line="794"/>
+        <location filename="../features/document_ocr_tab.py" line="813"/>
+        <location filename="../features/document_ocr_tab.py" line="827"/>
+        <location filename="../features/document_ocr_tab.py" line="842"/>
         <source>OCR</source>
         <translation>OCR</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="779"/>
+        <location filename="../features/document_ocr_tab.py" line="782"/>
         <source>No OCR data is available for this page yet.</source>
         <translation>此页尚无 OCR 数据。</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="795"/>
+        <location filename="../features/document_ocr_tab.py" line="798"/>
         <source>OCR text saved.</source>
         <translation>OCR 文本已保存。</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="813"/>
-        <location filename="../features/document_ocr_tab.py" line="825"/>
+        <location filename="../features/document_ocr_tab.py" line="816"/>
+        <location filename="../features/document_ocr_tab.py" line="830"/>
         <source>OCR queued.</source>
         <translation>OCR 已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="839"/>
+        <location filename="../features/document_ocr_tab.py" line="845"/>
         <source>OCR cancellation requested.</source>
         <translation>已请求取消 OCR。</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="899"/>
+        <location filename="../features/document_ocr_tab.py" line="917"/>
         <source>OCR applies only to the current document. Saving OCR clears later glossary, translation, and export results so they can be rebuilt from the updated OCR.</source>
         <translation>OCR 仅适用于当前文档。保存 OCR 会清除后续的术语、翻译和导出结果，以便根据更新后的 OCR 重新构建。</translation>
     </message>
@@ -794,177 +794,177 @@
         <translation>提交批量任务</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="148"/>
+        <location filename="../features/document_translation_view.py" line="149"/>
         <source>Units</source>
         <translation>单元</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="163"/>
-        <location filename="../features/document_translation_view.py" line="348"/>
+        <location filename="../features/document_translation_view.py" line="164"/>
+        <location filename="../features/document_translation_view.py" line="354"/>
         <source>No unit selected</source>
         <translation>未选择单元</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="177"/>
-        <location filename="../features/document_translation_view.py" line="878"/>
+        <location filename="../features/document_translation_view.py" line="178"/>
+        <location filename="../features/document_translation_view.py" line="892"/>
         <source>Source</source>
         <translation>原文</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="189"/>
-        <location filename="../features/document_translation_view.py" line="879"/>
+        <location filename="../features/document_translation_view.py" line="190"/>
+        <location filename="../features/document_translation_view.py" line="893"/>
         <source>Translation</source>
         <translation>翻译</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="194"/>
-        <location filename="../features/document_translation_view.py" line="880"/>
+        <location filename="../features/document_translation_view.py" line="195"/>
+        <location filename="../features/document_translation_view.py" line="894"/>
         <source>Find...</source>
         <translation>查找...</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="198"/>
-        <location filename="../features/document_translation_view.py" line="881"/>
+        <location filename="../features/document_translation_view.py" line="199"/>
+        <location filename="../features/document_translation_view.py" line="895"/>
         <source>Replace with...</source>
         <translation>替换为...</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="200"/>
-        <location filename="../features/document_translation_view.py" line="882"/>
+        <location filename="../features/document_translation_view.py" line="201"/>
+        <location filename="../features/document_translation_view.py" line="896"/>
         <source>Find Next</source>
         <translation>查找下一个</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="202"/>
-        <location filename="../features/document_translation_view.py" line="205"/>
-        <location filename="../features/document_translation_view.py" line="883"/>
-        <location filename="../features/document_translation_view.py" line="884"/>
+        <location filename="../features/document_translation_view.py" line="203"/>
+        <location filename="../features/document_translation_view.py" line="206"/>
+        <location filename="../features/document_translation_view.py" line="897"/>
+        <location filename="../features/document_translation_view.py" line="898"/>
         <source>Replace</source>
         <translation>替换</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="207"/>
-        <location filename="../features/document_translation_view.py" line="885"/>
+        <location filename="../features/document_translation_view.py" line="208"/>
+        <location filename="../features/document_translation_view.py" line="899"/>
         <source>Replace All</source>
         <translation>全部替换</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="260"/>
-        <location filename="../features/document_translation_view.py" line="887"/>
+        <location filename="../features/document_translation_view.py" line="261"/>
+        <location filename="../features/document_translation_view.py" line="901"/>
         <source>Save</source>
         <translation>保存</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="264"/>
-        <location filename="../features/document_translation_view.py" line="455"/>
-        <location filename="../features/document_translation_view.py" line="888"/>
+        <location filename="../features/document_translation_view.py" line="265"/>
+        <location filename="../features/document_translation_view.py" line="461"/>
+        <location filename="../features/document_translation_view.py" line="902"/>
         <source>Retranslate</source>
         <translation>重新翻译</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="267"/>
-        <location filename="../features/document_translation_view.py" line="889"/>
+        <location filename="../features/document_translation_view.py" line="268"/>
+        <location filename="../features/document_translation_view.py" line="903"/>
         <source>Previous</source>
         <translation>上一个</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="270"/>
-        <location filename="../features/document_translation_view.py" line="890"/>
+        <location filename="../features/document_translation_view.py" line="271"/>
+        <location filename="../features/document_translation_view.py" line="904"/>
         <source>Next</source>
         <translation>下一个</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="380"/>
+        <location filename="../features/document_translation_view.py" line="386"/>
         <source>Line count must stay at %1.</source>
         <translation>行数必须保持为 %1。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="433"/>
+        <location filename="../features/document_translation_view.py" line="439"/>
         <source>Save Unavailable</source>
         <translation>无法保存</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="437"/>
+        <location filename="../features/document_translation_view.py" line="443"/>
         <source>Save Failed</source>
         <translation>保存失败</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="446"/>
+        <location filename="../features/document_translation_view.py" line="452"/>
         <source>Translation saved.</source>
         <translation>译文已保存。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="452"/>
+        <location filename="../features/document_translation_view.py" line="458"/>
         <source>page</source>
         <translation>页面</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="452"/>
+        <location filename="../features/document_translation_view.py" line="458"/>
         <source>chunk</source>
         <translation>分块</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="456"/>
+        <location filename="../features/document_translation_view.py" line="462"/>
         <source>Retranslate this %1? LLM API costs will be incurred.</source>
         <translation>要重新翻译此%1吗？这会产生 LLM API 成本。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="470"/>
+        <location filename="../features/document_translation_view.py" line="476"/>
         <source>Retranslate Unavailable</source>
         <translation>无法重新翻译</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="474"/>
+        <location filename="../features/document_translation_view.py" line="480"/>
         <source>Retranslate Failed</source>
         <translation>重新翻译失败</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="481"/>
+        <location filename="../features/document_translation_view.py" line="487"/>
         <source>Retranslate queued.</source>
         <translation>重新翻译已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="493"/>
+        <location filename="../features/document_translation_view.py" line="499"/>
         <source>Translate Unavailable</source>
         <translation>无法翻译</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="497"/>
+        <location filename="../features/document_translation_view.py" line="503"/>
         <source>Translate Failed</source>
         <translation>翻译失败</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="504"/>
+        <location filename="../features/document_translation_view.py" line="511"/>
         <source>Translation queued.</source>
         <translation>翻译已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="517"/>
+        <location filename="../features/document_translation_view.py" line="524"/>
         <source>Batch Translation Unavailable</source>
         <translation>批量翻译不可用</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="521"/>
+        <location filename="../features/document_translation_view.py" line="528"/>
         <source>Batch Translation Failed</source>
         <translation>批量翻译失败</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="528"/>
+        <location filename="../features/document_translation_view.py" line="536"/>
         <source>Async batch translation queued.</source>
         <translation>异步批量翻译已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="566"/>
+        <location filename="../features/document_translation_view.py" line="580"/>
         <source>Progress: %1/%2</source>
         <translation>进度：%1/%2</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="573"/>
+        <location filename="../features/document_translation_view.py" line="587"/>
         <source>Active task: %1</source>
         <translation>当前任务：%1</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="886"/>
+        <location filename="../features/document_translation_view.py" line="900"/>
         <source>Close find panel</source>
         <translation>关闭查找面板</translation>
     </message>

@@ -119,6 +119,7 @@ class DocumentTranslationView(QWidget):
         self._can_translate = False
         self._can_batch = False
         self._drafts_by_unit_id: dict[str, str] = {}
+        self._suppressed_draft_unit_ids: set[str] = set()
         self._rendered_unit_id: str | None = None
         self._syncing_editor_scroll = False
         self._line_height_sync_pending = False
@@ -304,6 +305,10 @@ class DocumentTranslationView(QWidget):
         )
         self._sync_chrome_state()
 
+    def _refresh_with_suppressed_drafts(self, unit_ids: set[str]) -> None:
+        self._suppressed_draft_unit_ids.update(unit_ids)
+        self.refresh()
+
     def get_running_operations(self) -> list[str]:
         if self._state is None or self._state.active_task_id is None:
             return []
@@ -333,6 +338,7 @@ class DocumentTranslationView(QWidget):
             self._render_selected_unit(state.units[selected_row])
         else:
             self._render_selected_unit(None)
+        self._suppressed_draft_unit_ids -= {unit.unit_id for unit in state.units}
         self._sync_chrome_state()
 
     def _on_unit_selected(self, row: int) -> None:
@@ -474,7 +480,7 @@ class DocumentTranslationView(QWidget):
             QMessageBox.warning(self, self.tr("Retranslate Failed"), exc.payload.message)
             self.refresh()
             return
-        self.refresh()
+        self._refresh_with_suppressed_drafts({unit.unit_id})
         if command.message is not None:
             self._set_message(command.message.severity, command.message.text)
         else:
@@ -497,7 +503,8 @@ class DocumentTranslationView(QWidget):
             QMessageBox.warning(self, self.tr("Translate Failed"), exc.payload.message)
             self.refresh()
             return
-        self.refresh()
+        affected_unit_ids = {unit.unit_id for unit in self._state.units} if self._state is not None else set()
+        self._refresh_with_suppressed_drafts(affected_unit_ids)
         if command.message is not None:
             self._set_message(command.message.severity, command.message.text)
         else:
@@ -521,7 +528,8 @@ class DocumentTranslationView(QWidget):
             QMessageBox.warning(self, self.tr("Batch Translation Failed"), exc.payload.message)
             self.refresh()
             return
-        self.refresh()
+        affected_unit_ids = {unit.unit_id for unit in self._state.units} if self._state is not None else set()
+        self._refresh_with_suppressed_drafts(affected_unit_ids)
         if command.message is not None:
             self._set_message(command.message.severity, command.message.text)
         else:
@@ -536,6 +544,9 @@ class DocumentTranslationView(QWidget):
         unit = self._rendered_unit()
         if unit is None:
             return
+        if unit.unit_id in self._suppressed_draft_unit_ids:
+            self._drafts_by_unit_id.pop(unit.unit_id, None)
+            return
         current_text = self.translation_text.toPlainText()
         persisted_text = unit.translated_text or ""
         if current_text == persisted_text:
@@ -548,9 +559,12 @@ class DocumentTranslationView(QWidget):
 
     def _prune_drafts(self, state: DocumentTranslationState) -> None:
         next_unit_ids = {unit.unit_id for unit in state.units}
+        suppressed_unit_ids = self._suppressed_draft_unit_ids & next_unit_ids
         self._drafts_by_unit_id = {
             unit_id: draft for unit_id, draft in self._drafts_by_unit_id.items() if unit_id in next_unit_ids
         }
+        for unit_id in suppressed_unit_ids:
+            self._drafts_by_unit_id.pop(unit_id, None)
         for unit in state.units:
             persisted_text = unit.translated_text or ""
             if self._drafts_by_unit_id.get(unit.unit_id) == persisted_text:

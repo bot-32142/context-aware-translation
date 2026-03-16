@@ -488,8 +488,11 @@ class DocumentOCRTab(QWidget):
         self.empty_label.hide()
 
     def refresh(self) -> None:
+        self._refresh_with_draft_exclusions(set())
+
+    def _refresh_with_draft_exclusions(self, excluded_source_ids: set[int]) -> None:
         current_source_id = self._current_page.source_id if self._current_page is not None else None
-        self._remember_current_draft()
+        self._remember_current_draft(excluded_source_ids=excluded_source_ids)
         try:
             self._state = self._service.get_ocr(self._project_id, self._document_id)
         except ApplicationError as exc:
@@ -811,9 +814,11 @@ class DocumentOCRTab(QWidget):
             self.refresh()
             return
         self._set_message(result.message.text if result.message is not None else self.tr("OCR queued."))
-        self.refresh()
+        self._clear_page_drafts({page.source_id})
+        self._refresh_with_draft_exclusions({page.source_id})
 
     def _run_pending(self) -> None:
+        affected_source_ids = self._pending_page_source_ids()
         try:
             result = self._service.run_ocr(
                 RunOCRRequest(project_id=self._project_id, document_id=self._document_id, pending_only=True)
@@ -823,7 +828,8 @@ class DocumentOCRTab(QWidget):
             self.refresh()
             return
         self._set_message(result.message.text if result.message is not None else self.tr("OCR queued."))
-        self.refresh()
+        self._clear_page_drafts(affected_source_ids)
+        self._refresh_with_draft_exclusions(affected_source_ids)
 
     def _cancel_ocr(self) -> None:
         if self._state is None or self._state.active_task_id is None:
@@ -839,15 +845,27 @@ class DocumentOCRTab(QWidget):
         self._set_message(result.message.text if result.message is not None else self.tr("OCR cancellation requested."))
         self.refresh()
 
-    def _remember_current_draft(self) -> None:
+    def _remember_current_draft(self, *, excluded_source_ids: set[int] | None = None) -> None:
         page = self._current_page
         if page is None:
+            return
+        if excluded_source_ids is not None and page.source_id in excluded_source_ids:
+            self._page_drafts.pop(page.source_id, None)
             return
         draft = self._collect_page_draft(page)
         if draft is None:
             self._page_drafts.pop(page.source_id, None)
             return
         self._page_drafts[page.source_id] = draft
+
+    def _clear_page_drafts(self, source_ids: set[int]) -> None:
+        for source_id in source_ids:
+            self._page_drafts.pop(source_id, None)
+
+    def _pending_page_source_ids(self) -> set[int]:
+        if self._state is None:
+            return set()
+        return {page.source_id for page in self._state.pages if page.status is SurfaceStatus.READY}
 
     def _collect_page_draft(self, page: OCRPageState) -> _PageDraft | None:
         if page.elements:

@@ -856,16 +856,7 @@ def title_for_task(task_type: str) -> str:
 
 
 def queue_item_from_record(record: TaskRecord) -> QueueItem:
-    actions: list[QueueActionKind] = [QueueActionKind.OPEN_RELATED_ITEM]
     status = queue_status_from_task(record)
-    if status in {QueueStatus.QUEUED, QueueStatus.FAILED, QueueStatus.CANCELLED, QueueStatus.DONE}:
-        actions.append(QueueActionKind.RUN)
-    if status in {QueueStatus.QUEUED, QueueStatus.RUNNING}:
-        actions.append(QueueActionKind.CANCEL)
-    if status in {QueueStatus.FAILED, QueueStatus.CANCELLED, QueueStatus.DONE}:
-        actions.append(QueueActionKind.RETRY)
-    if status is not QueueStatus.RUNNING:
-        actions.append(QueueActionKind.DELETE)
     return QueueItem(
         queue_item_id=record.task_id,
         title=title_for_task(record.task_type),
@@ -877,8 +868,26 @@ def queue_item_from_record(record: TaskRecord) -> QueueItem:
         blocker=None,
         error_message=record.last_error,
         related_target=related_target_for_task(record),
-        available_actions=actions,
+        available_actions=_available_actions_for_task(record, status),
     )
+
+
+def _available_actions_for_task(record: TaskRecord, status: QueueStatus) -> list[QueueActionKind]:
+    actions: list[QueueActionKind] = [QueueActionKind.OPEN_RELATED_ITEM]
+    raw_status = record.status
+
+    if status in {QueueStatus.QUEUED, QueueStatus.RUNNING}:
+        if status is QueueStatus.QUEUED:
+            actions.append(QueueActionKind.RUN)
+        actions.append(QueueActionKind.CANCEL)
+        return actions
+
+    if raw_status in {"failed", "cancelled", "completed_with_errors"}:
+        actions.extend((QueueActionKind.RUN, QueueActionKind.RETRY, QueueActionKind.DELETE))
+        return actions
+
+    actions.append(QueueActionKind.DELETE)
+    return actions
 
 
 def _single_document_id(record: TaskRecord) -> int | None:

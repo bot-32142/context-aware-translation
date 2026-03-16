@@ -8,6 +8,7 @@ import pytest
 from context_aware_translation.application.contracts.common import QueueActionKind
 from context_aware_translation.application.contracts.queue import QueueActionRequest
 from context_aware_translation.application.errors import ApplicationError
+from context_aware_translation.application.runtime import queue_item_from_record
 from context_aware_translation.application.services.queue import DefaultQueueService
 from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.models import Decision
@@ -181,3 +182,56 @@ def test_queue_service_blocks_retry_for_non_terminal_task_before_engine_call() -
 
     assert exc_info.value.payload.code == "blocked"
     preflight_task.assert_not_called()
+
+
+def test_completed_queue_item_does_not_expose_rerun_actions() -> None:
+    record = TaskRecord(
+        task_id="task-6",
+        book_id="proj-6",
+        task_type="ocr",
+        status="completed",
+        phase="completed",
+        document_ids_json="[4]",
+        payload_json=None,
+        config_snapshot_json=None,
+        cancel_requested=False,
+        total_items=1,
+        completed_items=1,
+        failed_items=0,
+        last_error=None,
+        created_at=1.0,
+        updated_at=2.0,
+    )
+
+    item = queue_item_from_record(record)
+
+    assert item.available_actions == [QueueActionKind.OPEN_RELATED_ITEM, QueueActionKind.DELETE]
+
+
+def test_completed_with_errors_queue_item_still_exposes_retry_action() -> None:
+    record = TaskRecord(
+        task_id="task-7",
+        book_id="proj-7",
+        task_type="ocr",
+        status="completed_with_errors",
+        phase="completed_with_errors",
+        document_ids_json="[4]",
+        payload_json=None,
+        config_snapshot_json=None,
+        cancel_requested=False,
+        total_items=2,
+        completed_items=1,
+        failed_items=1,
+        last_error="partial failure",
+        created_at=1.0,
+        updated_at=2.0,
+    )
+
+    item = queue_item_from_record(record)
+
+    assert item.available_actions == [
+        QueueActionKind.OPEN_RELATED_ITEM,
+        QueueActionKind.RUN,
+        QueueActionKind.RETRY,
+        QueueActionKind.DELETE,
+    ]
