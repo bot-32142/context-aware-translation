@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Property, QCoreApplication, Signal
+from PySide6.QtCore import Property, QCoreApplication, QT_TRANSLATE_NOOP, Signal
 
 from context_aware_translation.ui.viewmodels.base import ViewModelBase
 
-_TIP_TEXT = (
-    "Import documents here, review project-wide progress, and open the next document tool directly from the table."
+_TIP_TEXT = QT_TRANSLATE_NOOP(
+    "WorkView",
+    "Import documents here, review project-wide progress, and open the next document tool directly from the table.",
 )
 _IMPORT_MESSAGE_SUCCESS = "success"
 _IMPORT_MESSAGE_ERROR = "error"
@@ -30,6 +31,10 @@ class WorkHomeViewModel(ViewModelBase):
         self._import_type_options: list[dict[str, object]] = []
         self._import_type_option_sources: list[tuple[str, str]] = []
         self._selected_import_type = ""
+        self._select_files_tooltip = ""
+        self._select_folder_tooltip = ""
+        self._import_tooltip = ""
+        self._setup_action_tooltip = ""
 
     @Property(str, notify=labels_changed)
     def tip_text(self) -> str:
@@ -103,6 +108,22 @@ class WorkHomeViewModel(ViewModelBase):
     def selected_import_type(self) -> str:
         return self._selected_import_type
 
+    @Property(str, notify=content_changed)
+    def select_files_tooltip(self) -> str:
+        return self._select_files_tooltip
+
+    @Property(str, notify=content_changed)
+    def select_folder_tooltip(self) -> str:
+        return self._select_folder_tooltip
+
+    @Property(str, notify=content_changed)
+    def import_tooltip(self) -> str:
+        return self._import_tooltip
+
+    @Property(str, notify=content_changed)
+    def setup_action_tooltip(self) -> str:
+        return self._setup_action_tooltip
+
     def set_context(self, summary: str, blocker_text: str) -> None:
         self._context_summary = summary
         self._context_blocker_text = blocker_text
@@ -111,6 +132,9 @@ class WorkHomeViewModel(ViewModelBase):
     def set_setup(self, message: str, action_label: str) -> None:
         self._setup_message = message
         self._setup_action_label = action_label
+        self._setup_action_tooltip = (
+            QCoreApplication.translate("WorkView", "Open project setup to fix this blocker.") if action_label else ""
+        )
         self._emit_content_changed()
 
     def clear_setup(self) -> None:
@@ -136,6 +160,17 @@ class WorkHomeViewModel(ViewModelBase):
         self._selected_import_type = resolved_selected
         self._import_type_option_sources = list(options)
         self._import_type_options = self._build_import_type_options()
+        self._select_files_tooltip = QCoreApplication.translate(
+            "WorkView", "Choose one or more source files to import."
+        )
+        self._select_folder_tooltip = QCoreApplication.translate(
+            "WorkView", "Choose a folder and import supported files from it."
+        )
+        self._import_tooltip = (
+            QCoreApplication.translate("WorkView", "Import the selected files or folder into this project.")
+            if can_import
+            else QCoreApplication.translate("WorkView", "Select files or a folder before importing.")
+        )
         self._emit_content_changed()
 
     def select_import_type(self, document_type: str) -> None:
@@ -153,6 +188,22 @@ class WorkHomeViewModel(ViewModelBase):
 
     def retranslate(self) -> None:
         self._import_type_options = self._build_import_type_options()
+        self._select_files_tooltip = QCoreApplication.translate(
+            "WorkView", "Choose one or more source files to import."
+        )
+        self._select_folder_tooltip = QCoreApplication.translate(
+            "WorkView", "Choose a folder and import supported files from it."
+        )
+        self._import_tooltip = (
+            QCoreApplication.translate("WorkView", "Import the selected files or folder into this project.")
+            if self._can_import
+            else QCoreApplication.translate("WorkView", "Select files or a folder before importing.")
+        )
+        self._setup_action_tooltip = (
+            QCoreApplication.translate("WorkView", "Open project setup to fix this blocker.")
+            if self._setup_action_label
+            else ""
+        )
         self.labels_changed.emit()
         self._emit_content_changed()
 

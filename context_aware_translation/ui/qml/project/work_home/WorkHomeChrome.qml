@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 
 Rectangle {
     id: root
@@ -17,12 +18,16 @@ Rectangle {
     property string selectFilesLabelText: workHome ? workHome.select_files_label : "Select Files"
     property string selectFolderLabelText: workHome ? workHome.select_folder_label : "Select Folder"
     property string importLabelText: workHome ? workHome.import_label : "Import"
+    property string selectFilesTooltipText: workHome ? workHome.select_files_tooltip : ""
+    property string selectFolderTooltipText: workHome ? workHome.select_folder_tooltip : ""
+    property string importTooltipText: workHome ? workHome.import_tooltip : ""
     property string contextSummaryText: workHome ? workHome.context_summary : ""
     property string contextBlockerText: workHome ? workHome.context_blocker_text : ""
     property bool hasContextBlocker: workHome ? workHome.has_context_blocker : false
     property bool hasSetupBlocker: workHome ? workHome.has_setup_blocker : false
     property string setupMessageText: workHome ? workHome.setup_message : ""
     property string setupActionLabelText: workHome ? workHome.setup_action_label : ""
+    property string setupActionTooltipText: workHome ? workHome.setup_action_tooltip : ""
     property string importSummaryText: workHome ? workHome.import_summary : ""
     property string importMessageText: workHome ? workHome.import_message : ""
     property string importMessageKind: workHome ? workHome.import_message_kind : ""
@@ -92,6 +97,7 @@ Rectangle {
                             }
 
                             MouseArea {
+                                id: importActionMouseArea
                                 anchors.fill: parent
                                 enabled: modelData.signalName !== "import" || root.canImport
                                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
@@ -105,6 +111,20 @@ Rectangle {
                                     }
                                 }
                             }
+
+                            ToolTip.visible: importActionMouseArea.containsMouse && !!(
+                                modelData.signalName === "files"
+                                ? root.selectFilesTooltipText
+                                : modelData.signalName === "folder"
+                                ? root.selectFolderTooltipText
+                                : root.importTooltipText
+                            )
+                            ToolTip.text: modelData.signalName === "files"
+                                ? root.selectFilesTooltipText
+                                : modelData.signalName === "folder"
+                                ? root.selectFolderTooltipText
+                                : root.importTooltipText
+                            ToolTip.delay: 500
                         }
                     }
                 }
@@ -203,10 +223,15 @@ Rectangle {
                     }
 
                     MouseArea {
+                        id: setupActionMouseArea
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
                         onClicked: root.setupActionRequested()
                     }
+
+                    ToolTip.visible: setupActionMouseArea.containsMouse && !!root.setupActionTooltipText
+                    ToolTip.text: root.setupActionTooltipText
+                    ToolTip.delay: 500
                 }
             }
         }

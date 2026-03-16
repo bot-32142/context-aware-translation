@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Property, QCoreApplication, Signal
+from PySide6.QtCore import Property, QCoreApplication, QT_TRANSLATE_NOOP, Signal
 
 from context_aware_translation.ui.viewmodels.base import ViewModelBase
 
-_PROJECT_SETTINGS_SUBTITLE = (
-    "Choose a shared workflow profile, or select Custom profile to edit connection and model choices for this project."
+_PROJECT_SETTINGS_SUBTITLE = QT_TRANSLATE_NOOP(
+    "ProjectSettingsPane",
+    "Choose a shared workflow profile, or select Custom profile to edit connection and model choices for this project.",
 )
 
 

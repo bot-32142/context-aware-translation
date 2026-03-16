@@ -43,6 +43,7 @@ from context_aware_translation.application.services.document import DocumentServ
 from context_aware_translation.application.services.terms import TermsService
 from context_aware_translation.application.services.work import WorkService
 from context_aware_translation.ui.chrome_sizing import sync_qml_host_height
+from context_aware_translation.ui.i18n import translate_backend_text
 from context_aware_translation.ui.features.document_workspace_view import DocumentWorkspaceView, WorkExportDialog
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
@@ -264,10 +265,12 @@ class WorkView(QWidget):
     def _apply_state(self, state: WorkboardState) -> None:
         self._state = state
         context_summary = (
-            state.context_frontier.summary if state.context_frontier is not None else self.tr("Context not ready yet.")
+            translate_backend_text(state.context_frontier.summary)
+            if state.context_frontier is not None
+            else self.tr("Context not ready yet.")
         )
         blocker_text = (
-            state.context_frontier.blocker.message
+            translate_backend_text(state.context_frontier.blocker.message)
             if state.context_frontier and state.context_frontier.blocker is not None
             else ""
         )
@@ -275,7 +278,7 @@ class WorkView(QWidget):
 
         if state.setup_blocker is not None:
             setup_action_label = self._setup_action_label(state.setup_blocker)
-            self.viewmodel.set_setup(state.setup_blocker.message, setup_action_label)
+            self.viewmodel.set_setup(translate_backend_text(state.setup_blocker.message), setup_action_label)
         else:
             self.viewmodel.clear_setup()
 
@@ -302,9 +305,9 @@ class WorkView(QWidget):
         self.rows_table.setItem(row, 0, QTableWidgetItem(str(row_state.document.order_index)))
         self.rows_table.setItem(row, 1, document_item)
         self.rows_table.setItem(row, 2, QTableWidgetItem(str(row_state.source_count)))
-        self._set_status_cell(row, 3, row_state.ocr_status, tooltip=row_tooltip)
-        self._set_status_cell(row, 4, row_state.terms_status, tooltip=row_tooltip)
-        self._set_status_cell(row, 5, row_state.translation_status, tooltip=row_tooltip)
+        self._set_status_cell(row, 3, translate_backend_text(row_state.ocr_status), tooltip=row_tooltip)
+        self._set_status_cell(row, 4, translate_backend_text(row_state.terms_status), tooltip=row_tooltip)
+        self._set_status_cell(row, 5, translate_backend_text(row_state.translation_status), tooltip=row_tooltip)
 
     def _set_status_cell(self, row: int, column: int, text: str, *, tooltip: str) -> None:
         item = QTableWidgetItem(text)
@@ -348,8 +351,10 @@ class WorkView(QWidget):
 
     def _row_tooltip(self, row_state: WorkDocumentRow) -> str:
         if row_state.blocker is not None:
-            return row_state.blocker.message
-        return self.tr("Double-click or press Enter to %1.").replace("%1", row_state.primary_action.label)
+            return translate_backend_text(row_state.blocker.message)
+        return self.tr("Double-click or press Enter to %1.").replace(
+            "%1", translate_backend_text(row_state.primary_action.label)
+        )
 
     def _fit_table_height(self) -> None:
         fit_table_height_to_rows(self.rows_table, max_visible_rows=self._TABLE_MAX_VISIBLE_ROWS)
@@ -386,9 +391,9 @@ class WorkView(QWidget):
         self._import_options = [(option.document_type, option.label) for option in state.available_types]
         self._selected_import_type = self._import_options[0][0] if self._import_options else None
         self._can_import = bool(self._import_options)
-        self._import_summary = state.summary or self._default_import_summary()
+        self._import_summary = translate_backend_text(state.summary) or self._default_import_summary()
         if state.error_message:
-            self._set_import_message(state.error_message, is_error=True)
+            self._set_import_message(translate_backend_text(state.error_message), is_error=True)
         else:
             self._set_import_message("", is_error=False)
 
@@ -405,13 +410,13 @@ class WorkView(QWidget):
                 )
             )
         except BlockedOperationError as exc:
-            self._set_import_message(exc.payload.message, is_error=True)
+            self._set_import_message(translate_backend_text(exc.payload.message), is_error=True)
             return
         except ApplicationError as exc:
-            self._set_import_message(exc.payload.message, is_error=True)
+            self._set_import_message(translate_backend_text(exc.payload.message), is_error=True)
             return
         self._set_import_message(
-            result.message.text if result.message is not None else self.tr("Import complete."),
+            translate_backend_text(result.message.text) if result.message is not None else self.tr("Import complete."),
             is_error=False,
         )
         self._selected_import_paths = []
@@ -496,9 +501,9 @@ class WorkView(QWidget):
                 ResetDocumentStackRequest(project_id=self._project_id, document_id=selected.document.document_id)
             )
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Reset Document"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("Reset Document"), translate_backend_text(exc.payload.message))
             return
-        QMessageBox.information(self, self.tr("Reset Complete"), result.message.text)
+        QMessageBox.information(self, self.tr("Reset Complete"), translate_backend_text(result.message.text))
         self.refresh()
 
     def _delete_selected_document(self) -> None:
@@ -521,9 +526,9 @@ class WorkView(QWidget):
                 DeleteDocumentStackRequest(project_id=self._project_id, document_id=selected.document.document_id)
             )
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Delete Document"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("Delete Document"), translate_backend_text(exc.payload.message))
             return
-        QMessageBox.information(self, self.tr("Delete Complete"), result.message.text)
+        QMessageBox.information(self, self.tr("Delete Complete"), translate_backend_text(result.message.text))
         self.refresh()
 
     def _on_cell_double_clicked(self, row: int, _column: int) -> None:
@@ -593,7 +598,7 @@ class WorkView(QWidget):
                 PrepareExportRequest(project_id=self._project_id, document_ids=[document_id])
             )
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Export"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("Export"), translate_backend_text(exc.payload.message))
             return
         dialog = WorkExportDialog(self._work_service, state, parent=self)
         dialog.exec()

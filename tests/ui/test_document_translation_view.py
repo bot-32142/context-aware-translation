@@ -140,6 +140,10 @@ def test_document_translation_view_renders_units_and_routes_actions():
         assert root.property("canTranslate") is True
         assert root.property("supportsBatch") is True
         assert root.property("canBatch") is True
+        assert root.property("translateTooltipText") == (
+            "Translate all pending units in this document with the current settings."
+        )
+        assert root.property("batchTooltipText") == ("Submit this document as an asynchronous batch translation job.")
         assert view.unit_list.count() == 2
         assert view.viewmodel.can_translate is True
         assert view.viewmodel.can_batch is True

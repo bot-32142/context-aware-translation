@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 
 Rectangle {
     id: root
@@ -40,6 +41,10 @@ Rectangle {
     property string runSelectedLabelText: imagesPane ? imagesPane.run_selected_label : "Reembed This Image"
     property string runPendingLabelText: imagesPane ? imagesPane.run_pending_label : "Reembed Pending"
     property string forceAllLabelText: imagesPane ? imagesPane.force_all_label : "Force Reembed All"
+    property string toggleTooltipText: imagesPane ? imagesPane.toggle_tooltip : ""
+    property string runSelectedTooltipText: imagesPane ? imagesPane.run_selected_tooltip : ""
+    property string runPendingTooltipText: imagesPane ? imagesPane.run_pending_tooltip : ""
+    property string forceAllTooltipText: imagesPane ? imagesPane.force_all_tooltip : ""
     property string cancelLabelText: imagesPane ? imagesPane.cancel_label : "Cancel"
     property string messageText: imagesPane ? imagesPane.message_text : ""
     property string progressText: imagesPane ? imagesPane.progress_text : ""
@@ -291,11 +296,16 @@ Rectangle {
                 }
 
                 MouseArea {
+                    id: toggleMouseArea
                     anchors.fill: parent
                     enabled: root.toggleEnabled
                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onClicked: root.toggleRequested()
                 }
+
+                ToolTip.visible: toggleMouseArea.containsMouse && !!root.toggleTooltipText
+                ToolTip.text: root.toggleTooltipText
+                ToolTip.delay: 500
             }
         }
 
@@ -320,11 +330,16 @@ Rectangle {
                 }
 
                 MouseArea {
+                    id: runSelectedMouseArea
                     anchors.fill: parent
                     enabled: root.runSelectedEnabled
                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onClicked: root.runSelectedRequested()
                 }
+
+                ToolTip.visible: runSelectedMouseArea.containsMouse && !!root.runSelectedTooltipText
+                ToolTip.text: root.runSelectedTooltipText
+                ToolTip.delay: 500
             }
 
             Rectangle {
@@ -343,11 +358,16 @@ Rectangle {
                 }
 
                 MouseArea {
+                    id: runPendingMouseArea
                     anchors.fill: parent
                     enabled: root.runPendingEnabled
                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onClicked: root.runPendingRequested()
                 }
+
+                ToolTip.visible: runPendingMouseArea.containsMouse && !!root.runPendingTooltipText
+                ToolTip.text: root.runPendingTooltipText
+                ToolTip.delay: 500
             }
 
             Rectangle {
@@ -366,11 +386,16 @@ Rectangle {
                 }
 
                 MouseArea {
+                    id: forceAllMouseArea
                     anchors.fill: parent
                     enabled: root.forceAllEnabled
                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onClicked: root.forceAllRequested()
                 }
+
+                ToolTip.visible: forceAllMouseArea.containsMouse && !!root.forceAllTooltipText
+                ToolTip.text: root.forceAllTooltipText
+                ToolTip.delay: 500
             }
 
             Rectangle {

@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Property, QCoreApplication, Signal
+from PySide6.QtCore import Property, QCoreApplication, QT_TRANSLATE_NOOP, Signal
 
 from context_aware_translation.ui.viewmodels.base import ViewModelBase
 
-_PROJECT_TIP_TEXT = (
+_PROJECT_TIP_TEXT = QT_TRANSLATE_NOOP(
+    "TermsView",
     "Terms are shared across the project. Build terms from document pages in "
-    "document Terms, then translate, review, filter, import, or export them here."
+    "document Terms, then translate, review, filter, import, or export them here.",
 )
-_DOCUMENT_TIP_TEXT = (
+_DOCUMENT_TIP_TEXT = QT_TRANSLATE_NOOP(
+    "TermsView",
     "Terms here are scoped to the current document. Build terms from page text, "
-    "then translate, review, or filter only this document's glossary candidates."
+    "then translate, review, or filter only this document's glossary candidates.",
 )
 
 

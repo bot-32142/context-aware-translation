@@ -39,6 +39,7 @@ from context_aware_translation.application.events import (
 from context_aware_translation.application.services.terms import TermsService
 from context_aware_translation.ui.chrome_sizing import sync_qml_host_height
 from context_aware_translation.ui.features.terms_table_widget import TermsTableWidget
+from context_aware_translation.ui.i18n import translate_backend_text
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.viewmodels.terms_pane import TermsPaneViewModel
@@ -270,20 +271,22 @@ class TermsView(QWidget):
         self.export_button.setEnabled(toolbar.can_export)
 
         build_tooltip = (
-            toolbar.build_blocker.message if toolbar.build_blocker else self.tr("Extract terms from this document.")
+            translate_backend_text(toolbar.build_blocker.message)
+            if toolbar.build_blocker
+            else self.tr("Extract terms from this document.")
         )
         translate_tooltip = (
-            toolbar.translate_pending_blocker.message
+            translate_backend_text(toolbar.translate_pending_blocker.message)
             if toolbar.translate_pending_blocker
             else self.tr("Translate all currently untranslated glossary terms for the current scope.")
         )
         review_tooltip = (
-            toolbar.review_blocker.message
+            translate_backend_text(toolbar.review_blocker.message)
             if toolbar.review_blocker
             else self.tr("Run an LLM review pass on unreviewed glossary terms for the current scope.")
         )
         filter_tooltip = (
-            toolbar.filter_noise_blocker.message
+            translate_backend_text(toolbar.filter_noise_blocker.message)
             if toolbar.filter_noise_blocker
             else (
                 self.tr("Ignore rare terms for this document.")
@@ -294,12 +297,14 @@ class TermsView(QWidget):
             )
         )
         import_tooltip = (
-            toolbar.import_blocker.message
+            translate_backend_text(toolbar.import_blocker.message)
             if toolbar.import_blocker
             else self.tr("Import terms from a JSON file and replace current project terms.")
         )
         export_tooltip = (
-            toolbar.export_blocker.message if toolbar.export_blocker else self.tr("Export terms to a JSON file.")
+            translate_backend_text(toolbar.export_blocker.message)
+            if toolbar.export_blocker
+            else self.tr("Export terms to a JSON file.")
         )
 
         self.build_button.setToolTip(build_tooltip)
@@ -619,13 +624,15 @@ class TermsView(QWidget):
             clipboard.setText(text)
 
     def _show_application_error(self, title: str, exc: ApplicationError) -> None:
-        QMessageBox.warning(self, title, exc.payload.message)
-        self._show_message(UserMessageSeverity.ERROR, exc.payload.message, show_dialog=False)
+        translated = translate_backend_text(exc.payload.message)
+        QMessageBox.warning(self, title, translated)
+        self._show_message(UserMessageSeverity.ERROR, translated, show_dialog=False)
 
     def _show_message(self, severity: UserMessageSeverity, text: str, *, show_dialog: bool = False) -> None:
-        self.table_panel.set_message(severity, text)
+        translated = translate_backend_text(text)
+        self.table_panel.set_message(severity, translated)
         if show_dialog:
-            QMessageBox.information(self, self.tr("Terms"), text)
+            QMessageBox.information(self, self.tr("Terms"), translated)
 
     def _persist_local_terms_write(self, action, *, title: str) -> bool:  # noqa: ANN001
         tracks_invalidation = self._event_bridge is not None

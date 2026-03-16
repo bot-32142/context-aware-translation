@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 
 Rectangle {
     id: root
@@ -11,6 +12,7 @@ Rectangle {
 
     property string tipText: exportPane ? exportPane.tip_text : ""
     property string exportLabelText: exportPane ? exportPane.export_label : "Export This Document"
+    property string exportTooltipText: exportPane ? exportPane.export_tooltip : ""
     property bool canExport: exportPane ? exportPane.can_export : false
     property bool hasResult: exportPane ? exportPane.has_result : false
     property string resultText: exportPane ? exportPane.result_text : ""
@@ -60,11 +62,16 @@ Rectangle {
                 }
 
                 MouseArea {
+                    id: exportMouseArea
                     anchors.fill: parent
                     enabled: root.canExport
                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onClicked: root.exportRequested()
                 }
+
+                ToolTip.visible: exportMouseArea.containsMouse && !!root.exportTooltipText
+                ToolTip.text: root.exportTooltipText
+                ToolTip.delay: 500
             }
 
             Text {

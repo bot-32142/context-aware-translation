@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QT_TRANSLATE_NOOP, Qt, QTimer
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -53,6 +53,70 @@ class RouteRow:
     step_label_widget: QLabel | None = None
 
 
+_STEP_TOOLTIP_TEXTS = {
+    WorkflowStepId.EXTRACTOR: QT_TRANSLATE_NOOP(
+        "WorkflowRoutesEditor", "Find candidate glossary terms from source text."
+    ),
+    WorkflowStepId.SUMMARIZER: QT_TRANSLATE_NOOP(
+        "WorkflowRoutesEditor", "Summarize nearby context so later steps can work with less text."
+    ),
+    WorkflowStepId.GLOSSARY_TRANSLATOR: QT_TRANSLATE_NOOP(
+        "WorkflowRoutesEditor", "Translate glossary terms before full document translation."
+    ),
+    WorkflowStepId.TRANSLATOR: QT_TRANSLATE_NOOP(
+        "WorkflowRoutesEditor", "Translate the main document text into the target language."
+    ),
+    WorkflowStepId.REVIEWER: QT_TRANSLATE_NOOP(
+        "WorkflowRoutesEditor", "Review glossary candidates and mark likely noise or confirmed terms."
+    ),
+    WorkflowStepId.OCR: QT_TRANSLATE_NOOP(
+        "WorkflowRoutesEditor", "Extract editable text from scanned or image-based pages."
+    ),
+    WorkflowStepId.IMAGE_REEMBEDDING: QT_TRANSLATE_NOOP(
+        "WorkflowRoutesEditor", "Put translated text back into document images."
+    ),
+    WorkflowStepId.MANGA_TRANSLATOR: QT_TRANSLATE_NOOP(
+        "WorkflowRoutesEditor", "Translate manga pages with image-aware text handling."
+    ),
+    WorkflowStepId.TRANSLATOR_BATCH: QT_TRANSLATE_NOOP(
+        "WorkflowRoutesEditor", "Submit document translation through the provider's asynchronous batch API."
+    ),
+}
+
+_STEP_LABELS = {
+    WorkflowStepId.EXTRACTOR: QT_TRANSLATE_NOOP("WorkflowRoutesEditor", "Extractor"),
+    WorkflowStepId.SUMMARIZER: QT_TRANSLATE_NOOP("WorkflowRoutesEditor", "Summarizer"),
+    WorkflowStepId.GLOSSARY_TRANSLATOR: QT_TRANSLATE_NOOP("WorkflowRoutesEditor", "Glossary translator"),
+    WorkflowStepId.TRANSLATOR: QT_TRANSLATE_NOOP("WorkflowRoutesEditor", "Translator"),
+    WorkflowStepId.REVIEWER: QT_TRANSLATE_NOOP("WorkflowRoutesEditor", "Reviewer"),
+    WorkflowStepId.OCR: QT_TRANSLATE_NOOP("WorkflowRoutesEditor", "OCR"),
+    WorkflowStepId.IMAGE_REEMBEDDING: QT_TRANSLATE_NOOP("WorkflowRoutesEditor", "Image reembedding"),
+    WorkflowStepId.MANGA_TRANSLATOR: QT_TRANSLATE_NOOP("WorkflowRoutesEditor", "Manga translator"),
+    WorkflowStepId.TRANSLATOR_BATCH: QT_TRANSLATE_NOOP("WorkflowRoutesEditor", "Translator batch"),
+}
+
+_STEP_TOOLTIP_FALLBACK = QT_TRANSLATE_NOOP(
+    "WorkflowRoutesEditor", "Connection and model settings for this workflow step."
+)
+
+_ADVANCED_TIP_TEXTS = {
+    WorkflowStepId.EXTRACTOR: QT_TRANSLATE_NOOP(
+        "StepAdvancedConfigDialog", "Extraction settings control how aggressively terms are discovered."
+    ),
+    WorkflowStepId.TRANSLATOR: QT_TRANSLATE_NOOP(
+        "StepAdvancedConfigDialog", "Translator settings tune chunk sizing and request budget."
+    ),
+    WorkflowStepId.OCR: QT_TRANSLATE_NOOP(
+        "StepAdvancedConfigDialog", "OCR settings control image compression and artifact cleanup."
+    ),
+    WorkflowStepId.TRANSLATOR_BATCH: QT_TRANSLATE_NOOP(
+        "StepAdvancedConfigDialog", "Batch settings configure optional async translation jobs."
+    ),
+}
+
+_ADVANCED_TIP_FALLBACK = QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Edit advanced settings for this workflow step.")
+
+
 @dataclass(frozen=True)
 class _SpinFieldSpec:
     attr_name: str
@@ -91,33 +155,83 @@ def validate_workflow_routes(
     return None
 
 
+def workflow_step_tooltip(step_id: WorkflowStepId, *, tr: Callable[[str], str]) -> str:
+    return tr(_STEP_TOOLTIP_TEXTS.get(step_id, _STEP_TOOLTIP_FALLBACK))
+
+
+def workflow_step_label(step_id: WorkflowStepId, *, tr: Callable[[str], str]) -> str:
+    return tr(_STEP_LABELS.get(step_id, step_id.value.replace("_", " ").title()))
+
+
+def workflow_step_label_from_text(step_label: str, *, tr: Callable[[str], str]) -> str:
+    normalized = step_label.strip().lower().replace(" ", "_")
+    for step_id in WorkflowStepId:
+        if step_id.value == normalized:
+            return workflow_step_label(step_id, tr=tr)
+    return tr(step_label)
+
+
 class StepAdvancedConfigDialog(QDialog):
-    _TIP_TEXTS = {
-        WorkflowStepId.EXTRACTOR: "Extraction settings control how aggressively terms are discovered.",
-        WorkflowStepId.TRANSLATOR: "Translator settings tune chunk sizing and request budget.",
-        WorkflowStepId.OCR: "OCR settings control image compression and artifact cleanup.",
-        WorkflowStepId.TRANSLATOR_BATCH: "Batch settings configure optional async translation jobs.",
-    }
     _SIMPLE_STEP_SPECS: dict[WorkflowStepId, tuple[_SpinFieldSpec | _CheckFieldSpec, ...]] = {
         WorkflowStepId.EXTRACTOR: (
-            _SpinFieldSpec("max_gleaning_spin", "Max gleaning", "max_gleaning", 0, 10, 3),
-            _SpinFieldSpec("max_term_name_spin", "Max term name length", "max_term_name_length", 10, 500, 200),
+            _SpinFieldSpec(
+                "max_gleaning_spin",
+                QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Max gleaning"),
+                "max_gleaning",
+                0,
+                10,
+                3,
+            ),
+            _SpinFieldSpec(
+                "max_term_name_spin",
+                QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Max term name length"),
+                "max_term_name_length",
+                10,
+                500,
+                200,
+            ),
         ),
         WorkflowStepId.TRANSLATOR: (
-            _SpinFieldSpec("max_tokens_spin", "Max tokens per call", "max_tokens_per_llm_call", 100, 100000, 4000),
-            _SpinFieldSpec("chunk_size_spin", "Chunk size", "chunk_size", 100, 5000, 1000),
+            _SpinFieldSpec(
+                "max_tokens_spin",
+                QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Max tokens per call"),
+                "max_tokens_per_llm_call",
+                100,
+                100000,
+                4000,
+            ),
+            _SpinFieldSpec(
+                "chunk_size_spin",
+                QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Chunk size"),
+                "chunk_size",
+                100,
+                5000,
+                1000,
+            ),
         ),
         WorkflowStepId.OCR: (
-            _SpinFieldSpec("ocr_dpi_spin", "OCR DPI", "ocr_dpi", 72, 600, 150),
-            _CheckFieldSpec("strip_artifacts_check", "Strip artifacts", "strip_llm_artifacts", True),
+            _SpinFieldSpec(
+                "ocr_dpi_spin",
+                QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "OCR DPI"),
+                "ocr_dpi",
+                72,
+                600,
+                150,
+            ),
+            _CheckFieldSpec(
+                "strip_artifacts_check",
+                QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Strip artifacts"),
+                "strip_llm_artifacts",
+                True,
+            ),
         ),
     }
     _BATCH_THINKING_OPTIONS = (
-        ("Auto", "auto"),
-        ("Off", "off"),
-        ("Low", "low"),
-        ("Medium", "medium"),
-        ("High", "high"),
+        (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Auto"), "auto"),
+        (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Off"), "off"),
+        (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Low"), "low"),
+        (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Medium"), "medium"),
+        (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "High"), "high"),
     )
 
     def __init__(self, route: WorkflowStepRoute, parent: QWidget | None = None) -> None:
@@ -171,7 +285,7 @@ class StepAdvancedConfigDialog(QDialog):
         return self._serialize()
 
     def _tip_text(self) -> str:
-        return self.tr(self._TIP_TEXTS.get(self._route.step_id, "Edit advanced settings for this workflow step."))
+        return self.tr(_ADVANCED_TIP_TEXTS.get(self._route.step_id, _ADVANCED_TIP_FALLBACK))
 
     def _spin(self, minimum: int, maximum: int, value: int) -> QSpinBox:
         spin = QSpinBox()
@@ -217,7 +331,7 @@ class StepAdvancedConfigDialog(QDialog):
         batch_size_spin = self._spin(1, 5000, int(raw_batch_size) if isinstance(raw_batch_size, int) else 100)
         thinking_combo = QComboBox()
         for label, value in self._BATCH_THINKING_OPTIONS:
-            thinking_combo.addItem(label, value)
+            thinking_combo.addItem(self.tr(label), value)
         self._select_combo_value(thinking_combo, str(config.get("thinking_mode") or "auto"))
 
         self._form_layout.addRow(self.tr("Provider"), provider_combo)
@@ -367,8 +481,10 @@ class WorkflowRoutesEditor(QWidget):
 
         for row_index, route in enumerate(routes):
             row_frame = self._build_frame("workflowRouteRow")
-            step_label = self._body_label(route.step_label)
-            step_label.setToolTip(self.tr("Connection and model settings for this workflow step."))
+            step_text = workflow_step_label(route.step_id, tr=self.tr)
+            step_label = self._body_label(step_text)
+            step_tooltip = workflow_step_tooltip(route.step_id, tr=self.tr)
+            step_label.setToolTip(step_tooltip)
 
             if route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
                 connection_label = self._body_label(route.connection_label or self.tr("Direct batch config"))
@@ -394,7 +510,7 @@ class WorkflowRoutesEditor(QWidget):
                     row_widget=row_frame,
                     step_label_widget=step_label,
                 )
-                self._items[(row_index, 0)] = self._step_item(route.step_label)
+                self._items[(row_index, 0)] = self._step_item(step_text, tooltip=step_tooltip)
                 self._items[(row_index, 1)] = self._item(connection_label.text())
                 if advanced_item is not None:
                     self._items[(row_index, 3)] = advanced_item
@@ -421,7 +537,7 @@ class WorkflowRoutesEditor(QWidget):
                     row_widget=row_frame,
                     step_label_widget=step_label,
                 )
-                self._items[(row_index, 0)] = self._step_item(route.step_label)
+                self._items[(row_index, 0)] = self._step_item(step_text, tooltip=step_tooltip)
                 if advanced_item is not None:
                     self._items[(row_index, 3)] = advanced_item
 
@@ -536,9 +652,9 @@ class WorkflowRoutesEditor(QWidget):
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         return item
 
-    def _step_item(self, step_label: str) -> QTableWidgetItem:
+    def _step_item(self, step_label: str, *, tooltip: str) -> QTableWidgetItem:
         item = self._item(step_label)
-        item.setToolTip(self.tr("Connection and model settings for this workflow step."))
+        item.setToolTip(tooltip)
         return item
 
     def _build_advanced_cell(self, route: WorkflowStepRoute, row: int) -> tuple[QWidget, QTableWidgetItem | None]:

@@ -29,6 +29,7 @@ from context_aware_translation.application.contracts.document import (
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.services.document import DocumentService
 from context_aware_translation.ui.chrome_sizing import sync_qml_host_height
+from context_aware_translation.ui.i18n import translate_backend_text, translate_progress_label
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.viewmodels.document_images_pane import DocumentImagesPaneViewModel
@@ -421,14 +422,16 @@ class DocumentImagesView(QWidget):
             self.progress_widget.progress_bar.setMinimum(0)
             self.progress_widget.progress_bar.setMaximum(0)
             self.progress_widget.message_label.setText(
-                state.progress.label if state.progress is not None and state.progress.label else self.tr("Reembedding")
+                translate_progress_label(state.progress.label)
+                if state.progress is not None and state.progress.label
+                else self.tr("Reembedding")
             )
             self.progress_widget.eta_label.clear()
         else:
             self.progress_widget.set_progress(
                 state.progress.current,
                 state.progress.total,
-                state.progress.label or self.tr("Reembedding"),
+                translate_progress_label(state.progress.label) or self.tr("Reembedding"),
             )
 
     def _update_action_buttons(self) -> None:
@@ -441,16 +444,20 @@ class DocumentImagesView(QWidget):
             return
         self.run_selected_button.setEnabled(asset.can_run if asset is not None else False)
         self.run_selected_button.setToolTip(
-            asset.run_blocker.message if asset is not None and asset.run_blocker is not None else ""
+            translate_backend_text(asset.run_blocker.message)
+            if asset is not None and asset.run_blocker is not None
+            else ""
         )
         toolbar = state.toolbar
         self.run_pending_button.setEnabled(toolbar.can_run_pending)
         self.run_pending_button.setToolTip(
-            toolbar.run_pending_blocker.message if toolbar.run_pending_blocker is not None else ""
+            translate_backend_text(toolbar.run_pending_blocker.message)
+            if toolbar.run_pending_blocker is not None
+            else ""
         )
         self.force_all_button.setEnabled(toolbar.can_force_all)
         self.force_all_button.setToolTip(
-            toolbar.force_all_blocker.message if toolbar.force_all_blocker is not None else ""
+            translate_backend_text(toolbar.force_all_blocker.message) if toolbar.force_all_blocker is not None else ""
         )
 
     def _current_blocker(self, *, require_asset_disabled: bool) -> BlockerInfo | None:
@@ -467,7 +474,7 @@ class DocumentImagesView(QWidget):
         if blocker is None:
             self.blocker_strip.hide()
             return
-        self.blocker_label.setText(blocker.message)
+        self.blocker_label.setText(translate_backend_text(blocker.message))
         target = blocker.target.kind if blocker.target is not None else None
         if target is NavigationTargetKind.APP_SETUP:
             self.blocker_action_button.setText(self.tr("Open App Setup"))
@@ -489,7 +496,7 @@ class DocumentImagesView(QWidget):
             self.open_project_setup_requested.emit()
 
     def _set_message(self, text: str) -> None:
-        self.message_label.setText(text)
+        self.message_label.setText(translate_backend_text(text))
         self.message_label.show()
         self._sync_chrome_state()
 
@@ -642,7 +649,7 @@ class DocumentImagesView(QWidget):
         else:
             status_color = "#5f5447"
         self.viewmodel.apply_state(
-            blocker_text=self.blocker_label.text().strip(),
+            blocker_text=translate_backend_text(self.blocker_label.text().strip()),
             has_blocker=not self.blocker_strip.isHidden(),
             blocker_action_label=self.blocker_action_button.text().strip(),
             has_blocker_action=not self.blocker_action_button.isHidden(),
@@ -660,6 +667,10 @@ class DocumentImagesView(QWidget):
             run_selected_enabled=self.run_selected_button.isEnabled(),
             run_pending_enabled=self.run_pending_button.isEnabled(),
             force_all_enabled=self.force_all_button.isEnabled(),
+            toggle_tooltip=self.toggle_button.toolTip(),
+            run_selected_tooltip=self.run_selected_button.toolTip(),
+            run_pending_tooltip=self.run_pending_button.toolTip(),
+            force_all_tooltip=self.force_all_button.toolTip(),
             message_text=self.message_label.text().strip(),
             progress_visible=not self.progress_widget.isHidden(),
             progress_text=self.progress_widget.message_label.text().strip(),

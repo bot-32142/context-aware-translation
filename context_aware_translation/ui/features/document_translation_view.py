@@ -43,6 +43,7 @@ from context_aware_translation.application.contracts.document import (
 )
 from context_aware_translation.application.errors import ApplicationError, BlockedOperationError
 from context_aware_translation.application.services.document import DocumentService
+from context_aware_translation.ui.i18n import translate_backend_text, translate_progress_label
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.viewmodels.document_translation_pane import DocumentTranslationPaneViewModel
@@ -328,7 +329,7 @@ class DocumentTranslationView(QWidget):
         for index, unit in enumerate(state.units):
             item = QListWidgetItem(self._row_text(unit))
             item.setData(Qt.ItemDataRole.UserRole, unit.unit_id)
-            item.setToolTip(unit.blocker.message if unit.blocker is not None else "")
+            item.setToolTip(translate_backend_text(unit.blocker.message if unit.blocker is not None else ""))
             self.unit_list.addItem(item)
             if target_unit_id is not None and unit.unit_id == target_unit_id:
                 selected_row = index
@@ -367,18 +368,22 @@ class DocumentTranslationView(QWidget):
 
         self._clear_find_highlight()
         self._rendered_unit_id = unit.unit_id
-        self.selection_label.setText(f"{unit.label} · {self.tr(_STATUS_TEXT[unit.status])}")
+        self.selection_label.setText(f"{translate_backend_text(unit.label)} · {self.tr(_STATUS_TEXT[unit.status])}")
         self.source_text.setPlainText(unit.source_text or "")
         self.translation_text.setPlainText(self._display_text_for_unit(unit))
         self.translation_text.setReadOnly(not unit.actions.can_save)
         self.save_button.setEnabled(unit.actions.can_save)
         self.retranslate_button.setEnabled(unit.actions.can_retranslate)
-        self.save_button.setToolTip(unit.actions.save_blocker.message if unit.actions.save_blocker is not None else "")
+        self.save_button.setToolTip(
+            translate_backend_text(unit.actions.save_blocker.message if unit.actions.save_blocker is not None else "")
+        )
         self.retranslate_button.setToolTip(
-            unit.actions.retranslate_blocker.message if unit.actions.retranslate_blocker is not None else ""
+            translate_backend_text(
+                unit.actions.retranslate_blocker.message if unit.actions.retranslate_blocker is not None else ""
+            )
         )
 
-        blocker_text = unit.blocker.message if unit.blocker is not None else ""
+        blocker_text = translate_backend_text(unit.blocker.message if unit.blocker is not None else "")
         self.blocker_label.setText(blocker_text)
         self.blocker_label.setVisible(bool(blocker_text))
 
@@ -436,11 +441,11 @@ class DocumentTranslationView(QWidget):
                 )
             )
         except BlockedOperationError as exc:
-            QMessageBox.warning(self, self.tr("Save Unavailable"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("Save Unavailable"), translate_backend_text(exc.payload.message))
             self.refresh()
             return
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Save Failed"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("Save Failed"), translate_backend_text(exc.payload.message))
             self.refresh()
             return
         saved_unit = self._unit_by_id(state, unit.unit_id)
@@ -473,11 +478,13 @@ class DocumentTranslationView(QWidget):
                 )
             )
         except BlockedOperationError as exc:
-            QMessageBox.information(self, self.tr("Retranslate Unavailable"), exc.payload.message)
+            QMessageBox.information(
+                self, self.tr("Retranslate Unavailable"), translate_backend_text(exc.payload.message)
+            )
             self.refresh()
             return
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Retranslate Failed"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("Retranslate Failed"), translate_backend_text(exc.payload.message))
             self.refresh()
             return
         self._refresh_with_suppressed_drafts({unit.unit_id})
@@ -496,11 +503,11 @@ class DocumentTranslationView(QWidget):
                 )
             )
         except BlockedOperationError as exc:
-            QMessageBox.information(self, self.tr("Translate Unavailable"), exc.payload.message)
+            QMessageBox.information(self, self.tr("Translate Unavailable"), translate_backend_text(exc.payload.message))
             self.refresh()
             return
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Translate Failed"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("Translate Failed"), translate_backend_text(exc.payload.message))
             self.refresh()
             return
         affected_unit_ids = {unit.unit_id for unit in self._state.units} if self._state is not None else set()
@@ -521,11 +528,13 @@ class DocumentTranslationView(QWidget):
                 )
             )
         except BlockedOperationError as exc:
-            QMessageBox.information(self, self.tr("Batch Translation Unavailable"), exc.payload.message)
+            QMessageBox.information(
+                self, self.tr("Batch Translation Unavailable"), translate_backend_text(exc.payload.message)
+            )
             self.refresh()
             return
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Batch Translation Failed"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("Batch Translation Failed"), translate_backend_text(exc.payload.message))
             self.refresh()
             return
         affected_unit_ids = {unit.unit_id for unit in self._state.units} if self._state is not None else set()
@@ -537,7 +546,7 @@ class DocumentTranslationView(QWidget):
 
     def _set_message(self, severity: UserMessageSeverity, text: str) -> None:
         _ = severity
-        self._message_text_value = text
+        self._message_text_value = translate_backend_text(text)
         self._sync_chrome_state()
 
     def _capture_current_draft(self) -> None:
@@ -571,7 +580,7 @@ class DocumentTranslationView(QWidget):
                 self._drafts_by_unit_id.pop(unit.unit_id, None)
 
     def _row_text(self, unit: TranslationUnitState) -> str:
-        return f"{_STATUS_ICON[unit.status]} {unit.label}"
+        return f"{_STATUS_ICON[unit.status]} {translate_backend_text(unit.label)}"
 
     def _progress_text(self, state: DocumentTranslationState) -> str:
         parts: list[str] = []
@@ -582,7 +591,7 @@ class DocumentTranslationView(QWidget):
                 .replace("%2", str(state.progress.total))
             )
         elif state.progress is not None and state.progress.label:
-            parts.append(state.progress.label)
+            parts.append(translate_progress_label(state.progress.label))
         if state.active_task_id is not None:
             parts.append(self.tr("Active task: %1").replace("%1", state.active_task_id))
         return " | ".join(parts)
@@ -920,6 +929,12 @@ class DocumentTranslationView(QWidget):
         self.refresh()
 
     def _sync_chrome_state(self) -> None:
+        translate_tooltip = self.tr("Translate all pending units in this document with the current settings.")
+        batch_tooltip = self.tr("Submit this document as an asynchronous batch translation job.")
+        if self._state is not None and self._state.run_action.blocker is not None:
+            translate_tooltip = translate_backend_text(self._state.run_action.blocker.message)
+        if self._state is not None and self._state.batch_action.blocker is not None:
+            batch_tooltip = translate_backend_text(self._state.batch_action.blocker.message)
         self.viewmodel.apply_state(
             progress_text=self._progress_text_value.strip(),
             message_text=self._message_text_value.strip(),
@@ -927,6 +942,8 @@ class DocumentTranslationView(QWidget):
             can_translate=self._can_translate,
             supports_batch=self._supports_batch,
             can_batch=self._can_batch,
+            translate_tooltip=translate_tooltip,
+            batch_tooltip=batch_tooltip,
         )
 
 

@@ -151,6 +151,9 @@ def test_document_images_view_renders_backend_state_and_runs_actions():
         assert root.property("runSelectedEnabled") is True
         assert root.property("runPendingEnabled") is True
         assert root.property("forceAllEnabled") is True
+        assert root.property("runSelectedTooltipText") == ""
+        assert root.property("runPendingTooltipText") == ""
+        assert root.property("forceAllTooltipText") == ""
         assert view.page_label.text() == "Image 1 of 2"
         assert view.status_label.text() == "Pending"
         assert view.text_panel.toPlainText() == "Everyone, get down now!!!"

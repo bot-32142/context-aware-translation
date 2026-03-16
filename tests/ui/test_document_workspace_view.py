@@ -446,6 +446,7 @@ def test_document_workspace_export_tab_runs_document_service():
         assert root is not None
         assert root.objectName() == "documentExportPaneChrome"
         assert root.property("exportLabelText") == "Export This Document"
+        assert root.property("exportTooltipText") == "Export this document using the selected format and options."
         export_tab.controls.preserve_structure_cb.setChecked(True)
         export_tab.controls.output_path_edit.setText("/tmp/export-dir")
         with patch.object(QMessageBox, "warning") as mock_warning:

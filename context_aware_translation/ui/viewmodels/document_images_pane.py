@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Property, QCoreApplication, Signal
+from PySide6.QtCore import Property, QCoreApplication, QT_TRANSLATE_NOOP, Signal
 
 from context_aware_translation.ui.viewmodels.base import ViewModelBase
 
-_TIP_TEXT = (
-    "Image actions are explicit. Review one image, reinsert pending images, or rerun everything for this document."
+_TIP_TEXT = QT_TRANSLATE_NOOP(
+    "DocumentImagesView",
+    "Image actions are explicit. Review one image, reinsert pending images, or rerun everything for this document.",
 )
 
 
@@ -37,6 +38,10 @@ class DocumentImagesPaneViewModel(ViewModelBase):
         self._run_selected_enabled = False
         self._run_pending_enabled = False
         self._force_all_enabled = False
+        self._toggle_tooltip = ""
+        self._run_selected_tooltip = ""
+        self._run_pending_tooltip = ""
+        self._force_all_tooltip = ""
         self._progress_visible = False
         self._progress_can_cancel = False
         self._empty_visible = True
@@ -158,6 +163,22 @@ class DocumentImagesPaneViewModel(ViewModelBase):
         return self._force_all_enabled
 
     @Property(str, notify=chrome_state_changed)
+    def toggle_tooltip(self) -> str:
+        return self._toggle_tooltip
+
+    @Property(str, notify=chrome_state_changed)
+    def run_selected_tooltip(self) -> str:
+        return self._run_selected_tooltip
+
+    @Property(str, notify=chrome_state_changed)
+    def run_pending_tooltip(self) -> str:
+        return self._run_pending_tooltip
+
+    @Property(str, notify=chrome_state_changed)
+    def force_all_tooltip(self) -> str:
+        return self._force_all_tooltip
+
+    @Property(str, notify=chrome_state_changed)
     def message_text(self) -> str:
         return self._message_text
 
@@ -212,12 +233,17 @@ class DocumentImagesPaneViewModel(ViewModelBase):
         run_selected_enabled: bool,
         run_pending_enabled: bool,
         force_all_enabled: bool,
+        toggle_tooltip: str = "",
+        run_selected_tooltip: str = "",
+        run_pending_tooltip: str = "",
+        force_all_tooltip: str = "",
         message_text: str,
         progress_visible: bool,
         progress_text: str,
         progress_can_cancel: bool,
         empty_visible: bool,
     ) -> None:
+        tooltip_state = (toggle_tooltip, run_selected_tooltip, run_pending_tooltip, force_all_tooltip)
         next_state = (
             blocker_text,
             has_blocker,
@@ -268,7 +294,12 @@ class DocumentImagesPaneViewModel(ViewModelBase):
             self._progress_can_cancel,
             self._empty_visible,
         )
-        if next_state == current_state:
+        if next_state == current_state and tooltip_state == (
+            self._toggle_tooltip,
+            self._run_selected_tooltip,
+            self._run_pending_tooltip,
+            self._force_all_tooltip,
+        ):
             return
         (
             self._blocker_text,
@@ -295,6 +326,10 @@ class DocumentImagesPaneViewModel(ViewModelBase):
             self._progress_can_cancel,
             self._empty_visible,
         ) = next_state
+        self._toggle_tooltip = toggle_tooltip
+        self._run_selected_tooltip = run_selected_tooltip
+        self._run_pending_tooltip = run_pending_tooltip
+        self._force_all_tooltip = force_all_tooltip
         self.chrome_state_changed.emit()
         self.mark_changed()
 

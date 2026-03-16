@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 
 Rectangle {
     id: root
@@ -113,11 +114,16 @@ Rectangle {
                     }
 
                     MouseArea {
+                        id: actionMouseArea
                         anchors.fill: parent
                         enabled: modelData.enabled
                         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                         onClicked: root.actionRequested(modelData.action)
                     }
+
+                    ToolTip.visible: actionMouseArea.containsMouse && !!modelData.tooltip
+                    ToolTip.text: modelData.tooltip || ""
+                    ToolTip.delay: 500
                 }
             }
         }

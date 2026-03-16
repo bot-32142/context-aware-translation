@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 
 Rectangle {
     id: root
@@ -28,6 +29,9 @@ Rectangle {
     property string runCurrentLabelText: ocrPane ? ocrPane.run_current_label : "(Re)run OCR (Current Page)"
     property string runPendingLabelText: ocrPane ? ocrPane.run_pending_label : "Run OCR for Pending Pages"
     property string saveLabelText: ocrPane ? ocrPane.save_label : "Save"
+    property string runCurrentTooltipText: ocrPane ? ocrPane.run_current_tooltip : ""
+    property string runPendingTooltipText: ocrPane ? ocrPane.run_pending_tooltip : ""
+    property string saveTooltipText: ocrPane ? ocrPane.save_tooltip : ""
     property string cancelLabelText: ocrPane ? ocrPane.cancel_label : "Cancel"
     property string progressLabelText: ocrPane ? ocrPane.progress_label : ""
     property string messageText: ocrPane ? ocrPane.message_text : ""
@@ -271,11 +275,16 @@ Rectangle {
                 }
 
                 MouseArea {
+                    id: runCurrentMouseArea
                     anchors.fill: parent
                     enabled: root.runCurrentEnabled
                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onClicked: root.runCurrentRequested()
                 }
+
+                ToolTip.visible: runCurrentMouseArea.containsMouse && !!root.runCurrentTooltipText
+                ToolTip.text: root.runCurrentTooltipText
+                ToolTip.delay: 500
             }
 
             Rectangle {
@@ -294,11 +303,16 @@ Rectangle {
                 }
 
                 MouseArea {
+                    id: runPendingMouseArea
                     anchors.fill: parent
                     enabled: root.runPendingEnabled
                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onClicked: root.runPendingRequested()
                 }
+
+                ToolTip.visible: runPendingMouseArea.containsMouse && !!root.runPendingTooltipText
+                ToolTip.text: root.runPendingTooltipText
+                ToolTip.delay: 500
             }
 
             Rectangle {
@@ -317,11 +331,16 @@ Rectangle {
                 }
 
                 MouseArea {
+                    id: saveMouseArea
                     anchors.fill: parent
                     enabled: root.saveEnabled
                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onClicked: root.saveRequested()
                 }
+
+                ToolTip.visible: saveMouseArea.containsMouse && !!root.saveTooltipText
+                ToolTip.text: root.saveTooltipText
+                ToolTip.delay: 500
             }
         }
 

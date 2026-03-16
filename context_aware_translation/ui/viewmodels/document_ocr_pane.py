@@ -38,6 +38,9 @@ class DocumentOcrPaneViewModel(ViewModelBase):
     def __init__(self, parent=None) -> None:  # noqa: ANN001
         super().__init__(parent)
         self._state = _OcrChromeState()
+        self._run_current_tooltip = ""
+        self._run_pending_tooltip = ""
+        self._save_tooltip = ""
 
     @Property(str, notify=chrome_state_changed)
     def tip_text(self) -> str:
@@ -170,6 +173,18 @@ class DocumentOcrPaneViewModel(ViewModelBase):
     def save_enabled(self) -> bool:
         return self._state.save_enabled
 
+    @Property(str, notify=chrome_state_changed)
+    def run_current_tooltip(self) -> str:
+        return self._run_current_tooltip
+
+    @Property(str, notify=chrome_state_changed)
+    def run_pending_tooltip(self) -> str:
+        return self._run_pending_tooltip
+
+    @Property(str, notify=chrome_state_changed)
+    def save_tooltip(self) -> str:
+        return self._save_tooltip
+
     @Property(bool, notify=chrome_state_changed)
     def progress_visible(self) -> bool:
         return self._state.progress_visible
@@ -198,12 +213,16 @@ class DocumentOcrPaneViewModel(ViewModelBase):
         run_current_enabled: bool,
         run_pending_enabled: bool,
         save_enabled: bool,
+        run_current_tooltip: str = "",
+        run_pending_tooltip: str = "",
+        save_tooltip: str = "",
         message_text: str,
         progress_visible: bool,
         progress_text: str,
         progress_can_cancel: bool,
         empty_visible: bool,
     ) -> None:
+        tooltip_state = (run_current_tooltip, run_pending_tooltip, save_tooltip)
         state = _OcrChromeState(
             has_pages=has_pages,
             page_number=page_number,
@@ -224,9 +243,16 @@ class DocumentOcrPaneViewModel(ViewModelBase):
             progress_can_cancel=progress_can_cancel,
             empty_visible=empty_visible,
         )
-        if state == self._state:
+        if state == self._state and tooltip_state == (
+            self._run_current_tooltip,
+            self._run_pending_tooltip,
+            self._save_tooltip,
+        ):
             return
         self._state = state
+        self._run_current_tooltip = run_current_tooltip
+        self._run_pending_tooltip = run_pending_tooltip
+        self._save_tooltip = save_tooltip
         self.chrome_state_changed.emit()
         self.mark_changed()
 

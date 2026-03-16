@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 
 Rectangle {
     id: root
@@ -25,6 +26,8 @@ Rectangle {
     property string routesHintText: projectSettingsPane ? projectSettingsPane.routes_hint_text : ""
     property string openAppSetupLabel: projectSettingsPane ? projectSettingsPane.open_app_setup_label : "Open App Setup"
     property string saveLabel: projectSettingsPane ? projectSettingsPane.save_label : "Save"
+    property string openAppSetupTooltipText: projectSettingsPane ? projectSettingsPane.open_app_setup_tooltip : ""
+    property string saveTooltipText: projectSettingsPane ? projectSettingsPane.save_tooltip : ""
 
     function primaryButtonColor(enabled) {
         return enabled ? "#2f251d" : "#d7cebf"
@@ -130,10 +133,15 @@ Rectangle {
                     }
 
                     MouseArea {
+                        id: blockerOpenAppSetupMouseArea
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
                         onClicked: root.openAppSetupRequested()
                     }
+
+                    ToolTip.visible: blockerOpenAppSetupMouseArea.containsMouse && !!root.openAppSetupTooltipText
+                    ToolTip.text: root.openAppSetupTooltipText
+                    ToolTip.delay: 500
                 }
             }
         }
@@ -181,11 +189,16 @@ Rectangle {
                 }
 
                 MouseArea {
+                    id: saveMouseArea
                     anchors.fill: parent
                     enabled: root.canSave
                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onClicked: root.saveRequested()
                 }
+
+                ToolTip.visible: saveMouseArea.containsMouse && !!root.saveTooltipText
+                ToolTip.text: root.saveTooltipText
+                ToolTip.delay: 500
             }
         }
     }

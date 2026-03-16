@@ -139,6 +139,9 @@ def test_app_settings_pane_renders_backend_state():
     assert view.profiles_table.rowCount() == 1
     assert view.viewmodel.current_tab == "connections"
     assert view.viewmodel.action_buttons[0]["label"] == "Open Setup Wizard"
+    assert view.viewmodel.action_buttons[0]["tooltip"] == (
+        "Open the setup wizard to configure reusable connections and shared workflow profiles."
+    )
     assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
 
 

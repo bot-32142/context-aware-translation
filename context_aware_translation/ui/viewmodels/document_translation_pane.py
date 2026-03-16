@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Property, QCoreApplication, Signal
+from PySide6.QtCore import Property, QCoreApplication, QT_TRANSLATE_NOOP, Signal
 
 from context_aware_translation.ui.viewmodels.base import ViewModelBase
 
-_TIP_TEXT = "Translation review is scoped to this document only. Saving edits does not trigger hidden reruns."
+_TIP_TEXT = QT_TRANSLATE_NOOP(
+    "DocumentTranslationView",
+    "Translation review is scoped to this document only. Saving edits does not trigger hidden reruns.",
+)
 
 
 class DocumentTranslationPaneViewModel(ViewModelBase):
@@ -21,6 +24,8 @@ class DocumentTranslationPaneViewModel(ViewModelBase):
         self._can_translate = False
         self._supports_batch = False
         self._can_batch = False
+        self._translate_tooltip = ""
+        self._batch_tooltip = ""
 
     @Property(str, notify=labels_changed)
     def tip_text(self) -> str:
@@ -58,6 +63,14 @@ class DocumentTranslationPaneViewModel(ViewModelBase):
     def can_batch(self) -> bool:
         return self._can_batch
 
+    @Property(str, notify=chrome_state_changed)
+    def translate_tooltip(self) -> str:
+        return self._translate_tooltip
+
+    @Property(str, notify=chrome_state_changed)
+    def batch_tooltip(self) -> str:
+        return self._batch_tooltip
+
     def apply_state(
         self,
         *,
@@ -67,7 +80,10 @@ class DocumentTranslationPaneViewModel(ViewModelBase):
         can_translate: bool,
         supports_batch: bool,
         can_batch: bool,
+        translate_tooltip: str = "",
+        batch_tooltip: str = "",
     ) -> None:
+        tooltip_state = (translate_tooltip, batch_tooltip)
         current_progress_text = self.progress_text
         next_progress_text = message_text or progress_text
         if (
@@ -78,6 +94,7 @@ class DocumentTranslationPaneViewModel(ViewModelBase):
             and self._can_translate == can_translate
             and self._supports_batch == supports_batch
             and self._can_batch == can_batch
+            and tooltip_state == (self._translate_tooltip, self._batch_tooltip)
         ):
             return
         self._progress_text = progress_text
@@ -86,6 +103,8 @@ class DocumentTranslationPaneViewModel(ViewModelBase):
         self._can_translate = can_translate
         self._supports_batch = supports_batch
         self._can_batch = can_batch
+        self._translate_tooltip = translate_tooltip
+        self._batch_tooltip = batch_tooltip
         self.chrome_state_changed.emit()
         self.mark_changed()
 

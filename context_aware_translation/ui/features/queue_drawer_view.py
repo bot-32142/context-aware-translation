@@ -23,17 +23,15 @@ from context_aware_translation.application.contracts.queue import QueueActionReq
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.events import ApplicationEventSubscriber, QueueChangedEvent
 from context_aware_translation.application.services.queue import QueueService
+from context_aware_translation.ui.i18n import (
+    translate_backend_text,
+    translate_progress_label,
+    translate_task_phase,
+    translate_task_status,
+    translate_task_type,
+)
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
-
-_STATUS_LABELS: dict[QueueStatus, str] = {
-    QueueStatus.RUNNING: "Running",
-    QueueStatus.QUEUED: "Queued",
-    QueueStatus.BLOCKED: "Blocked",
-    QueueStatus.FAILED: "Failed",
-    QueueStatus.DONE: "Done",
-    QueueStatus.CANCELLED: "Cancelled",
-}
 
 
 class _QueueDeleteWorker(QThread):
@@ -138,15 +136,15 @@ class _QueueItemCard(QFrame):
 
     def set_item(self, item: QueueItem) -> None:
         self._item = item
-        self.title_label.setText(item.title)
+        self.title_label.setText(translate_backend_text(item.title))
         self.scope_label.setText(self._scope_text(item))
         self.scope_label.setVisible(bool(self.scope_label.text()))
         self.detail_label.setText(self._detail_text(item))
         self.detail_label.setVisible(bool(self.detail_label.text()))
         blocker_text = item.blocker.message if item.blocker is not None else ""
-        self.blocker_label.setText(blocker_text)
+        self.blocker_label.setText(translate_backend_text(blocker_text))
         self.blocker_label.setVisible(bool(blocker_text))
-        self.error_label.setText(item.error_message or "")
+        self.error_label.setText(translate_backend_text(item.error_message or ""))
         self.error_label.setVisible(bool(item.error_message))
 
         labels = {
@@ -157,7 +155,9 @@ class _QueueItemCard(QFrame):
             QueueActionKind.DELETE: self.tr("Delete"),
         }
         self.status_label.setText(
-            self.tr("Deleting...") if self._pending_action is QueueActionKind.DELETE else _STATUS_LABELS[item.status]
+            self.tr("Deleting...")
+            if self._pending_action is QueueActionKind.DELETE
+            else translate_task_status(item.status.value)
         )
         for action, button in self._buttons.items():
             button.setText(labels[action])
@@ -187,11 +187,11 @@ class _QueueItemCard(QFrame):
     def _detail_text(self, item: QueueItem) -> str:
         parts: list[str] = []
         if item.stage:
-            parts.append(self.tr("Stage: {0}").format(item.stage))
+            parts.append(self.tr("Stage: {0}").format(translate_task_phase(item.stage)))
         if item.progress is not None and item.progress.total is not None and item.progress.current is not None:
             parts.append(self.tr("Progress: {0}/{1}").format(item.progress.current, item.progress.total))
         elif item.progress is not None and item.progress.label:
-            parts.append(item.progress.label)
+            parts.append(translate_progress_label(item.progress.label))
         return " | ".join(parts)
 
 
@@ -372,15 +372,18 @@ class QueueDrawerView(QWidget):
             message: UserMessage | None = None
             if item.status is QueueStatus.DONE:
                 message = UserMessage(
-                    severity=UserMessageSeverity.SUCCESS, text=self.tr("{0} finished.").format(item.title)
+                    severity=UserMessageSeverity.SUCCESS,
+                    text=self.tr("{0} finished.").format(translate_backend_text(item.title)),
                 )
             elif item.status is QueueStatus.FAILED:
-                text = item.error_message or self.tr("{0} failed.").format(item.title)
+                text = translate_backend_text(item.error_message or "") or self.tr("{0} failed.").format(
+                    translate_backend_text(item.title)
+                )
                 message = UserMessage(severity=UserMessageSeverity.ERROR, text=text)
             elif item.status is QueueStatus.CANCELLED:
                 message = UserMessage(
                     severity=UserMessageSeverity.WARNING,
-                    text=self.tr("{0} was cancelled.").format(item.title),
+                    text=self.tr("{0} was cancelled.").format(translate_backend_text(item.title)),
                 )
             if message is not None:
                 self.notification_requested.emit(message)

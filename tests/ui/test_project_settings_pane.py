@@ -166,6 +166,7 @@ def test_project_settings_pane_renders_backend_state():
         assert root is not None
         assert root.objectName() == "projectSettingsPaneChrome"
         assert root.property("showHeader") is False
+        assert root.property("saveTooltipText") == "Save the selected workflow profile for this project."
         assert view.viewmodel.title_text == "Setup for One Piece"
         assert view.profile_combo.objectName() == "projectWorkflowProfileCombo"
         assert view.profile_combo.currentIndex() == 0

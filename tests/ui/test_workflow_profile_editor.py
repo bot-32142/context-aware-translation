@@ -14,6 +14,7 @@ from context_aware_translation.ui.features.workflow_profile_editor import (
     ConnectionChoice,
     WorkflowProfileEditorDialog,
     WorkflowRoutesEditor,
+    workflow_step_tooltip,
 )
 
 try:
@@ -104,6 +105,47 @@ def test_workflow_profile_editor_uses_scrollable_dialog_layout():
     assert dialog.routes_table.rowHeight(0) >= dialog.routes_table.cellWidget(0, 3).sizeHint().height()
     assert "background-color: white" in dialog.routes_table.styleSheet()
     assert "palette(base)" not in dialog.routes_table.styleSheet()
+
+
+def test_workflow_routes_editor_exposes_step_specific_tooltips():
+    routes = [
+        WorkflowStepRoute(
+            step_id=WorkflowStepId.EXTRACTOR,
+            step_label="Extractor",
+            connection_id="conn-gemini",
+            connection_label="Gemini",
+            model="gemini-3-flash-preview",
+        ),
+        WorkflowStepRoute(
+            step_id=WorkflowStepId.GLOSSARY_TRANSLATOR,
+            step_label="Glossary Translator",
+            connection_id="conn-gemini",
+            connection_label="Gemini",
+            model="gemini-3-flash-preview",
+        ),
+    ]
+    editor = WorkflowRoutesEditor(
+        routes,
+        [
+            ConnectionChoice(
+                connection_id="conn-gemini",
+                label="Gemini",
+                default_model="gemini-3-flash-preview",
+            )
+        ],
+        advanced_step_ids=ADVANCED_STEP_IDS,
+        hint_text="hint",
+    )
+
+    extractor_tooltip = workflow_step_tooltip(WorkflowStepId.EXTRACTOR, tr=editor.tr)
+    glossary_tooltip = workflow_step_tooltip(WorkflowStepId.GLOSSARY_TRANSLATOR, tr=editor.tr)
+
+    assert editor.rows[0].step_label_widget is not None
+    assert editor.rows[0].step_label_widget.toolTip() == extractor_tooltip
+    assert editor._items[(0, 0)].toolTip() == extractor_tooltip
+    assert editor.rows[1].step_label_widget is not None
+    assert editor.rows[1].step_label_widget.toolTip() == glossary_tooltip
+    assert editor._items[(1, 0)].toolTip() == glossary_tooltip
 
 
 def test_workflow_profile_editor_normalizes_initial_routes_height_and_collapsed_spacing():

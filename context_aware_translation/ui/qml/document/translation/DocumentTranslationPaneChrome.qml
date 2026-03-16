@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 
 Rectangle {
     id: root
@@ -14,6 +15,8 @@ Rectangle {
     property string polishLabelText: translationPane ? translationPane.polish_label : "Enable polish pass"
     property string translateLabelText: translationPane ? translationPane.translate_label : "Translate"
     property string batchLabelText: translationPane ? translationPane.batch_label : "Submit Batch Task"
+    property string translateTooltipText: translationPane ? translationPane.translate_tooltip : ""
+    property string batchTooltipText: translationPane ? translationPane.batch_tooltip : ""
     property string progressText: translationPane ? translationPane.progress_text : ""
     property bool polishEnabled: translationPane ? translationPane.polish_enabled : true
     property bool canTranslate: translationPane ? translationPane.can_translate : false
@@ -89,11 +92,16 @@ Rectangle {
                 }
 
                 MouseArea {
+                    id: translateMouseArea
                     anchors.fill: parent
                     enabled: root.canTranslate
                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onClicked: root.translateRequested()
                 }
+
+                ToolTip.visible: translateMouseArea.containsMouse && !!root.translateTooltipText
+                ToolTip.text: root.translateTooltipText
+                ToolTip.delay: 500
             }
 
             Rectangle {
@@ -112,11 +120,16 @@ Rectangle {
                 }
 
                 MouseArea {
+                    id: batchMouseArea
                     anchors.fill: parent
                     enabled: root.canBatch
                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onClicked: root.batchRequested()
                 }
+
+                ToolTip.visible: batchMouseArea.containsMouse && !!root.batchTooltipText
+                ToolTip.text: root.batchTooltipText
+                ToolTip.delay: 500
             }
         }
     }

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Property, QCoreApplication, Signal
+from PySide6.QtCore import Property, QCoreApplication, QT_TRANSLATE_NOOP, Signal
 
 from context_aware_translation.ui.viewmodels.base import ViewModelBase
 
-_TIP_TEXT = (
+_TIP_TEXT = QT_TRANSLATE_NOOP(
+    "AppSettingsPane",
     "App Setup manages reusable connections and shared workflow profiles. "
     "The wizard creates a concrete shared workflow profile using the existing "
-    "step-based config system."
+    "step-based config system.",
 )
 
 
@@ -52,7 +53,7 @@ class AppSettingsPaneViewModel(ViewModelBase):
 
     def apply_state(self, *, current_tab: str, action_buttons: list[dict[str, object]]) -> None:
         self._current_tab = current_tab
-        self._action_buttons = action_buttons
+        self._action_buttons = [dict(button) for button in action_buttons]
         self.content_changed.emit()
         self.mark_changed()
 

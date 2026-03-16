@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Property, QCoreApplication, Signal
+from PySide6.QtCore import Property, QCoreApplication, QT_TRANSLATE_NOOP, Signal
 
 from context_aware_translation.ui.viewmodels.base import ViewModelBase
 
-_APP_SETTINGS_SUBTITLE = (
+_APP_SETTINGS_SUBTITLE = QT_TRANSLATE_NOOP(
+    "AppSettingsPane",
     "App Setup manages reusable connections and shared workflow profiles. "
     "The wizard creates a concrete shared workflow profile using the existing "
-    "step-based config system."
+    "step-based config system.",
 )
 
 

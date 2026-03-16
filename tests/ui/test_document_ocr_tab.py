@@ -272,6 +272,9 @@ def test_document_ocr_tab_qml_save_signal_persists_manual_text_edit():
         view.refresh()
         root = view.chrome_host.rootObject()
         assert root is not None
+        assert root.property("runCurrentTooltipText") == "Run or re-run OCR on the current page"
+        assert root.property("runPendingTooltipText") == "Run OCR on all pending pages in this document"
+        assert root.property("saveTooltipText") == "Save edited OCR text"
         view.text_edit.setPlainText("edited manually")
 
         root.saveRequested.emit()

@@ -20,6 +20,7 @@ from context_aware_translation.ui.features.workflow_profile_editor import (
     WorkflowRoutesEditor,
     validate_workflow_routes,
 )
+from context_aware_translation.ui.i18n import translate_backend_text
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.viewmodels.project_settings_pane import ProjectSettingsPaneViewModel
 from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme
@@ -244,7 +245,7 @@ class ProjectSettingsPane(QWidget):
 
         self.viewmodel.apply_state(
             project_name=state.project.name,
-            blocker_text=state.blocker.message if state.blocker is not None else "",
+            blocker_text=translate_backend_text(state.blocker.message) if state.blocker is not None else "",
             profile_options=options,
             custom_profile_text=self._custom_profile_text(),
             show_custom_profile=self._is_custom_selected() and self._effective_profile() is not None,

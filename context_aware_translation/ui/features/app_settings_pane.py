@@ -32,10 +32,11 @@ from context_aware_translation.application.services.app_setup import AppSetupSer
 from context_aware_translation.ui.chrome_sizing import sync_qml_host_height
 from context_aware_translation.ui.features.app_setup_view import (
     _NEW_PROFILE_ROUTE_SPECS,
-    _PROVIDER_LABELS,
+    _provider_label,
     ConnectionEditorDialog,
     SetupWizardDialog,
 )
+from context_aware_translation.ui.features.workflow_profile_editor import workflow_step_label
 from context_aware_translation.ui.features.workflow_profile_editor import (
     ConnectionChoice,
     WorkflowProfileEditorDialog,
@@ -189,15 +190,34 @@ class AppSettingsPane(QWidget):
             selected_profile = self._selected_profile()
             selected = selected_profile is not None
             return [
-                {"action": "add_profile", "label": self.tr("Add Profile"), "enabled": has_connections, "primary": True},
-                {"action": "duplicate_profile", "label": self.tr("Duplicate"), "enabled": selected, "primary": False},
+                {
+                    "action": "add_profile",
+                    "label": self.tr("Add Profile"),
+                    "enabled": has_connections,
+                    "primary": True,
+                    "tooltip": self.tr("Create a new reusable workflow profile from the current routes."),
+                },
+                {
+                    "action": "duplicate_profile",
+                    "label": self.tr("Duplicate"),
+                    "enabled": selected,
+                    "primary": False,
+                    "tooltip": self.tr("Copy the selected workflow profile so you can edit it safely."),
+                },
                 {
                     "action": "set_default_profile",
                     "label": self.tr("Set Default"),
                     "enabled": selected and not bool(selected_profile and selected_profile.is_default),
                     "primary": False,
+                    "tooltip": self.tr("Make the selected workflow profile the default for new projects."),
                 },
-                {"action": "delete_profile", "label": self.tr("Delete"), "enabled": selected, "primary": False},
+                {
+                    "action": "delete_profile",
+                    "label": self.tr("Delete"),
+                    "enabled": selected,
+                    "primary": False,
+                    "tooltip": self.tr("Delete the selected workflow profile."),
+                },
             ]
 
         selected_connection = self._selected_connection()
@@ -210,14 +230,30 @@ class AppSettingsPane(QWidget):
                 else self.tr("Open Setup Wizard"),
                 "enabled": True,
                 "primary": True,
+                "tooltip": self.tr(
+                    "Open the setup wizard to configure reusable connections and shared workflow profiles."
+                ),
             },
-            {"action": "add_connection", "label": self.tr("Add Connection"), "enabled": True, "primary": False},
-            {"action": "duplicate_connection", "label": self.tr("Duplicate"), "enabled": selected, "primary": False},
+            {
+                "action": "add_connection",
+                "label": self.tr("Add Connection"),
+                "enabled": True,
+                "primary": False,
+                "tooltip": self.tr("Create a reusable API connection for workflow steps."),
+            },
+            {
+                "action": "duplicate_connection",
+                "label": self.tr("Duplicate"),
+                "enabled": selected,
+                "primary": False,
+                "tooltip": self.tr("Copy the selected connection so you can adjust it without changing the original."),
+            },
             {
                 "action": "delete_connection",
                 "label": self.tr("Delete"),
                 "enabled": selected and not bool(selected_connection and selected_connection.is_managed),
                 "primary": False,
+                "tooltip": self.tr("Delete the selected reusable connection."),
             },
         ]
 
@@ -247,9 +283,11 @@ class AppSettingsPane(QWidget):
             )
             if connection.is_managed:
                 name_item.setToolTip(self.tr("Managed by the setup wizard. Duplicate it if you need an editable copy."))
-            provider_label = _PROVIDER_LABELS.get(connection.provider, connection.provider.value)
+            provider_label = self.tr(_provider_label(connection.provider))
             self._set_table_item(self.connections_table, row, 1, provider_label)
-            self._set_table_item(self.connections_table, row, 2, connection.status.value.replace("_", " ").title())
+            self._set_table_item(
+                self.connections_table, row, 2, self.tr(connection.status.value.replace("_", " ").title())
+            )
             self._set_table_item(self.connections_table, row, 3, connection.default_model or "")
             self._set_table_item(self.connections_table, row, 4, connection.base_url or "")
         self._finalize_table(self.connections_table)
@@ -465,7 +503,7 @@ class AppSettingsPane(QWidget):
         routes = [
             WorkflowStepRoute(
                 step_id=step_id,
-                step_label=label,
+                step_label=workflow_step_label(step_id, tr=self.tr),
                 connection_id=(
                     first_connection.connection_id if step_id is not WorkflowStepId.TRANSLATOR_BATCH else None
                 ),

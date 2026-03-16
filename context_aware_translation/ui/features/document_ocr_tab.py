@@ -31,6 +31,7 @@ from context_aware_translation.application.contracts.document import (
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.services.document import DocumentService
 from context_aware_translation.ui.chrome_sizing import sync_qml_host_height
+from context_aware_translation.ui.i18n import translate_backend_text, translate_progress_label
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.viewmodels.document_ocr_pane import DocumentOcrPaneViewModel
@@ -672,21 +673,21 @@ class DocumentOCRTab(QWidget):
 
         self.save_button.setEnabled(page is not None and self._state.actions.save.enabled)
         self.save_button.setToolTip(
-            self._state.actions.save.blocker.message
+            translate_backend_text(self._state.actions.save.blocker.message)
             if self._state.actions.save.blocker is not None
             else self.tr("Save edited OCR text")
         )
 
         self.run_current_button.setEnabled(page is not None and self._state.actions.run_current.enabled)
         self.run_current_button.setToolTip(
-            self._state.actions.run_current.blocker.message
+            translate_backend_text(self._state.actions.run_current.blocker.message)
             if self._state.actions.run_current.blocker is not None
             else self.tr("Run or re-run OCR on the current page")
         )
 
         self.run_pending_button.setEnabled(self._state.actions.run_pending.enabled)
         self.run_pending_button.setToolTip(
-            self._state.actions.run_pending.blocker.message
+            translate_backend_text(self._state.actions.run_pending.blocker.message)
             if self._state.actions.run_pending.blocker is not None
             else self.tr("Run OCR on all pending pages in this document")
         )
@@ -707,6 +708,8 @@ class DocumentOCRTab(QWidget):
             self.progress_widget.set_progress(
                 progress.current, progress.total, progress.label or self.tr("OCR running...")
             )
+            if progress.label:
+                self.progress_widget.message_label.setText(translate_progress_label(progress.label))
             self._sync_chrome_state()
             return
 
@@ -791,7 +794,7 @@ class DocumentOCRTab(QWidget):
         try:
             self._state = self._service.save_ocr(request)
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("OCR"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("OCR"), translate_backend_text(exc.payload.message))
             self.refresh()
             return
 
@@ -810,7 +813,7 @@ class DocumentOCRTab(QWidget):
                 RunOCRRequest(project_id=self._project_id, document_id=self._document_id, source_id=page.source_id)
             )
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("OCR"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("OCR"), translate_backend_text(exc.payload.message))
             self.refresh()
             return
         self._set_message(result.message.text if result.message is not None else self.tr("OCR queued."))
@@ -824,7 +827,7 @@ class DocumentOCRTab(QWidget):
                 RunOCRRequest(project_id=self._project_id, document_id=self._document_id, pending_only=True)
             )
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("OCR"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("OCR"), translate_backend_text(exc.payload.message))
             self.refresh()
             return
         self._set_message(result.message.text if result.message is not None else self.tr("OCR queued."))
@@ -839,7 +842,7 @@ class DocumentOCRTab(QWidget):
                 CancelOCRRequest(project_id=self._project_id, task_id=self._state.active_task_id)
             )
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("OCR"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("OCR"), translate_backend_text(exc.payload.message))
             self.refresh()
             return
         self._set_message(result.message.text if result.message is not None else self.tr("OCR cancellation requested."))
@@ -898,7 +901,7 @@ class DocumentOCRTab(QWidget):
             self.message_label.clear()
             self._sync_chrome_state()
             return
-        self.message_label.setText(text)
+        self.message_label.setText(translate_backend_text(text))
         self.message_label.show()
         self._sync_chrome_state()
 
@@ -974,9 +977,12 @@ class DocumentOCRTab(QWidget):
             run_current_enabled=self.run_current_button.isEnabled(),
             run_pending_enabled=self.run_pending_button.isEnabled(),
             save_enabled=self.save_button.isEnabled(),
+            run_current_tooltip=self.run_current_button.toolTip(),
+            run_pending_tooltip=self.run_pending_button.toolTip(),
+            save_tooltip=self.save_button.toolTip(),
             message_text=self.message_label.text() if not self.message_label.isHidden() else "",
             progress_visible=not self.progress_widget.isHidden(),
-            progress_text=self.progress_widget.message_label.text(),
+            progress_text=translate_progress_label(self.progress_widget.message_label.text()),
             progress_can_cancel=not self.progress_widget.cancel_button.isHidden(),
             empty_visible=not self.empty_label.isHidden(),
         )

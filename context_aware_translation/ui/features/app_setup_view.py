@@ -4,7 +4,7 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QT_TRANSLATE_NOOP, Qt, QTimer
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -47,6 +47,7 @@ from context_aware_translation.application.contracts.common import (
     UserMessageSeverity,
 )
 from context_aware_translation.application.services.app_setup import AppSetupService
+from context_aware_translation.ui.features.workflow_profile_editor import workflow_step_label_from_text
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
 from context_aware_translation.ui.widgets.table_support import (
@@ -90,9 +91,17 @@ _NEW_PROFILE_ROUTE_SPECS: tuple[tuple[WorkflowStepId, str], ...] = (
 )
 
 
+def _provider_label(provider: ProviderKind) -> str:
+    return _PROVIDER_LABELS.get(provider, provider.value)
+
+
+def _capability_label(capability: CapabilityCode) -> str:
+    return _CAPABILITY_LABELS.get(capability, capability.value.replace("_", " ").title())
+
+
 def _provider_defaults(provider: ProviderKind) -> tuple[str, str | None, str | None]:
     base_url, default_model = _PROVIDER_DEFAULTS[provider]
-    return _PROVIDER_LABELS[provider], (base_url or None), (default_model or None)
+    return _provider_label(provider), (base_url or None), (default_model or None)
 
 
 @dataclass(frozen=True)
@@ -113,18 +122,32 @@ class _TokenLimitSpec:
     default: int = 1_000_000
 
 
-class ConnectionDraftForm(QWidget):
-    _SPIN_FIELDS = (
-        _SpinFieldSpec("Timeout", "timeout_spin", 1, 600, 60, " s"),
-        _SpinFieldSpec("Max retries", "retries_spin", 0, 10, 3),
-        _SpinFieldSpec("Concurrency", "concurrency_spin", 1, 50, 5),
-    )
-    _TOKEN_LIMIT_FIELDS = (
-        _TokenLimitSpec("Total token limit", "total_limit_checkbox", "total_limit_spin"),
-        _TokenLimitSpec("Input token limit", "input_limit_checkbox", "input_limit_spin"),
-        _TokenLimitSpec("Output token limit", "output_limit_checkbox", "output_limit_spin"),
-    )
+_CONNECTION_SPIN_FIELDS = (
+    _SpinFieldSpec(QT_TRANSLATE_NOOP("ConnectionDraftForm", "Timeout"), "timeout_spin", 1, 600, 60, " s"),
+    _SpinFieldSpec(QT_TRANSLATE_NOOP("ConnectionDraftForm", "Max retries"), "retries_spin", 0, 10, 3),
+    _SpinFieldSpec(QT_TRANSLATE_NOOP("ConnectionDraftForm", "Concurrency"), "concurrency_spin", 1, 50, 5),
+)
 
+_CONNECTION_TOKEN_LIMIT_FIELDS = (
+    _TokenLimitSpec(
+        QT_TRANSLATE_NOOP("ConnectionDraftForm", "Total token limit"),
+        "total_limit_checkbox",
+        "total_limit_spin",
+    ),
+    _TokenLimitSpec(
+        QT_TRANSLATE_NOOP("ConnectionDraftForm", "Input token limit"),
+        "input_limit_checkbox",
+        "input_limit_spin",
+    ),
+    _TokenLimitSpec(
+        QT_TRANSLATE_NOOP("ConnectionDraftForm", "Output token limit"),
+        "output_limit_checkbox",
+        "output_limit_spin",
+    ),
+)
+
+
+class ConnectionDraftForm(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._init_ui()
@@ -159,7 +182,7 @@ class ConnectionDraftForm(QWidget):
         self.display_name_edit = QLineEdit()
         self.provider_combo = QComboBox()
         for provider in ProviderKind:
-            self.provider_combo.addItem(_PROVIDER_LABELS[provider], provider.value)
+            self.provider_combo.addItem(self.tr(_provider_label(provider)), provider.value)
         self.api_key_edit = QLineEdit()
         self.api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.api_key_edit.setPlaceholderText(self.tr("Paste API key"))
@@ -226,7 +249,7 @@ class ConnectionDraftForm(QWidget):
         self.token_tab_layout.insertWidget(insert_at, widget)
 
     def _build_spin_fields(self, form: QFormLayout) -> None:
-        for spec in self._SPIN_FIELDS:
+        for spec in _CONNECTION_SPIN_FIELDS:
             spin = QSpinBox()
             spin.setRange(spec.minimum, spec.maximum)
             spin.setValue(spec.default)
@@ -236,7 +259,7 @@ class ConnectionDraftForm(QWidget):
             form.addRow(self.tr(spec.label), spin)
 
     def _build_token_limit_fields(self, form: QFormLayout) -> None:
-        for spec in self._TOKEN_LIMIT_FIELDS:
+        for spec in _CONNECTION_TOKEN_LIMIT_FIELDS:
             widget, checkbox, spin = self._create_token_limit_row(spec.default)
             setattr(self, spec.checkbox_attr, checkbox)
             setattr(self, spec.spin_attr, spin)
@@ -602,7 +625,9 @@ class SetupWizardDialog(QDialog):
                 result_layout = QVBoxLayout(result_group)
                 if result.message is not None:
                     result_layout.addWidget(create_tip_label(result.message.text))
-                supported = ", ".join(_CAPABILITY_LABELS[capability] for capability in result.supported_capabilities)
+                supported = ", ".join(
+                    self.tr(_capability_label(capability)) for capability in result.supported_capabilities
+                )
                 result_layout.addWidget(QLabel(supported or self.tr("No supported workflow capabilities detected.")))
                 self.page_layout.addWidget(result_group)
 
@@ -621,7 +646,7 @@ class SetupWizardDialog(QDialog):
                 for route in recommendation.routes:
                     row = table.rowCount()
                     table.insertRow(row)
-                    table.setItem(row, 0, QTableWidgetItem(route.step_label))
+                    table.setItem(row, 0, QTableWidgetItem(workflow_step_label_from_text(route.step_label, tr=self.tr)))
                     table.setItem(row, 1, QTableWidgetItem(route.connection_label or ""))
                     table.setItem(row, 2, QTableWidgetItem(route.model or ""))
                 table.resizeColumnsToContents()

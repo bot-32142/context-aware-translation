@@ -242,6 +242,10 @@ def test_work_view_loads_qml_home_chrome_and_routes_setup_signal():
         assert root.property("contextSummaryText") == "Context ready through 03"
         assert root.property("hasSetupBlocker") is True
         assert root.property("selectFilesLabelText") == "Select Files"
+        assert root.property("selectFilesTooltipText") == "Choose one or more source files to import."
+        assert root.property("selectFolderTooltipText") == "Choose a folder and import supported files from it."
+        assert root.property("importTooltipText") == "Select files or a folder before importing."
+        assert root.property("setupActionTooltipText") == "Open project setup to fix this blocker."
         assert int(root.property("implicitHeight")) > 180
         assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
         assert view.viewmodel.setup_message == blocker.message

@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Property, QCoreApplication, Signal
+from PySide6.QtCore import Property, QCoreApplication, QT_TRANSLATE_NOOP, Signal
 
 from context_aware_translation.ui.viewmodels.base import ViewModelBase
 
-_TIP_TEXT = (
-    "Choose a shared workflow profile, or select Custom profile to edit connection and model choices for this project."
+_TIP_TEXT = QT_TRANSLATE_NOOP(
+    "ProjectSettingsPane",
+    "Choose a shared workflow profile, or select Custom profile to edit connection and model choices for this project.",
 )
-_ROUTES_HINT_TEXT = "Step-specific route overrides remain editable below during this migration."
+_ROUTES_HINT_TEXT = QT_TRANSLATE_NOOP(
+    "ProjectSettingsPane",
+    "Step-specific route overrides remain editable below during this migration.",
+)
 _PROFILE_OPTION_DETAIL_KEYS = {"detail"}
 
 
@@ -28,6 +32,8 @@ class ProjectSettingsPaneViewModel(ViewModelBase):
         self._show_custom_profile = False
         self._show_open_app_setup = False
         self._can_save = False
+        self._open_app_setup_tooltip = ""
+        self._save_tooltip = ""
 
     @Property(str, notify=labels_changed)
     def title_text(self) -> str:
@@ -103,6 +109,14 @@ class ProjectSettingsPaneViewModel(ViewModelBase):
     def can_save(self) -> bool:
         return self._can_save
 
+    @Property(str, notify=content_changed)
+    def open_app_setup_tooltip(self) -> str:
+        return self._open_app_setup_tooltip
+
+    @Property(str, notify=content_changed)
+    def save_tooltip(self) -> str:
+        return self._save_tooltip
+
     def apply_state(
         self,
         *,
@@ -121,6 +135,20 @@ class ProjectSettingsPaneViewModel(ViewModelBase):
         self._show_custom_profile = show_custom_profile
         self._show_open_app_setup = show_open_app_setup
         self._can_save = can_save
+        self._open_app_setup_tooltip = (
+            QCoreApplication.translate(
+                "ProjectSettingsPane", "Open App Setup to configure shared connections and profiles."
+            )
+            if show_open_app_setup
+            else ""
+        )
+        self._save_tooltip = (
+            QCoreApplication.translate("ProjectSettingsPane", "Save the selected workflow profile for this project.")
+            if can_save
+            else QCoreApplication.translate(
+                "ProjectSettingsPane", "Select or configure a workflow profile before saving project setup."
+            )
+        )
         self._emit_content_changed()
 
     def set_message(self, text: str, *, is_error: bool) -> None:
@@ -133,6 +161,20 @@ class ProjectSettingsPaneViewModel(ViewModelBase):
 
     def retranslate(self) -> None:
         self._profile_options = self._translate_profile_options(self._profile_options)
+        self._open_app_setup_tooltip = (
+            QCoreApplication.translate(
+                "ProjectSettingsPane", "Open App Setup to configure shared connections and profiles."
+            )
+            if self._show_open_app_setup
+            else ""
+        )
+        self._save_tooltip = (
+            QCoreApplication.translate("ProjectSettingsPane", "Save the selected workflow profile for this project.")
+            if self._can_save
+            else QCoreApplication.translate(
+                "ProjectSettingsPane", "Select or configure a workflow profile before saving project setup."
+            )
+        )
         self.labels_changed.emit()
         self._emit_content_changed()
 

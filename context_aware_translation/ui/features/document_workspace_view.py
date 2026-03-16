@@ -43,7 +43,7 @@ from context_aware_translation.ui.features.document_images_view import DocumentI
 from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
 from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
 from context_aware_translation.ui.features.terms_view import TermsView
-from context_aware_translation.ui.i18n import qarg
+from context_aware_translation.ui.i18n import qarg, translate_backend_text
 from context_aware_translation.ui.shell_hosts.document_shell_host import DocumentShellHost
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
@@ -111,9 +111,9 @@ class _ExportControls(QWidget):
     def apply_state(self, state: ExportDialogState | DocumentExportState) -> None:
         self._default_output_path = state.default_output_path or ""
         self.blocker_label.setVisible(state.blocker is not None)
-        self.blocker_label.setText(state.blocker.message if state.blocker is not None else "")
+        self.blocker_label.setText(translate_backend_text(state.blocker.message if state.blocker is not None else ""))
         self.warning_label.setVisible(bool(state.incomplete_translation_message))
-        self.warning_label.setText(state.incomplete_translation_message or "")
+        self.warning_label.setText(translate_backend_text(state.incomplete_translation_message or ""))
 
         self.format_combo.blockSignals(True)
         self.format_combo.clear()
@@ -143,7 +143,7 @@ class _ExportControls(QWidget):
                 self.tr("Fallback to original content is only needed when translation is incomplete.")
             )
         else:
-            self.allow_original_fallback_cb.setToolTip(state.incomplete_translation_message)
+            self.allow_original_fallback_cb.setToolTip(translate_backend_text(state.incomplete_translation_message))
 
         if not self.output_path_edit.text().strip():
             self.output_path_edit.setText(self._default_output_path)
@@ -300,12 +300,12 @@ class WorkExportDialog(QDialog):
                 )
             )
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Export Failed"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("Export Failed"), translate_backend_text(exc.payload.message))
             return
         QMessageBox.information(
             self,
             self.tr("Export Complete"),
-            result.message.text if result.message is not None else result.output_path,
+            translate_backend_text(result.message.text) if result.message is not None else result.output_path,
         )
         self.accept()
 
@@ -369,7 +369,7 @@ class _DocumentExportTab(QWidget):
         try:
             self._state = self._service.get_export(self._project_id, self._document_id)
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Export"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("Export"), translate_backend_text(exc.payload.message))
             return
         self.controls.apply_state(self._state)
         self._result_text = ""
@@ -401,12 +401,12 @@ class _DocumentExportTab(QWidget):
                 )
             )
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Export Failed"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("Export Failed"), translate_backend_text(exc.payload.message))
             return
         self._show_result(result)
 
     def _show_result(self, result: DocumentExportResult) -> None:
-        message = result.message.text if result.message is not None else result.output_path
+        message = translate_backend_text(result.message.text) if result.message is not None else result.output_path
         self._result_text = message
         self._sync_chrome_state()
 
@@ -421,9 +421,15 @@ class _DocumentExportTab(QWidget):
         root.exportRequested.connect(self._run_export)
 
     def _sync_chrome_state(self) -> None:
+        export_tooltip = self.tr("Export this document using the selected format and options.")
+        if self._state is not None and self._state.blocker is not None:
+            export_tooltip = translate_backend_text(self._state.blocker.message)
+        elif self._state is not None and not self.controls.can_submit(self._state):
+            export_tooltip = self.tr("Choose a valid format and output path before exporting this document.")
         self.viewmodel.apply_state(
             can_export=self._can_export,
             result_text=self._result_text.strip(),
+            export_tooltip=export_tooltip,
         )
 
 
