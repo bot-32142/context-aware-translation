@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
@@ -56,7 +57,13 @@ class TermsService(Protocol):
 
     def get_document_terms(self, project_id: str, document_id: int) -> TermsTableState: ...
 
-    def get_toolbar_state(self, project_id: str, *, document_id: int | None = None) -> TermsToolbarState: ...
+    def get_toolbar_state(
+        self,
+        project_id: str,
+        *,
+        document_id: int | None = None,
+        rows: Sequence[TermTableRow] | None = None,
+    ) -> TermsToolbarState: ...
 
     def update_term(self, request: UpdateTermRequest) -> TermsTableState: ...
 
@@ -87,14 +94,19 @@ class DefaultTermsService:
     def get_document_terms(self, project_id: str, document_id: int) -> TermsTableState:
         return self._build_terms_table(project_id, document_id=document_id)
 
-    def get_toolbar_state(self, project_id: str, *, document_id: int | None = None) -> TermsToolbarState:
-        chunk_ids, term_records = self._load_scope_term_records(project_id, document_id=document_id)
+    def get_toolbar_state(
+        self,
+        project_id: str,
+        *,
+        document_id: int | None = None,
+        rows: Sequence[TermTableRow] | None = None,
+    ) -> TermsToolbarState:
+        row_list = list(rows) if rows is not None else self._load_scope_rows(project_id, document_id=document_id)
         return self._build_toolbar_state(
             project_id,
             document_id=document_id,
-            has_rows=bool(term_records),
-            term_records=term_records,
-            chunk_ids=chunk_ids,
+            has_rows=bool(row_list),
+            rows=row_list,
         )
 
     def update_term(self, request: UpdateTermRequest) -> TermsTableState:
@@ -253,8 +265,7 @@ class DefaultTermsService:
             project_id,
             document_id=document_id,
             has_rows=bool(rows),
-            term_records=filtered_records,
-            chunk_ids=chunk_ids,
+            rows=rows,
         )
         return TermsTableState(
             scope=scope,
@@ -262,6 +273,10 @@ class DefaultTermsService:
             rows=rows,
             status=SurfaceStatus.READY,
         )
+
+    def _load_scope_rows(self, project_id: str, *, document_id: int | None) -> list[TermTableRow]:
+        _chunk_ids, filtered_records = self._load_scope_term_records(project_id, document_id=document_id)
+        return [self._term_record_to_row(record) for record in filtered_records]
 
     def _load_scope_term_records(
         self,
@@ -297,6 +312,7 @@ class DefaultTermsService:
             votes=self._recognized_chunk_count(record),
             ignored=record.ignored,
             reviewed=record.is_reviewed,
+            rare_candidate=self._is_structurally_rare(record),
             status=(
                 TermStatus.IGNORED
                 if record.ignored
@@ -347,8 +363,7 @@ class DefaultTermsService:
         *,
         document_id: int | None,
         has_rows: bool,
-        term_records: list[TermRecord],
-        chunk_ids: set[int] | None,
+        rows: list[TermTableRow],
     ) -> TermsToolbarState:
         build_allowed = False
         build_blocker = None
@@ -402,7 +417,7 @@ class DefaultTermsService:
             translate_blocker = mutation_blocker
             review_allowed = False
             review_blocker = mutation_blocker
-        has_rare_terms = bool(self._get_rare_term_keys(term_records, chunk_ids=chunk_ids))
+        has_rare_terms = any(row.rare_candidate and not row.ignored and not row.reviewed for row in rows)
         filter_noise_allowed = mutation_blocker is None and has_rare_terms
         filter_noise_blocker = None
         if mutation_blocker is not None:
@@ -497,11 +512,14 @@ class DefaultTermsService:
                 occurrence_chunk_ids = {int(key) for key in (record.occurrence or {}) if str(key).isdigit()}
                 if not occurrence_chunk_ids.intersection(chunk_ids):
                     continue
-            total_occurrences = sum((record.occurrence or {}).values())
-            if total_occurrences <= 1:
-                rare_keys.append(record.key)
-                continue
-            chunk_desc_count = sum(1 for key in (record.descriptions or {}) if str(key).lstrip("-").isdigit())
-            if chunk_desc_count <= 1:
+            if self._is_structurally_rare(record):
                 rare_keys.append(record.key)
         return rare_keys
+
+    @staticmethod
+    def _is_structurally_rare(record: TermRecord) -> bool:
+        total_occurrences = sum((record.occurrence or {}).values())
+        if total_occurrences <= 1:
+            return True
+        chunk_desc_count = sum(1 for key in (record.descriptions or {}) if str(key).lstrip("-").isdigit())
+        return chunk_desc_count <= 1

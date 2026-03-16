@@ -636,7 +636,11 @@ class TermsView(QWidget):
     def _refresh_toolbar_state(self) -> None:
         if self._state is None:
             return
-        toolbar = self._service.get_toolbar_state(self.project_id, document_id=self.document_id)
+        toolbar = self._service.get_toolbar_state(
+            self.project_id,
+            document_id=self.document_id,
+            rows=self._state.rows,
+        )
         self._state = self._state.model_copy(update={"toolbar": toolbar})
         self._apply_toolbar_state(toolbar)
 

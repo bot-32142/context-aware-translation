@@ -44,6 +44,7 @@ class TermTableRow(ContractModel):
     votes: int = 0
     ignored: bool = False
     reviewed: bool = False
+    rare_candidate: bool = False
     status: TermStatus = TermStatus.NEEDS_TRANSLATION
 
 

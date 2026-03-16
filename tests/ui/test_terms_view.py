@@ -435,9 +435,20 @@ def test_terms_view_refreshes_toolbar_after_local_review_toggle_without_full_rel
         reviewed_item = view.table_model.item(0, 6)
         reviewed_item.setCheckState(Qt.CheckState.Checked)
 
-        assert view.review_button.isEnabled() == service.get_toolbar_state("proj-1").can_review
-        assert view.filter_noise_button.isEnabled()
+        assert (
+            view.review_button.isEnabled()
+            == service.get_toolbar_state(
+                "proj-1",
+                rows=view.table_panel.rows_snapshot(),
+            ).can_review
+        )
+        expected_toolbar = service.get_toolbar_state(
+            "proj-1",
+            rows=view.table_panel.rows_snapshot(),
+        )
+        assert view.filter_noise_button.isEnabled() == expected_toolbar.can_filter_noise
         assert [name for name, _payload in service.calls if name == "get_toolbar_state"] == [
+            "get_toolbar_state",
             "get_toolbar_state",
             "get_toolbar_state",
         ]

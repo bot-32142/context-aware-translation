@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from collections.abc import Sequence
 from typing import Any, cast
 
 from context_aware_translation.application.contracts.app_setup import (
@@ -275,10 +276,7 @@ class FakeTermsService:
                 "can_filter_noise": (
                     False
                     if blocked
-                    else any(
-                        not row.ignored and not row.reviewed and (row.occurrences <= 1 or row.votes <= 1)
-                        for row in rows
-                    )
+                    else any(not row.ignored and not row.reviewed and row.rare_candidate for row in rows)
                 ),
             }
         )
@@ -292,11 +290,19 @@ class FakeTermsService:
         self.calls.append(("get_document_terms", (project_id, document_id)))
         return self.document_state or self.project_state
 
-    def get_toolbar_state(self, project_id: str, *, document_id: int | None = None) -> TermsToolbarState:
+    def get_toolbar_state(
+        self,
+        project_id: str,
+        *,
+        document_id: int | None = None,
+        rows: Sequence[Any] | None = None,
+    ) -> TermsToolbarState:
         self.calls.append(("get_toolbar_state", (project_id, document_id)))
         state = (
             self.document_state if document_id is not None and self.document_state is not None else self.project_state
         )
+        if rows is not None:
+            state = state.model_copy(update={"rows": list(rows)})
         return self._with_recomputed_toolbar(state).toolbar
 
     def update_term(self, request: UpdateTermRequest) -> TermsTableState:
