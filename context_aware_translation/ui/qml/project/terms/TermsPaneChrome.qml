@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 
 Rectangle {
     id: root
@@ -23,6 +24,12 @@ Rectangle {
     property string filterLabelText: termsPane ? termsPane.filter_label : "Filter Rare"
     property string importLabelText: termsPane ? termsPane.import_label : "Import Terms"
     property string exportLabelText: termsPane ? termsPane.export_label : "Export Terms"
+    property string buildTooltipText: termsPane ? termsPane.build_tooltip : ""
+    property string translateTooltipText: termsPane ? termsPane.translate_tooltip : ""
+    property string reviewTooltipText: termsPane ? termsPane.review_tooltip : ""
+    property string filterTooltipText: termsPane ? termsPane.filter_tooltip : ""
+    property string importTooltipText: termsPane ? termsPane.import_tooltip : ""
+    property string exportTooltipText: termsPane ? termsPane.export_tooltip : ""
     property bool showBuild: termsPane ? termsPane.show_build : false
     property bool showImport: termsPane ? termsPane.show_import : true
     property bool showExport: termsPane ? termsPane.show_export : true
@@ -69,12 +76,12 @@ Rectangle {
 
             Repeater {
                 model: [
-                    { "label": root.buildLabelText, "enabled": root.canBuild, "kind": "build", "visible": root.showBuild },
-                    { "label": root.translateLabelText, "enabled": root.canTranslate, "kind": "translate" },
-                    { "label": root.reviewLabelText, "enabled": root.canReview, "kind": "review" },
-                    { "label": root.filterLabelText, "enabled": root.canFilter, "kind": "filter" },
-                    { "label": root.importLabelText, "enabled": root.canImport, "kind": "import", "visible": root.showImport },
-                    { "label": root.exportLabelText, "enabled": root.canExport, "kind": "export", "visible": root.showExport }
+                    { "label": root.buildLabelText, "enabled": root.canBuild, "kind": "build", "visible": root.showBuild, "tooltip": root.buildTooltipText },
+                    { "label": root.translateLabelText, "enabled": root.canTranslate, "kind": "translate", "tooltip": root.translateTooltipText },
+                    { "label": root.reviewLabelText, "enabled": root.canReview, "kind": "review", "tooltip": root.reviewTooltipText },
+                    { "label": root.filterLabelText, "enabled": root.canFilter, "kind": "filter", "tooltip": root.filterTooltipText },
+                    { "label": root.importLabelText, "enabled": root.canImport, "kind": "import", "visible": root.showImport, "tooltip": root.importTooltipText },
+                    { "label": root.exportLabelText, "enabled": root.canExport, "kind": "export", "visible": root.showExport, "tooltip": root.exportTooltipText }
                 ]
 
                 delegate: Rectangle {
@@ -96,7 +103,9 @@ Rectangle {
                     }
 
                     MouseArea {
+                        id: buttonMouseArea
                         anchors.fill: parent
+                        hoverEnabled: true
                         enabled: modelData.enabled
                         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                         onClicked: {
@@ -115,6 +124,10 @@ Rectangle {
                             }
                         }
                     }
+
+                    ToolTip.visible: buttonMouseArea.containsMouse && !!modelData.tooltip
+                    ToolTip.text: modelData.tooltip
+                    ToolTip.delay: 500
                 }
             }
         }

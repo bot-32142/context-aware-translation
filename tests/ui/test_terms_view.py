@@ -163,6 +163,15 @@ def test_terms_view_loads_qml_project_chrome_and_routes_toolbar_actions():
         assert root.property("canTranslate") is True
         assert root.property("canReview") is True
         assert root.property("canExport") is True
+        assert root.property("translateTooltipText") == (
+            "Translate all currently untranslated glossary terms for the current scope."
+        )
+        assert root.property("reviewTooltipText") == (
+            "Run an LLM review pass on unreviewed glossary terms for the current scope."
+        )
+        assert root.property("filterTooltipText") == (
+            "Automatically ignore terms that occurred only once or were recognized by the LLM in only one chunk."
+        )
         assert view.import_button.isHidden()
         assert view.export_button.isHidden()
         assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
@@ -279,6 +288,8 @@ def test_terms_view_loads_qml_document_chrome_and_routes_document_actions():
         assert root.property("canBuild") is True
         assert root.property("canTranslate") is True
         assert root.property("canReview") is True
+        assert root.property("buildTooltipText") == "Extract terms from this document."
+        assert root.property("filterTooltipText") == "Ignore rare terms for this document."
         assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
 
         with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):

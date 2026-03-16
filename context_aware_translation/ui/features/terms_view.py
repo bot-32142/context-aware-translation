@@ -269,20 +269,20 @@ class TermsView(QWidget):
         self.import_button.setEnabled(toolbar.can_import)
         self.export_button.setEnabled(toolbar.can_export)
 
-        self.build_button.setToolTip(
+        build_tooltip = (
             toolbar.build_blocker.message if toolbar.build_blocker else self.tr("Extract terms from this document.")
         )
-        self.translate_button.setToolTip(
+        translate_tooltip = (
             toolbar.translate_pending_blocker.message
             if toolbar.translate_pending_blocker
             else self.tr("Translate all currently untranslated glossary terms for the current scope.")
         )
-        self.review_button.setToolTip(
+        review_tooltip = (
             toolbar.review_blocker.message
             if toolbar.review_blocker
             else self.tr("Run an LLM review pass on unreviewed glossary terms for the current scope.")
         )
-        self.filter_noise_button.setToolTip(
+        filter_tooltip = (
             toolbar.filter_noise_blocker.message
             if toolbar.filter_noise_blocker
             else (
@@ -293,14 +293,21 @@ class TermsView(QWidget):
                 )
             )
         )
-        self.import_button.setToolTip(
+        import_tooltip = (
             toolbar.import_blocker.message
             if toolbar.import_blocker
             else self.tr("Import terms from a JSON file and replace current project terms.")
         )
-        self.export_button.setToolTip(
+        export_tooltip = (
             toolbar.export_blocker.message if toolbar.export_blocker else self.tr("Export terms to a JSON file.")
         )
+
+        self.build_button.setToolTip(build_tooltip)
+        self.translate_button.setToolTip(translate_tooltip)
+        self.review_button.setToolTip(review_tooltip)
+        self.filter_noise_button.setToolTip(filter_tooltip)
+        self.import_button.setToolTip(import_tooltip)
+        self.export_button.setToolTip(export_tooltip)
         if self.viewmodel is not None:
             self.viewmodel.apply_toolbar_state(
                 can_build=toolbar.can_build,
@@ -309,6 +316,12 @@ class TermsView(QWidget):
                 can_filter=toolbar.can_filter_noise,
                 can_import=toolbar.can_import,
                 can_export=toolbar.can_export,
+                build_tooltip=build_tooltip,
+                translate_tooltip=translate_tooltip,
+                review_tooltip=review_tooltip,
+                filter_tooltip=filter_tooltip,
+                import_tooltip=import_tooltip,
+                export_tooltip=export_tooltip,
             )
         self._update_bulk_button_state()
 

@@ -30,6 +30,12 @@ class TermsPaneViewModel(ViewModelBase):
         self._can_filter = False
         self._can_import = False
         self._can_export = False
+        self._build_tooltip = ""
+        self._translate_tooltip = ""
+        self._review_tooltip = ""
+        self._filter_tooltip = ""
+        self._import_tooltip = ""
+        self._export_tooltip = ""
 
     @Property(str, notify=labels_changed)
     def title(self) -> str:
@@ -104,6 +110,30 @@ class TermsPaneViewModel(ViewModelBase):
     def can_export(self) -> bool:
         return self._can_export
 
+    @Property(str, notify=chrome_state_changed)
+    def build_tooltip(self) -> str:
+        return self._build_tooltip
+
+    @Property(str, notify=chrome_state_changed)
+    def translate_tooltip(self) -> str:
+        return self._translate_tooltip
+
+    @Property(str, notify=chrome_state_changed)
+    def review_tooltip(self) -> str:
+        return self._review_tooltip
+
+    @Property(str, notify=chrome_state_changed)
+    def filter_tooltip(self) -> str:
+        return self._filter_tooltip
+
+    @Property(str, notify=chrome_state_changed)
+    def import_tooltip(self) -> str:
+        return self._import_tooltip
+
+    @Property(str, notify=chrome_state_changed)
+    def export_tooltip(self) -> str:
+        return self._export_tooltip
+
     def apply_toolbar_state(
         self,
         *,
@@ -113,8 +143,27 @@ class TermsPaneViewModel(ViewModelBase):
         can_filter: bool,
         can_import: bool,
         can_export: bool,
+        build_tooltip: str,
+        translate_tooltip: str,
+        review_tooltip: str,
+        filter_tooltip: str,
+        import_tooltip: str,
+        export_tooltip: str,
     ) -> None:
-        next_state = (can_build, can_translate, can_review, can_filter, can_import, can_export)
+        next_state = (
+            can_build,
+            can_translate,
+            can_review,
+            can_filter,
+            can_import,
+            can_export,
+            build_tooltip,
+            translate_tooltip,
+            review_tooltip,
+            filter_tooltip,
+            import_tooltip,
+            export_tooltip,
+        )
         current_state = (
             self._can_build,
             self._can_translate,
@@ -122,6 +171,12 @@ class TermsPaneViewModel(ViewModelBase):
             self._can_filter,
             self._can_import,
             self._can_export,
+            self._build_tooltip,
+            self._translate_tooltip,
+            self._review_tooltip,
+            self._filter_tooltip,
+            self._import_tooltip,
+            self._export_tooltip,
         )
         if next_state == current_state:
             return
@@ -132,6 +187,12 @@ class TermsPaneViewModel(ViewModelBase):
             self._can_filter,
             self._can_import,
             self._can_export,
+            self._build_tooltip,
+            self._translate_tooltip,
+            self._review_tooltip,
+            self._filter_tooltip,
+            self._import_tooltip,
+            self._export_tooltip,
         ) = next_state
         self.chrome_state_changed.emit()
         self.mark_changed()
