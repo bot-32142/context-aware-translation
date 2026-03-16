@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDockWidget, QWidget
@@ -38,8 +39,8 @@ class QueueDockController:
         events,
         drawer_factory,
         shell_factory,
-        open_navigation_target_callback: Callable[[object], None],
-        notification_callback: Callable[[object], None],
+        open_navigation_target_callback: Callable[[Any], None],
+        notification_callback: Callable[[Any], None],
         title_text: Callable[[], str],
         dismiss_project_modal_callback: Callable[[], None] | None = None,
     ) -> None:
@@ -129,7 +130,7 @@ class ProjectSessionManager:
         show_projects_surface_callback: Callable[[], None],
         queue_requested_callback: Callable[[], None],
         open_app_setup_callback: Callable[[], None],
-        project_setup_saved_callback: Callable[[object], None],
+        project_setup_saved_callback: Callable[[Any], None],
     ) -> None:
         self._parent_window = parent_window
         self._app_shell = app_shell

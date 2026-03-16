@@ -55,4 +55,7 @@ def test_project_shell_viewmodel_tracks_secondary_modal_routes():
     assert viewmodel.modal_route == ModalRoute.QUEUE.value
 
     viewmodel.dismiss_modal()
+    assert viewmodel.modal_route == ModalRoute.PROJECT_SETTINGS.value
+
+    viewmodel.dismiss_modal()
     assert viewmodel.modal_route == ""

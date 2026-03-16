@@ -305,6 +305,34 @@ def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
     assert _provider_api_key_edit(dialog, ProviderKind.GEMINI).text() == "secret"
 
 
+def test_setup_wizard_dialog_clearing_all_providers_does_not_reuse_stale_selection():
+    from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
+
+    wizard_state = SetupWizardState(
+        available_providers=[
+            ProviderCard(
+                provider=ProviderKind.GEMINI,
+                label="Gemini",
+                helper_text="Good for image text reading and image editing.",
+            )
+        ],
+        selected_providers=[ProviderKind.GEMINI],
+    )
+    service = FakeAppSetupService(state=_make_state(needs_wizard=True), wizard_state=wizard_state)
+    dialog = SetupWizardDialog(service, wizard_state)
+
+    assert dialog.selected_providers() == [ProviderKind.GEMINI]
+    _provider_checkbox(dialog, ProviderKind.GEMINI).setChecked(False)
+
+    assert dialog.selected_providers() == []
+
+    with patch.object(QMessageBox, "warning") as warning_mock:
+        dialog._go_next()
+
+    warning_mock.assert_called_once()
+    assert dialog._page_index == 0
+
+
 def test_connection_draft_form_round_trips_advanced_fields():
     from context_aware_translation.ui.features.app_setup_view import ConnectionDraftForm
 

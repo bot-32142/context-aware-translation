@@ -56,6 +56,7 @@ class RouteStateViewModel(ViewModelBase):
     def __init__(self, parent=None) -> None:  # noqa: ANN001
         super().__init__(parent)
         self._state = RouteState()
+        self._modal_return_state: RouteState | None = None
 
     @Property(str, notify=route_changed)
     def primary_route(self) -> str:
@@ -92,12 +93,15 @@ class RouteStateViewModel(ViewModelBase):
         self.mark_changed()
 
     def open_projects(self) -> None:
+        self._modal_return_state = None
         self.set_route(RouteState())
 
     def open_project(self, project_id: str, *, primary: PrimaryRoute = PrimaryRoute.WORK) -> None:
+        self._modal_return_state = None
         self.set_route(RouteState(primary=primary, project_id=project_id))
 
     def open_document(self, project_id: str, document_id: int, section: DocumentSection) -> None:
+        self._modal_return_state = None
         self.set_route(
             RouteState(
                 primary=PrimaryRoute.WORK,
@@ -112,10 +116,21 @@ class RouteStateViewModel(ViewModelBase):
         state = self._state
         if project_id is not None and project_id != state.project_id:
             state = RouteState(primary=PrimaryRoute.WORK, project_id=project_id)
+        if state.modal is not None and state.modal is not modal:
+            self._modal_return_state = replace(state)
+        elif state.modal is None or state.modal is modal:
+            self._modal_return_state = None
         self.set_route(replace(state, modal=modal))
 
     def close_modal(self) -> None:
         if self._state.modal is None:
+            return
+        if self._modal_return_state is not None:
+            restored_state = self._modal_return_state
+            self._modal_return_state = None
+            self._state = restored_state
+            self.route_changed.emit()
+            self.mark_changed()
             return
         self.set_route(replace(self._state, modal=None))
 
@@ -135,6 +150,7 @@ class RouteStateViewModel(ViewModelBase):
         route = route_state_from_navigation_target(target)
         if route is None:
             return
+        self._modal_return_state = None
         self.set_route(route)
 
 

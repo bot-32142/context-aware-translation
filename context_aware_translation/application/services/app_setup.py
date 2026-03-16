@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from typing import Protocol
 
 from context_aware_translation.application.contracts.app_setup import (
@@ -139,31 +140,49 @@ class DefaultAppSetupService:
                 ApplicationErrorCode.PRECONDITION,
                 "Managed wizard connections cannot be deleted directly.",
             )
-        deleted = self._runtime.book_manager.delete_endpoint_profile(connection_id)
+        try:
+            deleted = self._runtime.book_manager.delete_endpoint_profile(connection_id)
+        except sqlite3.IntegrityError as exc:
+            raise_application_error(
+                ApplicationErrorCode.CONFLICT,
+                "Connection is still referenced by existing workflow configuration.",
+                connection_id=connection_id,
+                reason=str(exc),
+            )
         if not deleted:
             raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
         self._runtime.invalidate_setup()
+        self._runtime.invalidate_projects()
+        self._runtime.invalidate_workboard()
         return self.get_state()
 
     def duplicate_connection(self, connection_id: str) -> AppSetupState:
         existing = self._runtime.book_manager.get_endpoint_profile(connection_id)
         if existing is None:
             raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
-        self._runtime.book_manager.create_endpoint_profile(
-            name=self._next_connection_copy_name(public_connection_name(existing.name)),
-            api_key=existing.api_key,
-            base_url=existing.base_url,
-            model=existing.model,
-            temperature=existing.temperature,
-            kwargs=dict(existing.kwargs or {}),
-            timeout=existing.timeout,
-            max_retries=existing.max_retries,
-            concurrency=existing.concurrency,
-            description=existing.description,
-            token_limit=existing.token_limit,
-            input_token_limit=existing.input_token_limit,
-            output_token_limit=existing.output_token_limit,
-        )
+        try:
+            self._runtime.book_manager.create_endpoint_profile(
+                name=self._next_connection_copy_name(public_connection_name(existing.name)),
+                api_key=existing.api_key,
+                base_url=existing.base_url,
+                model=existing.model,
+                temperature=existing.temperature,
+                kwargs=dict(existing.kwargs or {}),
+                timeout=existing.timeout,
+                max_retries=existing.max_retries,
+                concurrency=existing.concurrency,
+                description=existing.description,
+                token_limit=existing.token_limit,
+                input_token_limit=existing.input_token_limit,
+                output_token_limit=existing.output_token_limit,
+            )
+        except sqlite3.IntegrityError as exc:
+            raise_application_error(
+                ApplicationErrorCode.CONFLICT,
+                "A connection with that name already exists.",
+                connection_id=connection_id,
+                reason=str(exc),
+            )
         self._runtime.invalidate_setup()
         return self.get_state()
 
@@ -227,22 +246,38 @@ class DefaultAppSetupService:
         existing = self._runtime.book_manager.get_profile(request.profile.profile_id)
         if existing is not None:
             payload = build_workflow_profile_payload(base_config=existing.config, profile=request.profile)
-            updated = self._runtime.book_manager.update_profile(
-                request.profile.profile_id,
-                name=request.profile.name,
-                config=payload,
-                is_default=existing.is_default,
-            )
+            try:
+                updated = self._runtime.book_manager.update_profile(
+                    request.profile.profile_id,
+                    name=request.profile.name,
+                    config=payload,
+                    is_default=existing.is_default,
+                )
+            except sqlite3.IntegrityError as exc:
+                raise_application_error(
+                    ApplicationErrorCode.CONFLICT,
+                    "A workflow profile with that name already exists.",
+                    profile_id=request.profile.profile_id,
+                    reason=str(exc),
+                )
             if updated is None:
                 raise_application_error(ApplicationErrorCode.INTERNAL, "Failed to update workflow profile.")
             profile_id = request.profile.profile_id
         else:
             payload = build_workflow_profile_payload(base_config=None, profile=request.profile)
-            created = self._runtime.book_manager.create_profile(
-                name=request.profile.name or _DEFAULT_PROFILE_NAME,
-                config=payload,
-                is_default=False,
-            )
+            try:
+                created = self._runtime.book_manager.create_profile(
+                    name=request.profile.name or _DEFAULT_PROFILE_NAME,
+                    config=payload,
+                    is_default=False,
+                )
+            except sqlite3.IntegrityError as exc:
+                raise_application_error(
+                    ApplicationErrorCode.CONFLICT,
+                    "A workflow profile with that name already exists.",
+                    profile_name=request.profile.name or _DEFAULT_PROFILE_NAME,
+                    reason=str(exc),
+                )
             profile_id = created.profile_id
 
         if should_be_default:
@@ -257,12 +292,20 @@ class DefaultAppSetupService:
         existing = self._runtime.book_manager.get_profile(profile_id)
         if existing is None:
             raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Workflow profile not found: {profile_id}")
-        self._runtime.book_manager.create_profile(
-            name=self._next_profile_copy_name(existing.name),
-            config=dict(existing.config),
-            description=existing.description,
-            is_default=False,
-        )
+        try:
+            self._runtime.book_manager.create_profile(
+                name=self._next_profile_copy_name(existing.name),
+                config=dict(existing.config),
+                description=existing.description,
+                is_default=False,
+            )
+        except sqlite3.IntegrityError as exc:
+            raise_application_error(
+                ApplicationErrorCode.CONFLICT,
+                "A workflow profile with that name already exists.",
+                profile_id=profile_id,
+                reason=str(exc),
+            )
         self._runtime.invalidate_setup()
         self._runtime.invalidate_projects()
         self._runtime.invalidate_workboard()
@@ -273,6 +316,13 @@ class DefaultAppSetupService:
             deleted = self._runtime.book_manager.delete_profile(profile_id)
         except ValueError as exc:
             raise_application_error(ApplicationErrorCode.PRECONDITION, str(exc))
+        except sqlite3.IntegrityError as exc:
+            raise_application_error(
+                ApplicationErrorCode.CONFLICT,
+                "Workflow profile is still referenced by existing projects.",
+                profile_id=profile_id,
+                reason=str(exc),
+            )
         if not deleted:
             raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Workflow profile not found: {profile_id}")
         self._runtime.invalidate_setup()
@@ -364,41 +414,57 @@ class DefaultAppSetupService:
                     ApplicationErrorCode.PRECONDITION,
                     "Managed wizard connections cannot be edited directly. Duplicate the connection if you need a custom copy.",
                 )
-            updated = self._runtime.book_manager.update_endpoint_profile(
-                connection_id,
+            try:
+                updated = self._runtime.book_manager.update_endpoint_profile(
+                    connection_id,
+                    name=draft.display_name,
+                    description=draft.description,
+                    api_key=existing.api_key if draft.api_key is None else draft.api_key,
+                    base_url=existing.base_url if draft.base_url is None else draft.base_url,
+                    model=existing.model if draft.default_model is None else draft.default_model,
+                    temperature=draft.temperature,
+                    kwargs=kwargs_payload,
+                    timeout=draft.timeout,
+                    max_retries=draft.max_retries,
+                    concurrency=draft.concurrency,
+                    token_limit=draft.token_limit,
+                    input_token_limit=draft.input_token_limit,
+                    output_token_limit=draft.output_token_limit,
+                )
+            except sqlite3.IntegrityError as exc:
+                raise_application_error(
+                    ApplicationErrorCode.CONFLICT,
+                    "A connection with that name already exists.",
+                    connection_id=connection_id,
+                    reason=str(exc),
+                )
+            if updated is None:
+                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
+            return updated
+
+        try:
+            return self._runtime.book_manager.create_endpoint_profile(
                 name=draft.display_name,
-                description=draft.description,
-                api_key=existing.api_key if draft.api_key is None else draft.api_key,
-                base_url=existing.base_url if draft.base_url is None else draft.base_url,
-                model=existing.model if draft.default_model is None else draft.default_model,
+                api_key=draft.api_key or "",
+                base_url=draft.base_url or "",
+                model=draft.default_model or "",
                 temperature=draft.temperature,
                 kwargs=kwargs_payload,
                 timeout=draft.timeout,
                 max_retries=draft.max_retries,
                 concurrency=draft.concurrency,
+                description=draft.description,
                 token_limit=draft.token_limit,
                 input_token_limit=draft.input_token_limit,
                 output_token_limit=draft.output_token_limit,
             )
-            if updated is None:
-                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
-            return updated
-
-        return self._runtime.book_manager.create_endpoint_profile(
-            name=draft.display_name,
-            api_key=draft.api_key or "",
-            base_url=draft.base_url or "",
-            model=draft.default_model or "",
-            temperature=draft.temperature,
-            kwargs=kwargs_payload,
-            timeout=draft.timeout,
-            max_retries=draft.max_retries,
-            concurrency=draft.concurrency,
-            description=draft.description,
-            token_limit=draft.token_limit,
-            input_token_limit=draft.input_token_limit,
-            output_token_limit=draft.output_token_limit,
-        )
+        except sqlite3.IntegrityError as exc:
+            raise_application_error(
+                ApplicationErrorCode.CONFLICT,
+                "A connection with that name already exists.",
+                connection_name=draft.display_name,
+                reason=str(exc),
+            )
 
     def _find_connection_by_name(self, name: str) -> EndpointProfile | None:
         return next(

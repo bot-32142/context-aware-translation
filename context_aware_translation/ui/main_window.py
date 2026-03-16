@@ -67,6 +67,7 @@ class MainWindow(QMainWindow):
         self._is_closing = False
 
         self._sleep_inhibitor = SleepInhibitor()
+        self._sleep_inhibitor_acquired = False
 
         # Initialize the application composition root and bridge application events.
         self._app_context = build_application_context(task_parent=self)
@@ -209,17 +210,26 @@ class MainWindow(QMainWindow):
     def _update_sleep_inhibitor(self) -> None:
         """Acquire or release sleep inhibition based on whether any work is active."""
         if getattr(self, "_is_closing", False):
-            self._sleep_inhibitor.release()
+            MainWindow._set_sleep_inhibitor_active(self, False)
             return
 
         if self._task_engine.has_running_work():
-            self._sleep_inhibitor.acquire()
+            MainWindow._set_sleep_inhibitor_active(self, True)
             return
 
         for view_name, widget in self._view_registry.items():
             if view_name.startswith("project_") and MainWindow._running_operations_for(widget):
-                self._sleep_inhibitor.acquire()
+                MainWindow._set_sleep_inhibitor_active(self, True)
                 return
+        MainWindow._set_sleep_inhibitor_active(self, False)
+
+    def _set_sleep_inhibitor_active(self, active: bool) -> None:
+        if active == getattr(self, "_sleep_inhibitor_acquired", False):
+            return
+        self._sleep_inhibitor_acquired = active
+        if active:
+            self._sleep_inhibitor.acquire()
+            return
         self._sleep_inhibitor.release()
 
     def _current_project_view_name(self) -> str | None:
@@ -318,6 +328,8 @@ class MainWindow(QMainWindow):
 
     def open_project(self, book_id: str, book_name: str) -> None:
         """Open a project shell through the app shell host."""
+        if not self._prepare_to_leave_current_project():
+            return
         self.close_book()
         self._project_sessions.open_project(book_id, book_name)
         self._sync_project_session_state()
@@ -374,6 +386,11 @@ class MainWindow(QMainWindow):
         shell = self._current_project_shell()
         if shell is None:
             return
+        modal_route = getattr(getattr(shell, "viewmodel", None), "modal_route", "")
+        if modal_route and modal_route != ModalRoute.QUEUE.value:
+            return
+        if getattr(shell, "current_surface", "") not in {"", "queue"} and not modal_route:
+            return
         shell.dismiss_modal()
 
     def _on_queue_notification(self, message: UserMessage) -> None:
@@ -381,13 +398,21 @@ class MainWindow(QMainWindow):
         self.show_status(message.text, timeout_ms)
 
     def _show_projects_surface(self) -> None:
-        current_project_view = self._current_project_view_name()
-        running_operations = self._get_book_running_operations()
-        if current_project_view is not None and running_operations:
-            if not self._warn_running_operations(running_operations):
-                return
-            MainWindow._request_cancel_for(self._view_registry.get(current_project_view))
+        if not self._prepare_to_leave_current_project():
+            return
         self.close_book()
+
+    def _prepare_to_leave_current_project(self) -> bool:
+        current_project_view = self._current_project_view_name()
+        if current_project_view is None:
+            return True
+        running_operations = self._get_book_running_operations()
+        if not running_operations:
+            return True
+        if not self._warn_running_operations(running_operations):
+            return False
+        MainWindow._request_cancel_for(self._view_registry.get(current_project_view))
+        return True
 
     def _open_navigation_target(self, target: NavigationTarget) -> None:
         route = route_state_from_navigation_target(target)
@@ -413,9 +438,11 @@ class MainWindow(QMainWindow):
             book = self.book_manager.get_book(route.project_id)
             if book is not None:
                 self.open_project(book.book_id, book.name)
+            if route.project_id != self._current_book_id:
+                return
 
         shell = self._project_sessions.current_project_shell()
-        if shell is None:
+        if shell is None or not isinstance(shell, ProjectShellHost):
             return
 
         if route.modal is ModalRoute.PROJECT_SETTINGS:
@@ -472,7 +499,7 @@ class MainWindow(QMainWindow):
         self._task_engine.close()
         self._task_store.close()
         self.book_manager.close()
-        self._sleep_inhibitor.release()
+        self._set_sleep_inhibitor_active(False)
         self._save_geometry()
         super().closeEvent(event)
 

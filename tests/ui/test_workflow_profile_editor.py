@@ -494,3 +494,37 @@ def test_translator_batch_model_is_edited_from_main_model_column():
     assert dialog.routes_table.item(0, 1).text() == "Gemini AI Studio"
     assert payload["translator_batch_config"]["provider"] == "gemini_ai_studio"
     assert payload["translator_batch_config"]["model"] == "gemini-2.5-flash"
+
+
+def test_workflow_routes_editor_requires_batch_api_key_and_model_when_enabled():
+    routes = [
+        WorkflowStepRoute(
+            step_id=WorkflowStepId.TRANSLATOR_BATCH,
+            step_label="Translator batch",
+            connection_id=None,
+            connection_label="Gemini AI Studio",
+            model="",
+            step_config={
+                "provider": "gemini_ai_studio",
+                "api_key": "secret",
+                "batch_size": 100,
+                "thinking_mode": "auto",
+            },
+        )
+    ]
+    editor = WorkflowRoutesEditor(routes, [], advanced_step_ids=ADVANCED_STEP_IDS, hint_text="hint")
+
+    assert editor.validate_routes() == "Translator batch requires a model when enabled."
+
+    editor.rows[0].route = editor.rows[0].route.model_copy(
+        update={
+            "model": "gemini-2.5-flash",
+            "step_config": {
+                "provider": "gemini_ai_studio",
+                "api_key": "",
+                "batch_size": 100,
+                "thinking_mode": "auto",
+            },
+        }
+    )
+    assert editor.validate_routes() == "Translator batch requires an API key when enabled."

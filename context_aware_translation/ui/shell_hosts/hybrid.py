@@ -7,6 +7,7 @@ from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
 
 from context_aware_translation.ui.qml_resources import qml_root_path, qml_source
+from context_aware_translation.ui.window_controllers import cleanup_widget
 
 
 class QmlChromeHost(QQuickWidget):
@@ -75,6 +76,7 @@ class HybridShellHost(QWidget):
         if key in self._content_widgets:
             old_widget = self.remove_content(key)
             if old_widget is not None:
+                cleanup_widget(old_widget)
                 old_widget.deleteLater()
         self._content_widgets[key] = widget
         self.content_stack.addWidget(widget)
@@ -141,6 +143,7 @@ class HybridDialogHost(QDialog):
     def set_body_widget(self, widget: QWidget) -> QWidget:
         if self.body_widget is not None:
             self._layout.removeWidget(self.body_widget)
+            cleanup_widget(self.body_widget)
             self.body_widget.deleteLater()
         self.body_widget = widget
         self._layout.addWidget(widget, 1)

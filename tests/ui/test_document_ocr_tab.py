@@ -4,6 +4,7 @@ import pytest
 
 from context_aware_translation.application.contracts.common import (
     AcceptedCommand,
+    ActionState,
     DocumentRef,
     DocumentSection,
     ProjectRef,
@@ -19,6 +20,7 @@ from context_aware_translation.application.contracts.document import (
     OCRPageState,
     OCRTextElement,
 )
+from context_aware_translation.application.errors import ApplicationError, ApplicationErrorCode, ApplicationErrorPayload
 from tests.application.fakes import FakeDocumentService
 
 try:
@@ -95,7 +97,9 @@ def test_document_ocr_tab_uses_structured_editor_and_bbox_overlay():
             ],
             current_page_index=0,
             actions=DocumentOCRActions(
-                save={"enabled": True}, run_current={"enabled": True}, run_pending={"enabled": True}
+                save=ActionState(enabled=True),
+                run_current=ActionState(enabled=True),
+                run_pending=ActionState(enabled=True),
             ),
         ),
         ocr_page_images={101: _png_1x1()},
@@ -473,5 +477,151 @@ def test_document_ocr_tab_disables_navigation_and_actions_when_no_pages():
         assert view.save_button.isEnabled() is False
         assert view.run_current_button.isEnabled() is False
         assert view.run_pending_button.isEnabled() is False
+    finally:
+        view.deleteLater()
+
+
+def test_document_ocr_tab_preserves_unsaved_draft_across_page_switch_and_refresh():
+    from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
+
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        ocr=DocumentOCRState(
+            workspace=_workspace_state(),
+            pages=[
+                OCRPageState(
+                    source_id=101, page_number=1, total_pages=2, status=SurfaceStatus.DONE, extracted_text="one"
+                ),
+                OCRPageState(
+                    source_id=102, page_number=2, total_pages=2, status=SurfaceStatus.DONE, extracted_text="two"
+                ),
+            ],
+            current_page_index=0,
+            actions=DocumentOCRActions(
+                save={"enabled": True}, run_current={"enabled": True}, run_pending={"enabled": True}
+            ),
+        ),
+        ocr_page_images={101: _png_1x1(), 102: _png_1x1()},
+    )
+    view = DocumentOCRTab(service, "proj-1", 4)
+    try:
+        view.refresh()
+        view.text_edit.setPlainText("draft one")
+
+        view._go_next()
+        assert view.text_edit.toPlainText() == "two"
+
+        view._go_previous()
+        assert view.text_edit.toPlainText() == "draft one"
+
+        view.refresh()
+        assert view.text_edit.toPlainText() == "draft one"
+    finally:
+        view.deleteLater()
+
+
+def test_document_ocr_tab_run_and_cancel_refresh_state_immediately():
+    from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
+
+    initial_state = DocumentOCRState(
+        workspace=_workspace_state(),
+        pages=[
+            OCRPageState(source_id=101, page_number=1, total_pages=1, status=SurfaceStatus.DONE, extracted_text="hello")
+        ],
+        current_page_index=0,
+        actions=DocumentOCRActions(
+            save=ActionState(enabled=True),
+            run_current=ActionState(enabled=True),
+            run_pending=ActionState(enabled=True),
+        ),
+        active_task_id=None,
+    )
+    queued_state = DocumentOCRState(
+        workspace=_workspace_state(),
+        pages=[
+            OCRPageState(
+                source_id=101, page_number=1, total_pages=1, status=SurfaceStatus.RUNNING, extracted_text="hello"
+            )
+        ],
+        current_page_index=0,
+        actions=DocumentOCRActions(
+            save=ActionState(enabled=False),
+            run_current=ActionState(enabled=False),
+            run_pending=ActionState(enabled=False),
+        ),
+        active_task_id="ocr-task-1",
+    )
+    idle_state = queued_state.model_copy(
+        update={
+            "pages": [queued_state.pages[0].model_copy(update={"status": SurfaceStatus.DONE})],
+            "actions": DocumentOCRActions(
+                save=ActionState(enabled=True),
+                run_current=ActionState(enabled=True),
+                run_pending=ActionState(enabled=True),
+            ),
+            "active_task_id": None,
+        }
+    )
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        ocr=initial_state,
+        ocr_page_images={101: _png_1x1()},
+    )
+    run_calls = {"count": 0}
+    cancel_calls = {"count": 0}
+
+    def _run(request):  # noqa: ANN001
+        service.calls.append(("run_ocr", request))
+        run_calls["count"] += 1
+        service.ocr = queued_state
+        return AcceptedCommand(
+            command_name="run_ocr", message=UserMessage(severity=UserMessageSeverity.INFO, text="Queued.")
+        )
+
+    def _cancel(request):  # noqa: ANN001
+        service.calls.append(("cancel_ocr", request))
+        cancel_calls["count"] += 1
+        service.ocr = idle_state
+        return AcceptedCommand(
+            command_name="cancel_ocr",
+            message=UserMessage(severity=UserMessageSeverity.INFO, text="Cancel requested."),
+        )
+
+    service.run_ocr = _run
+    service.cancel_ocr = _cancel
+    view = DocumentOCRTab(service, "proj-1", 4)
+    try:
+        view.refresh()
+        view.run_current_button.click()
+        assert run_calls["count"] == 1
+        assert view._state is not None and view._state.active_task_id == "ocr-task-1"
+        assert view.progress_widget.isHidden() is False
+        assert view.run_current_button.isEnabled() is False
+
+        view.request_cancel_running_operations(include_engine_tasks=True)
+        assert cancel_calls["count"] == 1
+        assert view._state is not None and view._state.active_task_id is None
+        assert view.progress_widget.isHidden() is True
+        assert view.run_current_button.isEnabled() is True
+        assert view.page_status_label.text() == "OCR Done"
+    finally:
+        view.deleteLater()
+
+
+def test_document_ocr_tab_refresh_handles_service_error_without_raising():
+    from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
+
+    service = FakeDocumentService(workspace=_workspace_state(), ocr=None)
+
+    def _raise(_project_id: str, _document_id: int):
+        raise ApplicationError(
+            ApplicationErrorPayload(code=ApplicationErrorCode.INTERNAL, message="ocr refresh failed")
+        )
+
+    service.get_ocr = _raise
+    view = DocumentOCRTab(service, "proj-1", 4)
+    try:
+        view.refresh()
+        assert view.message_label.text() == "ocr refresh failed"
     finally:
         view.deleteLater()

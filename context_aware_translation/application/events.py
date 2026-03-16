@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 import uuid
 from collections.abc import Callable, Iterable
@@ -9,6 +10,8 @@ from typing import Protocol
 from pydantic import Field
 
 from context_aware_translation.application.contracts.common import ContractModel, DocumentSection
+
+logger = logging.getLogger(__name__)
 
 
 class ApplicationEventKind(StrEnum):
@@ -117,7 +120,10 @@ class InMemoryApplicationEventBus(ApplicationEventPublisher, ApplicationEventSub
                 continue
             if predicate is not None and not predicate(event):
                 continue
-            handler(event)
+            try:
+                handler(event)
+            except Exception:
+                logger.exception("Application event subscriber failed for %s", event.kind)
 
     def publish_many(self, events: Iterable[ApplicationEventPayload]) -> None:
         for event in events:

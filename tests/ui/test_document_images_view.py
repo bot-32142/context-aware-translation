@@ -31,6 +31,7 @@ from context_aware_translation.application.contracts.document import (
     TranslationUnitState,
 )
 from context_aware_translation.application.contracts.terms import TermsScope, TermsScopeKind, TermsTableState
+from context_aware_translation.application.errors import ApplicationError, ApplicationErrorCode, ApplicationErrorPayload
 from tests.application.fakes import FakeDocumentService, FakeTermsService, FakeWorkService
 
 try:
@@ -394,3 +395,67 @@ def test_document_images_view_routes_setup_blocker_and_document_workspace_forwar
         assert requested == ["app"]
     finally:
         workspace.cleanup()
+
+
+def test_document_images_view_run_and_cancel_refresh_state_immediately():
+    from context_aware_translation.ui.features.document_images_view import DocumentImagesView
+
+    running_state = _images_state(active_task_id="task-1")
+    idle_state = _images_state(active_task_id=None)
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        images=idle_state,
+        ocr_page_images={101: b"image-1", 102: b"image-2"},
+    )
+
+    def _run(request):  # noqa: ANN001
+        service.calls.append(("run_image_reinsertion", request))
+        service.images = running_state
+        return AcceptedCommand(
+            command_name="run_image_reinsertion",
+            message=UserMessage(severity=UserMessageSeverity.INFO, text="Queued."),
+        )
+
+    def _cancel(project_id: str, task_id: str):
+        service.calls.append(("cancel_image_reinsertion", (project_id, task_id)))
+        service.images = idle_state
+        return AcceptedCommand(
+            command_name="cancel_image_reinsertion",
+            message=UserMessage(severity=UserMessageSeverity.INFO, text="Cancel requested."),
+        )
+
+    service.run_image_reinsertion = _run
+    service.cancel_image_reinsertion = _cancel
+    view = DocumentImagesView("proj-1", 4, service)
+    try:
+        view.refresh()
+        view.run_selected_button.click()
+        assert view._state is not None and view._state.active_task_id == "task-1"
+        assert view.progress_widget.isHidden() is False
+        assert view.run_selected_button.isEnabled() is False
+
+        view.request_cancel_running_operations(include_engine_tasks=True)
+        assert view._state is not None and view._state.active_task_id is None
+        assert view.progress_widget.isHidden() is True
+        assert view.run_selected_button.isEnabled() is True
+    finally:
+        view.deleteLater()
+
+
+def test_document_images_view_refresh_handles_service_error_without_raising():
+    from context_aware_translation.ui.features.document_images_view import DocumentImagesView
+
+    service = FakeDocumentService(workspace=_workspace_state(), images=None)
+
+    def _raise(_project_id: str, _document_id: int):
+        raise ApplicationError(
+            ApplicationErrorPayload(code=ApplicationErrorCode.INTERNAL, message="images refresh failed")
+        )
+
+    service.get_images = _raise
+    view = DocumentImagesView("proj-1", 4, service)
+    try:
+        view.refresh()
+        assert view.message_label.text() == "images refresh failed"
+    finally:
+        view.deleteLater()

@@ -20,6 +20,7 @@ def _ensure_qt_app() -> QApplication:
     app = QApplication.instance()
     if app is None:
         app = QApplication([])
+    assert isinstance(app, QApplication)
     return app
 
 
@@ -46,6 +47,18 @@ def test_event_bus_filters_and_unsubscribes() -> None:
         ApplicationEventKind.QUEUE_CHANGED,
     ]
     assert seen_queue == [ApplicationEventKind.QUEUE_CHANGED]
+
+
+def test_event_bus_isolates_subscriber_failures() -> None:
+    bus = InMemoryApplicationEventBus()
+    seen: list[ApplicationEventKind] = []
+
+    bus.subscribe(lambda _event: (_ for _ in ()).throw(RuntimeError("boom")))
+    bus.subscribe(lambda event: seen.append(event.kind))
+
+    bus.publish(QueueChangedEvent(project_id="proj-1"))
+
+    assert seen == [ApplicationEventKind.QUEUE_CHANGED]
 
 
 def test_services_publish_invalidation_events(tmp_path: Path) -> None:

@@ -301,6 +301,81 @@ def test_project_settings_pane_first_popup_click_switches_to_custom_profile():
         view.cleanup()
 
 
+def test_project_settings_pane_preserves_custom_draft_across_profile_switches():
+    from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
+
+    service = FakeProjectSetupService(state=_make_state())
+    bus = InMemoryApplicationEventBus()
+    view = ProjectSettingsPane("proj-1", service, bus)
+    try:
+        custom_index = next(
+            index for index, option in enumerate(view.viewmodel.profile_options) if option["label"] == "Custom profile"
+        )
+        view.profile_combo.setCurrentIndex(custom_index)
+        _flush()
+
+        translator_row = next(
+            index for index, row in enumerate(view._custom_rows) if row.route.step_id is WorkflowStepId.TRANSLATOR
+        )
+        translator = view._custom_rows[translator_row]
+        translator.connection_combo.setCurrentIndex(translator.connection_combo.findData("conn-openai"))
+        translator.model_edit.setText("gpt-4.1-mini")
+
+        view.profile_combo.setCurrentIndex(0)
+        _flush()
+        view.profile_combo.setCurrentIndex(custom_index)
+        _flush()
+
+        translator = view._custom_rows[translator_row]
+        assert translator.connection_combo.currentData() == "conn-openai"
+        assert translator.model_edit.text() == "gpt-4.1-mini"
+    finally:
+        view.cleanup()
+
+
+def test_project_settings_pane_blocks_invalid_custom_batch_route_save():
+    from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
+
+    base_state = _make_state(project_specific=True)
+    assert base_state.project_profile is not None
+    state = base_state.model_copy(
+        update={
+            "project_profile": base_state.project_profile.model_copy(
+                update={
+                    "routes": [
+                        *base_state.project_profile.routes,
+                        WorkflowStepRoute(
+                            step_id=WorkflowStepId.TRANSLATOR_BATCH,
+                            step_label="Translator batch",
+                            connection_id=None,
+                            connection_label="Gemini AI Studio",
+                            model="",
+                            step_config={
+                                "provider": "gemini_ai_studio",
+                                "api_key": "secret",
+                                "batch_size": 100,
+                                "thinking_mode": "auto",
+                            },
+                        ),
+                    ]
+                }
+            )
+        }
+    )
+    service = FakeProjectSetupService(state=state)
+    bus = InMemoryApplicationEventBus()
+    view = ProjectSettingsPane("proj-1", service, bus)
+    try:
+        assert view.viewmodel.show_custom_profile is True
+        view._save()
+
+        assert service.calls == [("get_state", "proj-1")]
+        assert view.viewmodel.message_text == "Translator batch requires a model when enabled."
+        assert view.viewmodel.message_kind == "error"
+    finally:
+        view.cleanup()
+
+
 def test_project_settings_pane_custom_step_advanced_button_opens_advanced_dialog():
     from context_aware_translation.ui.features import workflow_profile_editor as editor_module
     from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane

@@ -2,126 +2,145 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="zh_CN">
 <context>
+    <name></name>
+    <message>
+        <location filename="../features/workflow_profile_editor.py" line="85"/>
+        <source>Translator batch requires an API key when enabled.</source>
+        <translation>启用批量翻译器时必须提供 API 密钥。</translation>
+    </message>
+    <message>
+        <location filename="../features/workflow_profile_editor.py" line="87"/>
+        <source>Translator batch requires a model when enabled.</source>
+        <translation>启用批量翻译器时必须提供模型。</translation>
+    </message>
+    <message>
+        <location filename="../features/workflow_profile_editor.py" line="90"/>
+        <source>Every workflow step must use a connection and model.</source>
+        <translation>每个工作流步骤都必须使用连接和模型。</translation>
+    </message>
+</context>
+<context>
     <name>AppSettingsPane</name>
     <message>
-        <location filename="../features/app_settings_pane.py" line="83"/>
-        <location filename="../features/app_settings_pane.py" line="106"/>
-        <location filename="../features/app_settings_pane.py" line="140"/>
-        <location filename="../features/app_settings_pane.py" line="142"/>
+        <location filename="../features/app_settings_pane.py" line="84"/>
+        <location filename="../features/app_settings_pane.py" line="107"/>
+        <location filename="../features/app_settings_pane.py" line="141"/>
+        <location filename="../features/app_settings_pane.py" line="143"/>
         <source>Name</source>
         <translation>名称</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="83"/>
-        <location filename="../features/app_settings_pane.py" line="140"/>
+        <location filename="../features/app_settings_pane.py" line="84"/>
+        <location filename="../features/app_settings_pane.py" line="141"/>
         <source>Provider</source>
         <translation>提供商</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="83"/>
-        <location filename="../features/app_settings_pane.py" line="140"/>
+        <location filename="../features/app_settings_pane.py" line="84"/>
+        <location filename="../features/app_settings_pane.py" line="141"/>
         <source>Status</source>
         <translation>状态</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="83"/>
-        <location filename="../features/app_settings_pane.py" line="140"/>
+        <location filename="../features/app_settings_pane.py" line="84"/>
+        <location filename="../features/app_settings_pane.py" line="141"/>
         <source>Model</source>
         <translation>模型</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="83"/>
-        <location filename="../features/app_settings_pane.py" line="140"/>
+        <location filename="../features/app_settings_pane.py" line="84"/>
+        <location filename="../features/app_settings_pane.py" line="141"/>
         <source>Base URL</source>
         <translation>基础 URL</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="106"/>
-        <location filename="../features/app_settings_pane.py" line="142"/>
+        <location filename="../features/app_settings_pane.py" line="107"/>
+        <location filename="../features/app_settings_pane.py" line="143"/>
         <source>Target language</source>
         <translation>目标语言</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="106"/>
-        <location filename="../features/app_settings_pane.py" line="142"/>
+        <location filename="../features/app_settings_pane.py" line="107"/>
+        <location filename="../features/app_settings_pane.py" line="143"/>
         <source>Default</source>
         <translation>默认</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="191"/>
+        <location filename="../features/app_settings_pane.py" line="192"/>
         <source>Add Profile</source>
         <translation>添加配置档案</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="192"/>
-        <location filename="../features/app_settings_pane.py" line="214"/>
+        <location filename="../features/app_settings_pane.py" line="193"/>
+        <location filename="../features/app_settings_pane.py" line="215"/>
         <source>Duplicate</source>
         <translation>复制</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="195"/>
+        <location filename="../features/app_settings_pane.py" line="196"/>
         <source>Set Default</source>
         <translation>设为默认</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="199"/>
-        <location filename="../features/app_settings_pane.py" line="217"/>
+        <location filename="../features/app_settings_pane.py" line="200"/>
+        <location filename="../features/app_settings_pane.py" line="218"/>
         <source>Delete</source>
         <translation>删除</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="207"/>
+        <location filename="../features/app_settings_pane.py" line="208"/>
         <source>Run Setup Wizard</source>
         <translation>运行设置向导</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="209"/>
+        <location filename="../features/app_settings_pane.py" line="210"/>
         <source>Open Setup Wizard</source>
         <translation>打开设置向导</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="213"/>
+        <location filename="../features/app_settings_pane.py" line="214"/>
         <source>Add Connection</source>
         <translation>添加连接</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="248"/>
+        <location filename="../features/app_settings_pane.py" line="249"/>
         <source>Managed by the setup wizard. Duplicate it if you need an editable copy.</source>
         <translation>由设置向导管理。如需可编辑副本，请先复制。</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="264"/>
+        <location filename="../features/app_settings_pane.py" line="265"/>
         <source>Yes</source>
         <translation>是</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="344"/>
+        <location filename="../features/app_settings_pane.py" line="345"/>
         <source>Delete Connection</source>
         <translation>删除连接</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="346"/>
+        <location filename="../features/app_settings_pane.py" line="347"/>
         <source>Delete the selected connection? Existing profiles or projects may stop working until setup is fixed.</source>
         <translation>删除所选连接？现有配置档案或项目可能会停止工作，直到重新完成设置。</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="391"/>
+        <location filename="../features/app_settings_pane.py" line="392"/>
         <source>Delete Workflow Profile</source>
         <translation>删除工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="392"/>
+        <location filename="../features/app_settings_pane.py" line="393"/>
         <source>Delete the selected workflow profile? Projects using it will need setup first.</source>
         <translation>删除所选工作流配置档案？使用它的项目将需要先重新完成设置。</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="398"/>
+        <location filename="../features/app_settings_pane.py" line="399"/>
+        <location filename="../features/app_settings_pane.py" line="509"/>
         <source>App Setup</source>
         <translation>应用设置</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="457"/>
-        <location filename="../features/app_settings_pane.py" line="481"/>
+        <location filename="../features/app_settings_pane.py" line="458"/>
+        <location filename="../features/app_settings_pane.py" line="482"/>
         <source>New Workflow Profile</source>
         <translation>新建工作流配置档案</translation>
     </message>
@@ -318,183 +337,183 @@
         <translation type="vanished">图像操作均需显式触发。你可以检查单张图片、重新嵌入待处理图片，或为此文档重新运行全部图片。</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="112"/>
-        <location filename="../features/document_images_view.py" line="240"/>
+        <location filename="../features/document_images_view.py" line="113"/>
+        <location filename="../features/document_images_view.py" line="244"/>
         <source>Translated text for the selected image appears here.</source>
         <translation>所选图片的译文会显示在这里。</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="215"/>
+        <location filename="../features/document_images_view.py" line="219"/>
         <source>Put text back into images</source>
         <translation>将文字重新放回图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="349"/>
+        <location filename="../features/document_images_view.py" line="359"/>
         <source>Pending</source>
         <translation>待处理</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="83"/>
-        <location filename="../features/document_images_view.py" line="232"/>
+        <location filename="../features/document_images_view.py" line="84"/>
+        <location filename="../features/document_images_view.py" line="236"/>
         <source>Original</source>
         <translation>原文</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="346"/>
-        <location filename="../features/document_images_view.py" line="397"/>
+        <location filename="../features/document_images_view.py" line="356"/>
+        <location filename="../features/document_images_view.py" line="407"/>
         <source>Translated Text</source>
         <translation>翻译文本</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="99"/>
-        <location filename="../features/document_images_view.py" line="308"/>
-        <location filename="../features/document_images_view.py" line="339"/>
-        <location filename="../features/document_images_view.py" line="394"/>
+        <location filename="../features/document_images_view.py" line="100"/>
+        <location filename="../features/document_images_view.py" line="318"/>
+        <location filename="../features/document_images_view.py" line="349"/>
+        <location filename="../features/document_images_view.py" line="404"/>
         <source>Show Text</source>
         <translation>显示文本</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="100"/>
-        <location filename="../features/document_images_view.py" line="233"/>
+        <location filename="../features/document_images_view.py" line="101"/>
+        <location filename="../features/document_images_view.py" line="237"/>
         <source>Toggle between reembedded image and translated text</source>
         <translation>在重新嵌入的图片和翻译文本之间切换</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="157"/>
-        <location filename="../features/document_images_view.py" line="234"/>
+        <location filename="../features/document_images_view.py" line="158"/>
+        <location filename="../features/document_images_view.py" line="238"/>
         <source>First image</source>
         <translation>第一张图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="161"/>
-        <location filename="../features/document_images_view.py" line="235"/>
+        <location filename="../features/document_images_view.py" line="162"/>
+        <location filename="../features/document_images_view.py" line="239"/>
         <source>Previous image</source>
         <translation>上一张图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="164"/>
-        <location filename="../features/document_images_view.py" line="301"/>
+        <location filename="../features/document_images_view.py" line="165"/>
+        <location filename="../features/document_images_view.py" line="311"/>
         <source>Image 0 of 0</source>
         <translation>图片 0 / 0</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="168"/>
+        <location filename="../features/document_images_view.py" line="169"/>
         <location filename="../viewmodels/document_images_pane.py" line="66"/>
         <source>Go to:</source>
         <translation>跳转到：</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="171"/>
-        <location filename="../features/document_images_view.py" line="236"/>
+        <location filename="../features/document_images_view.py" line="172"/>
+        <location filename="../features/document_images_view.py" line="240"/>
         <source>Next image</source>
         <translation>下一张图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="175"/>
-        <location filename="../features/document_images_view.py" line="237"/>
+        <location filename="../features/document_images_view.py" line="176"/>
+        <location filename="../features/document_images_view.py" line="241"/>
         <source>Last image</source>
         <translation>最后一张图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="182"/>
-        <location filename="../features/document_images_view.py" line="238"/>
+        <location filename="../features/document_images_view.py" line="183"/>
+        <location filename="../features/document_images_view.py" line="242"/>
         <source>Enter image number</source>
         <translation>输入图片编号</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="184"/>
+        <location filename="../features/document_images_view.py" line="185"/>
         <location filename="../viewmodels/document_images_pane.py" line="70"/>
         <source>Go</source>
         <translation>跳转</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="414"/>
-        <location filename="../features/document_images_view.py" line="421"/>
+        <location filename="../features/document_images_view.py" line="424"/>
+        <location filename="../features/document_images_view.py" line="431"/>
         <source>Reembedding</source>
         <translation>重新嵌入</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="122"/>
-        <location filename="../features/document_images_view.py" line="241"/>
+        <location filename="../features/document_images_view.py" line="123"/>
+        <location filename="../features/document_images_view.py" line="245"/>
         <location filename="../viewmodels/document_images_pane.py" line="190"/>
         <source>No reembeddable images are available for this document.</source>
         <translation>此文档没有可重嵌的图片。</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="185"/>
-        <location filename="../features/document_images_view.py" line="239"/>
+        <location filename="../features/document_images_view.py" line="186"/>
+        <location filename="../features/document_images_view.py" line="243"/>
         <source>Jump to image</source>
         <translation>跳转到图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="189"/>
+        <location filename="../features/document_images_view.py" line="190"/>
         <location filename="../viewmodels/document_images_pane.py" line="78"/>
         <source>Reembed This Image</source>
         <translation>重新嵌入此图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="192"/>
+        <location filename="../features/document_images_view.py" line="193"/>
         <location filename="../viewmodels/document_images_pane.py" line="82"/>
         <source>Reembed Pending</source>
         <translation>重新嵌入待处理项</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="195"/>
+        <location filename="../features/document_images_view.py" line="196"/>
         <location filename="../viewmodels/document_images_pane.py" line="86"/>
         <source>Force Reembed All</source>
         <translation>强制全部重新嵌入</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="316"/>
+        <location filename="../features/document_images_view.py" line="326"/>
         <source>Image %1 of %2</source>
         <translation>图片 %1 / %2</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="347"/>
+        <location filename="../features/document_images_view.py" line="357"/>
         <source>Show Image</source>
         <translation>显示图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="398"/>
+        <location filename="../features/document_images_view.py" line="408"/>
         <source>Show Reembedded</source>
         <translation>显示重嵌结果</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="95"/>
-        <location filename="../features/document_images_view.py" line="307"/>
-        <location filename="../features/document_images_view.py" line="338"/>
-        <location filename="../features/document_images_view.py" line="341"/>
-        <location filename="../features/document_images_view.py" line="393"/>
+        <location filename="../features/document_images_view.py" line="96"/>
+        <location filename="../features/document_images_view.py" line="317"/>
+        <location filename="../features/document_images_view.py" line="348"/>
+        <location filename="../features/document_images_view.py" line="351"/>
+        <location filename="../features/document_images_view.py" line="403"/>
         <source>Reembedded</source>
         <translation>重新嵌入后</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="463"/>
+        <location filename="../features/document_images_view.py" line="473"/>
         <source>Open App Setup</source>
         <translation>打开应用设置</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="466"/>
+        <location filename="../features/document_images_view.py" line="476"/>
         <source>Open Setup</source>
         <translation>打开设置</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="558"/>
+        <location filename="../features/document_images_view.py" line="568"/>
         <source>Image reinsertion queued.</source>
         <translation>图片重新嵌入已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="566"/>
+        <location filename="../features/document_images_view.py" line="576"/>
         <source>Pending image reinsertion queued.</source>
         <translation>待处理图片重新嵌入已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="574"/>
+        <location filename="../features/document_images_view.py" line="584"/>
         <source>Full image reinsertion queued.</source>
         <translation>全量图片重新嵌入已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="582"/>
+        <location filename="../features/document_images_view.py" line="593"/>
         <source>Cancellation requested.</source>
         <translation>已请求取消。</translation>
     </message>
@@ -527,226 +546,230 @@
 <context>
     <name>DocumentOCRTab</name>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="407"/>
-        <location filename="../features/document_ocr_tab.py" line="839"/>
+        <location filename="../features/document_ocr_tab.py" line="417"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="44"/>
         <source>OCR applies only to the current document. Saving OCR does not rerun later steps.</source>
         <translation>OCR 仅作用于当前文档。保存 OCR 不会重新运行后续步骤。</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="369"/>
-        <location filename="../features/document_ocr_tab.py" line="841"/>
+        <location filename="../features/document_ocr_tab.py" line="379"/>
+        <location filename="../features/document_ocr_tab.py" line="902"/>
         <source>OCR text will appear here.</source>
         <translation>OCR 文本会显示在这里。</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="412"/>
-        <location filename="../features/document_ocr_tab.py" line="842"/>
+        <location filename="../features/document_ocr_tab.py" line="422"/>
+        <location filename="../features/document_ocr_tab.py" line="903"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="79"/>
         <source>|&lt;</source>
         <translation>|&lt;</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="422"/>
-        <location filename="../features/document_ocr_tab.py" line="541"/>
+        <location filename="../features/document_ocr_tab.py" line="432"/>
+        <location filename="../features/document_ocr_tab.py" line="556"/>
         <source>Page 0 of 0</source>
         <translation>第 0 页，共 0 页</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="433"/>
-        <location filename="../features/document_ocr_tab.py" line="848"/>
+        <location filename="../features/document_ocr_tab.py" line="443"/>
+        <location filename="../features/document_ocr_tab.py" line="909"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="91"/>
         <source>&gt;|</source>
         <translation>&gt;|</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="448"/>
-        <location filename="../features/document_ocr_tab.py" line="852"/>
+        <location filename="../features/document_ocr_tab.py" line="458"/>
+        <location filename="../features/document_ocr_tab.py" line="913"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="99"/>
         <source>Go</source>
         <translation>跳转</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="463"/>
-        <location filename="../features/document_ocr_tab.py" line="858"/>
+        <location filename="../features/document_ocr_tab.py" line="473"/>
+        <location filename="../features/document_ocr_tab.py" line="919"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="111"/>
         <source>Save</source>
         <translation>保存</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="458"/>
-        <location filename="../features/document_ocr_tab.py" line="856"/>
+        <location filename="../features/document_ocr_tab.py" line="468"/>
+        <location filename="../features/document_ocr_tab.py" line="917"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="107"/>
         <source>Run OCR for Pending Pages</source>
         <translation>对待处理页面运行 OCR</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="476"/>
-        <location filename="../features/document_ocr_tab.py" line="859"/>
+        <location filename="../features/document_ocr_tab.py" line="486"/>
+        <location filename="../features/document_ocr_tab.py" line="920"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="115"/>
         <source>No image pages are available for OCR in this document.</source>
         <translation>此文档中没有可供 OCR 的图片页面。</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="413"/>
-        <location filename="../features/document_ocr_tab.py" line="843"/>
+        <location filename="../features/document_ocr_tab.py" line="423"/>
+        <location filename="../features/document_ocr_tab.py" line="904"/>
         <source>First page</source>
         <translation>第一页</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="417"/>
-        <location filename="../features/document_ocr_tab.py" line="844"/>
+        <location filename="../features/document_ocr_tab.py" line="427"/>
+        <location filename="../features/document_ocr_tab.py" line="905"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="83"/>
         <source>&lt;</source>
         <translation>&lt;</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="418"/>
-        <location filename="../features/document_ocr_tab.py" line="845"/>
+        <location filename="../features/document_ocr_tab.py" line="428"/>
+        <location filename="../features/document_ocr_tab.py" line="906"/>
         <source>Previous page</source>
         <translation>上一页</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="428"/>
-        <location filename="../features/document_ocr_tab.py" line="846"/>
+        <location filename="../features/document_ocr_tab.py" line="438"/>
+        <location filename="../features/document_ocr_tab.py" line="907"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="87"/>
         <source>&gt;</source>
         <translation>&gt;</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="429"/>
-        <location filename="../features/document_ocr_tab.py" line="847"/>
+        <location filename="../features/document_ocr_tab.py" line="439"/>
+        <location filename="../features/document_ocr_tab.py" line="908"/>
         <source>Next page</source>
         <translation>下一页</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="434"/>
-        <location filename="../features/document_ocr_tab.py" line="849"/>
+        <location filename="../features/document_ocr_tab.py" line="444"/>
+        <location filename="../features/document_ocr_tab.py" line="910"/>
         <source>Last page</source>
         <translation>最后一页</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="438"/>
-        <location filename="../features/document_ocr_tab.py" line="850"/>
+        <location filename="../features/document_ocr_tab.py" line="448"/>
+        <location filename="../features/document_ocr_tab.py" line="911"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="95"/>
         <source>Go to:</source>
         <translation>跳转到：</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="445"/>
-        <location filename="../features/document_ocr_tab.py" line="851"/>
+        <location filename="../features/document_ocr_tab.py" line="455"/>
+        <location filename="../features/document_ocr_tab.py" line="912"/>
         <source>Enter page number</source>
         <translation>输入页码</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="449"/>
-        <location filename="../features/document_ocr_tab.py" line="853"/>
+        <location filename="../features/document_ocr_tab.py" line="459"/>
+        <location filename="../features/document_ocr_tab.py" line="914"/>
         <source>Jump to page</source>
         <translation>跳转到页面</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="453"/>
-        <location filename="../features/document_ocr_tab.py" line="854"/>
+        <location filename="../features/document_ocr_tab.py" line="463"/>
+        <location filename="../features/document_ocr_tab.py" line="915"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="103"/>
         <source>(Re)run OCR (Current Page)</source>
         <translation>（重新）运行OCR（当前页）</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="454"/>
-        <location filename="../features/document_ocr_tab.py" line="661"/>
-        <location filename="../features/document_ocr_tab.py" line="855"/>
+        <location filename="../features/document_ocr_tab.py" line="464"/>
+        <location filename="../features/document_ocr_tab.py" line="681"/>
+        <location filename="../features/document_ocr_tab.py" line="916"/>
         <source>Run or re-run OCR on the current page</source>
         <translation>在当前页运行或重新运行OCR</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="459"/>
-        <location filename="../features/document_ocr_tab.py" line="668"/>
-        <location filename="../features/document_ocr_tab.py" line="857"/>
+        <location filename="../features/document_ocr_tab.py" line="469"/>
+        <location filename="../features/document_ocr_tab.py" line="688"/>
+        <location filename="../features/document_ocr_tab.py" line="918"/>
         <source>Run OCR on all pending pages in this document</source>
         <translation>对此文档中所有待处理页面运行OCR</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="464"/>
-        <location filename="../features/document_ocr_tab.py" line="654"/>
+        <location filename="../features/document_ocr_tab.py" line="474"/>
+        <location filename="../features/document_ocr_tab.py" line="674"/>
         <source>Save edited OCR text</source>
         <translation>保存编辑后的OCR文本</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="569"/>
+        <location filename="../features/document_ocr_tab.py" line="588"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="52"/>
         <source>Page %1 of %2</source>
         <translation>第 %1 页，共 %2 页</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="599"/>
+        <location filename="../features/document_ocr_tab.py" line="619"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="60"/>
         <source>OCR Done</source>
         <translation>OCR已完成</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="602"/>
+        <location filename="../features/document_ocr_tab.py" line="622"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="62"/>
         <source>OCR Running</source>
         <translation>OCR 运行中</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="605"/>
+        <location filename="../features/document_ocr_tab.py" line="625"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="64"/>
         <source>OCR Failed</source>
         <translation>OCR 失败</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="608"/>
+        <location filename="../features/document_ocr_tab.py" line="628"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="65"/>
         <source>Pending OCR</source>
         <translation>待处理OCR</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="685"/>
-        <location filename="../features/document_ocr_tab.py" line="691"/>
+        <location filename="../features/document_ocr_tab.py" line="705"/>
+        <location filename="../features/document_ocr_tab.py" line="711"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="119"/>
         <source>OCR running...</source>
         <translation>OCR 运行中...</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="737"/>
+        <location filename="../features/document_ocr_tab.py" line="757"/>
         <source>Line Count Mismatch</source>
         <translation>行数不匹配</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="738"/>
+        <location filename="../features/document_ocr_tab.py" line="758"/>
         <source>Structured OCR text must keep the same number of lines as the original OCR result.</source>
         <translation>结构化 OCR 文本必须与原始 OCR 结果保持相同的行数。</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="759"/>
-        <location filename="../features/document_ocr_tab.py" line="771"/>
-        <location filename="../features/document_ocr_tab.py" line="789"/>
-        <location filename="../features/document_ocr_tab.py" line="800"/>
-        <location filename="../features/document_ocr_tab.py" line="813"/>
+        <location filename="../features/document_ocr_tab.py" line="779"/>
+        <location filename="../features/document_ocr_tab.py" line="791"/>
+        <location filename="../features/document_ocr_tab.py" line="810"/>
+        <location filename="../features/document_ocr_tab.py" line="822"/>
+        <location filename="../features/document_ocr_tab.py" line="836"/>
         <source>OCR</source>
         <translation>OCR</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="759"/>
+        <location filename="../features/document_ocr_tab.py" line="779"/>
         <source>No OCR data is available for this page yet.</source>
         <translation>此页尚无 OCR 数据。</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="775"/>
+        <location filename="../features/document_ocr_tab.py" line="795"/>
         <source>OCR text saved.</source>
         <translation>OCR 文本已保存。</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="792"/>
-        <location filename="../features/document_ocr_tab.py" line="803"/>
+        <location filename="../features/document_ocr_tab.py" line="813"/>
+        <location filename="../features/document_ocr_tab.py" line="825"/>
         <source>OCR queued.</source>
         <translation>OCR 已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="816"/>
+        <location filename="../features/document_ocr_tab.py" line="839"/>
         <source>OCR cancellation requested.</source>
         <translation>已请求取消 OCR。</translation>
+    </message>
+    <message>
+        <location filename="../features/document_ocr_tab.py" line="899"/>
+        <source>OCR applies only to the current document. Saving OCR clears later glossary, translation, and export results so they can be rebuilt from the updated OCR.</source>
+        <translation>OCR 仅适用于当前文档。保存 OCR 会清除后续的术语、翻译和导出结果，以便根据更新后的 OCR 重新构建。</translation>
     </message>
 </context>
 <context>
@@ -756,192 +779,192 @@
         <translation type="vanished">翻译审校仅限当前文档。保存编辑不会触发隐藏的重跑。</translation>
     </message>
     <message>
-        <location filename="../viewmodels/document_translation_pane.py" line="30"/>
+        <location filename="../viewmodels/document_translation_pane.py" line="31"/>
         <source>Enable polish pass</source>
         <translation>启用润色阶段</translation>
     </message>
     <message>
-        <location filename="../viewmodels/document_translation_pane.py" line="34"/>
+        <location filename="../viewmodels/document_translation_pane.py" line="35"/>
         <source>Translate</source>
         <translation>翻译</translation>
     </message>
     <message>
-        <location filename="../viewmodels/document_translation_pane.py" line="38"/>
+        <location filename="../viewmodels/document_translation_pane.py" line="39"/>
         <source>Submit Batch Task</source>
         <translation>提交批量任务</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="144"/>
+        <location filename="../features/document_translation_view.py" line="148"/>
         <source>Units</source>
         <translation>单元</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="159"/>
-        <location filename="../features/document_translation_view.py" line="340"/>
+        <location filename="../features/document_translation_view.py" line="163"/>
+        <location filename="../features/document_translation_view.py" line="348"/>
         <source>No unit selected</source>
         <translation>未选择单元</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="173"/>
-        <location filename="../features/document_translation_view.py" line="826"/>
+        <location filename="../features/document_translation_view.py" line="177"/>
+        <location filename="../features/document_translation_view.py" line="878"/>
         <source>Source</source>
         <translation>原文</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="185"/>
-        <location filename="../features/document_translation_view.py" line="827"/>
+        <location filename="../features/document_translation_view.py" line="189"/>
+        <location filename="../features/document_translation_view.py" line="879"/>
         <source>Translation</source>
         <translation>翻译</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="190"/>
-        <location filename="../features/document_translation_view.py" line="828"/>
+        <location filename="../features/document_translation_view.py" line="194"/>
+        <location filename="../features/document_translation_view.py" line="880"/>
         <source>Find...</source>
         <translation>查找...</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="194"/>
-        <location filename="../features/document_translation_view.py" line="829"/>
+        <location filename="../features/document_translation_view.py" line="198"/>
+        <location filename="../features/document_translation_view.py" line="881"/>
         <source>Replace with...</source>
         <translation>替换为...</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="196"/>
-        <location filename="../features/document_translation_view.py" line="830"/>
+        <location filename="../features/document_translation_view.py" line="200"/>
+        <location filename="../features/document_translation_view.py" line="882"/>
         <source>Find Next</source>
         <translation>查找下一个</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="198"/>
-        <location filename="../features/document_translation_view.py" line="201"/>
-        <location filename="../features/document_translation_view.py" line="831"/>
-        <location filename="../features/document_translation_view.py" line="832"/>
+        <location filename="../features/document_translation_view.py" line="202"/>
+        <location filename="../features/document_translation_view.py" line="205"/>
+        <location filename="../features/document_translation_view.py" line="883"/>
+        <location filename="../features/document_translation_view.py" line="884"/>
         <source>Replace</source>
         <translation>替换</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="203"/>
-        <location filename="../features/document_translation_view.py" line="833"/>
+        <location filename="../features/document_translation_view.py" line="207"/>
+        <location filename="../features/document_translation_view.py" line="885"/>
         <source>Replace All</source>
         <translation>全部替换</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="256"/>
-        <location filename="../features/document_translation_view.py" line="835"/>
+        <location filename="../features/document_translation_view.py" line="260"/>
+        <location filename="../features/document_translation_view.py" line="887"/>
         <source>Save</source>
         <translation>保存</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="260"/>
-        <location filename="../features/document_translation_view.py" line="440"/>
-        <location filename="../features/document_translation_view.py" line="836"/>
+        <location filename="../features/document_translation_view.py" line="264"/>
+        <location filename="../features/document_translation_view.py" line="455"/>
+        <location filename="../features/document_translation_view.py" line="888"/>
         <source>Retranslate</source>
         <translation>重新翻译</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="263"/>
-        <location filename="../features/document_translation_view.py" line="837"/>
+        <location filename="../features/document_translation_view.py" line="267"/>
+        <location filename="../features/document_translation_view.py" line="889"/>
         <source>Previous</source>
         <translation>上一个</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="266"/>
-        <location filename="../features/document_translation_view.py" line="838"/>
+        <location filename="../features/document_translation_view.py" line="270"/>
+        <location filename="../features/document_translation_view.py" line="890"/>
         <source>Next</source>
         <translation>下一个</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="371"/>
+        <location filename="../features/document_translation_view.py" line="380"/>
         <source>Line count must stay at %1.</source>
         <translation>行数必须保持为 %1。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="423"/>
+        <location filename="../features/document_translation_view.py" line="433"/>
         <source>Save Unavailable</source>
         <translation>无法保存</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="427"/>
+        <location filename="../features/document_translation_view.py" line="437"/>
         <source>Save Failed</source>
         <translation>保存失败</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="431"/>
+        <location filename="../features/document_translation_view.py" line="446"/>
         <source>Translation saved.</source>
         <translation>译文已保存。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="437"/>
+        <location filename="../features/document_translation_view.py" line="452"/>
         <source>page</source>
         <translation>页面</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="437"/>
+        <location filename="../features/document_translation_view.py" line="452"/>
         <source>chunk</source>
         <translation>分块</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="441"/>
+        <location filename="../features/document_translation_view.py" line="456"/>
         <source>Retranslate this %1? LLM API costs will be incurred.</source>
         <translation>要重新翻译此%1吗？这会产生 LLM API 成本。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="455"/>
+        <location filename="../features/document_translation_view.py" line="470"/>
         <source>Retranslate Unavailable</source>
         <translation>无法重新翻译</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="459"/>
+        <location filename="../features/document_translation_view.py" line="474"/>
         <source>Retranslate Failed</source>
         <translation>重新翻译失败</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="466"/>
+        <location filename="../features/document_translation_view.py" line="481"/>
         <source>Retranslate queued.</source>
         <translation>重新翻译已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="478"/>
+        <location filename="../features/document_translation_view.py" line="493"/>
         <source>Translate Unavailable</source>
         <translation>无法翻译</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="482"/>
+        <location filename="../features/document_translation_view.py" line="497"/>
         <source>Translate Failed</source>
         <translation>翻译失败</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="489"/>
+        <location filename="../features/document_translation_view.py" line="504"/>
         <source>Translation queued.</source>
         <translation>翻译已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="502"/>
+        <location filename="../features/document_translation_view.py" line="517"/>
         <source>Batch Translation Unavailable</source>
         <translation>批量翻译不可用</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="506"/>
+        <location filename="../features/document_translation_view.py" line="521"/>
         <source>Batch Translation Failed</source>
         <translation>批量翻译失败</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="513"/>
+        <location filename="../features/document_translation_view.py" line="528"/>
         <source>Async batch translation queued.</source>
         <translation>异步批量翻译已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="527"/>
+        <location filename="../features/document_translation_view.py" line="566"/>
         <source>Progress: %1/%2</source>
         <translation>进度：%1/%2</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="534"/>
+        <location filename="../features/document_translation_view.py" line="573"/>
         <source>Active task: %1</source>
         <translation>当前任务：%1</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="834"/>
+        <location filename="../features/document_translation_view.py" line="886"/>
         <source>Close find panel</source>
         <translation>关闭查找面板</translation>
     </message>
@@ -959,7 +982,13 @@
         <translation>这些工具仅适用于当前文档。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="478"/>
+        <location filename="../features/document_workspace_view.py" line="481"/>
+        <location filename="../features/document_workspace_view.py" line="533"/>
+        <source>Document</source>
+        <translation>文档</translation>
+    </message>
+    <message>
+        <location filename="../features/document_workspace_view.py" line="488"/>
         <source>%1</source>
         <translation>%1</translation>
     </message>
@@ -1087,7 +1116,7 @@ This will permanently remove all project data including documents, translations,
     <name>MainWindow</name>
     <message>
         <location filename="../main_window.py" line="57"/>
-        <location filename="../main_window.py" line="445"/>
+        <location filename="../main_window.py" line="472"/>
         <location filename="../viewmodels/app_shell.py" line="32"/>
         <source>Context-Aware Translation</source>
         <translation>上下文感知翻译</translation>
@@ -1110,55 +1139,55 @@ This will permanently remove all project data including documents, translations,
         <translation>项目设置</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="140"/>
+        <location filename="../main_window.py" line="141"/>
         <location filename="../viewmodels/app_shell.py" line="40"/>
         <source>Queue</source>
         <translation>队列</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="154"/>
-        <location filename="../main_window.py" line="452"/>
+        <location filename="../main_window.py" line="155"/>
+        <location filename="../main_window.py" line="479"/>
         <source>&amp;File</source>
         <translation>文件(&amp;F)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="156"/>
-        <location filename="../main_window.py" line="456"/>
+        <location filename="../main_window.py" line="157"/>
+        <location filename="../main_window.py" line="483"/>
         <source>Open &amp;Data Folder</source>
         <translation>打开数据文件夹(&amp;D)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="160"/>
-        <location filename="../main_window.py" line="457"/>
+        <location filename="../main_window.py" line="161"/>
+        <location filename="../main_window.py" line="484"/>
         <source>App &amp;Settings</source>
         <translation>应用设置(&amp;S)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="164"/>
-        <location filename="../main_window.py" line="453"/>
+        <location filename="../main_window.py" line="165"/>
+        <location filename="../main_window.py" line="480"/>
         <source>&amp;Language</source>
         <translation>语言(&amp;L)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="179"/>
-        <location filename="../main_window.py" line="454"/>
+        <location filename="../main_window.py" line="180"/>
+        <location filename="../main_window.py" line="481"/>
         <source>&amp;Help</source>
         <translation>帮助(&amp;H)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="181"/>
-        <location filename="../main_window.py" line="458"/>
+        <location filename="../main_window.py" line="182"/>
+        <location filename="../main_window.py" line="485"/>
         <source>&amp;About</source>
         <translation>关于(&amp;A)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="189"/>
-        <location filename="../main_window.py" line="462"/>
+        <location filename="../main_window.py" line="190"/>
+        <location filename="../main_window.py" line="489"/>
         <source>Ready</source>
         <translation>就绪</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="264"/>
+        <location filename="../main_window.py" line="274"/>
         <source>The following operations are currently running: %1.
 
 Leaving the project may stop local non-task processing.
@@ -1175,37 +1204,37 @@ All completed results are already saved and won&apos;t be lost.</source>
 所有已完成的结果都已保存，不会丢失。</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="324"/>
+        <location filename="../main_window.py" line="336"/>
         <source>Opened project: %1</source>
         <translation>已打开项目：%1</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="337"/>
+        <location filename="../main_window.py" line="349"/>
         <source>Closed project: %1</source>
         <translation>已关闭项目：%1</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="362"/>
+        <location filename="../main_window.py" line="374"/>
         <source>Project setup saved.</source>
         <translation>项目设置已保存。</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="261"/>
+        <location filename="../main_window.py" line="271"/>
         <source>Operation in Progress</source>
         <translation>操作进行中</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="284"/>
+        <location filename="../main_window.py" line="294"/>
         <source>About Context-Aware Translation</source>
         <translation>关于上下文感知翻译</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="287"/>
+        <location filename="../main_window.py" line="297"/>
         <source>&lt;h3&gt;Context-Aware Translation&lt;/h3&gt;&lt;p&gt;Version %1&lt;/p&gt;&lt;p&gt;A desktop application for context-aware document translation with glossary management and OCR support.&lt;/p&gt;&lt;p&gt;Built with PySide6 (Qt for Python)&lt;/p&gt;</source>
         <translation>&lt;h3&gt;上下文感知翻译&lt;/h3&gt;&lt;p&gt;版本 %1&lt;/p&gt;&lt;p&gt;一款支持术语表管理和OCR的上下文感知文档翻译桌面应用。&lt;/p&gt;&lt;p&gt;基于 PySide6（Qt for Python）构建&lt;/p&gt;</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="317"/>
+        <location filename="../main_window.py" line="327"/>
         <source>View &apos;%1&apos; not found</source>
         <translation>未找到视图“%1”</translation>
     </message>
@@ -1345,82 +1374,82 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>ProjectSettingsPane</name>
     <message>
-        <location filename="../features/project_settings_pane.py" line="97"/>
-        <location filename="../features/project_settings_pane.py" line="137"/>
+        <location filename="../features/project_settings_pane.py" line="99"/>
+        <location filename="../features/project_settings_pane.py" line="139"/>
         <source>Step routes</source>
         <translation>步骤路由</translation>
     </message>
     <message>
-        <location filename="../features/project_settings_pane.py" line="107"/>
+        <location filename="../features/project_settings_pane.py" line="109"/>
         <source>Use the Advanced column to edit step-specific settings.</source>
         <translation>使用“高级”列编辑步骤专用设置。</translation>
     </message>
     <message>
-        <location filename="../features/project_settings_pane.py" line="212"/>
+        <location filename="../features/project_settings_pane.py" line="214"/>
         <source>Shared workflow profile</source>
         <translation>共享工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/project_settings_pane.py" line="225"/>
-        <location filename="../viewmodels/project_settings_pane.py" line="47"/>
+        <location filename="../features/project_settings_pane.py" line="227"/>
+        <location filename="../viewmodels/project_settings_pane.py" line="48"/>
         <source>Custom profile</source>
         <translation>自定义配置档案</translation>
     </message>
     <message>
-        <location filename="../features/project_settings_pane.py" line="226"/>
+        <location filename="../features/project_settings_pane.py" line="228"/>
         <source>Project-specific overrides</source>
         <translation>项目专用覆盖设置</translation>
     </message>
     <message>
-        <location filename="../features/project_settings_pane.py" line="313"/>
+        <location filename="../features/project_settings_pane.py" line="321"/>
         <source>Select a shared workflow profile first.</source>
         <translation>请先选择共享工作流配置档案。</translation>
     </message>
     <message>
-        <location filename="../features/project_settings_pane.py" line="321"/>
+        <location filename="../features/project_settings_pane.py" line="331"/>
         <source>Select a shared workflow profile before saving.</source>
         <translation>请先选择共享工作流配置档案再保存。</translation>
     </message>
     <message>
-        <location filename="../features/project_settings_pane.py" line="339"/>
+        <location filename="../features/project_settings_pane.py" line="349"/>
         <source>Project setup saved.</source>
         <translation>项目设置已保存。</translation>
     </message>
     <message>
-        <location filename="../features/project_settings_pane.py" line="398"/>
+        <location filename="../features/project_settings_pane.py" line="408"/>
         <source>Editing a project-specific profile based on %1.</source>
         <translation>正在编辑基于 %1 的项目专用配置档案。</translation>
     </message>
     <message>
-        <location filename="../features/project_settings_pane.py" line="402"/>
-        <location filename="../features/project_settings_pane.py" line="409"/>
+        <location filename="../features/project_settings_pane.py" line="412"/>
+        <location filename="../features/project_settings_pane.py" line="419"/>
         <source>the selected shared profile</source>
         <translation>所选共享配置档案</translation>
     </message>
     <message>
-        <location filename="../viewmodels/project_settings_pane.py" line="34"/>
+        <location filename="../viewmodels/project_settings_pane.py" line="35"/>
         <source>Project Setup</source>
         <translation>项目设置</translation>
     </message>
     <message>
-        <location filename="../viewmodels/project_settings_pane.py" line="35"/>
+        <location filename="../viewmodels/project_settings_pane.py" line="36"/>
         <source>Setup for %1</source>
         <translation>%1 的设置</translation>
     </message>
     <message>
-        <location filename="../features/project_settings_pane.py" line="75"/>
-        <location filename="../features/project_settings_pane.py" line="136"/>
-        <location filename="../viewmodels/project_settings_pane.py" line="43"/>
+        <location filename="../features/project_settings_pane.py" line="77"/>
+        <location filename="../features/project_settings_pane.py" line="138"/>
+        <location filename="../viewmodels/project_settings_pane.py" line="44"/>
         <source>Workflow profile</source>
         <translation>工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../viewmodels/project_settings_pane.py" line="51"/>
+        <location filename="../viewmodels/project_settings_pane.py" line="52"/>
         <source>Open App Setup</source>
         <translation>打开应用设置</translation>
     </message>
     <message>
-        <location filename="../viewmodels/project_settings_pane.py" line="55"/>
+        <location filename="../viewmodels/project_settings_pane.py" line="56"/>
         <source>Save</source>
         <translation>保存</translation>
     </message>
@@ -1657,42 +1686,42 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>StepAdvancedConfigDialog</name>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="109"/>
+        <location filename="../features/workflow_profile_editor.py" line="129"/>
         <source>Step Settings</source>
         <translation>步骤设置</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="133"/>
+        <location filename="../features/workflow_profile_editor.py" line="153"/>
         <source>This step has no additional settings beyond connection and model.</source>
         <translation>此步骤除连接和模型外没有其他附加设置。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="188"/>
+        <location filename="../features/workflow_profile_editor.py" line="211"/>
         <source>Disabled</source>
         <translation>禁用</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="189"/>
+        <location filename="../features/workflow_profile_editor.py" line="212"/>
         <source>Gemini AI Studio</source>
         <translation>Gemini AI Studio</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="199"/>
+        <location filename="../features/workflow_profile_editor.py" line="223"/>
         <source>Provider</source>
         <translation>提供商</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="200"/>
+        <location filename="../features/workflow_profile_editor.py" line="224"/>
         <source>API key</source>
         <translation>API 密钥</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="201"/>
+        <location filename="../features/workflow_profile_editor.py" line="225"/>
         <source>Batch size</source>
         <translation>批次大小</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="202"/>
+        <location filename="../features/workflow_profile_editor.py" line="226"/>
         <source>Thinking mode</source>
         <translation>思考模式</translation>
     </message>
@@ -2238,28 +2267,28 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>WorkExportDialog</name>
     <message>
-        <location filename="../features/document_workspace_view.py" line="250"/>
-        <location filename="../features/document_workspace_view.py" line="271"/>
+        <location filename="../features/document_workspace_view.py" line="255"/>
+        <location filename="../features/document_workspace_view.py" line="276"/>
         <source>Export</source>
         <translation>导出</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="257"/>
+        <location filename="../features/document_workspace_view.py" line="262"/>
         <source>Export %1</source>
         <translation>导出 %1</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="259"/>
+        <location filename="../features/document_workspace_view.py" line="264"/>
         <source>Export selected documents</source>
         <translation>导出所选文档</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="298"/>
+        <location filename="../features/document_workspace_view.py" line="303"/>
         <source>Export Failed</source>
         <translation>导出失败</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="302"/>
+        <location filename="../features/document_workspace_view.py" line="307"/>
         <source>Export Complete</source>
         <translation>导出完成</translation>
     </message>
@@ -2283,17 +2312,17 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation type="vanished">在此导入文档、查看项目范围的进度，并直接从表格中打开下一个文档工具。</translation>
     </message>
     <message>
-        <location filename="../viewmodels/work_home.py" line="37"/>
+        <location filename="../viewmodels/work_home.py" line="40"/>
         <source>Select Files</source>
         <translation>选择文件</translation>
     </message>
     <message>
-        <location filename="../viewmodels/work_home.py" line="41"/>
+        <location filename="../viewmodels/work_home.py" line="44"/>
         <source>Select Folder</source>
         <translation>选择文件夹</translation>
     </message>
     <message>
-        <location filename="../viewmodels/work_home.py" line="45"/>
+        <location filename="../viewmodels/work_home.py" line="48"/>
         <source>Import</source>
         <translation>导入</translation>
     </message>
@@ -2429,104 +2458,103 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>WorkflowProfileEditorDialog</name>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="761"/>
+        <location filename="../features/workflow_profile_editor.py" line="780"/>
         <source>Workflow Profile</source>
         <translation>工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="785"/>
+        <location filename="../features/workflow_profile_editor.py" line="804"/>
         <source>A workflow profile is a user-facing wrapper over the existing step-based config. Edit connection and model choices here.</source>
         <translation>工作流配置档案是对现有分步骤配置的用户界面封装。可在此编辑连接和模型选择。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="790"/>
+        <location filename="../features/workflow_profile_editor.py" line="809"/>
         <source>General</source>
         <translation>常规</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="812"/>
+        <location filename="../features/workflow_profile_editor.py" line="831"/>
         <source>Profile name</source>
         <translation>配置档案名称</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="813"/>
+        <location filename="../features/workflow_profile_editor.py" line="832"/>
         <source>Target language</source>
         <translation>目标语言</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="819"/>
+        <location filename="../features/workflow_profile_editor.py" line="838"/>
         <source>Workflow Routing</source>
         <translation>工作流路由</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="824"/>
+        <location filename="../features/workflow_profile_editor.py" line="843"/>
         <source>Use the Advanced column to edit step-specific settings.</source>
         <translation>使用“高级”列编辑步骤专用设置。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="864"/>
+        <location filename="../features/workflow_profile_editor.py" line="883"/>
+        <location filename="../features/workflow_profile_editor.py" line="889"/>
         <source>Missing Information</source>
         <translation>缺少信息</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="864"/>
+        <location filename="../features/workflow_profile_editor.py" line="883"/>
         <source>Target language is required.</source>
         <translation>目标语言为必填项。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="869"/>
         <source>Missing Connection</source>
-        <translation>缺少连接</translation>
+        <translation type="vanished">缺少连接</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="870"/>
         <source>Every workflow step must use a connection and model.</source>
-        <translation>每个工作流步骤都必须使用连接和模型。</translation>
+        <translation type="vanished">每个工作流步骤都必须使用连接和模型。</translation>
     </message>
 </context>
 <context>
     <name>WorkflowRoutesEditor</name>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="309"/>
+        <location filename="../features/workflow_profile_editor.py" line="333"/>
         <source>Step</source>
         <translation>步骤</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="310"/>
+        <location filename="../features/workflow_profile_editor.py" line="334"/>
         <source>Connection</source>
         <translation>连接</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="311"/>
+        <location filename="../features/workflow_profile_editor.py" line="335"/>
         <source>Model</source>
         <translation>模型</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="312"/>
-        <location filename="../features/workflow_profile_editor.py" line="529"/>
+        <location filename="../features/workflow_profile_editor.py" line="336"/>
+        <location filename="../features/workflow_profile_editor.py" line="546"/>
         <source>Advanced</source>
         <translation>高级</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="350"/>
-        <location filename="../features/workflow_profile_editor.py" line="560"/>
+        <location filename="../features/workflow_profile_editor.py" line="374"/>
+        <location filename="../features/workflow_profile_editor.py" line="577"/>
         <source>Direct batch config</source>
         <translation>直接批处理配置</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="472"/>
+        <location filename="../features/workflow_profile_editor.py" line="489"/>
         <source>Select connection</source>
         <translation>选择连接</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="347"/>
-        <location filename="../features/workflow_profile_editor.py" line="524"/>
+        <location filename="../features/workflow_profile_editor.py" line="371"/>
+        <location filename="../features/workflow_profile_editor.py" line="541"/>
         <source>Connection and model settings for this workflow step.</source>
         <translation>此工作流步骤的连接和模型设置。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="535"/>
-        <location filename="../features/workflow_profile_editor.py" line="540"/>
+        <location filename="../features/workflow_profile_editor.py" line="552"/>
+        <location filename="../features/workflow_profile_editor.py" line="557"/>
         <source>This step has no additional settings beyond connection and model.</source>
         <translation>此步骤除连接和模型外没有其他附加设置。</translation>
     </message>
@@ -2542,12 +2570,12 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation type="vanished">导出此文档</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="367"/>
+        <location filename="../features/document_workspace_view.py" line="372"/>
         <source>Export</source>
         <translation>导出</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="399"/>
+        <location filename="../features/document_workspace_view.py" line="404"/>
         <source>Export Failed</source>
         <translation>导出失败</translation>
     </message>
@@ -2555,70 +2583,70 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>_ExportControls</name>
     <message>
-        <location filename="../features/document_workspace_view.py" line="84"/>
+        <location filename="../features/document_workspace_view.py" line="85"/>
         <source>Format</source>
         <translation>格式</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="92"/>
+        <location filename="../features/document_workspace_view.py" line="93"/>
         <source>Browse...</source>
         <translation>浏览...</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="95"/>
+        <location filename="../features/document_workspace_view.py" line="96"/>
         <source>Output path</source>
         <translation>输出路径</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="98"/>
+        <location filename="../features/document_workspace_view.py" line="99"/>
         <source>Preserve folder structure</source>
         <translation>保留文件夹结构</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="103"/>
+        <location filename="../features/document_workspace_view.py" line="104"/>
         <source>Allow fallback to original content for untranslated chunks</source>
         <translation>允许未翻译分块回退为原始内容</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="133"/>
+        <location filename="../features/document_workspace_view.py" line="134"/>
         <source>Preserve folder structure is not supported for this export.</source>
         <translation>此导出不支持保留文件夹结构。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="142"/>
+        <location filename="../features/document_workspace_view.py" line="143"/>
         <source>Fallback to original content is only needed when translation is incomplete.</source>
         <translation>仅在翻译不完整时才需要回退到原始内容。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="176"/>
+        <location filename="../features/document_workspace_view.py" line="177"/>
         <source>Output path is required.</source>
         <translation>输出路径为必填项。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="213"/>
+        <location filename="../features/document_workspace_view.py" line="218"/>
         <source>Select Output Folder</source>
         <translation>选择输出文件夹</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="176"/>
-        <location filename="../features/document_workspace_view.py" line="180"/>
-        <location filename="../features/document_workspace_view.py" line="219"/>
+        <location filename="../features/document_workspace_view.py" line="177"/>
+        <location filename="../features/document_workspace_view.py" line="181"/>
+        <location filename="../features/document_workspace_view.py" line="224"/>
         <source>Missing Information</source>
         <translation>缺少信息</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="180"/>
-        <location filename="../features/document_workspace_view.py" line="219"/>
+        <location filename="../features/document_workspace_view.py" line="181"/>
+        <location filename="../features/document_workspace_view.py" line="224"/>
         <source>Export format is required.</source>
         <translation>导出格式为必填项。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="224"/>
+        <location filename="../features/document_workspace_view.py" line="229"/>
         <source>Save Export File</source>
         <translation>保存导出文件</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="226"/>
+        <location filename="../features/document_workspace_view.py" line="231"/>
         <source>%1 Files (*.%2)</source>
         <translation>%1 文件 (*.%2)</translation>
     </message>

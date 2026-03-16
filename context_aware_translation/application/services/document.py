@@ -230,16 +230,25 @@ class DefaultDocumentService:
             serialized = self._serialize_ocr_save(existing_ocr_json, request)
             dbx.document_repo.update_source_ocr(request.source_id, serialized)
             dbx.document_repo.update_source_ocr_completed(request.source_id)
+            reset_result = dbx.document_repo.reset_document_stack(
+                request.document_id,
+                context_tree_db_path=self._runtime.book_manager.get_book_context_tree_path(request.project_id),
+            )
+        invalidated_sections = [
+            DocumentSection.OCR,
+            DocumentSection.TERMS,
+            DocumentSection.TRANSLATION,
+            DocumentSection.EXPORT,
+        ]
+        affected_document_ids = [int(document_id) for document_id in reset_result.get("affected_document_ids", [])]
+        invalidate_all_documents = any(document_id != request.document_id for document_id in affected_document_ids)
         self._runtime.invalidate_document(
             request.project_id,
-            request.document_id,
-            sections=[
-                DocumentSection.OCR,
-                DocumentSection.TERMS,
-                DocumentSection.TRANSLATION,
-                DocumentSection.EXPORT,
-            ],
+            None if invalidate_all_documents else request.document_id,
+            sections=invalidated_sections,
         )
+        if affected_document_ids:
+            self._runtime.invalidate_terms(request.project_id)
         self._runtime.invalidate_workboard(request.project_id)
         return self.get_ocr(request.project_id, request.document_id)
 
@@ -1500,8 +1509,7 @@ class DefaultDocumentService:
         active_task: TaskRecord | None,
     ) -> tuple[bool, BlockerInfo | None]:
         if active_task is not None:
-            blocker = self._active_task_blocker(project_id=project_id, document_id=document_id)
-            return False, blocker
+            return False, self._translation_active_task_blocker(project_id=project_id, document_id=document_id)
         if not has_work:
             return (
                 False,
@@ -1524,12 +1532,47 @@ class DefaultDocumentService:
             {"document_ids": [document_id], "enable_polish": enable_polish},
             TaskAction.RUN,
         )
-        return self._decision_to_action_state(
+        return self._translation_decision_to_action_state(
             project_id,
             decision,
             document_id=document_id,
+            batch=batch,
+        )
+
+    def _translation_decision_to_action_state(
+        self,
+        project_id: str,
+        decision: Any,
+        *,
+        document_id: int,
+        batch: bool,
+    ) -> tuple[bool, BlockerInfo | None]:
+        if decision.allowed:
+            return True, None
+        reason = decision.reason or (
+            "Async batch translation is unavailable." if batch else "Translation is unavailable."
+        )
+        lowered = reason.lower()
+        target_kind = NavigationTargetKind.DOCUMENT_TRANSLATION
+        if decision.code == "blocked_claim_conflict":
+            return False, self._translation_active_task_blocker(project_id=project_id, document_id=document_id)
+        if "setup" in lowered or "config snapshot" in lowered:
+            target_kind = NavigationTargetKind.APP_SETUP
+        return False, make_blocker(
+            blocker_code_for_decision_code(decision.code or ""),
+            reason,
+            target_kind=target_kind,
+            project_id=project_id,
+            document_id=document_id,
+        )
+
+    def _translation_active_task_blocker(self, *, project_id: str, document_id: int) -> BlockerInfo:
+        return make_blocker(
+            BlockerCode.ALREADY_RUNNING_ELSEWHERE,
+            "Translation is already running for this document.",
             target_kind=NavigationTargetKind.QUEUE,
-            default_reason="Async batch translation is unavailable." if batch else "Translation is unavailable.",
+            project_id=project_id,
+            document_id=document_id,
         )
 
     def _retranslate_action_state_for_chunk(

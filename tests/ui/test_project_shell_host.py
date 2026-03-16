@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from context_aware_translation.ui.shell_hosts.project_shell_host import ProjectShellHost
+from context_aware_translation.ui.viewmodels.router import ModalRoute, PrimaryRoute, RouteState
 
 try:
     from PySide6.QtWidgets import QApplication, QLabel
@@ -66,3 +69,32 @@ def test_project_shell_host_emits_secondary_actions_and_tracks_modal_state():
     assert settings == [True]
     assert backs == [True]
     assert host.viewmodel.modal_route == "project_settings"
+
+
+def test_project_shell_host_replacing_work_widget_cleans_up_old_content() -> None:
+    host = ProjectShellHost()
+    old_work = QLabel("old work")
+    old_work.cleanup = MagicMock()  # type: ignore[attr-defined]
+    host.set_work_widget(old_work)
+
+    new_work = QLabel("new work")
+    host.set_work_widget(new_work)
+
+    old_work.cleanup.assert_called_once()
+
+
+def test_project_shell_host_modal_close_restores_previous_modal_route() -> None:
+    host = ProjectShellHost()
+    host.set_work_widget(QLabel("work"))
+    host.set_terms_widget(QLabel("terms"))
+    host.set_project_context("proj-1", "One Piece")
+
+    host.present_project_settings()
+    host.present_queue()
+    host.dismiss_modal()
+
+    assert host.viewmodel.route_state() == RouteState(
+        primary=PrimaryRoute.WORK,
+        project_id="proj-1",
+        modal=ModalRoute.PROJECT_SETTINGS,
+    )

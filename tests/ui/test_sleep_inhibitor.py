@@ -390,6 +390,7 @@ def test_update_sleep_inhibitor_acquires_when_task_engine_has_running_work():
         _task_engine=_make_fake_task_engine(has_running_work=True),
         _view_registry={},
         _sleep_inhibitor=mock_inhibitor,
+        _sleep_inhibitor_acquired=False,
     )
 
     MainWindow._update_sleep_inhibitor(fake_window)
@@ -406,6 +407,7 @@ def test_update_sleep_inhibitor_acquires_when_workspace_has_running_ops():
         _task_engine=_make_fake_task_engine(has_running_work=False),
         _view_registry={"project_abc": workspace},
         _sleep_inhibitor=mock_inhibitor,
+        _sleep_inhibitor_acquired=False,
     )
 
     MainWindow._update_sleep_inhibitor(fake_window)
@@ -422,6 +424,7 @@ def test_update_sleep_inhibitor_releases_when_nothing_running():
         _task_engine=_make_fake_task_engine(has_running_work=False),
         _view_registry={"project_abc": workspace, "projects": SimpleNamespace()},
         _sleep_inhibitor=mock_inhibitor,
+        _sleep_inhibitor_acquired=True,
     )
 
     MainWindow._update_sleep_inhibitor(fake_window)

@@ -44,6 +44,7 @@ from context_aware_translation.application.runtime import (
     build_default_routes_from_config,
     make_blocker,
     map_document_type_code,
+    raise_application_error,
 )
 from context_aware_translation.application.services._export_support import (
     prepare_export,
@@ -369,6 +370,21 @@ class DefaultWorkService:
         context_tree_path = self._runtime.book_manager.get_book_context_tree_path(request.project_id)
         with self._runtime.open_book_db(request.project_id) as dbx:
             result = dbx.document_repo.reset_document_stack(request.document_id, context_tree_db_path=context_tree_path)
+        if not result.get("document_exists", True):
+            raise_application_error(
+                ApplicationErrorCode.NOT_FOUND,
+                f"Document not found: {request.document_id}",
+                project_id=request.project_id,
+                document_id=request.document_id,
+            )
+        affected_document_ids = [int(document_id) for document_id in result.get("affected_document_ids", [])]
+        if not affected_document_ids:
+            return WorkMutationResult(
+                message=UserMessage(
+                    severity=UserMessageSeverity.INFO,
+                    text="No document state changed.",
+                )
+            )
         self._runtime.invalidate_workboard(request.project_id)
         self._runtime.invalidate_terms(request.project_id)
         self._runtime.invalidate_document(request.project_id)
@@ -376,7 +392,7 @@ class DefaultWorkService:
             message=UserMessage(
                 severity=UserMessageSeverity.SUCCESS,
                 text=(
-                    f"Reset {len(result.get('affected_document_ids', []))} document(s); "
+                    f"Reset {len(affected_document_ids)} document(s); "
                     f"deleted {result.get('deleted_chunks', 0)} chunks and deleted {result.get('deleted_terms', 0)} terms."
                 ),
             )
@@ -391,6 +407,21 @@ class DefaultWorkService:
             result = dbx.document_repo.delete_documents_stack(
                 request.document_id, context_tree_db_path=context_tree_path
             )
+        if not result.get("document_exists", True):
+            raise_application_error(
+                ApplicationErrorCode.NOT_FOUND,
+                f"Document not found: {request.document_id}",
+                project_id=request.project_id,
+                document_id=request.document_id,
+            )
+        deleted_documents = int(result.get("deleted_documents", 0) or 0)
+        if deleted_documents == 0:
+            return WorkMutationResult(
+                message=UserMessage(
+                    severity=UserMessageSeverity.INFO,
+                    text="No documents were deleted.",
+                )
+            )
         self._runtime.invalidate_workboard(request.project_id)
         self._runtime.invalidate_terms(request.project_id)
         self._runtime.invalidate_document(request.project_id)
@@ -399,7 +430,7 @@ class DefaultWorkService:
             message=UserMessage(
                 severity=UserMessageSeverity.SUCCESS,
                 text=(
-                    f"Deleted {result.get('deleted_documents', 0)} document(s), "
+                    f"Deleted {deleted_documents} document(s), "
                     f"{result.get('deleted_sources', 0)} sources, and {result.get('deleted_chunks', 0)} chunks."
                 ),
             )

@@ -636,7 +636,7 @@ class SetupWizardDialog(QDialog):
 
     def selected_providers(self) -> list[ProviderKind]:
         checked = [provider for provider, (checkbox, _) in self._provider_inputs.items() if checkbox.isChecked()]
-        return checked if checked else list(self._wizard_state.selected_providers)
+        return checked
 
     def _draft_for_provider(self, provider: ProviderKind) -> ConnectionDraft:
         for draft in self._wizard_state.drafts:

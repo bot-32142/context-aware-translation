@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from bisect import bisect_right
+from typing import Any, cast
 
 from PySide6.QtCore import QEvent, QSignalBlocker, Qt, QTimer
 from PySide6.QtGui import (
@@ -113,9 +114,12 @@ class DocumentTranslationView(QWidget):
         self._state: DocumentTranslationState | None = None
         self._supports_batch = False
         self._progress_text_value = ""
+        self._message_text_value = ""
         self._polish_enabled = True
         self._can_translate = False
         self._can_batch = False
+        self._drafts_by_unit_id: dict[str, str] = {}
+        self._rendered_unit_id: str | None = None
         self._syncing_editor_scroll = False
         self._line_height_sync_pending = False
         self._source_block_tops: list[float] = []
@@ -288,6 +292,7 @@ class DocumentTranslationView(QWidget):
         self._sync_chrome_state()
 
     def refresh(self) -> None:
+        self._capture_current_draft()
         previous_unit_id = self._selected_unit_id()
         self._apply_state(
             self._service.get_translation(
@@ -305,6 +310,7 @@ class DocumentTranslationView(QWidget):
         return [self._state.active_task_id]
 
     def _apply_state(self, state: DocumentTranslationState, *, previous_unit_id: str | None) -> None:
+        self._prune_drafts(state)
         self._state = state
         self._supports_batch = state.supports_batch
         self._progress_text_value = self._progress_text(state)
@@ -330,6 +336,7 @@ class DocumentTranslationView(QWidget):
         self._sync_chrome_state()
 
     def _on_unit_selected(self, row: int) -> None:
+        self._capture_current_draft()
         if self._state is None or row < 0 or row >= len(self._state.units):
             self._render_selected_unit(None)
             return
@@ -337,6 +344,7 @@ class DocumentTranslationView(QWidget):
 
     def _render_selected_unit(self, unit: TranslationUnitState | None) -> None:
         if unit is None:
+            self._rendered_unit_id = None
             self.selection_label.setText(self.tr("No unit selected"))
             self.blocker_label.hide()
             self.source_text.clear()
@@ -352,9 +360,10 @@ class DocumentTranslationView(QWidget):
             return
 
         self._clear_find_highlight()
+        self._rendered_unit_id = unit.unit_id
         self.selection_label.setText(f"{unit.label} · {self.tr(_STATUS_TEXT[unit.status])}")
         self.source_text.setPlainText(unit.source_text or "")
-        self.translation_text.setPlainText(unit.translated_text or "")
+        self.translation_text.setPlainText(self._display_text_for_unit(unit))
         self.translation_text.setReadOnly(not unit.actions.can_save)
         self.save_button.setEnabled(unit.actions.can_save)
         self.retranslate_button.setEnabled(unit.actions.can_retranslate)
@@ -410,13 +419,14 @@ class DocumentTranslationView(QWidget):
         unit = self._selected_unit()
         if unit is None:
             return
+        translated_text = self.translation_text.toPlainText()
         try:
             state = self._service.save_translation(
                 SaveTranslationRequest(
                     project_id=self._project_id,
                     document_id=self._document_id,
                     unit_id=unit.unit_id,
-                    translated_text=self.translation_text.toPlainText(),
+                    translated_text=translated_text,
                 )
             )
         except BlockedOperationError as exc:
@@ -427,6 +437,11 @@ class DocumentTranslationView(QWidget):
             QMessageBox.warning(self, self.tr("Save Failed"), exc.payload.message)
             self.refresh()
             return
+        saved_unit = self._unit_by_id(state, unit.unit_id)
+        if saved_unit is not None and (saved_unit.translated_text or "") == translated_text:
+            self._drafts_by_unit_id.pop(unit.unit_id, None)
+        else:
+            self._drafts_by_unit_id[unit.unit_id] = translated_text
         self._apply_state(state, previous_unit_id=unit.unit_id)
         self._set_message(UserMessageSeverity.SUCCESS, self.tr("Translation saved."))
 
@@ -514,8 +529,32 @@ class DocumentTranslationView(QWidget):
 
     def _set_message(self, severity: UserMessageSeverity, text: str) -> None:
         _ = severity
-        self._progress_text_value = text
+        self._message_text_value = text
         self._sync_chrome_state()
+
+    def _capture_current_draft(self) -> None:
+        unit = self._rendered_unit()
+        if unit is None:
+            return
+        current_text = self.translation_text.toPlainText()
+        persisted_text = unit.translated_text or ""
+        if current_text == persisted_text:
+            self._drafts_by_unit_id.pop(unit.unit_id, None)
+            return
+        self._drafts_by_unit_id[unit.unit_id] = current_text
+
+    def _display_text_for_unit(self, unit: TranslationUnitState) -> str:
+        return self._drafts_by_unit_id.get(unit.unit_id, unit.translated_text or "")
+
+    def _prune_drafts(self, state: DocumentTranslationState) -> None:
+        next_unit_ids = {unit.unit_id for unit in state.units}
+        self._drafts_by_unit_id = {
+            unit_id: draft for unit_id, draft in self._drafts_by_unit_id.items() if unit_id in next_unit_ids
+        }
+        for unit in state.units:
+            persisted_text = unit.translated_text or ""
+            if self._drafts_by_unit_id.get(unit.unit_id) == persisted_text:
+                self._drafts_by_unit_id.pop(unit.unit_id, None)
 
     def _row_text(self, unit: TranslationUnitState) -> str:
         return f"{_STATUS_ICON[unit.status]} {unit.label}"
@@ -696,12 +735,25 @@ class DocumentTranslationView(QWidget):
             return self._source_block_tops, self._source_block_heights
         return self._translation_block_tops, self._translation_block_heights
 
+    def _rendered_unit(self) -> TranslationUnitState | None:
+        return self._unit_by_id(self._state, self._rendered_unit_id)
+
+    def _unit_by_id(self, state: DocumentTranslationState | None, unit_id: str | None) -> TranslationUnitState | None:
+        if state is None or unit_id is None:
+            return None
+        for unit in state.units:
+            if unit.unit_id == unit_id:
+                return unit
+        return None
+
     def _connect_shortcuts(self) -> None:
-        self._shortcuts = [
-            QShortcut(QKeySequence.StandardKey.Find, self, activated=self._show_find_panel),
-            QShortcut(QKeySequence.StandardKey.Replace, self, activated=self._show_replace_panel),
-            QShortcut(QKeySequence(Qt.Key.Key_Escape), self.find_panel, activated=self._hide_find_panel),
-        ]
+        find_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Find), self)
+        find_shortcut.activated.connect(self._show_find_panel)
+        replace_shortcut = QShortcut(QKeySequence(QKeySequence.StandardKey.Replace), self)
+        replace_shortcut.activated.connect(self._show_replace_panel)
+        close_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Escape), self.find_panel)
+        close_shortcut.activated.connect(self._hide_find_panel)
+        self._shortcuts = [find_shortcut, replace_shortcut, close_shortcut]
 
     def _show_find_panel(self, *, show_replace: bool = False) -> None:
         if not self.find_panel.isVisible():
@@ -770,7 +822,7 @@ class DocumentTranslationView(QWidget):
             return ""
         if row == self.unit_list.currentRow():
             return self.translation_text.toPlainText()
-        return self._state.units[row].translated_text or ""
+        return self._display_text_for_unit(self._state.units[row])
 
     def _select_find_match(self, row: int, start: int, length: int) -> None:
         if row != self.unit_list.currentRow():
@@ -843,9 +895,9 @@ class DocumentTranslationView(QWidget):
         root = self.chrome_host.rootObject()
         if root is None:
             return
-        root.polishToggled.connect(self._on_polish_toggled)
-        root.translateRequested.connect(self._translate_document)
-        root.batchRequested.connect(self._submit_batch_translation)
+        cast(Any, root).polishToggled.connect(self._on_polish_toggled)
+        cast(Any, root).translateRequested.connect(self._translate_document)
+        cast(Any, root).batchRequested.connect(self._submit_batch_translation)
 
     def _on_polish_toggled(self, enabled: bool) -> None:
         if enabled == self._polish_enabled:
@@ -856,6 +908,7 @@ class DocumentTranslationView(QWidget):
     def _sync_chrome_state(self) -> None:
         self.viewmodel.apply_state(
             progress_text=self._progress_text_value.strip(),
+            message_text=self._message_text_value.strip(),
             polish_enabled=self._polish_enabled,
             can_translate=self._can_translate,
             supports_batch=self._supports_batch,

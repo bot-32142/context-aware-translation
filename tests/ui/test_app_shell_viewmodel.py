@@ -54,4 +54,7 @@ def test_app_shell_viewmodel_tracks_modal_routes():
     assert viewmodel.modal_route == ModalRoute.QUEUE.value
 
     viewmodel.dismiss_modal()
+    assert viewmodel.modal_route == ModalRoute.APP_SETTINGS.value
+
+    viewmodel.dismiss_modal()
     assert viewmodel.modal_route == ""

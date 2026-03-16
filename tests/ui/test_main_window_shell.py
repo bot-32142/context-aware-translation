@@ -646,6 +646,35 @@ def test_main_window_routes_navigation_targets_through_route_bridge():
         patch_stack.close()
 
 
+def test_main_window_cross_project_navigation_uses_running_operation_warning_flow():
+    window, context, patch_stack = _make_window()
+    try:
+        window.open_project("project-1", "One Piece")
+        current_shell = window._view_registry["project_project-1"]
+        assert isinstance(current_shell, _FakeProjectShellHost)
+        assert isinstance(current_shell.work_widget, _FakeWorkView)
+        current_shell.work_widget.running_operations = ["OCR"]
+        context.runtime.book_manager.get_book.return_value = SimpleNamespace(book_id="project-2", name="Bleach")
+
+        with patch.object(window, "_warn_running_operations", return_value=False) as warn:
+            window._open_navigation_target(NavigationTarget(kind=NavigationTargetKind.WORK, project_id="project-2"))
+
+        warn.assert_called_once_with(["OCR"])
+        assert current_shell.work_widget.cancel_requests == []
+        assert window._current_book_id == "project-1"
+
+        with patch.object(window, "_warn_running_operations", return_value=True) as warn:
+            window._open_navigation_target(NavigationTarget(kind=NavigationTargetKind.WORK, project_id="project-2"))
+
+        warn.assert_called_once_with(["OCR"])
+        assert current_shell.work_widget.cancel_requests == [False]
+        assert window._current_book_id == "project-2"
+        assert window._app_shell.current_view_key == "project_project-2"
+    finally:
+        window.close()
+        patch_stack.close()
+
+
 def test_main_window_routes_global_queue_target_without_open_project():
     window, _context, patch_stack = _make_window()
     try:
@@ -808,17 +837,46 @@ def test_main_window_queue_close_after_multiple_deletes_clears_project_modal_sta
         patch_stack.close()
 
 
+def test_main_window_closing_queue_does_not_dismiss_project_settings_modal():
+    window, _context, patch_stack = _make_window()
+    try:
+        window.open_project("project-1", "One Piece")
+        shell = window._view_registry["project_project-1"]
+        assert isinstance(shell, _FakeProjectShellHost)
+
+        shell.present_project_settings()
+        window._open_queue_drawer(project_id="project-1", project_name="One Piece")
+
+        window._queue_shell.close_requested.emit()
+        QApplication.processEvents()
+
+        assert window._queue_dock.isHidden()
+        assert window._app_shell.modal_route == ""
+        assert shell.current_surface == "project_settings"
+    finally:
+        window.close()
+        patch_stack.close()
+
+
 def test_update_sleep_inhibitor_acquires_when_project_shell_has_running_ops():
     from context_aware_translation.ui.main_window import MainWindow
 
     mock_inhibitor = MagicMock()
     workspace = SimpleNamespace(get_running_operations=MagicMock(return_value=["OCR"]))
-    fake_window = SimpleNamespace(
-        _task_engine=SimpleNamespace(has_running_work=MagicMock(return_value=False)),
-        _view_registry={"project_abc": workspace},
-        _sleep_inhibitor=mock_inhibitor,
-    )
+    fake_window = SimpleNamespace()
+    fake_window._task_engine = SimpleNamespace(has_running_work=MagicMock(return_value=False))
+    fake_window._view_registry = {"project_abc": workspace}
+    fake_window._sleep_inhibitor = mock_inhibitor
+    fake_window._sleep_inhibitor_acquired = False
+    fake_window._set_sleep_inhibitor_active = lambda active: MainWindow._set_sleep_inhibitor_active(fake_window, active)
 
     MainWindow._update_sleep_inhibitor(fake_window)
     mock_inhibitor.acquire.assert_called_once()
     mock_inhibitor.release.assert_not_called()
+
+    MainWindow._update_sleep_inhibitor(fake_window)
+    mock_inhibitor.acquire.assert_called_once()
+
+    workspace.get_running_operations.return_value = []
+    MainWindow._update_sleep_inhibitor(fake_window)
+    mock_inhibitor.release.assert_called_once()

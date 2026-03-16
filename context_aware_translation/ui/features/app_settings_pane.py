@@ -27,6 +27,7 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowStepId,
     WorkflowStepRoute,
 )
+from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.services.app_setup import AppSetupService
 from context_aware_translation.ui.chrome_sizing import sync_qml_host_height
 from context_aware_translation.ui.features.app_setup_view import (
@@ -502,7 +503,11 @@ class AppSettingsPane(QWidget):
         return parent if isinstance(parent, QWidget) else self
 
     def _mutate(self, callback: Callable[[], object]) -> None:
-        callback()
+        try:
+            callback()
+        except ApplicationError as exc:
+            QMessageBox.warning(self, self.tr("App Setup"), exc.payload.message)
+            return
         self.refresh()
 
     def _set_table_item(

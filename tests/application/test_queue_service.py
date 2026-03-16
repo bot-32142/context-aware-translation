@@ -3,8 +3,14 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
+from context_aware_translation.application.contracts.common import QueueActionKind
+from context_aware_translation.application.contracts.queue import QueueActionRequest
+from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.services.queue import DefaultQueueService
 from context_aware_translation.storage.repositories.task_store import TaskRecord
+from context_aware_translation.workflow.tasks.models import Decision
 
 
 def test_queue_service_uses_lightweight_task_rows() -> None:
@@ -74,3 +80,71 @@ def test_queue_service_recovers_document_target_from_chunk_retranslation_payload
     assert state.items[0].related_target.project_id == "proj-2"
     assert state.items[0].related_target.document_id == 9
     assert state.items[0].related_target.kind == "document_translation"
+
+
+def test_queue_service_blocks_noop_action_instead_of_reporting_success() -> None:
+    record = TaskRecord(
+        task_id="task-3",
+        book_id="proj-3",
+        task_type="ocr",
+        status="running",
+        phase="running",
+        document_ids_json="[4]",
+        payload_json=None,
+        config_snapshot_json=None,
+        cancel_requested=False,
+        total_items=1,
+        completed_items=0,
+        failed_items=0,
+        last_error=None,
+        created_at=1.0,
+        updated_at=2.0,
+    )
+    runtime = SimpleNamespace(
+        task_store=SimpleNamespace(get=MagicMock(return_value=record)),
+        task_engine=SimpleNamespace(
+            preflight_task=MagicMock(return_value=Decision(allowed=False, code="invalid_state", reason="Cannot run"))
+        ),
+    )
+
+    service = DefaultQueueService(runtime)  # type: ignore[arg-type]
+
+    with pytest.raises(ApplicationError) as exc_info:
+        service.apply_action(QueueActionRequest(queue_item_id="task-3", action=QueueActionKind.RUN))
+
+    assert exc_info.value.payload.code == "blocked"
+
+
+def test_queue_service_wraps_engine_errors() -> None:
+    record = TaskRecord(
+        task_id="task-4",
+        book_id="proj-4",
+        task_type="ocr",
+        status="failed",
+        phase="failed",
+        document_ids_json="[4]",
+        payload_json=None,
+        config_snapshot_json=None,
+        cancel_requested=False,
+        total_items=1,
+        completed_items=0,
+        failed_items=1,
+        last_error="boom",
+        created_at=1.0,
+        updated_at=2.0,
+    )
+    runtime = SimpleNamespace(
+        task_store=SimpleNamespace(get=MagicMock(return_value=record)),
+        task_engine=SimpleNamespace(
+            preflight_task=MagicMock(return_value=Decision(allowed=True)),
+            rerun=MagicMock(side_effect=RuntimeError("engine exploded")),
+        ),
+    )
+
+    service = DefaultQueueService(runtime)  # type: ignore[arg-type]
+
+    with pytest.raises(ApplicationError) as exc_info:
+        service.apply_action(QueueActionRequest(queue_item_id="task-4", action=QueueActionKind.RETRY))
+
+    assert exc_info.value.payload.code == "conflict"
+    assert exc_info.value.payload.message == "Queue action 'retry' could not be applied."

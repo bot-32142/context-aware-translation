@@ -8,6 +8,7 @@ _TIP_TEXT = (
     "Choose a shared workflow profile, or select Custom profile to edit connection and model choices for this project."
 )
 _ROUTES_HINT_TEXT = "Step-specific route overrides remain editable below during this migration."
+_PROFILE_OPTION_DETAIL_KEYS = {"detail"}
 
 
 class ProjectSettingsPaneViewModel(ViewModelBase):
@@ -115,24 +116,37 @@ class ProjectSettingsPaneViewModel(ViewModelBase):
     ) -> None:
         self._project_name = project_name
         self._blocker_text = blocker_text
-        self._profile_options = profile_options
+        self._profile_options = self._translate_profile_options(profile_options)
         self._custom_profile_text = custom_profile_text
         self._show_custom_profile = show_custom_profile
         self._show_open_app_setup = show_open_app_setup
         self._can_save = can_save
-        self.content_changed.emit()
-        self.mark_changed()
+        self._emit_content_changed()
 
     def set_message(self, text: str, *, is_error: bool) -> None:
         self._message_text = text
         self._message_kind = "error" if text and is_error else "success" if text else ""
-        self.content_changed.emit()
-        self.mark_changed()
+        self._emit_content_changed()
 
     def clear_message(self) -> None:
         self.set_message("", is_error=False)
 
     def retranslate(self) -> None:
+        self._profile_options = self._translate_profile_options(self._profile_options)
         self.labels_changed.emit()
+        self._emit_content_changed()
+
+    def _emit_content_changed(self) -> None:
         self.content_changed.emit()
         self.mark_changed()
+
+    def _translate_profile_options(self, profile_options: list[dict[str, object]]) -> list[dict[str, object]]:
+        translated_options: list[dict[str, object]] = []
+        for option in profile_options:
+            translated_option = dict(option)
+            for key in _PROFILE_OPTION_DETAIL_KEYS:
+                value = translated_option.get(key)
+                if isinstance(value, str):
+                    translated_option[key] = QCoreApplication.translate("ProjectSettingsPane", value)
+            translated_options.append(translated_option)
+        return translated_options

@@ -7,6 +7,8 @@ from context_aware_translation.ui.viewmodels.base import ViewModelBase
 _TIP_TEXT = (
     "Import documents here, review project-wide progress, and open the next document tool directly from the table."
 )
+_IMPORT_MESSAGE_SUCCESS = "success"
+_IMPORT_MESSAGE_ERROR = "error"
 
 
 class WorkHomeViewModel(ViewModelBase):
@@ -26,6 +28,7 @@ class WorkHomeViewModel(ViewModelBase):
         self._import_message_kind = ""
         self._can_import = False
         self._import_type_options: list[dict[str, object]] = []
+        self._import_type_option_sources: list[tuple[str, str]] = []
         self._selected_import_type = ""
 
     @Property(str, notify=labels_changed)
@@ -125,18 +128,14 @@ class WorkHomeViewModel(ViewModelBase):
     ) -> None:
         self._import_summary = summary
         self._import_message = message
-        self._import_message_kind = "error" if is_error else "success"
+        self._import_message_kind = (
+            _IMPORT_MESSAGE_ERROR if message and is_error else _IMPORT_MESSAGE_SUCCESS if message else ""
+        )
         self._can_import = can_import
         resolved_selected = selected_import_type or ""
         self._selected_import_type = resolved_selected
-        self._import_type_options = [
-            {
-                "documentType": document_type,
-                "label": label,
-                "selected": document_type == resolved_selected,
-            }
-            for document_type, label in options
-        ]
+        self._import_type_option_sources = list(options)
+        self._import_type_options = self._build_import_type_options()
         self._emit_content_changed()
 
     def select_import_type(self, document_type: str) -> None:
@@ -144,9 +143,7 @@ class WorkHomeViewModel(ViewModelBase):
         if normalized == self._selected_import_type:
             return
         self._selected_import_type = normalized
-        self._import_type_options = [
-            {**option, "selected": str(option["documentType"]) == normalized} for option in self._import_type_options
-        ]
+        self._import_type_options = self._build_import_type_options()
         self._emit_content_changed()
 
     def clear_import_message(self) -> None:
@@ -155,8 +152,22 @@ class WorkHomeViewModel(ViewModelBase):
         self._emit_content_changed()
 
     def retranslate(self) -> None:
+        self._import_type_options = self._build_import_type_options()
         self.labels_changed.emit()
-        self.mark_changed()
+        self._emit_content_changed()
+
+    def _translate_option_label(self, label: str) -> str:
+        return QCoreApplication.translate("WorkView", label)
+
+    def _build_import_type_options(self) -> list[dict[str, object]]:
+        return [
+            {
+                "documentType": document_type,
+                "label": self._translate_option_label(label),
+                "selected": document_type == self._selected_import_type,
+            }
+            for document_type, label in self._import_type_option_sources
+        ]
 
     def _emit_content_changed(self) -> None:
         self.content_changed.emit()

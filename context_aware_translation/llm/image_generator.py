@@ -9,7 +9,7 @@ from collections.abc import Callable
 from enum import Enum
 from typing import TYPE_CHECKING, Protocol
 
-from context_aware_translation.llm.image_backend_base import TextReplacement
+from context_aware_translation.llm.image_backend_base import BaseImageGenerator, TextReplacement
 from context_aware_translation.llm.image_backends import gemini_backend, openai_backend, qwen_backend
 
 if TYPE_CHECKING:
@@ -93,3 +93,12 @@ def create_image_generator(config: ImageReembeddingConfig) -> ImageGenerator:
     if backend == ImageBackend.QWEN:
         return qwen_backend.QwenImageGenerator(config)
     raise ValueError(f"Unknown image backend: {config.backend}")
+
+
+__all__ = [
+    "BaseImageGenerator",
+    "ImageBackend",
+    "ImageGenerator",
+    "build_text_replacements",
+    "create_image_generator",
+]

@@ -16,6 +16,8 @@ from context_aware_translation.application.contracts.app_setup import (
 from context_aware_translation.application.contracts.common import ProviderKind
 from context_aware_translation.application.contracts.project_setup import SaveProjectSetupRequest
 from context_aware_translation.application.contracts.projects import CreateProjectRequest
+from context_aware_translation.application.contracts.terms import UpdateTermRequest
+from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 
 
@@ -23,7 +25,31 @@ def _ensure_qt_app() -> QApplication:
     app = QApplication.instance()
     if app is None:
         app = QApplication([])
+    assert isinstance(app, QApplication)
     return app
+
+
+def _configure_project_for_task_preflights(context, project_id: str) -> None:  # noqa: ANN001
+    endpoint = context.runtime.book_manager.create_endpoint_profile(
+        name=f"Test Endpoint {project_id}",
+        api_key="test-key",
+        base_url="https://api.openai.com/v1",
+        model="gpt-4.1-mini",
+    )
+    config = context.runtime.get_effective_config_payload(project_id)
+    for key in (
+        "extractor_config",
+        "summarizor_config",
+        "glossary_config",
+        "translator_config",
+        "review_config",
+        "ocr_config",
+        "image_reembedding_config",
+        "manga_translator_config",
+    ):
+        config.setdefault(key, {})
+        config[key]["endpoint_profile"] = endpoint.profile_id
+    context.runtime.book_manager.set_book_custom_config(project_id, config)
 
 
 def test_build_application_context_exposes_services(tmp_path: Path) -> None:
@@ -357,5 +383,111 @@ def test_app_setup_service_persists_advanced_connection_fields(tmp_path: Path) -
         assert endpoint.kwargs["provider"] == ProviderKind.DEEPSEEK.value
         assert endpoint.kwargs["reasoning_effort"] == "none"
         assert endpoint.kwargs["extra_body"] == {"foo": "bar"}
+    finally:
+        context.close()
+
+
+def test_app_setup_delete_connection_invalidates_dependent_surfaces(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    seen: list[str] = []
+    subscription = context.events.subscribe(lambda event: seen.append(event.kind.value))
+    try:
+        state = context.services.app_setup.save_connection(
+            SaveConnectionRequest(
+                connection=ConnectionDraft(
+                    display_name="Disposable",
+                    provider=ProviderKind.OPENAI,
+                    api_key="secret",
+                    base_url="https://api.openai.com/v1",
+                    default_model="gpt-4.1-mini",
+                )
+            )
+        )
+        connection = next(item for item in state.connections if item.display_name == "Disposable")
+        seen.clear()
+
+        context.services.app_setup.delete_connection(connection.connection_id)
+
+        assert "setup_invalidated" in seen
+        assert "projects_invalidated" in seen
+        assert "workboard_invalidated" in seen
+    finally:
+        subscription.close()
+        context.close()
+
+
+def test_projects_delete_invalidates_all_affected_surfaces(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    seen: list[str] = []
+    subscription = context.events.subscribe(lambda event: seen.append(event.kind.value))
+    try:
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Delete Me", target_language="English")
+        )
+        project_id = created.project.project_id
+        seen.clear()
+
+        context.services.projects.delete_project(project_id, permanent=True)
+
+        assert "projects_invalidated" in seen
+        assert "setup_invalidated" in seen
+        assert "workboard_invalidated" in seen
+        assert "queue_changed" in seen
+        assert "document_invalidated" in seen
+        assert "terms_invalidated" in seen
+    finally:
+        subscription.close()
+        context.close()
+
+
+def test_application_context_close_closes_task_engine_before_registry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _ensure_qt_app()
+    close_order: list[str] = []
+    context = build_application_context(library_root=tmp_path)
+    original_engine_close = context.runtime.task_engine.close
+    original_book_manager_close = context.runtime.book_manager.close
+
+    def _track_engine_close() -> None:
+        close_order.append("engine")
+        original_engine_close()
+
+    def _track_book_manager_close() -> None:
+        close_order.append("book_manager")
+        original_book_manager_close()
+
+    monkeypatch.setattr(context.runtime.task_engine, "close", _track_engine_close, raising=True)
+    monkeypatch.setattr(context.runtime.book_manager, "close", _track_book_manager_close, raising=True)
+
+    context.close()
+
+    assert close_order[:2] == ["engine", "book_manager"]
+
+
+def test_terms_update_missing_term_raises_not_found(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    try:
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Terms Missing", target_language="English")
+        )
+        project_id = created.project.project_id
+        _configure_project_for_task_preflights(context, project_id)
+        scope = context.services.terms.get_project_terms(project_id).scope
+
+        with pytest.raises(ApplicationError) as exc_info:
+            context.services.terms.update_term(
+                UpdateTermRequest(
+                    scope=scope,
+                    term_id=1,
+                    term_key="missing",
+                    translation="x",
+                )
+            )
+
+        assert exc_info.value.payload.code == "not_found"
     finally:
         context.close()

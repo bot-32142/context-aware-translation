@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from typing import Protocol
 
 from context_aware_translation.application.contracts.projects import (
@@ -46,6 +47,13 @@ class DefaultProjectsService:
             book = self._runtime.book_manager.create_book(request.name)
         except ValueError as exc:
             raise_application_error(ApplicationErrorCode.PRECONDITION, str(exc), project_name=request.name)
+        except sqlite3.IntegrityError as exc:
+            raise_application_error(
+                ApplicationErrorCode.CONFLICT,
+                "A project with that name already exists.",
+                project_name=request.name,
+                reason=str(exc),
+            )
         if request.target_language:
             self.update_project(UpdateProjectRequest(project_id=book.book_id, target_language=request.target_language))
             book = self._runtime.get_book(book.book_id)
@@ -56,7 +64,16 @@ class DefaultProjectsService:
 
     def update_project(self, request: UpdateProjectRequest) -> ProjectSummary:
         if request.name is not None:
-            updated = self._runtime.book_manager.update_book(request.project_id, name=request.name)
+            try:
+                updated = self._runtime.book_manager.update_book(request.project_id, name=request.name)
+            except sqlite3.IntegrityError as exc:
+                raise_application_error(
+                    ApplicationErrorCode.CONFLICT,
+                    "A project with that name already exists.",
+                    project_id=request.project_id,
+                    project_name=request.name,
+                    reason=str(exc),
+                )
             if updated is None:
                 raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Project not found: {request.project_id}")
         if request.target_language is not None:
@@ -73,3 +90,8 @@ class DefaultProjectsService:
         if not deleted:
             raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Project not found: {project_id}")
         self._runtime.invalidate_projects()
+        self._runtime.invalidate_setup(project_id)
+        self._runtime.invalidate_workboard(project_id)
+        self._runtime.invalidate_queue(project_id)
+        self._runtime.invalidate_document(project_id)
+        self._runtime.invalidate_terms(project_id)

@@ -40,6 +40,7 @@ from context_aware_translation.application.runtime import (
     blocker_code_for_decision_code,
     make_blocker,
     make_document_ref,
+    raise_application_error,
 )
 from context_aware_translation.storage.schema.book_db import TermRecord, TermRowUpdate
 from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
@@ -92,16 +93,23 @@ class DefaultTermsService:
             records = dbx.term_repo.list_term_records()
             target_key = request.term_key or str(request.term_id)
             record = next((item for item in records if item.key == target_key), None)
-            if record is not None:
-                if request.translation is not None:
-                    record.translated_name = request.translation
-                if request.description is not None:
-                    record.descriptions = {**record.descriptions, "manual": request.description}
-                if request.ignored is not None:
-                    record.ignored = request.ignored
-                if request.reviewed is not None:
-                    record.is_reviewed = request.reviewed
-                dbx.term_repo.upsert_terms([record])
+            if record is None:
+                raise_application_error(
+                    ApplicationErrorCode.NOT_FOUND,
+                    f"Term not found: {target_key}",
+                    project_id=request.scope.project.project_id,
+                    document_id=request.scope.document.document_id if request.scope.document is not None else None,
+                    term_key=target_key,
+                )
+            if request.translation is not None:
+                record.translated_name = request.translation
+            if request.description is not None:
+                record.descriptions = {**record.descriptions, "manual": request.description}
+            if request.ignored is not None:
+                record.ignored = request.ignored
+            if request.reviewed is not None:
+                record.is_reviewed = request.reviewed
+            dbx.term_repo.upsert_terms([record])
         self._runtime.invalidate_terms(
             request.scope.project.project_id,
             request.scope.document.document_id if request.scope.document is not None else None,

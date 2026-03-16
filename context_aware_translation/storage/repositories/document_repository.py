@@ -208,8 +208,18 @@ class DocumentRepository:
         Returns:
             Dict with cutoff, affected_document_ids, deleted_chunks, etc.
         """
-        # Step 1: Capture cutoff BEFORE any deletion
-        cutoff = self.db.get_min_chunk_id_for_document(document_id)
+        affected_doc_ids = self._stack_document_ids(document_id)
+        if not affected_doc_ids:
+            return {
+                "document_exists": False,
+                "cutoff": None,
+                "affected_document_ids": [],
+                "deleted_chunks": 0,
+                "pruned_terms": 0,
+                "deleted_terms": 0,
+            }
+
+        cutoff = self._min_chunk_id_for_documents(affected_doc_ids)
 
         if cutoff is not None and context_tree_db_path is not None:
             # Step 2: Clean context tree (separate DB -- do first for fail-safety)
@@ -225,12 +235,13 @@ class DocumentRepository:
             result = self.db.reset_documents_from(cutoff)
         else:
             result = {
-                "affected_document_ids": [document_id],
+                "affected_document_ids": affected_doc_ids,
                 "deleted_chunks": 0,
                 "pruned_terms": 0,
                 "deleted_terms": 0,
             }
 
+        result["document_exists"] = True
         result["cutoff"] = cutoff
         return result
 
@@ -258,16 +269,11 @@ class DocumentRepository:
             Dict with cutoff, affected_document_ids, deleted_chunks,
             deleted_sources, deleted_documents, etc.
         """
-        # Step 1: Capture cutoff BEFORE any deletion
-        # Look across all documents that will be affected
-        affected_rows = self.db.conn.execute(
-            "SELECT document_id FROM document WHERE document_id >= ? ORDER BY document_id",
-            (document_id,),
-        ).fetchall()
-        affected_doc_ids = [r["document_id"] for r in affected_rows]
+        affected_doc_ids = self._stack_document_ids(document_id)
 
         if not affected_doc_ids:
             return {
+                "document_exists": False,
                 "cutoff": None,
                 "affected_document_ids": [],
                 "deleted_chunks": 0,
@@ -277,13 +283,7 @@ class DocumentRepository:
                 "deleted_documents": 0,
             }
 
-        # Find min chunk_id across all affected documents
-        placeholders = ",".join("?" * len(affected_doc_ids))
-        row = self.db.conn.execute(
-            f"SELECT MIN(chunk_id) as min_id FROM chunks WHERE document_id IN ({placeholders})",
-            affected_doc_ids,
-        ).fetchone()
-        cutoff = int(row["min_id"]) if row and row["min_id"] is not None else None
+        cutoff = self._min_chunk_id_for_documents(affected_doc_ids)
 
         if cutoff is not None and context_tree_db_path is not None:
             # Step 2: Clean context tree (separate DB -- do first for fail-safety)
@@ -296,8 +296,28 @@ class DocumentRepository:
 
         # Step 3: Delete documents (handles chunk/term reset + source/doc deletion)
         result = self.db.delete_documents_from(document_id)
+        result["document_exists"] = True
         result["cutoff"] = cutoff
         return result
+
+    def _stack_document_ids(self, document_id: int) -> list[int]:
+        rows = self.db.conn.execute(
+            "SELECT document_id FROM document WHERE document_id >= ? ORDER BY document_id",
+            (document_id,),
+        ).fetchall()
+        return [int(row["document_id"]) for row in rows]
+
+    def _min_chunk_id_for_documents(self, document_ids: list[int]) -> int | None:
+        if not document_ids:
+            return None
+        placeholders = ",".join("?" * len(document_ids))
+        row = self.db.conn.execute(
+            f"SELECT MIN(chunk_id) as min_id FROM chunks WHERE document_id IN ({placeholders})",
+            document_ids,
+        ).fetchone()
+        if row is None or row["min_id"] is None:
+            return None
+        return int(row["min_id"])
 
     # =========================================================================
     # Image Reembedding Methods

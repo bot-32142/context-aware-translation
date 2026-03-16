@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from PySide6.QtCore import Qt, QTimer
@@ -69,6 +69,26 @@ class _CheckFieldSpec:
     label: str
     key: str
     default: bool
+
+
+def validate_workflow_routes(
+    routes: list[WorkflowStepRoute],
+    *,
+    tr: Callable[[str], str],
+) -> str | None:
+    for route in routes:
+        if route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
+            provider = str(route.step_config.get("provider") or "").strip()
+            if not provider:
+                continue
+            if not str(route.step_config.get("api_key") or "").strip():
+                return tr("Translator batch requires an API key when enabled.")
+            if not str(route.model or "").strip():
+                return tr("Translator batch requires a model when enabled.")
+            continue
+        if not str(route.connection_id or "").strip() or not str(route.model or "").strip():
+            return tr("Every workflow step must use a connection and model.")
+    return None
 
 
 class StepAdvancedConfigDialog(QDialog):
@@ -167,13 +187,16 @@ class StepAdvancedConfigDialog(QDialog):
 
     def _build_simple_step(
         self,
-        config: dict[str, object],
+        config: Mapping[str, object],
         specs: tuple[_SpinFieldSpec | _CheckFieldSpec, ...],
     ) -> Callable[[], WorkflowStepRoute]:
         readers: dict[str, Callable[[], bool | int | float | str | None]] = {}
         for spec in specs:
             if isinstance(spec, _SpinFieldSpec):
-                widget = self._spin(spec.minimum, spec.maximum, int(config.get(spec.key, spec.default) or spec.default))
+                raw_value = config.get(spec.key, spec.default)
+                widget = self._spin(
+                    spec.minimum, spec.maximum, int(raw_value) if isinstance(raw_value, int) else spec.default
+                )
                 readers[spec.key] = lambda w=widget: int(w.value())
             else:
                 widget = QCheckBox()
@@ -183,14 +206,15 @@ class StepAdvancedConfigDialog(QDialog):
             self._form_layout.addRow(self.tr(spec.label), widget)
         return lambda: self._route.model_copy(update={"step_config": {key: read() for key, read in readers.items()}})
 
-    def _build_translator_batch(self, config: dict[str, object]) -> Callable[[], WorkflowStepRoute]:
+    def _build_translator_batch(self, config: Mapping[str, object]) -> Callable[[], WorkflowStepRoute]:
         provider_combo = QComboBox()
         provider_combo.addItem(self.tr("Disabled"), "")
         provider_combo.addItem(self.tr("Gemini AI Studio"), "gemini_ai_studio")
         self._select_combo_value(provider_combo, str(config.get("provider") or ""))
 
         api_key_edit = QLineEdit(str(config.get("api_key") or ""))
-        batch_size_spin = self._spin(1, 5000, int(config.get("batch_size", 100) or 100))
+        raw_batch_size = config.get("batch_size", 100)
+        batch_size_spin = self._spin(1, 5000, int(raw_batch_size) if isinstance(raw_batch_size, int) else 100)
         thinking_combo = QComboBox()
         for label, value in self._BATCH_THINKING_OPTIONS:
             thinking_combo.addItem(label, value)
@@ -332,7 +356,7 @@ class WorkflowRoutesEditor(QWidget):
         while self._rows_layout.count():
             item = self._rows_layout.takeAt(0)
             widget = item.widget()
-            if widget is not None:
+            if isinstance(widget, QWidget):
                 widget.hide()
                 widget.setParent(None)
                 widget.deleteLater()
@@ -452,15 +476,8 @@ class WorkflowRoutesEditor(QWidget):
             )
         return routes
 
-    def has_missing_required_fields(self) -> bool:
-        for row in self.rows:
-            if row.route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
-                continue
-            if row.connection_combo is None or not str(row.connection_combo.currentData() or "").strip():
-                return True
-            if not row.model_edit.text().strip():
-                return True
-        return False
+    def validate_routes(self) -> str | None:
+        return validate_workflow_routes(self.build_routes(), tr=self.tr)
 
     def _build_connection_combo(self, connection_id: str | None) -> QComboBox:
         combo = QSearchableComboBox()
@@ -633,14 +650,16 @@ class WorkflowRoutesEditor(QWidget):
         self._scroll_area.setFixedHeight(max(visible_height + viewport_padding, 2))
         self.setMinimumWidth(self._minimum_editor_width())
 
+        layout = self.layout()
+        assert layout is not None
         editor_height = (
-            self.layout().contentsMargins().top()
+            layout.contentsMargins().top()
             + self._hint_label.sizeHint().height()
-            + self.layout().spacing()
+            + layout.spacing()
             + self._header.sizeHint().height()
-            + self.layout().spacing()
+            + layout.spacing()
             + self._scroll_area.height()
-            + self.layout().contentsMargins().bottom()
+            + layout.contentsMargins().bottom()
         )
         self.setMinimumHeight(editor_height)
         self.updateGeometry()
@@ -863,11 +882,12 @@ class WorkflowProfileEditorDialog(QDialog):
         if not target_language:
             QMessageBox.warning(self, self.tr("Missing Information"), self.tr("Target language is required."))
             return
-        if self.routes_editor.has_missing_required_fields():
+        route_error = self.routes_editor.validate_routes()
+        if route_error is not None:
             QMessageBox.warning(
                 self,
-                self.tr("Missing Connection"),
-                self.tr("Every workflow step must use a connection and model."),
+                self.tr("Missing Information"),
+                route_error,
             )
             return
         self.accept()
@@ -877,9 +897,13 @@ class WorkflowProfileEditorDialog(QDialog):
         self.routes_editor.adjustSize()
         self._sync_section_height(self.general_section)
         self._sync_section_height(self.routes_section)
-        self._body_scroll.widget().adjustSize()
+        body_widget = self._body_scroll.widget()
+        if isinstance(body_widget, QWidget):
+            body_widget.adjustSize()
         self._body_layout.activate()
-        self.layout().activate()
+        layout = self.layout()
+        if layout is not None:
+            layout.activate()
 
     def _sync_section_height(self, section: QCollapsible) -> None:
         content = section.content()
@@ -895,6 +919,7 @@ class WorkflowProfileEditorDialog(QDialog):
         if content.maximumHeight() != target_height:
             content.setMaximumHeight(target_height)
         layout = section.layout()
+        assert layout is not None
         margins = layout.contentsMargins()
         total_height = (
             margins.top()

@@ -36,6 +36,7 @@ from context_aware_translation.application.contracts.terms import (
     TermsToolbarState,
     TermTableRow,
 )
+from context_aware_translation.application.errors import ApplicationError, ApplicationErrorCode, ApplicationErrorPayload
 from context_aware_translation.application.events import (
     DocumentInvalidatedEvent,
     InMemoryApplicationEventBus,
@@ -496,5 +497,65 @@ def test_document_workspace_images_tab_refits_when_activated():
 
         images_tab = _current_section_widget(view)
         assert images_tab.image_viewer.transform().m11() > 1.0
+    finally:
+        view.cleanup()
+
+
+def test_document_workspace_invalidation_refresh_preserves_ocr_draft():
+    view, bus, _document_service, _terms_service = _make_view()
+    try:
+        view.show_section(DocumentSection.OCR)
+        ocr_tab = _current_section_widget(view)
+        ocr_tab.text_edit.setPlainText("draft survives")
+
+        bus.publish(DocumentInvalidatedEvent(project_id="proj-1", document_id=4))
+
+        assert ocr_tab.text_edit.toPlainText() == "draft survives"
+    finally:
+        view.cleanup()
+
+
+def test_document_workspace_refresh_handles_workspace_error_without_raising():
+    from context_aware_translation.ui.features.document_workspace_view import DocumentWorkspaceView
+
+    bus = InMemoryApplicationEventBus()
+    document_service = FakeDocumentService(
+        workspace=_make_workspace_state(),
+        ocr=_make_ocr_state(),
+        ocr_page_images={101: None, 102: None},
+    )
+    terms_service = FakeTermsService(project_state=_make_terms_state(), document_state=_make_terms_state())
+    work_service = FakeWorkService(state_by_project={"proj-1": object()})
+
+    def _raise(_project_id: str, _document_id: int):
+        raise ApplicationError(
+            ApplicationErrorPayload(code=ApplicationErrorCode.INTERNAL, message="workspace refresh failed")
+        )
+
+    document_service.get_workspace = _raise
+    with patch.object(QMessageBox, "warning") as mock_warning:
+        view = DocumentWorkspaceView("proj-1", 4, document_service, terms_service, work_service, bus)
+    try:
+        mock_warning.assert_called()
+        assert view.current_section() is None
+    finally:
+        view.cleanup()
+
+
+def test_document_workspace_event_refresh_handles_child_refresh_error_without_raising():
+    view, bus, _document_service, _terms_service = _make_view()
+    try:
+        view.show_section(DocumentSection.OCR)
+        ocr_tab = _current_section_widget(view)
+
+        def _raise():
+            raise ApplicationError(
+                ApplicationErrorPayload(code=ApplicationErrorCode.INTERNAL, message="ocr pane failed")
+            )
+
+        ocr_tab.refresh = _raise
+        with patch.object(QMessageBox, "warning") as mock_warning:
+            bus.publish(DocumentInvalidatedEvent(project_id="proj-1", document_id=4))
+        mock_warning.assert_called()
     finally:
         view.cleanup()

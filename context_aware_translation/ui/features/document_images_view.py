@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
+from typing import Any, cast
 
 from PIL import Image
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
@@ -19,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from context_aware_translation.application.contracts.common import NavigationTargetKind
+from context_aware_translation.application.contracts.common import BlockerInfo, NavigationTargetKind
 from context_aware_translation.application.contracts.document import (
     DocumentImagesState,
     ImageAssetState,
@@ -206,9 +207,12 @@ class DocumentImagesView(QWidget):
 
     def refresh(self) -> None:
         previous_asset_id = self._selected_asset_id()
-        self._apply_state(
-            self._service.get_images(self._project_id, self._document_id), previous_asset_id=previous_asset_id
-        )
+        try:
+            state = self._service.get_images(self._project_id, self._document_id)
+        except ApplicationError as exc:
+            self._set_message(exc.payload.message)
+            return
+        self._apply_state(state, previous_asset_id=previous_asset_id)
 
     def get_running_operations(self) -> list[str]:
         if self._state is not None and self._state.active_task_id is not None:
@@ -289,10 +293,16 @@ class DocumentImagesView(QWidget):
         self.go_to_label.setEnabled(has_asset)
         self.page_spinbox.setEnabled(has_asset)
         self.go_button.setEnabled(has_asset)
-        self.first_button.setEnabled(has_asset and self._current_index > 0)
-        self.prev_button.setEnabled(has_asset and self._current_index > 0)
-        self.next_button.setEnabled(has_asset and self._current_index < len(self._assets) - 1)
-        self.last_button.setEnabled(has_asset and self._current_index < len(self._assets) - 1)
+        if not has_asset or self._current_index is None:
+            self.first_button.setEnabled(False)
+            self.prev_button.setEnabled(False)
+            self.next_button.setEnabled(False)
+            self.last_button.setEnabled(False)
+            return
+        self.first_button.setEnabled(self._current_index > 0)
+        self.prev_button.setEnabled(self._current_index > 0)
+        self.next_button.setEnabled(self._current_index < len(self._assets) - 1)
+        self.last_button.setEnabled(self._current_index < len(self._assets) - 1)
 
     def _render_current_asset(self) -> None:
         asset = self._selected_asset()
@@ -443,7 +453,7 @@ class DocumentImagesView(QWidget):
             toolbar.force_all_blocker.message if toolbar.force_all_blocker is not None else ""
         )
 
-    def _current_blocker(self, *, require_asset_disabled: bool) -> object | None:
+    def _current_blocker(self, *, require_asset_disabled: bool) -> BlockerInfo | None:
         asset = self._selected_asset()
         if asset is not None and asset.run_blocker is not None and (not require_asset_disabled or not asset.can_run):
             return asset.run_blocker
@@ -577,8 +587,9 @@ class DocumentImagesView(QWidget):
     def _cancel(self) -> None:
         if self._state is None or self._state.active_task_id is None:
             return
+        task_id: str = self._state.active_task_id
         self._run_command(
-            lambda: self._service.cancel_image_reinsertion(self._project_id, self._state.active_task_id),
+            lambda: self._service.cancel_image_reinsertion(self._project_id, task_id),
             fallback_message=self.tr("Cancellation requested."),
         )
 
@@ -607,7 +618,7 @@ class DocumentImagesView(QWidget):
         sync_qml_host_height(self.chrome_host)
 
     def _connect_qml_signals(self) -> None:
-        root = self.chrome_host.rootObject()
+        root = cast(Any, self.chrome_host.rootObject())
         if root is None:
             return
         root.blockerActionRequested.connect(self._open_blocker_target)

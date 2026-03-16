@@ -45,9 +45,11 @@ class ApplicationContext:
     events: InMemoryApplicationEventBus
 
     def close(self) -> None:
-        self.runtime.task_engine.stop_autorun()
-        self.runtime.task_store.close()
-        self.runtime.book_manager.close()
+        try:
+            self.runtime.task_engine.close()
+        finally:
+            self.runtime.task_store.close()
+            self.runtime.book_manager.close()
 
 
 def build_application_context(

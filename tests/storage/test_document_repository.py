@@ -311,3 +311,37 @@ def test_transaction_rollback_flow(document_repository: DocumentRepository, mock
     # Rollback transaction
     document_repository.rollback()
     mock_db.rollback.assert_called_once()
+
+
+def test_reset_document_stack_reports_missing_document(document_repository: DocumentRepository, mock_db: MagicMock):
+    mock_db.conn.execute.return_value.fetchall.return_value = []
+
+    result = document_repository.reset_document_stack(99)
+
+    assert result["document_exists"] is False
+    assert result["affected_document_ids"] == []
+
+
+def test_reset_document_stack_without_chunks_tracks_all_affected_documents(
+    document_repository: DocumentRepository, mock_db: MagicMock
+):
+    execute_results = [
+        MagicMock(fetchall=MagicMock(return_value=[{"document_id": 3}, {"document_id": 4}])),
+        MagicMock(fetchone=MagicMock(return_value={"min_id": None})),
+    ]
+    mock_db.conn.execute.side_effect = execute_results
+
+    result = document_repository.reset_document_stack(3)
+
+    assert result["document_exists"] is True
+    assert result["affected_document_ids"] == [3, 4]
+    assert result["deleted_chunks"] == 0
+
+
+def test_delete_documents_stack_reports_missing_document(document_repository: DocumentRepository, mock_db: MagicMock):
+    mock_db.conn.execute.return_value.fetchall.return_value = []
+
+    result = document_repository.delete_documents_stack(42)
+
+    assert result["document_exists"] is False
+    assert result["deleted_documents"] == 0

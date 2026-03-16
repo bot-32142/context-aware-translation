@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, cast
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
@@ -57,6 +58,12 @@ class _ElementPalette:
     badge_background: str
     badge_border: str
     muted_text: str
+
+
+@dataclass(slots=True)
+class _PageDraft:
+    extracted_text: str | None = None
+    element_texts: list[str] | None = None
 
 
 _DEFAULT_ELEMENT_PALETTE = _ElementPalette(
@@ -303,7 +310,9 @@ class _StructuredElementList(QScrollArea):
         self._cards.clear()
         while self._layout.count():
             item = self._layout.takeAt(0)
-            widget = item.widget()
+            if item is None:
+                continue
+            widget = item.widget() if item is not None else None
             if widget is not None:
                 widget.deleteLater()
 
@@ -339,6 +348,7 @@ class DocumentOCRTab(QWidget):
         self.viewmodel = DocumentOcrPaneViewModel(self)
         self._state: DocumentOCRState | None = None
         self._current_page_index: int | None = None
+        self._page_drafts: dict[int, _PageDraft] = {}
         self._element_to_bbox: dict[int, int] = {}
         self._bbox_to_element: dict[int, int] = {}
         self._chrome_resize_timer = QTimer(self)
@@ -479,7 +489,12 @@ class DocumentOCRTab(QWidget):
 
     def refresh(self) -> None:
         current_source_id = self._current_page.source_id if self._current_page is not None else None
-        self._state = self._service.get_ocr(self._project_id, self._document_id)
+        self._remember_current_draft()
+        try:
+            self._state = self._service.get_ocr(self._project_id, self._document_id)
+        except ApplicationError as exc:
+            self._set_message(exc.payload.message)
+            return
         self._sync_pages(current_source_id=current_source_id)
         self._apply_actions()
         self._apply_progress()
@@ -562,9 +577,13 @@ class DocumentOCRTab(QWidget):
             return
         if index < 0 or index >= len(self._state.pages):
             index = 0
+        previous_page = self._current_page
+        next_page = self._state.pages[index]
+        if previous_page is not None and previous_page.source_id != next_page.source_id:
+            self._remember_current_draft()
         self._current_page_index = index
 
-        page = self._state.pages[index]
+        page = next_page
         total_pages = len(self._state.pages)
         self.page_label.setText(self.tr("Page %1 of %2").replace("%1", str(index + 1)).replace("%2", str(total_pages)))
         self.page_spinbox.setMaximum(total_pages)
@@ -591,6 +610,7 @@ class DocumentOCRTab(QWidget):
             self.structured_list.clear()
             self.text_edit.setPlainText(page.extracted_text or "")
             self._right_stack.setCurrentWidget(self.text_edit)
+        self._restore_page_draft(page)
         self._apply_actions()
         self._sync_chrome_state()
 
@@ -613,12 +633,12 @@ class DocumentOCRTab(QWidget):
         self._right_stack.setCurrentWidget(self.structured_list)
         self._element_to_bbox = {}
         self._bbox_to_element = {}
-        bboxes: list[OCRBoundingBox] = []
+        bboxes: list[object] = []
         for index, element in enumerate(page.elements):
             if element.bbox is None:
                 continue
             bbox_index = len(bboxes)
-            bboxes.append(element.bbox)
+            bboxes.append(cast(object, element.bbox))
             self._element_to_bbox[index] = bbox_index
             self._bbox_to_element.setdefault(bbox_index, index)
         if bboxes:
@@ -773,6 +793,7 @@ class DocumentOCRTab(QWidget):
             return
 
         self._set_message(self.tr("OCR text saved."))
+        self._page_drafts.pop(page.source_id, None)
         self._sync_pages(current_source_id=page.source_id)
         self._apply_actions()
         self._apply_progress()
@@ -790,6 +811,7 @@ class DocumentOCRTab(QWidget):
             self.refresh()
             return
         self._set_message(result.message.text if result.message is not None else self.tr("OCR queued."))
+        self.refresh()
 
     def _run_pending(self) -> None:
         try:
@@ -801,6 +823,7 @@ class DocumentOCRTab(QWidget):
             self.refresh()
             return
         self._set_message(result.message.text if result.message is not None else self.tr("OCR queued."))
+        self.refresh()
 
     def _cancel_ocr(self) -> None:
         if self._state is None or self._state.active_task_id is None:
@@ -814,6 +837,42 @@ class DocumentOCRTab(QWidget):
             self.refresh()
             return
         self._set_message(result.message.text if result.message is not None else self.tr("OCR cancellation requested."))
+        self.refresh()
+
+    def _remember_current_draft(self) -> None:
+        page = self._current_page
+        if page is None:
+            return
+        draft = self._collect_page_draft(page)
+        if draft is None:
+            self._page_drafts.pop(page.source_id, None)
+            return
+        self._page_drafts[page.source_id] = draft
+
+    def _collect_page_draft(self, page: OCRPageState) -> _PageDraft | None:
+        if page.elements:
+            texts = self.structured_list.texts()
+            original_texts = [element.text for element in page.elements]
+            if texts and texts != original_texts:
+                return _PageDraft(element_texts=texts)
+            return None
+        edited_text = self.text_edit.toPlainText()
+        if edited_text != (page.extracted_text or ""):
+            return _PageDraft(extracted_text=edited_text)
+        return None
+
+    def _restore_page_draft(self, page: OCRPageState) -> None:
+        draft = self._page_drafts.get(page.source_id)
+        if draft is None:
+            return
+        if page.elements:
+            if draft.element_texts is None or len(draft.element_texts) != len(page.elements):
+                return
+            for card, text in zip(self.structured_list._cards, draft.element_texts, strict=True):
+                card._editor.setPlainText(text)
+            return
+        if draft.extracted_text is not None:
+            self.text_edit.setPlainText(draft.extracted_text)
 
     def _set_message(self, text: str) -> None:
         if not text:
@@ -836,7 +895,9 @@ class DocumentOCRTab(QWidget):
 
     def retranslateUi(self) -> None:
         self.tip_label.setText(
-            self.tr("OCR applies only to the current document. Saving OCR does not rerun later steps.")
+            self.tr(
+                "OCR applies only to the current document. Saving OCR clears later glossary, translation, and export results so they can be rebuilt from the updated OCR."
+            )
         )
         self.text_edit.setPlaceholderText(self.tr("OCR text will appear here."))
         self.first_button.setText(self.tr("|<"))
@@ -864,7 +925,7 @@ class DocumentOCRTab(QWidget):
         self._sync_chrome_state()
 
     def _connect_qml_signals(self) -> None:
-        root = self.chrome_host.rootObject()
+        root = cast(Any, self.chrome_host.rootObject())
         if root is None:
             return
         root.firstRequested.connect(self._go_first)

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 
 from context_aware_translation.ui.viewmodels.project_settings_pane import ProjectSettingsPaneViewModel
+from context_aware_translation.ui.viewmodels.work_home import WorkHomeViewModel
 
 try:
     from PySide6.QtWidgets import QApplication
@@ -57,3 +60,77 @@ def test_project_settings_pane_viewmodel_tracks_project_content_and_messages():
 
     viewmodel.clear_message()
     assert viewmodel.has_message is False
+
+
+def test_project_settings_pane_viewmodel_retranslate_refreshes_dynamic_profile_labels():
+    viewmodel = ProjectSettingsPaneViewModel()
+    viewmodel.apply_state(
+        project_name="One Piece",
+        blocker_text="",
+        profile_options=[
+            {"label": "Recommended", "detail": "Shared workflow profile", "selected": True},
+        ],
+        custom_profile_text="",
+        show_custom_profile=False,
+        show_open_app_setup=False,
+        can_save=True,
+    )
+
+    notifications: list[str] = []
+    viewmodel.content_changed.connect(lambda: notifications.append("content"))
+
+    with patch("context_aware_translation.ui.viewmodels.project_settings_pane.QCoreApplication.translate") as translate:
+        translate.side_effect = lambda _context, text: f"T:{text}"
+        viewmodel.retranslate()
+
+        assert viewmodel.title_text == "T:Setup for %1".replace("%1", "One Piece")
+        assert viewmodel.profile_options == [
+            {"label": "Recommended", "detail": "T:Shared workflow profile", "selected": True}
+        ]
+
+    assert notifications == ["content"]
+
+
+def test_project_settings_pane_viewmodel_preserves_user_profile_names_on_retranslate():
+    viewmodel = ProjectSettingsPaneViewModel()
+    viewmodel.apply_state(
+        project_name="One Piece",
+        blocker_text="",
+        profile_options=[
+            {"label": "Save", "detail": "Shared workflow profile", "selected": True},
+        ],
+        custom_profile_text="",
+        show_custom_profile=False,
+        show_open_app_setup=False,
+        can_save=True,
+    )
+
+    with patch("context_aware_translation.ui.viewmodels.project_settings_pane.QCoreApplication.translate") as translate:
+        translate.side_effect = lambda _context, text: f"T:{text}"
+        viewmodel.retranslate()
+
+    assert viewmodel.profile_options == [{"label": "Save", "detail": "T:Shared workflow profile", "selected": True}]
+
+
+def test_work_home_viewmodel_retranslate_refreshes_dynamic_content_labels():
+    viewmodel = WorkHomeViewModel()
+    viewmodel.set_import_state(
+        summary="Ready",
+        message="Imported",
+        is_error=False,
+        can_import=True,
+        options=[("text", "Text files")],
+        selected_import_type="text",
+    )
+
+    notifications: list[str] = []
+    viewmodel.content_changed.connect(lambda: notifications.append("content"))
+
+    with patch("context_aware_translation.ui.viewmodels.work_home.QCoreApplication.translate") as translate:
+        translate.side_effect = lambda _context, text: f"T:{text}"
+        viewmodel.retranslate()
+
+        assert viewmodel.tip_text.startswith("T:Import documents here")
+        assert viewmodel.import_type_options == [{"documentType": "text", "label": "T:Text files", "selected": True}]
+
+    assert notifications == ["content"]

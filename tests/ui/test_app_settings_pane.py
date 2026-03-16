@@ -22,6 +22,7 @@ from context_aware_translation.application.contracts.common import (
     UserMessage,
     UserMessageSeverity,
 )
+from context_aware_translation.application.errors import ApplicationError, ApplicationErrorCode, ApplicationErrorPayload
 from tests.application.fakes import FakeAppSetupService
 
 try:
@@ -238,6 +239,22 @@ def test_app_settings_pane_runs_wizard_through_service():
         view._on_run_wizard()
 
     assert any(call[0] == "get_wizard_state" for call in service.calls)
+
+
+def test_app_settings_pane_shows_application_error_from_mutation():
+    from context_aware_translation.ui.features.app_settings_pane import AppSettingsPane
+
+    service = FakeAppSetupService(state=_make_state())
+    view = AppSettingsPane(service)
+
+    error = ApplicationError(
+        ApplicationErrorPayload(code=ApplicationErrorCode.VALIDATION, message="Could not save connection.")
+    )
+
+    with patch.object(QMessageBox, "warning") as warning_mock:
+        view._mutate(lambda: (_ for _ in ()).throw(error))
+
+    warning_mock.assert_called_once_with(view, "App Setup", "Could not save connection.")
 
 
 def test_app_settings_pane_parents_child_dialogs_to_host_window():

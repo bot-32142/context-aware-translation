@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QApplication
 from context_aware_translation.application.composition import build_application_context
 from context_aware_translation.application.contracts.document import OCRTextElement, SaveOCRPageRequest
 from context_aware_translation.application.contracts.projects import CreateProjectRequest
+from context_aware_translation.application.events import DocumentInvalidatedEvent
 from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 from context_aware_translation.storage.schema.book_db import ChunkRecord, SQLiteBookDB
 
@@ -18,6 +19,7 @@ def _ensure_qt_app() -> QApplication:
     app = QApplication.instance()
     if app is None:
         app = QApplication([])
+    assert isinstance(app, QApplication)
     return app
 
 
@@ -214,10 +216,137 @@ def test_document_service_save_ocr_remains_available_after_chunking_starts(tmp_p
         db, repo = _open_repo(context, project_id)
         try:
             saved = repo.get_source_ocr_json(source_id)
+            chunks = db.list_chunks(document_id=document_id)
+            terms = db.list_terms()
         finally:
             db.close()
         assert saved is not None
         assert json.loads(saved)["text"] == "after edit"
+        assert chunks == []
+        assert terms == []
+    finally:
+        context.close()
+
+
+def test_document_service_save_ocr_invalidates_later_documents_when_stack_resets(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    seen_events: list[object] = []
+    subscription = context.events.subscribe(lambda event: seen_events.append(event))
+    try:
+        project = context.services.projects.create_project(
+            CreateProjectRequest(name="OCR Stack Invalidation", target_language="English")
+        )
+        project_id = project.project.project_id
+        _configure_project_for_ocr(context, project_id)
+
+        db, repo = _open_repo(context, project_id)
+        try:
+            document_id = repo.insert_document("pdf")
+            later_document_id = repo.insert_document("pdf")
+            source_id = repo.insert_document_source(
+                document_id,
+                0,
+                "image",
+                binary_content=_tiny_png_bytes(),
+                mime_type="image/png",
+                ocr_json=json.dumps({"text": "before edit"}, ensure_ascii=False),
+                is_ocr_completed=True,
+            )
+            db.upsert_chunks(
+                [
+                    ChunkRecord(
+                        chunk_id=1,
+                        hash="chunk-1",
+                        text="before edit",
+                        document_id=document_id,
+                        is_extracted=True,
+                        is_summarized=True,
+                    ),
+                    ChunkRecord(
+                        chunk_id=2,
+                        hash="chunk-2",
+                        text="later doc",
+                        document_id=later_document_id,
+                        is_extracted=True,
+                        is_summarized=True,
+                    ),
+                ]
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        context.services.document.save_ocr(
+            SaveOCRPageRequest(
+                project_id=project_id,
+                document_id=document_id,
+                source_id=source_id,
+                extracted_text="after edit",
+            )
+        )
+
+        document_events = [event for event in seen_events if isinstance(event, DocumentInvalidatedEvent)]
+        assert document_events
+        latest_document_event = document_events[-1]
+        assert latest_document_event.project_id == project_id
+        assert latest_document_event.document_id is None
+        assert latest_document_event.sections
+    finally:
+        subscription.close()
+        context.close()
+
+
+def test_document_service_translation_run_blocker_prefers_translation_context(tmp_path: Path, monkeypatch) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    try:
+        project = context.services.projects.create_project(
+            CreateProjectRequest(name="Translation Blocker", target_language="English")
+        )
+        project_id = project.project.project_id
+        _configure_project_for_ocr(context, project_id)
+
+        db, repo = _open_repo(context, project_id)
+        try:
+            document_id = repo.insert_document("text")
+            db.upsert_chunks(
+                [
+                    ChunkRecord(
+                        chunk_id=1,
+                        hash="chunk-1",
+                        text="hello",
+                        document_id=document_id,
+                        is_extracted=True,
+                        is_summarized=True,
+                    )
+                ]
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        original_preflight = context.runtime.task_engine.preflight
+
+        def _preflight(task_type, book_id, params, action):  # noqa: ANN001
+            if task_type in {"translation_text", "batch_translation"}:
+                from context_aware_translation.workflow.tasks.models import Decision
+
+                return Decision(
+                    allowed=False,
+                    code="config_snapshot_unavailable",
+                    reason="Translation needs setup before it can run.",
+                )
+            return original_preflight(task_type, book_id, params, action)
+
+        monkeypatch.setattr(context.runtime.task_engine, "preflight", _preflight, raising=True)
+
+        state = context.services.document.get_translation(project_id, document_id)
+
+        assert not state.run_action.enabled
+        assert state.run_action.blocker is not None
+        assert state.run_action.blocker.target is not None
+        assert state.run_action.blocker.target.kind == "app_setup"
     finally:
         context.close()
 

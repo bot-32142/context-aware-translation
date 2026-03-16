@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtWidgets import (
@@ -164,7 +165,7 @@ class _ExportControls(QWidget):
     def output_path(self) -> str:
         return self.output_path_edit.text().strip()
 
-    def options(self) -> dict[str, bool]:
+    def options(self) -> dict[str, str | int | float | bool | None]:
         return {
             "preserve_structure": self.preserve_structure_cb.isChecked(),
             "allow_original_fallback": self.allow_original_fallback_cb.isChecked(),
@@ -179,7 +180,11 @@ class _ExportControls(QWidget):
         if not format_id:
             QMessageBox.warning(parent, self.tr("Missing Information"), self.tr("Export format is required."))
             return None
-        return _ExportSubmission(format_id=format_id, output_path=output_path, options=self.options())
+        return _ExportSubmission(
+            format_id=format_id,
+            output_path=output_path,
+            options=cast(dict[str, str | int | float | bool | None], self.options()),
+        )
 
     def _on_options_changed(self) -> None:
         self._sync_output_path()
@@ -410,7 +415,7 @@ class _DocumentExportTab(QWidget):
         self._sync_chrome_state()
 
     def _connect_qml_signals(self) -> None:
-        root = self.chrome_host.rootObject()
+        root = cast(Any, self.chrome_host.rootObject())
         if root is None:
             return
         root.exportRequested.connect(self._run_export)
@@ -448,6 +453,7 @@ class DocumentWorkspaceView(QWidget):
         self._state = None
         self._section_widgets: dict[DocumentSection, QWidget] = {}
         self._dirty_sections: set[DocumentSection] = set()
+        self._refresh_error_sections: set[DocumentSection] = set()
         self._event_bridge = QtApplicationEventBridge(events, parent=self)
         self._event_bridge.document_invalidated.connect(self._on_document_invalidated)
         self._event_bridge.setup_invalidated.connect(self._on_setup_invalidated)
@@ -469,7 +475,11 @@ class DocumentWorkspaceView(QWidget):
 
     def refresh(self) -> None:
         current_section = self.current_section()
-        self._state = self._document_service.get_workspace(self._project_id, self._document_id)
+        try:
+            self._state = self._document_service.get_workspace(self._project_id, self._document_id)
+        except ApplicationError as exc:
+            QMessageBox.warning(self, self.tr("Document"), exc.payload.message)
+            return
         target_section = current_section or self._state.active_tab
         self._dirty_sections.update(self._section_widgets)
         self.shell_host.set_document_context(
@@ -516,7 +526,13 @@ class DocumentWorkspaceView(QWidget):
             return
         refresh = getattr(widget, "refresh", None)
         if callable(refresh):
-            refresh()
+            try:
+                refresh()
+            except ApplicationError as exc:
+                self._refresh_error_sections.add(section)
+                QMessageBox.warning(self, _SECTION_LABELS.get(section, self.tr("Document")), exc.payload.message)
+                return
+            self._refresh_error_sections.discard(section)
         self._dirty_sections.discard(section)
 
     def section_widget(self, section: DocumentSection) -> QWidget | None:

@@ -7,6 +7,7 @@ from context_aware_translation.adapters.qt.application_event_bridge import QtApp
 from context_aware_translation.application.contracts.app_setup import (
     WorkflowProfileDetail,
     WorkflowProfileKind,
+    WorkflowStepRoute,
 )
 from context_aware_translation.application.contracts.project_setup import ProjectSetupState, SaveProjectSetupRequest
 from context_aware_translation.application.errors import ApplicationError, BlockedOperationError
@@ -17,6 +18,7 @@ from context_aware_translation.ui.features.workflow_profile_editor import (
     ADVANCED_STEP_IDS,
     ConnectionChoice,
     WorkflowRoutesEditor,
+    validate_workflow_routes,
 )
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.viewmodels.project_settings_pane import ProjectSettingsPaneViewModel
@@ -179,6 +181,7 @@ class ProjectSettingsPane(QWidget):
             self.profile_combo.setCurrentIndex(model_index.row())
 
     def _apply_profile_index(self, index: int) -> None:
+        self._persist_custom_draft()
         profile_id = self._profile_option_values[index]
         if profile_id == _CUSTOM_PROFILE_ID:
             self._selected_profile_id = _CUSTOM_PROFILE_ID
@@ -186,7 +189,6 @@ class ProjectSettingsPane(QWidget):
         else:
             self._selected_profile_id = profile_id
             self._custom_base_profile_id = profile_id
-            self._draft_project_profile = None
         self._sync_routes_editor()
         self._sync_viewmodel()
         self.viewmodel.clear_message()
@@ -285,7 +287,9 @@ class ProjectSettingsPane(QWidget):
             self.routes_group.setMinimumHeight(0)
             self.routes_group.setMaximumHeight(0)
             self.routes_group.updateGeometry()
-            self.layout().activate()
+            layout = self.layout()
+            if layout is not None:
+                layout.activate()
             self._schedule_chrome_resize()
             return
         self.routes_group.show()
@@ -296,7 +300,9 @@ class ProjectSettingsPane(QWidget):
         self.routes_group.setMaximumHeight(16777215)
         self.routes_editor.updateGeometry()
         self.routes_group.updateGeometry()
-        self.layout().activate()
+        layout = self.layout()
+        if layout is not None:
+            layout.activate()
         self._schedule_chrome_resize()
 
     def _schedule_chrome_resize(self) -> None:
@@ -308,15 +314,19 @@ class ProjectSettingsPane(QWidget):
 
     def _save(self) -> None:
         shared_profile_id = self._selected_shared_profile_id()
+        project_profile = None
+        base_profile_id = shared_profile_id
         if self._is_custom_selected():
             if self._draft_project_profile is None:
                 self.viewmodel.set_message(self.tr("Select a shared workflow profile first."), is_error=True)
                 return
-            project_profile = self._build_custom_profile()
+            routes = self.routes_editor.build_routes()
+            route_error = validate_workflow_routes(routes, tr=self.tr)
+            if route_error is not None:
+                self.viewmodel.set_message(route_error, is_error=True)
+                return
+            project_profile = self._build_custom_profile(routes)
             base_profile_id = self._custom_base_profile_id
-        else:
-            project_profile = None
-            base_profile_id = shared_profile_id
         if base_profile_id is None and project_profile is None:
             self.viewmodel.set_message(self.tr("Select a shared workflow profile before saving."), is_error=True)
             return
@@ -409,12 +419,16 @@ class ProjectSettingsPane(QWidget):
             self.tr("the selected shared profile"),
         )
 
-    def _build_custom_profile(self) -> WorkflowProfileDetail:
+    def _build_custom_profile(self, routes: list[WorkflowStepRoute]) -> WorkflowProfileDetail:
         assert self._draft_project_profile is not None
-        routes = self.routes_editor.build_routes()
         return self._draft_project_profile.model_copy(
             update={"routes": routes, "kind": WorkflowProfileKind.PROJECT_SPECIFIC}
         )
+
+    def _persist_custom_draft(self) -> None:
+        if not self._is_custom_selected() or self._draft_project_profile is None:
+            return
+        self._draft_project_profile = self._build_custom_profile(self.routes_editor.build_routes())
 
     def _connection_choices(self) -> list[ConnectionChoice]:
         if self._state is None:
