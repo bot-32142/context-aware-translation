@@ -7,11 +7,13 @@ Tests are organized to match the code structure:
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import pytest
 
 from context_aware_translation.core.models import Term
+from context_aware_translation.core.term_memory import TermMemoryVersion
 from context_aware_translation.storage.repositories.term_repository import (
     BatchUpdate,
     TermRepository,
@@ -780,6 +782,50 @@ def test_close(temp_term_repository: TermRepository):
     # Should raise error when trying to apply batch after close
     with pytest.raises(RuntimeError, match="StorageManager is closed"):
         temp_term_repository.apply_batch(update)
+
+
+def test_delete_terms_also_clears_term_memory_versions(temp_term_repository: TermRepository):
+    temp_term_repository.upsert_terms(
+        [
+            TermRecord(key="term1", descriptions={"1": "desc"}, occurrence={"1": 1}, votes=1, total_api_calls=1),
+            TermRecord(key="term2", descriptions={"1": "desc"}, occurrence={"1": 1}, votes=1, total_api_calls=1),
+        ]
+    )
+    temp_term_repository.replace_term_memory_versions(
+        "term1",
+        [
+            TermMemoryVersion(
+                term="term1",
+                effective_start_chunk=1,
+                latest_evidence_chunk=1,
+                summary_text="hero summary",
+                kind="bootstrap",
+                source_count=1,
+                created_at=time.time(),
+            )
+        ],
+    )
+    temp_term_repository.replace_term_memory_versions(
+        "term2",
+        [
+            TermMemoryVersion(
+                term="term2",
+                effective_start_chunk=1,
+                latest_evidence_chunk=1,
+                summary_text="other summary",
+                kind="bootstrap",
+                source_count=1,
+                created_at=time.time(),
+            )
+        ],
+    )
+
+    deleted = temp_term_repository.delete_terms(["term1"])
+
+    assert deleted == 1
+    assert temp_term_repository.get_keyed_context("term1") is None
+    assert temp_term_repository.list_term_memory_versions("term1") == []
+    assert temp_term_repository.list_term_memory_versions("term2")
 
 
 def test_apply_batch_commits_when_no_transaction(

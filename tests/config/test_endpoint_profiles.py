@@ -411,7 +411,6 @@ class TestRuntimeConfigSnapshot:
 
             runtime = config.get_workflow_runtime_config()
             assert runtime.sqlite_path == config.sqlite_path
-            assert runtime.context_tree_sqlite_path == config.context_tree_sqlite_path
             assert runtime.extractor_config.model == "m"
             assert runtime.summarizor_config.model == "m"
             assert runtime.translator_config.model == "m"

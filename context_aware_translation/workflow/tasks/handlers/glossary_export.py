@@ -53,7 +53,7 @@ class GlossaryExportHandler:
         book_id = record.book_id
         claims = [
             ResourceClaim("glossary_state", book_id, "*", ClaimMode.READ_SHARED),
-            ResourceClaim("context_tree", book_id, "*", ClaimMode.WRITE_COOPERATIVE),
+            ResourceClaim("term_memory", book_id, "*", ClaimMode.WRITE_COOPERATIVE),
         ]
         return frozenset(claims)
 

@@ -5,15 +5,14 @@ from transformers import PreTrainedTokenizer
 from context_aware_translation.config import Config, WorkflowRuntimeConfig
 from context_aware_translation.core.context_extractor import TermExtractor
 from context_aware_translation.core.context_manager import TranslationContextManager, TranslationContextManagerAdapter
-from context_aware_translation.core.context_tree import ContextTree
 from context_aware_translation.core.manga_document_handler import MangaDocumentHandler
 from context_aware_translation.llm.client import LLMClient
 from context_aware_translation.llm.translation_strategies import (
     LLMChunkTranslator,
-    LLMDescriptionSummarizer,
     LLMGlossaryTranslator,
     LLMMangaPageTranslator,
     LLMSourceLanguageDetector,
+    LLMTermMemoryUpdater,
     LLMTermReviewer,
 )
 from context_aware_translation.storage.repositories.document_repository import DocumentRepository
@@ -28,36 +27,11 @@ def _build_llm_client(runtime_config: WorkflowRuntimeConfig) -> LLMClient:
     return LLMClient(runtime_config.summarizor_config)
 
 
-def _build_context_tree(runtime_config: WorkflowRuntimeConfig, llm_client: LLMClient) -> ContextTree:
-    summarizor_config = runtime_config.summarizor_config
-    summarizor_model = summarizor_config.model
-    if summarizor_model is None:
-        raise ValueError("summarizor_config.model must be set")
-
-    description_summarizer = LLMDescriptionSummarizer(
-        summarizor_config,
-        llm_client,
-    )
-
-    return ContextTree(
-        summarizer=description_summarizer,
-        estimate_token_size_func=lambda text: len(
-            get_tokenizer(summarizor_model).encode(text, add_special_tokens=False)
-        ),
-        sqlite_path=runtime_config.context_tree_sqlite_path,
-        max_token_size=250,
-        max_workers=summarizor_config.concurrency,
-    )
-
-
 def _build_manager(
     runtime_config: WorkflowRuntimeConfig,
     llm_client: LLMClient,
-    context_tree: ContextTree,
     db: SQLiteBookDB,
     document_repo: DocumentRepository,
-    *,
-    owns_context_tree: bool = True,
 ) -> TranslationContextManagerAdapter:
     term_repo = TermRepository(db)
 
@@ -82,17 +56,20 @@ def _build_manager(
         translator_config,
         runtime_config.translation_target_language,
     )
+    term_memory_updater = LLMTermMemoryUpdater(
+        runtime_config.summarizor_config,
+        llm_client,
+    )
 
     base_manager = TranslationContextManager(
         term_repo,
-        context_tree,
         term_extractor,
         tokenizer,
         source_language_detector=language_detector,
         glossary_translator=glossary_translator,
         chunk_translator=chunk_translator,
         term_reviewer=term_reviewer,
-        owns_context_tree=owns_context_tree,
+        term_memory_updater=term_memory_updater,
     )
     manager = TranslationContextManagerAdapter(base_manager)
 
@@ -118,26 +95,18 @@ def build_workflow_runtime(
     runtime_config: WorkflowRuntimeConfig,
     *,
     book_id: str | None = None,
-    context_tree: ContextTree | None = None,
 ) -> WorkflowContext:
     """Build all runtime dependencies required for workflow execution."""
     llm_client = _build_llm_client(runtime_config)
-    owns_context_tree = context_tree is None
-    if context_tree is None:
-        context_tree = _build_context_tree(runtime_config, llm_client)
     db = SQLiteBookDB(runtime_config.sqlite_path)
     document_repo = DocumentRepository(db)
-    manager = _build_manager(
-        runtime_config, llm_client, context_tree, db, document_repo, owns_context_tree=owns_context_tree
-    )
+    manager = _build_manager(runtime_config, llm_client, db, document_repo)
 
     return WorkflowContext(
         config=config,
         llm_client=llm_client,
-        context_tree=context_tree,
         manager=manager,
         db=db,
         document_repo=document_repo,
         book_id=book_id,
-        owns_context_tree=owns_context_tree,
     )

@@ -3,8 +3,7 @@ from types import TracebackType
 from typing import TYPE_CHECKING
 
 from context_aware_translation.config import CONFIG_SNAPSHOT_VERSION, Config, WorkflowRuntimeConfig
-from context_aware_translation.core.context_tree_registry import ContextTreeRegistry
-from context_aware_translation.workflow.bootstrap import _build_context_tree, _build_llm_client, build_workflow_runtime
+from context_aware_translation.workflow.bootstrap import build_workflow_runtime
 from context_aware_translation.workflow.runtime import WorkflowContext
 
 if TYPE_CHECKING:
@@ -51,23 +50,11 @@ class WorkflowSession:
         return session
 
     def _build_runtime(self, runtime_config: WorkflowRuntimeConfig) -> WorkflowContext:
-        if self._book_id is not None:
-            context_tree = ContextTreeRegistry.acquire(
-                self._book_id,
-                lambda: _build_context_tree(runtime_config, _build_llm_client(runtime_config)),
-            )
-            return build_workflow_runtime(self.config, runtime_config, book_id=self._book_id, context_tree=context_tree)
         return build_workflow_runtime(self.config, runtime_config, book_id=self._book_id)
 
     def __enter__(self) -> WorkflowContext:
         runtime_config = self.config.get_workflow_runtime_config()
-        try:
-            self._runtime = self._build_runtime(runtime_config)
-        except Exception:
-            # If build fails after registry acquire, release the ref
-            if self._book_id is not None:
-                ContextTreeRegistry.release(self._book_id)
-            raise
+        self._runtime = self._build_runtime(runtime_config)
         return self._runtime
 
     def __exit__(
@@ -76,10 +63,6 @@ class WorkflowSession:
         _exc_val: BaseException | None,
         _exc_tb: TracebackType | None,
     ) -> None:
-        try:
-            if self._runtime is not None:
-                self._runtime.close()
-        finally:
-            if self._book_id is not None:
-                ContextTreeRegistry.release(self._book_id)
+        if self._runtime is not None:
+            self._runtime.close()
         self._runtime = None

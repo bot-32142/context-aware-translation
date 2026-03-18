@@ -214,7 +214,7 @@ def test_document_images_view_cancels_active_task():
         assert root is not None
         assert root.property("progressVisible") is True
         assert root.property("progressCanCancel") is True
-        assert root.property("progressText") == "apply"
+        assert root.property("progressText") == "Applying results"
 
         root.cancelRequested.emit()
         assert ("cancel_image_reinsertion", ("proj-1", "task-1")) in service.calls

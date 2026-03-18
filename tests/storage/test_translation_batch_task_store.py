@@ -15,7 +15,6 @@ def test_translation_batch_task_store_create_and_list(tmp_path):
             payload_json='{"items":[]}',
             document_ids_json="[1,2]",
             force=True,
-            skip_context=False,
         )
         fetched = store.get(created.task_id)
         listed = store.list_tasks("book-1")
@@ -25,7 +24,6 @@ def test_translation_batch_task_store_create_and_list(tmp_path):
     assert fetched is not None
     assert fetched.task_id == created.task_id
     assert fetched.force is True
-    assert fetched.skip_context is False
     assert listed and listed[0].task_id == created.task_id
 
 

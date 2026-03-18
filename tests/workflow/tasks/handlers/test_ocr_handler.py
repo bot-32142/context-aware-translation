@@ -343,6 +343,8 @@ def _make_deps_for_submit(
     fake_repo.get_document_by_id.return_value = doc
     fake_repo.get_document_sources_needing_ocr.return_value = ocr_sources or []
     fake_repo.get_document_sources_metadata.return_value = all_sources or []
+    fake_repo.get_chunk_count.return_value = 0
+    deps._fake_repo = fake_repo
 
     deps._patches = (
         patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
@@ -434,6 +436,16 @@ def test_validate_submit_rejects_no_pending_ocr_sources(tmp_path):
         result = handler.validate_submit("book-1", {"document_ids": [1]}, deps)
     assert not result.allowed
     assert "no pending ocr" in result.reason.lower()
+
+
+def test_validate_submit_rejects_when_chunking_started(tmp_path):
+    doc = {"document_id": 1, "document_type": "scanned_book"}
+    deps = _make_deps_for_submit(tmp_path, doc=doc, ocr_sources=[{"source_id": 10}])
+    deps._fake_repo.get_chunk_count.return_value = 1
+    with deps._patches[0], deps._patches[1]:
+        result = handler.validate_submit("book-1", {"document_ids": [1]}, deps)
+    assert not result.allowed
+    assert "locked after terms or translation have started" in result.reason.lower()
 
 
 def test_validate_submit_allows_scanned_book_with_pending_sources(tmp_path):
@@ -542,6 +554,8 @@ def _make_deps_for_run(
     fake_repo.get_document_by_id.return_value = doc
     fake_repo.get_document_sources_needing_ocr.return_value = ocr_sources or []
     fake_repo.get_document_sources_metadata.return_value = all_sources or []
+    fake_repo.get_chunk_count.return_value = 0
+    deps._fake_repo = fake_repo
 
     deps._patches = (
         patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
@@ -597,6 +611,17 @@ def test_validate_run_rejects_no_pending_sources(tmp_path):
         result = handler.validate_run(record, {}, deps)
     assert not result.allowed
     assert "no pending" in result.reason.lower()
+
+
+def test_validate_run_rejects_when_chunking_started(tmp_path):
+    record = _make_record(document_ids_json=json.dumps([1]))
+    doc = {"document_id": 1, "document_type": "scanned_book"}
+    deps = _make_deps_for_run(tmp_path, doc=doc, ocr_sources=[{"source_id": 10}])
+    deps._fake_repo.get_chunk_count.return_value = 1
+    with deps._patches[0], deps._patches[1]:
+        result = handler.validate_run(record, {}, deps)
+    assert not result.allowed
+    assert "locked after terms or translation have started" in result.reason.lower()
 
 
 def test_validate_run_allows_valid_record(tmp_path):

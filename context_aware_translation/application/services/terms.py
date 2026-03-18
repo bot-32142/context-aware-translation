@@ -44,7 +44,6 @@ from context_aware_translation.application.runtime import (
     raise_application_error,
 )
 from context_aware_translation.storage.schema.book_db import TermRecord, TermRowUpdate
-from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 from context_aware_translation.workflow.tasks.models import TaskAction
 
@@ -127,8 +126,6 @@ class DefaultTermsService:
                 )
             if request.translation is not None:
                 record.translated_name = request.translation
-            if request.description is not None:
-                record.descriptions = {**record.descriptions, "manual": request.description}
             if request.ignored is not None:
                 record.ignored = request.ignored
             if request.reviewed is not None:
@@ -216,11 +213,7 @@ class DefaultTermsService:
         if blocker is not None:
             self._raise_blocked_blocker(blocker, project_id=request.project_id)
         with self._runtime.open_book_db(request.project_id) as dbx:
-            context_tree_db = ContextTreeDB(self._runtime.book_manager.get_book_context_tree_path(request.project_id))
-            try:
-                import_glossary(dbx.db, context_tree_db, Path(request.input_path))
-            finally:
-                context_tree_db.close()
+            import_glossary(dbx.db, Path(request.input_path))
         self._runtime.invalidate_terms(request.project_id)
         return self.get_project_terms(request.project_id)
 

@@ -204,32 +204,32 @@
 <context>
     <name>ConnectionDraftForm</name>
     <message>
-        <location filename="../features/app_setup_view.py" line="103"/>
+        <location filename="../features/app_setup_view.py" line="126"/>
         <source>Timeout</source>
         <translation>超时</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="104"/>
+        <location filename="../features/app_setup_view.py" line="127"/>
         <source>Max retries</source>
         <translation>最大重试次数</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="105"/>
+        <location filename="../features/app_setup_view.py" line="128"/>
         <source>Concurrency</source>
         <translation>并发数</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="110"/>
+        <location filename="../features/app_setup_view.py" line="133"/>
         <source>Total token limit</source>
         <translation>总令牌上限</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="115"/>
+        <location filename="../features/app_setup_view.py" line="138"/>
         <source>Input token limit</source>
         <translation>输入令牌上限</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="120"/>
+        <location filename="../features/app_setup_view.py" line="143"/>
         <source>Output token limit</source>
         <translation>输出令牌上限</translation>
     </message>
@@ -1335,97 +1335,97 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>ProgressMessages</name>
     <message>
-        <location filename="../i18n.py" line="190"/>
+        <location filename="../i18n.py" line="192"/>
         <source>Starting OCR...</source>
         <translation>正在启动OCR...</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="191"/>
+        <location filename="../i18n.py" line="193"/>
         <source>Extracting terms...</source>
         <translation>正在提取术语...</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="192"/>
+        <location filename="../i18n.py" line="194"/>
         <source>Reviewing terms...</source>
         <translation>正在审校术语...</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="193"/>
+        <location filename="../i18n.py" line="195"/>
         <source>Translating glossary terms...</source>
         <translation>正在翻译术语表术语...</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="194"/>
+        <location filename="../i18n.py" line="196"/>
         <source>Translating...</source>
         <translation>正在翻译...</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="195"/>
+        <location filename="../i18n.py" line="197"/>
         <source>Preparing glossary export...</source>
         <translation>正在准备术语表导出...</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="196"/>
+        <location filename="../i18n.py" line="198"/>
         <source>Writing glossary file...</source>
         <translation>正在写入术语表文件...</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="203"/>
+        <location filename="../i18n.py" line="205"/>
         <source>OCR page %1/%2</source>
         <translation>OCR 第%1/%2页</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="207"/>
+        <location filename="../i18n.py" line="209"/>
         <source>Exporting document %1/%2</source>
         <translation>正在导出文档 %1/%2</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="211"/>
+        <location filename="../i18n.py" line="213"/>
         <source>Summarizing glossary term %1/%2</source>
         <translation>正在摘要术语 %1/%2</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="215"/>
+        <location filename="../i18n.py" line="217"/>
         <source>Collecting glossary term %1/%2</source>
         <translation>正在收集术语 %1/%2</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="219"/>
+        <location filename="../i18n.py" line="221"/>
         <source>Translating chunk %1/%2</source>
         <translation>正在翻译文本块 %1/%2</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="223"/>
+        <location filename="../i18n.py" line="225"/>
         <source>Extracting terms from chunk %1/%2</source>
         <translation>正在从文本块提取术语 %1/%2</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="227"/>
+        <location filename="../i18n.py" line="229"/>
         <source>Reviewing batch %1/%2</source>
         <translation>正在审核批次 %1/%2</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="231"/>
+        <location filename="../i18n.py" line="233"/>
         <source>Translating glossary group %1/%2</source>
         <translation>正在翻译术语组 %1/%2</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="235"/>
+        <location filename="../i18n.py" line="237"/>
         <source>Translating batch %1/%2</source>
         <translation>正在翻译批次 %1/%2</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="239"/>
+        <location filename="../i18n.py" line="241"/>
         <source>Translating manga batch %1/%2</source>
         <translation>正在翻译漫画批次 %1/%2</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="243"/>
+        <location filename="../i18n.py" line="245"/>
         <source>Reembedding image %1/%2</source>
         <translation>正在重嵌入图片 %1/%2</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="247"/>
+        <location filename="../i18n.py" line="249"/>
         <source>Reembedding manga page %1/%2</source>
         <translation>正在重嵌入漫画页面 %1/%2</translation>
     </message>
@@ -1603,14 +1603,14 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>QueueDrawerView</name>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="266"/>
-        <location filename="../features/queue_drawer_view.py" line="316"/>
+        <location filename="../features/queue_drawer_view.py" line="265"/>
+        <location filename="../features/queue_drawer_view.py" line="315"/>
         <source>Queue is clear</source>
         <translation>队列为空</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="270"/>
-        <location filename="../features/queue_drawer_view.py" line="317"/>
+        <location filename="../features/queue_drawer_view.py" line="269"/>
+        <location filename="../features/queue_drawer_view.py" line="316"/>
         <source>No background actions right now.</source>
         <translation>当前没有后台操作。</translation>
     </message>
@@ -1639,33 +1639,33 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation>正在显示当前项目的后台操作。</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="352"/>
+        <location filename="../features/queue_drawer_view.py" line="351"/>
         <source>Nothing is running or queued.</source>
         <translation>当前没有正在运行或排队的操作。</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="357"/>
+        <location filename="../features/queue_drawer_view.py" line="356"/>
         <source>Running {0} | Queued {1} | Blocked {2} | Failed {3}</source>
         <translation>运行中 {0} | 排队 {1} | 阻塞 {2} | 失败 {3}</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="376"/>
+        <location filename="../features/queue_drawer_view.py" line="375"/>
         <source>{0} finished.</source>
         <translation>{0} 已完成。</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="379"/>
+        <location filename="../features/queue_drawer_view.py" line="378"/>
         <source>{0} failed.</source>
         <translation>{0} 失败。</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="386"/>
+        <location filename="../features/queue_drawer_view.py" line="385"/>
         <source>{0} was cancelled.</source>
         <translation>{0} 已取消。</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="419"/>
-        <location filename="../features/queue_drawer_view.py" line="448"/>
+        <location filename="../features/queue_drawer_view.py" line="418"/>
+        <location filename="../features/queue_drawer_view.py" line="447"/>
         <source>Queue action &apos;{0}&apos; applied.</source>
         <translation>队列操作“{0}”已应用。</translation>
     </message>
@@ -1679,212 +1679,212 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>RuntimeMessages</name>
     <message>
-        <location filename="../i18n.py" line="337"/>
+        <location filename="../i18n.py" line="339"/>
         <source>Complete</source>
         <translation>完成</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="338"/>
+        <location filename="../i18n.py" line="340"/>
         <source>Context not ready yet.</source>
         <translation>上下文尚未就绪。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="339"/>
+        <location filename="../i18n.py" line="341"/>
         <source>Export</source>
         <translation>导出</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="343"/>
+        <location filename="../i18n.py" line="345"/>
         <source>Image reinsertion blocked.</source>
         <translation>图片回填已被阻止。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="350"/>
+        <location filename="../i18n.py" line="352"/>
         <source>Image reinsertion is blocked.</source>
         <translation>图片回填当前被阻止。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="351"/>
+        <location filename="../i18n.py" line="353"/>
         <source>Inspect images</source>
         <translation>检查图片</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="352"/>
+        <location filename="../i18n.py" line="354"/>
         <source>N/A</source>
         <translation>不适用</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="353"/>
+        <location filename="../i18n.py" line="355"/>
         <source>Needs OCR review</source>
         <translation>需要检查 OCR</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="354"/>
+        <location filename="../i18n.py" line="356"/>
         <source>Needs setup</source>
         <translation>需要设置</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="355"/>
+        <location filename="../i18n.py" line="357"/>
         <source>No document state changed.</source>
         <translation>没有文档状态发生变化。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="356"/>
+        <location filename="../i18n.py" line="358"/>
         <source>No documents were deleted.</source>
         <translation>没有删除任何文档。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="372"/>
+        <location filename="../i18n.py" line="374"/>
         <source>Not started</source>
         <translation>未开始</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="373"/>
+        <location filename="../i18n.py" line="375"/>
         <source>OCR cancellation requested.</source>
         <translation>已请求取消 OCR。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="380"/>
+        <location filename="../i18n.py" line="382"/>
         <source>Open</source>
         <translation>打开</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="381"/>
+        <location filename="../i18n.py" line="383"/>
         <source>Open Images</source>
         <translation>打开图片</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="382"/>
+        <location filename="../i18n.py" line="384"/>
         <source>Open OCR</source>
         <translation>打开 OCR</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="383"/>
+        <location filename="../i18n.py" line="385"/>
         <source>Open Setup</source>
         <translation>打开设置</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="384"/>
+        <location filename="../i18n.py" line="386"/>
         <source>Open Terms</source>
         <translation>打开术语</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="385"/>
+        <location filename="../i18n.py" line="387"/>
         <source>Open Terms to build terms</source>
         <translation>打开术语页面以构建术语</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="386"/>
+        <location filename="../i18n.py" line="388"/>
         <source>Open Translation</source>
         <translation>打开翻译</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="387"/>
+        <location filename="../i18n.py" line="389"/>
         <source>Ready to export</source>
         <translation>可导出</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="388"/>
+        <location filename="../i18n.py" line="390"/>
         <source>Read text from images</source>
         <translation>从图片中读取文字</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="392"/>
+        <location filename="../i18n.py" line="394"/>
         <source>Retranslate chunk</source>
         <translation>重译文本块</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="396"/>
+        <location filename="../i18n.py" line="398"/>
         <source>Review terms</source>
         <translation>审校术语</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="397"/>
+        <location filename="../i18n.py" line="399"/>
         <source>Submit async batch</source>
         <translation>提交异步批处理</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="408"/>
+        <location filename="../i18n.py" line="410"/>
         <source>Translate terms</source>
         <translation>翻译术语</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="409"/>
+        <location filename="../i18n.py" line="411"/>
         <source>Translate text</source>
         <translation>翻译文本</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="413"/>
+        <location filename="../i18n.py" line="415"/>
         <source>Translated units</source>
         <translation>已翻译单元</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="417"/>
+        <location filename="../i18n.py" line="419"/>
         <source>Translation is unavailable.</source>
         <translation>翻译当前不可用。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="421"/>
+        <location filename="../i18n.py" line="423"/>
         <source>Waiting in order</source>
         <translation>按顺序等待中</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="427"/>
+        <location filename="../i18n.py" line="429"/>
         <source>Blocked by %1 on Document %2.</source>
         <translation>被文档 %2 上的 %1 阻塞。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="431"/>
+        <location filename="../i18n.py" line="433"/>
         <source>Chunk %1</source>
         <translation>文本块 %1</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="435"/>
+        <location filename="../i18n.py" line="437"/>
         <source>Context ready through Document %1.</source>
         <translation>上下文已准备到文档 %1。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="439"/>
+        <location filename="../i18n.py" line="441"/>
         <source>Deleted %1 document(s), %2 sources, and %3 chunks.</source>
         <translation>已删除 %1 个文档、%2 个源和 %3 个文本块。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="443"/>
+        <location filename="../i18n.py" line="445"/>
         <source>Document %1</source>
         <translation>文档 %1</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="447"/>
+        <location filename="../i18n.py" line="449"/>
         <source>Image %1</source>
         <translation>图片 %1</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="451"/>
+        <location filename="../i18n.py" line="453"/>
         <source>Imported %1 document(s); skipped %2.</source>
         <translation>已导入 %1 个文档；跳过 %2 个。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="455"/>
+        <location filename="../i18n.py" line="457"/>
         <source>In progress (%1/%2)</source>
         <translation>进行中（%1/%2）</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="459"/>
+        <location filename="../i18n.py" line="461"/>
         <source>Page %1</source>
         <translation>页面 %1</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="463"/>
+        <location filename="../i18n.py" line="465"/>
         <source>Pending (%1)</source>
         <translation>待处理（%1）</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="467"/>
+        <location filename="../i18n.py" line="469"/>
         <source>Reset %1 document(s); deleted %2 chunks and deleted %3 terms.</source>
         <translation>已重置 %1 个文档；删除了 %2 个文本块和 %3 个术语。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="471"/>
+        <location filename="../i18n.py" line="473"/>
         <source>Waiting for Document %1 before continuing in order.</source>
         <translation>正在等待文档 %1，之后才能按顺序继续。</translation>
     </message>
@@ -2144,37 +2144,37 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>TaskDecisionCode</name>
     <message>
-        <location filename="../i18n.py" line="665"/>
+        <location filename="../i18n.py" line="667"/>
         <source>Blocked by active task claims</source>
         <translation>被活动任务占用声明阻塞</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="670"/>
+        <location filename="../i18n.py" line="672"/>
         <source>Task not found</source>
         <translation>未找到任务</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="677"/>
+        <location filename="../i18n.py" line="679"/>
         <source>No terms are pending review.</source>
         <translation>没有待审校的术语。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="678"/>
+        <location filename="../i18n.py" line="680"/>
         <source>Selected document(s) are no longer pending.</source>
         <translation>所选文档已不再处于待处理状态。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="679"/>
+        <location filename="../i18n.py" line="681"/>
         <source>No documents are pending glossary build.</source>
         <translation>没有待构建术语表的文档。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="680"/>
+        <location filename="../i18n.py" line="682"/>
         <source>Some selected documents still require OCR.</source>
         <translation>部分所选文档仍需要 OCR。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="681"/>
+        <location filename="../i18n.py" line="683"/>
         <source>No untranslated terms found.</source>
         <translation>未找到未翻译的术语。</translation>
     </message>
@@ -2182,127 +2182,127 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>TaskDecisionReason</name>
     <message>
-        <location filename="../i18n.py" line="483"/>
+        <location filename="../i18n.py" line="485"/>
         <source>Already running</source>
         <translation>已在运行中</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="487"/>
+        <location filename="../i18n.py" line="489"/>
         <source>Blocked by active task claims</source>
         <translation>被活动任务占用声明阻塞</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="491"/>
+        <location filename="../i18n.py" line="493"/>
         <source>Book has no documents.</source>
         <translation>项目中没有文档。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="492"/>
+        <location filename="../i18n.py" line="494"/>
         <source>Cancel requested, cannot run</source>
         <translation>已请求取消，无法运行</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="493"/>
+        <location filename="../i18n.py" line="495"/>
         <source>Cannot delete active task</source>
         <translation>无法删除活动任务</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="498"/>
+        <location filename="../i18n.py" line="500"/>
         <source>Cannot open book database.</source>
         <translation>无法打开项目数据库。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="518"/>
+        <location filename="../i18n.py" line="520"/>
         <source>No documents selected.</source>
         <translation>未选择任何文档。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="526"/>
+        <location filename="../i18n.py" line="528"/>
         <source>No terms are pending review.</source>
         <translation>没有待审校的术语。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="534"/>
+        <location filename="../i18n.py" line="536"/>
         <source>No untranslated terms found.</source>
         <translation>未找到未翻译的术语。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="550"/>
+        <location filename="../i18n.py" line="552"/>
         <source>Task already completed</source>
         <translation>任务已完成</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="554"/>
+        <location filename="../i18n.py" line="556"/>
         <source>Task is already running</source>
         <translation>任务已在运行中</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="555"/>
+        <location filename="../i18n.py" line="557"/>
         <source>Task is being cancelled</source>
         <translation>任务正在取消中</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="592"/>
+        <location filename="../i18n.py" line="594"/>
         <source>source_ids must be a list.</source>
         <translation>source_ids 必须是列表。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="602"/>
+        <location filename="../i18n.py" line="604"/>
         <source>Book not found: %1</source>
         <translation>未找到项目：%1</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="605"/>
+        <location filename="../i18n.py" line="607"/>
         <source>Cannot run task with status: %1</source>
         <translation>无法运行处于状态 %1 的任务</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="609"/>
+        <location filename="../i18n.py" line="611"/>
         <source>Chunk %1 belongs to document %2, not %3.</source>
         <translation>文本块 %1 属于文档 %2，而不是 %3。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="613"/>
+        <location filename="../i18n.py" line="615"/>
         <source>Chunk %1 not found in database.</source>
         <translation>数据库中未找到文本块 %1。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="617"/>
+        <location filename="../i18n.py" line="619"/>
         <source>Document type &apos;%1&apos; does not support OCR.</source>
         <translation>文档类型 &apos;%1&apos; 不支持 OCR。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="627"/>
+        <location filename="../i18n.py" line="629"/>
         <source>Document type(s) %1 do not support image reembedding.</source>
         <translation>文档类型 %1 不支持图片重嵌入。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="643"/>
+        <location filename="../i18n.py" line="645"/>
         <source>Document %1 not found.</source>
         <translation>未找到文档 %1。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="647"/>
+        <location filename="../i18n.py" line="649"/>
         <source>Selected document(s) are no longer pending: %1</source>
         <translation>所选文档已不再待处理：%1</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="651"/>
+        <location filename="../i18n.py" line="653"/>
         <source>Status %1 is not autorunnable</source>
         <translation>状态 %1 不支持自动运行</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="653"/>
+        <location filename="../i18n.py" line="655"/>
         <source>Task not found: %1</source>
         <translation>未找到任务：%1</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="656"/>
+        <location filename="../i18n.py" line="658"/>
         <source>source_id %1 does not belong to document %2.</source>
         <translation>source_id %1 不属于文档 %2。</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="660"/>
+        <location filename="../i18n.py" line="662"/>
         <source>source_ids not found in selected documents: %1</source>
         <translation>在所选文档中未找到这些 source_ids：%1</translation>
     </message>
@@ -2310,235 +2310,235 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>TaskLabels</name>
     <message>
-        <location filename="../i18n.py" line="259"/>
+        <location filename="../i18n.py" line="261"/>
         <source>Blocked</source>
         <translation>已阻塞</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="261"/>
+        <location filename="../i18n.py" line="263"/>
         <source>Queued</source>
         <translation>排队中</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="262"/>
+        <location filename="../i18n.py" line="264"/>
         <source>Running</source>
         <translation>运行中</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="263"/>
+        <location filename="../i18n.py" line="265"/>
         <source>Paused</source>
         <translation>已暂停</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="264"/>
+        <location filename="../i18n.py" line="266"/>
         <source>Cancel Requested</source>
         <translation>请求取消</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="265"/>
+        <location filename="../i18n.py" line="267"/>
         <source>Cancelling</source>
         <translation>取消中</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="266"/>
+        <location filename="../i18n.py" line="268"/>
         <source>Cancelled</source>
         <translation>已取消</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="267"/>
+        <location filename="../i18n.py" line="269"/>
         <source>Completed</source>
         <translation>已完成</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="268"/>
+        <location filename="../i18n.py" line="270"/>
         <source>Completed with Errors</source>
         <translation>已完成（有错误）</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="269"/>
+        <location filename="../i18n.py" line="271"/>
         <source>Failed</source>
         <translation>失败</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="274"/>
+        <location filename="../i18n.py" line="276"/>
         <source>Batch Translation</source>
         <translation>批量翻译</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="275"/>
+        <location filename="../i18n.py" line="277"/>
         <source>Glossary Extraction</source>
         <translation>术语提取</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="276"/>
+        <location filename="../i18n.py" line="278"/>
         <source>Glossary Export</source>
         <translation>术语表导出</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="277"/>
+        <location filename="../i18n.py" line="279"/>
         <source>Glossary Review</source>
         <translation>术语审校</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="278"/>
+        <location filename="../i18n.py" line="280"/>
         <source>Glossary Translation</source>
         <translation>术语翻译</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="279"/>
+        <location filename="../i18n.py" line="281"/>
         <source>Chunk Retranslation</source>
         <translation>文本块重译</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="280"/>
+        <location filename="../i18n.py" line="282"/>
         <source>Text Translation</source>
         <translation>文本翻译</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="281"/>
+        <location filename="../i18n.py" line="283"/>
         <source>Manga Translation</source>
         <translation>漫画翻译</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="282"/>
-        <location filename="../i18n.py" line="288"/>
-        <location filename="../i18n.py" line="314"/>
+        <location filename="../i18n.py" line="284"/>
+        <location filename="../i18n.py" line="290"/>
+        <location filename="../i18n.py" line="316"/>
         <source>OCR</source>
         <translation>OCR</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="283"/>
+        <location filename="../i18n.py" line="285"/>
         <source>Image Reembedding</source>
         <translation>图片重嵌入</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="289"/>
+        <location filename="../i18n.py" line="291"/>
         <source>Extracting terms</source>
         <translation>正在提取术语</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="290"/>
+        <location filename="../i18n.py" line="292"/>
         <source>Reviewing terms</source>
         <translation>正在审校术语</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="291"/>
+        <location filename="../i18n.py" line="293"/>
         <source>Translating glossary</source>
         <translation>正在翻译术语表</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="292"/>
+        <location filename="../i18n.py" line="294"/>
         <source>Translating chunks</source>
         <translation>正在翻译文本块</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="293"/>
+        <location filename="../i18n.py" line="295"/>
         <source>Reembedding images</source>
         <translation>正在重嵌入图片</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="294"/>
+        <location filename="../i18n.py" line="296"/>
         <source>Exporting</source>
         <translation>正在导出</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="295"/>
+        <location filename="../i18n.py" line="297"/>
         <source>Preparing</source>
         <translation>正在准备</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="296"/>
+        <location filename="../i18n.py" line="298"/>
         <source>Submitting batch jobs</source>
         <translation>正在提交批量任务</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="297"/>
+        <location filename="../i18n.py" line="299"/>
         <source>Polling batch jobs</source>
         <translation>正在轮询批量任务</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="298"/>
+        <location filename="../i18n.py" line="300"/>
         <source>Validating batch output</source>
         <translation>正在验证批量输出</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="299"/>
+        <location filename="../i18n.py" line="301"/>
         <source>Fallback translation</source>
         <translation>回退翻译</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="300"/>
+        <location filename="../i18n.py" line="302"/>
         <source>Applying results</source>
         <translation>正在应用结果</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="260"/>
-        <location filename="../i18n.py" line="301"/>
+        <location filename="../i18n.py" line="262"/>
+        <location filename="../i18n.py" line="303"/>
         <source>Done</source>
         <translation>完成</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="306"/>
+        <location filename="../i18n.py" line="308"/>
         <source>Batch translation</source>
         <translation>批量翻译</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="307"/>
+        <location filename="../i18n.py" line="309"/>
         <source>Glossary extraction</source>
         <translation>术语提取</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="308"/>
+        <location filename="../i18n.py" line="310"/>
         <source>Glossary translation</source>
         <translation>术语翻译</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="309"/>
+        <location filename="../i18n.py" line="311"/>
         <source>Glossary review</source>
         <translation>术语审校</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="310"/>
+        <location filename="../i18n.py" line="312"/>
         <source>Glossary export</source>
         <translation>术语表导出</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="311"/>
+        <location filename="../i18n.py" line="313"/>
         <source>Text translation</source>
         <translation>文本翻译</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="312"/>
+        <location filename="../i18n.py" line="314"/>
         <source>Manga translation</source>
         <translation>漫画翻译</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="313"/>
+        <location filename="../i18n.py" line="315"/>
         <source>Chunk retranslation</source>
         <translation>文本块重译</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="315"/>
+        <location filename="../i18n.py" line="317"/>
         <source>Image reembedding</source>
         <translation>图片重嵌入</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="319"/>
+        <location filename="../i18n.py" line="321"/>
         <source>No document scope</source>
         <translation>无文档范围</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="320"/>
+        <location filename="../i18n.py" line="322"/>
         <source>All documents</source>
         <translation>所有文档</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="321"/>
+        <location filename="../i18n.py" line="323"/>
         <source>1 document</source>
         <translation>1个文档</translation>
     </message>
     <message>
-        <location filename="../i18n.py" line="322"/>
+        <location filename="../i18n.py" line="324"/>
         <source>%1 documents</source>
         <translation>%1个文档</translation>
     </message>
@@ -3409,52 +3409,52 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>_QueueItemCard</name>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="151"/>
+        <location filename="../features/queue_drawer_view.py" line="150"/>
         <source>Open</source>
         <translation>打开</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="152"/>
+        <location filename="../features/queue_drawer_view.py" line="151"/>
         <source>Run</source>
         <translation>运行</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="153"/>
+        <location filename="../features/queue_drawer_view.py" line="152"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="154"/>
+        <location filename="../features/queue_drawer_view.py" line="153"/>
         <source>Retry</source>
         <translation>重试</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="155"/>
+        <location filename="../features/queue_drawer_view.py" line="154"/>
         <source>Delete</source>
         <translation>删除</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="158"/>
+        <location filename="../features/queue_drawer_view.py" line="157"/>
         <source>Deleting...</source>
         <translation>正在删除...</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="182"/>
+        <location filename="../features/queue_drawer_view.py" line="181"/>
         <source>Project: {0}</source>
         <translation>项目：{0}</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="184"/>
+        <location filename="../features/queue_drawer_view.py" line="183"/>
         <source>Document {0}</source>
         <translation>文档 {0}</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="190"/>
+        <location filename="../features/queue_drawer_view.py" line="189"/>
         <source>Stage: {0}</source>
         <translation>阶段：{0}</translation>
     </message>
     <message>
-        <location filename="../features/queue_drawer_view.py" line="192"/>
+        <location filename="../features/queue_drawer_view.py" line="191"/>
         <source>Progress: {0}/{1}</source>
         <translation>进度：{0}/{1}</translation>
     </message>

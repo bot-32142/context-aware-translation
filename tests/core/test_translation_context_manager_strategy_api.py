@@ -9,6 +9,7 @@ import pytest
 
 from context_aware_translation.core.context_manager import TranslationContextManager, TranslationContextManagerAdapter
 from context_aware_translation.core.models import Term
+from context_aware_translation.core.term_memory import TermMemoryVersion
 from context_aware_translation.storage.schema.book_db import TermRecord, TranslationChunkRecord
 
 
@@ -51,6 +52,7 @@ class DummyTermRepo:
         self._terms = {term.key: term for term in terms or []}
         self.chunks = chunks or []
         self._pending_terms = pending_terms or []
+        self._term_memory_versions: dict[str, list[TermMemoryVersion]] = {}
 
     def get_source_language(self) -> str | None:
         return self._source_language
@@ -101,6 +103,25 @@ class DummyTermRepo:
         if not force:
             chunks = [c for c in chunks if not c.is_translated]
         return list(chunks)
+
+    def replace_term_memory_versions(self, term: str, versions: list[TermMemoryVersion]) -> None:
+        self._term_memory_versions[term] = list(versions)
+
+    def get_latest_term_memory_before(self, term: str, query_index: int) -> TermMemoryVersion | None:
+        versions = self._term_memory_versions.get(term, [])
+        eligible = [version for version in versions if version.effective_start_chunk <= query_index]
+        if not eligible:
+            return None
+        eligible.sort(key=lambda version: version.effective_start_chunk)
+        return eligible[-1]
+
+    def list_latest_term_memory_versions(self) -> dict[str, TermMemoryVersion]:
+        latest: dict[str, TermMemoryVersion] = {}
+        for term, versions in self._term_memory_versions.items():
+            if not versions:
+                continue
+            latest[term] = sorted(versions, key=lambda version: version.effective_start_chunk)[-1]
+        return latest
 
 
 class DetectLanguageStrategy:

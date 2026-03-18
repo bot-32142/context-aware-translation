@@ -6,12 +6,10 @@ from context_aware_translation.storage.schema.book_db import (
     TermRecord,
     TranslationChunkRecord,
 )
-from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 from context_aware_translation.storage.schema.registry_db import RegistryDB
 
 __all__ = [
     "ChunkRecord",
-    "ContextTreeDB",
     "RegistryDB",
     "SQLiteBookDB",
     "TermRecord",

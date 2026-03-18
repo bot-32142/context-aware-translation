@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Property, QCoreApplication, QT_TRANSLATE_NOOP, Signal
+from PySide6.QtCore import QT_TRANSLATE_NOOP, Property, QCoreApplication, Signal
 
 from context_aware_translation.ui.viewmodels.base import ViewModelBase
 

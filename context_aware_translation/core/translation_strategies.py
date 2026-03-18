@@ -69,6 +69,27 @@ class DescriptionSummarizer(Protocol):
         ...
 
 
+class TermMemoryUpdater(Protocol):
+    """Protocol for building and revising causal term-memory summaries."""
+
+    async def bootstrap_summary(
+        self,
+        descriptions: list[str],
+        cancel_check: Callable[[], bool] | None = None,
+    ) -> str:
+        """Build the first compact summary for a term."""
+        ...
+
+    async def update_summary(
+        self,
+        current_summary: str,
+        new_descriptions: list[tuple[int, str]],
+        cancel_check: Callable[[], bool] | None = None,
+    ) -> tuple[bool, str]:
+        """Return whether the summary changes and the resulting summary text."""
+        ...
+
+
 class MangaPageTranslationStrategy(Protocol):
     """Protocol for translating manga pages using vision LLM with glossary terms."""
 

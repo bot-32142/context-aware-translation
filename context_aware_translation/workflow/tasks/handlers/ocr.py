@@ -155,6 +155,12 @@ class OCRHandler:
                     reason=f"Document type '{doc_type}' does not support OCR. Supported types: {', '.join(sorted(_OCR_CAPABLE_DOCUMENT_TYPES))}.",
                 )
 
+            if doc_repo.get_chunk_count(doc_id) > 0:
+                return Decision(
+                    allowed=False,
+                    reason="OCR is locked after terms or translation have started for this document.",
+                )
+
             # Check book config has ocr_config
             book_config = deps.book_manager.get_book_config(book_id)
             if book_config is None or not book_config.get("ocr_config"):
@@ -233,6 +239,12 @@ class OCRHandler:
                 return Decision(
                     allowed=False,
                     reason=f"Document type '{doc_type}' does not support OCR.",
+                )
+
+            if doc_repo.get_chunk_count(doc_id) > 0:
+                return Decision(
+                    allowed=False,
+                    reason="OCR is locked after terms or translation have started for this document.",
                 )
 
             # Validate stored source_ids if present

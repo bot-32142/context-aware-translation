@@ -182,7 +182,7 @@ def test_preflight_creation_returns_decision_for_batch_handler(engine, tmp_path)
     decision = engine.preflight(
         "batch_translation",
         "book-preflight",
-        {"document_ids": [1, 2], "force": False, "skip_context": False},
+        {"document_ids": [1, 2], "force": False},
         TaskAction.RUN,
     )
     assert decision.allowed is True

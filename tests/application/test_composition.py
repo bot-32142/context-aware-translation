@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 from PySide6.QtWidgets import QApplication
 
 from context_aware_translation.application.composition import build_application_context
@@ -19,6 +20,7 @@ from context_aware_translation.application.contracts.projects import CreateProje
 from context_aware_translation.application.contracts.terms import UpdateTermRequest
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+from context_aware_translation.storage.schema.book_db import TermRecord
 
 
 def _ensure_qt_app() -> QApplication:
@@ -515,5 +517,41 @@ def test_terms_update_missing_term_raises_not_found(tmp_path: Path) -> None:
             )
 
         assert exc_info.value.payload.code == "not_found"
+    finally:
+        context.close()
+
+
+def test_terms_update_request_rejects_removed_description_field(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    try:
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Terms Manual Edit", target_language="English")
+        )
+        project_id = created.project.project_id
+        _configure_project_for_task_preflights(context, project_id)
+
+        with context.runtime.open_book_db(project_id) as dbx:
+            dbx.term_repo.upsert_terms(
+                [
+                    TermRecord(
+                        key="ルフィ",
+                        descriptions={"1": "Main character"},
+                        occurrence={"1": 1},
+                        votes=1,
+                        total_api_calls=1,
+                    )
+                ]
+            )
+
+        scope = context.services.terms.get_project_terms(project_id).scope
+
+        with pytest.raises(ValidationError):
+            UpdateTermRequest(
+                scope=scope,
+                term_id=1,
+                term_key="ルフィ",
+                description="Pirate captain",
+            )
     finally:
         context.close()

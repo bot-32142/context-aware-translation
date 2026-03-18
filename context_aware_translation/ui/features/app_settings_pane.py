@@ -32,14 +32,14 @@ from context_aware_translation.application.services.app_setup import AppSetupSer
 from context_aware_translation.ui.chrome_sizing import sync_qml_host_height
 from context_aware_translation.ui.features.app_setup_view import (
     _NEW_PROFILE_ROUTE_SPECS,
-    _provider_label,
     ConnectionEditorDialog,
     SetupWizardDialog,
+    _provider_label,
 )
-from context_aware_translation.ui.features.workflow_profile_editor import workflow_step_label
 from context_aware_translation.ui.features.workflow_profile_editor import (
     ConnectionChoice,
     WorkflowProfileEditorDialog,
+    workflow_step_label,
 )
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.viewmodels.app_settings_pane import AppSettingsPaneViewModel

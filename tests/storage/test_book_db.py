@@ -11,10 +11,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
+from collections.abc import Generator
 from pathlib import Path
+from typing import cast
 
 import pytest
 
+from context_aware_translation.core.term_memory import TermMemoryVersion
 from context_aware_translation.storage.schema.book_db import (
     ChunkRecord,
     SQLiteBookDB,
@@ -28,7 +32,7 @@ from context_aware_translation.storage.schema.book_db import (
 
 
 @pytest.fixture
-def temp_db(tmp_path: Path) -> SQLiteBookDB:
+def temp_db(tmp_path: Path) -> Generator[SQLiteBookDB, None, None]:
     """Create a temporary database for testing."""
     db_path = tmp_path / "test.db"
     db = SQLiteBookDB(db_path)
@@ -135,7 +139,7 @@ def test_term_db_init(temp_db: SQLiteBookDB):
     meta = temp_db.conn.execute("SELECT schema_version FROM meta").fetchone()
     assert meta is not None
     assert meta["schema_version"] == temp_db.schema_version
-    assert temp_db.schema_version == 3
+    assert temp_db.schema_version == 4
 
 
 # --- Term Operations ---
@@ -438,7 +442,7 @@ def test_upsert_terms_none_descriptions(temp_db: SQLiteBookDB):
     """Test upserting term with None descriptions."""
     term = TermRecord(
         key="term1",
-        descriptions=None,  # Should be handled as {}
+        descriptions=cast(dict, None),  # Should be handled as {}
         occurrence={},
         votes=1,
         total_api_calls=1,
@@ -455,7 +459,7 @@ def test_upsert_terms_none_occurrence(temp_db: SQLiteBookDB):
     term = TermRecord(
         key="term1",
         descriptions={},
-        occurrence=None,  # Should be handled as {}
+        occurrence=cast(dict, None),  # Should be handled as {}
         votes=1,
         total_api_calls=1,
     )
@@ -1450,3 +1454,150 @@ def test_transaction_commit(temp_db: SQLiteBookDB):
 
     # Term should exist after commit
     assert temp_db.get_term("term1") is not None
+
+
+def test_reset_source_ocr_prunes_term_memory_for_removed_document_chunks(temp_db: SQLiteBookDB):
+    document_id = temp_db.insert_document("manga")
+    source_id = temp_db.insert_document_source(
+        document_id,
+        0,
+        "image",
+        ocr_json=json.dumps({"regions": [{"text": "hello"}]}),
+        is_ocr_completed=True,
+        is_text_added=True,
+    )
+    temp_db.upsert_chunks(
+        [
+            TranslationChunkRecord(
+                chunk_id=5,
+                hash="hash-5",
+                text="chunk 5",
+                document_id=document_id,
+                is_extracted=True,
+                is_summarized=True,
+                is_occurrence_mapped=True,
+            )
+        ]
+    )
+    temp_db.upsert_terms(
+        [
+            TermRecord(
+                key="hero",
+                descriptions={"5": "hero desc", "imported": "stable import"},
+                occurrence={"5": 1},
+                votes=1,
+                total_api_calls=1,
+            )
+        ]
+    )
+    temp_db.replace_term_memory_versions(
+        "hero",
+        [
+            TermMemoryVersion(
+                term="hero",
+                effective_start_chunk=5,
+                latest_evidence_chunk=5,
+                summary_text="stale summary",
+                kind="bootstrap",
+                source_count=1,
+                created_at=time.time(),
+            )
+        ],
+    )
+
+    temp_db.reset_source_ocr(source_id)
+
+    assert temp_db.list_chunks(document_id=document_id) == []
+    assert temp_db.list_term_memory_versions("hero") == []
+    hero = temp_db.get_term("hero")
+    assert hero is not None
+    assert hero.descriptions == {"imported": "stable import"}
+    assert hero.occurrence == {}
+
+
+def test_reset_source_ocr_preserves_later_document_term_evidence(temp_db: SQLiteBookDB):
+    first_document_id = temp_db.insert_document("manga")
+    first_source_id = temp_db.insert_document_source(
+        first_document_id,
+        0,
+        "image",
+        ocr_json=json.dumps({"regions": [{"text": "first"}]}),
+        is_ocr_completed=True,
+        is_text_added=True,
+    )
+    second_document_id = temp_db.insert_document("manga")
+    temp_db.insert_document_source(
+        second_document_id,
+        0,
+        "image",
+        ocr_json=json.dumps({"regions": [{"text": "second"}]}),
+        is_ocr_completed=True,
+        is_text_added=True,
+    )
+    temp_db.upsert_chunks(
+        [
+            TranslationChunkRecord(
+                chunk_id=5,
+                hash="hash-5",
+                text="chunk 5",
+                document_id=first_document_id,
+                is_extracted=True,
+                is_summarized=True,
+                is_occurrence_mapped=True,
+            ),
+            TranslationChunkRecord(
+                chunk_id=20,
+                hash="hash-20",
+                text="chunk 20",
+                document_id=second_document_id,
+                is_extracted=True,
+                is_summarized=True,
+                is_occurrence_mapped=True,
+            ),
+        ]
+    )
+    temp_db.upsert_terms(
+        [
+            TermRecord(
+                key="hero",
+                descriptions={"5": "first doc desc", "20": "second doc desc"},
+                occurrence={"5": 1, "20": 1},
+                votes=2,
+                total_api_calls=2,
+            )
+        ]
+    )
+    temp_db.replace_term_memory_versions(
+        "hero",
+        [
+            TermMemoryVersion(
+                term="hero",
+                effective_start_chunk=6,
+                latest_evidence_chunk=5,
+                summary_text="first doc summary",
+                kind="bootstrap",
+                source_count=1,
+                created_at=time.time(),
+            ),
+            TermMemoryVersion(
+                term="hero",
+                effective_start_chunk=21,
+                latest_evidence_chunk=20,
+                summary_text="second doc summary",
+                kind="revision",
+                source_count=2,
+                created_at=time.time(),
+            ),
+        ],
+    )
+
+    temp_db.reset_source_ocr(first_source_id)
+
+    hero = temp_db.get_term("hero")
+    assert hero is not None
+    assert hero.descriptions == {"20": "second doc desc"}
+    assert hero.occurrence == {"20": 1}
+    assert temp_db.list_chunks(document_id=first_document_id) == []
+    remaining_chunks = temp_db.list_chunks(document_id=second_document_id)
+    assert len(remaining_chunks) == 1
+    assert remaining_chunks[0].chunk_id == 20

@@ -28,7 +28,6 @@ from context_aware_translation.ui.i18n import (
     translate_progress_label,
     translate_task_phase,
     translate_task_status,
-    translate_task_type,
 )
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone

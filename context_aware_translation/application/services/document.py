@@ -202,7 +202,6 @@ class DefaultDocumentService:
                 request.project_id,
                 request.document_id,
                 chunk_count=dbx.document_repo.get_chunk_count(request.document_id),
-                allow_existing_chunks=True,
             )
             if blocker is not None:
                 raise_application_error(
@@ -230,10 +229,7 @@ class DefaultDocumentService:
             serialized = self._serialize_ocr_save(existing_ocr_json, request)
             dbx.document_repo.update_source_ocr(request.source_id, serialized)
             dbx.document_repo.update_source_ocr_completed(request.source_id)
-            reset_result = dbx.document_repo.reset_document_stack(
-                request.document_id,
-                context_tree_db_path=self._runtime.book_manager.get_book_context_tree_path(request.project_id),
-            )
+            reset_result = dbx.document_repo.reset_document_stack(request.document_id)
         invalidated_sections = [
             DocumentSection.OCR,
             DocumentSection.TERMS,
@@ -253,6 +249,21 @@ class DefaultDocumentService:
         return self.get_ocr(request.project_id, request.document_id)
 
     def run_ocr(self, request: RunOCRRequest) -> AcceptedCommand:
+        with self._runtime.open_book_db(request.project_id) as dbx:
+            blocker = self._ocr_mutation_blocker(
+                request.project_id,
+                request.document_id,
+                chunk_count=dbx.document_repo.get_chunk_count(request.document_id),
+            )
+            if blocker is not None:
+                raise_application_error(
+                    ApplicationErrorCode.BLOCKED,
+                    blocker.message,
+                    project_id=request.project_id,
+                    document_id=request.document_id,
+                    source_id=request.source_id,
+                    decision_code=blocker.code.value,
+                )
         params: dict[str, object] = {"document_ids": [request.document_id]}
         if request.source_id is not None:
             params["source_ids"] = [request.source_id]
@@ -687,7 +698,6 @@ class DefaultDocumentService:
             document_id,
             chunk_count=chunk_count,
             active_task=active_task,
-            allow_existing_chunks=True,
         )
         rerun_blocker = self._ocr_mutation_blocker(
             project_id,
@@ -752,7 +762,6 @@ class DefaultDocumentService:
         *,
         chunk_count: int,
         active_task: Any | None = None,
-        allow_existing_chunks: bool = False,
     ) -> BlockerInfo | None:
         if active_task is not None:
             return make_blocker(
@@ -776,7 +785,7 @@ class DefaultDocumentService:
                 project_id=project_id,
                 document_id=document_id,
             )
-        if chunk_count > 0 and not allow_existing_chunks:
+        if chunk_count > 0:
             return make_blocker(
                 BlockerCode.NOTHING_TO_DO,
                 "OCR is locked after terms or translation have started for this document.",

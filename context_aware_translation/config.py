@@ -447,7 +447,6 @@ class WorkflowRuntimeConfig:
     translation_target_language: str
     llm_concurrency: int
     sqlite_path: Path
-    context_tree_sqlite_path: Path
     extractor_config: ExtractorConfig
     summarizor_config: SummarizorConfig
     translator_config: TranslatorConfig
@@ -642,7 +641,6 @@ class Config:
     output_dir: Path = field(default_factory=lambda: DEFAULT_OUTPUT_DIR)
     working_dir: Path | None = None  # default to output_dir / data
     sqlite_path: Path | None = None  # default to working_dir / terms.db
-    context_tree_sqlite_path: Path | None = None  # default to working_dir / context_tree.db
     log_dir: Path | None = None  # default to working_dir / logs
     book_id: str | None = None  # If created from a book, stores the book_id
 
@@ -673,8 +671,6 @@ class Config:
             result["working_dir"] = str(self.working_dir)
         if self.sqlite_path:
             result["sqlite_path"] = str(self.sqlite_path)
-        if self.context_tree_sqlite_path:
-            result["context_tree_sqlite_path"] = str(self.context_tree_sqlite_path)
         if self.log_dir:
             result["log_dir"] = str(self.log_dir)
 
@@ -765,9 +761,6 @@ class Config:
             output_dir=Path(data["output_dir"]) if "output_dir" in data else DEFAULT_OUTPUT_DIR,
             working_dir=Path(data["working_dir"]) if data.get("working_dir") else None,
             sqlite_path=Path(data["sqlite_path"]) if data.get("sqlite_path") else None,
-            context_tree_sqlite_path=(
-                Path(data["context_tree_sqlite_path"]) if data.get("context_tree_sqlite_path") else None
-            ),
             log_dir=Path(data["log_dir"]) if data.get("log_dir") else None,
             book_id=data.get("book_id"),
             endpoint_profiles=endpoint_profiles,
@@ -821,8 +814,6 @@ class Config:
             missing.append("translation_target_language")
         if self.sqlite_path is None:
             missing.append("sqlite_path")
-        if self.context_tree_sqlite_path is None:
-            missing.append("context_tree_sqlite_path")
         if self.extractor_config is None:
             missing.append("extractor_config")
         if self.summarizor_config is None:
@@ -847,7 +838,6 @@ class Config:
             translation_target_language=self.translation_target_language,
             llm_concurrency=self.llm_concurrency,
             sqlite_path=self.sqlite_path,  # type: ignore[arg-type]
-            context_tree_sqlite_path=self.context_tree_sqlite_path,  # type: ignore[arg-type]
             extractor_config=self.extractor_config,  # type: ignore[arg-type]
             summarizor_config=self.summarizor_config,  # type: ignore[arg-type]
             translator_config=self.translator_config,  # type: ignore[arg-type]
@@ -867,8 +857,6 @@ class Config:
             self.working_dir = Path(self.working_dir)
         if self.sqlite_path is None:
             self.sqlite_path = self.working_dir / SQLITE_FILENAME
-        if self.context_tree_sqlite_path is None:
-            self.context_tree_sqlite_path = self.working_dir / "context_tree.db"
         if self.log_dir is None:
             self.log_dir = self.working_dir / "logs"
         else:
@@ -993,7 +981,6 @@ class Config:
             output_dir=book_path,
             working_dir=book_path,
             sqlite_path=book_path / "book.db",
-            context_tree_sqlite_path=book_path / "context_tree.db",
             log_dir=book_path / "logs",
             book_id=book.book_id,
             endpoint_profiles=endpoint_profiles,

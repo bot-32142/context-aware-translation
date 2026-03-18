@@ -76,7 +76,6 @@ class UpdateTermRequest(ContractModel):
     term_id: int
     term_key: str | None = None
     translation: str | None = None
-    description: str | None = None
     ignored: bool | None = None
     reviewed: bool | None = None
 

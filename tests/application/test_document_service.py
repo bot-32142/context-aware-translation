@@ -5,11 +5,13 @@ import json
 import sqlite3
 from pathlib import Path
 
+import pytest
 from PySide6.QtWidgets import QApplication
 
 from context_aware_translation.application.composition import build_application_context
-from context_aware_translation.application.contracts.document import OCRTextElement, SaveOCRPageRequest
+from context_aware_translation.application.contracts.document import OCRTextElement, RunOCRRequest, SaveOCRPageRequest
 from context_aware_translation.application.contracts.projects import CreateProjectRequest
+from context_aware_translation.application.errors import ApplicationError, ApplicationErrorCode
 from context_aware_translation.application.events import DocumentInvalidatedEvent
 from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 from context_aware_translation.storage.schema.book_db import ChunkRecord, SQLiteBookDB
@@ -95,6 +97,57 @@ def test_document_service_get_ocr_allows_current_page_rerun_after_completion(tmp
         context.close()
 
 
+def test_document_service_run_ocr_is_blocked_after_chunking_starts(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    try:
+        project = context.services.projects.create_project(
+            CreateProjectRequest(name="OCR Run Blocked", target_language="English")
+        )
+        project_id = project.project.project_id
+        _configure_project_for_ocr(context, project_id)
+
+        db, repo = _open_repo(context, project_id)
+        try:
+            document_id = repo.insert_document("pdf")
+            source_id = repo.insert_document_source(
+                document_id,
+                0,
+                "image",
+                binary_content=_tiny_png_bytes(),
+                mime_type="image/png",
+                ocr_json=json.dumps({"text": "before edit"}, ensure_ascii=False),
+                is_ocr_completed=True,
+            )
+            db.upsert_chunks(
+                [
+                    ChunkRecord(
+                        chunk_id=1,
+                        hash="chunk-1",
+                        text="before edit",
+                        document_id=document_id,
+                        is_extracted=True,
+                        is_summarized=True,
+                    )
+                ]
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        with pytest.raises(ApplicationError) as exc_info:
+            context.services.document.run_ocr(
+                RunOCRRequest(project_id=project_id, document_id=document_id, source_id=source_id)
+            )
+
+        assert exc_info.value.payload.code == ApplicationErrorCode.BLOCKED
+        assert (
+            exc_info.value.payload.message == "OCR is locked after terms or translation have started for this document."
+        )
+    finally:
+        context.close()
+
+
 def test_document_service_save_ocr_preserves_structured_payload_shape(tmp_path: Path) -> None:
     _ensure_qt_app()
     context = build_application_context(library_root=tmp_path)
@@ -163,7 +216,7 @@ def test_document_service_save_ocr_preserves_structured_payload_shape(tmp_path: 
         context.close()
 
 
-def test_document_service_save_ocr_remains_available_after_chunking_starts(tmp_path: Path) -> None:
+def test_document_service_save_ocr_is_blocked_after_chunking_starts(tmp_path: Path) -> None:
     _ensure_qt_app()
     context = build_application_context(library_root=tmp_path)
     try:
@@ -201,17 +254,20 @@ def test_document_service_save_ocr_remains_available_after_chunking_starts(tmp_p
         finally:
             db.close()
 
-        state = context.services.document.save_ocr(
-            SaveOCRPageRequest(
-                project_id=project_id,
-                document_id=document_id,
-                source_id=source_id,
-                extracted_text="after edit",
+        with pytest.raises(ApplicationError) as exc_info:
+            context.services.document.save_ocr(
+                SaveOCRPageRequest(
+                    project_id=project_id,
+                    document_id=document_id,
+                    source_id=source_id,
+                    extracted_text="after edit",
+                )
             )
-        )
 
-        assert state.pages[0].extracted_text == "after edit"
-        assert state.actions.save.enabled
+        assert exc_info.value.payload.code == ApplicationErrorCode.BLOCKED
+        assert (
+            exc_info.value.payload.message == "OCR is locked after terms or translation have started for this document."
+        )
 
         db, repo = _open_repo(context, project_id)
         try:
@@ -221,14 +277,14 @@ def test_document_service_save_ocr_remains_available_after_chunking_starts(tmp_p
         finally:
             db.close()
         assert saved is not None
-        assert json.loads(saved)["text"] == "after edit"
-        assert chunks == []
+        assert json.loads(saved)["text"] == "before edit"
+        assert len(chunks) == 1
         assert terms == []
     finally:
         context.close()
 
 
-def test_document_service_save_ocr_invalidates_later_documents_when_stack_resets(tmp_path: Path) -> None:
+def test_document_service_save_ocr_does_not_invalidate_later_documents_when_blocked(tmp_path: Path) -> None:
     _ensure_qt_app()
     context = build_application_context(library_root=tmp_path)
     seen_events: list[object] = []
@@ -277,21 +333,19 @@ def test_document_service_save_ocr_invalidates_later_documents_when_stack_resets
         finally:
             db.close()
 
-        context.services.document.save_ocr(
-            SaveOCRPageRequest(
-                project_id=project_id,
-                document_id=document_id,
-                source_id=source_id,
-                extracted_text="after edit",
+        with pytest.raises(ApplicationError) as exc_info:
+            context.services.document.save_ocr(
+                SaveOCRPageRequest(
+                    project_id=project_id,
+                    document_id=document_id,
+                    source_id=source_id,
+                    extracted_text="after edit",
+                )
             )
-        )
 
+        assert exc_info.value.payload.code == ApplicationErrorCode.BLOCKED
         document_events = [event for event in seen_events if isinstance(event, DocumentInvalidatedEvent)]
-        assert document_events
-        latest_document_event = document_events[-1]
-        assert latest_document_event.project_id == project_id
-        assert latest_document_event.document_id is None
-        assert latest_document_event.sections
+        assert document_events == []
     finally:
         subscription.close()
         context.close()

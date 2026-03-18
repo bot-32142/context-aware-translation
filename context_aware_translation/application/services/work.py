@@ -367,9 +367,8 @@ class DefaultWorkService:
         blocker = self._document_mutation_blocker(request.project_id)
         if blocker is not None:
             self._raise_blocked_blocker(blocker, project_id=request.project_id, document_id=request.document_id)
-        context_tree_path = self._runtime.book_manager.get_book_context_tree_path(request.project_id)
         with self._runtime.open_book_db(request.project_id) as dbx:
-            result = dbx.document_repo.reset_document_stack(request.document_id, context_tree_db_path=context_tree_path)
+            result = dbx.document_repo.reset_document_stack(request.document_id)
         if not result.get("document_exists", True):
             raise_application_error(
                 ApplicationErrorCode.NOT_FOUND,
@@ -402,11 +401,8 @@ class DefaultWorkService:
         blocker = self._document_mutation_blocker(request.project_id)
         if blocker is not None:
             self._raise_blocked_blocker(blocker, project_id=request.project_id, document_id=request.document_id)
-        context_tree_path = self._runtime.book_manager.get_book_context_tree_path(request.project_id)
         with self._runtime.open_book_db(request.project_id) as dbx:
-            result = dbx.document_repo.delete_documents_stack(
-                request.document_id, context_tree_db_path=context_tree_path
-            )
+            result = dbx.document_repo.delete_documents_stack(request.document_id)
         if not result.get("document_exists", True):
             raise_application_error(
                 ApplicationErrorCode.NOT_FOUND,
@@ -499,7 +495,7 @@ class DefaultWorkService:
             {
                 ResourceClaim("doc", project_id, "*", ClaimMode.WRITE_EXCLUSIVE),
                 ResourceClaim("glossary_state", project_id, "*", ClaimMode.WRITE_EXCLUSIVE),
-                ResourceClaim("context_tree", project_id, "*", ClaimMode.WRITE_EXCLUSIVE),
+                ResourceClaim("term_memory", project_id, "*", ClaimMode.WRITE_EXCLUSIVE),
                 ResourceClaim("ocr", project_id, "*", ClaimMode.WRITE_EXCLUSIVE),
             }
         )

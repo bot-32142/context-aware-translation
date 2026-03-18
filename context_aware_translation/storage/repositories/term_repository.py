@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
 from context_aware_translation.core.models import KeyedContext, Term
+from context_aware_translation.core.term_memory import TermMemoryVersion
 from context_aware_translation.storage.schema.book_db import (
     ChunkRecord,
     SQLiteBookDB,
@@ -364,3 +365,18 @@ class TermRepository:
     def get_chunk_stats(self) -> dict[str, Any]:
         """Get chunk statistics."""
         return self.keyed_context_db.get_chunk_stats()
+
+    def replace_term_memory_versions(self, term: str, versions: list[TermMemoryVersion]) -> None:
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("StorageManager is closed")
+            self.keyed_context_db.replace_term_memory_versions(term, versions)
+
+    def list_term_memory_versions(self, term: str) -> list[TermMemoryVersion]:
+        return self.keyed_context_db.list_term_memory_versions(term)
+
+    def get_latest_term_memory_before(self, term: str, query_chunk: int) -> TermMemoryVersion | None:
+        return self.keyed_context_db.get_latest_term_memory_before(term, query_chunk)
+
+    def list_latest_term_memory_versions(self) -> dict[str, TermMemoryVersion]:
+        return self.keyed_context_db.list_latest_term_memory_versions()

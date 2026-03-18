@@ -667,18 +667,6 @@ class BookManager:
         """
         return self.get_book_path(book_id) / "book.db"
 
-    def get_book_context_tree_path(self, book_id: str) -> Path:
-        """
-        Get path to context_tree.db.
-
-        Args:
-            book_id: Book identifier
-
-        Returns:
-            Path to context_tree.db
-        """
-        return self.get_book_path(book_id) / "context_tree.db"
-
     def validate_book_name(self, name: str) -> str | None:
         """
         Validate book name format only.

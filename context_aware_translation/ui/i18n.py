@@ -7,6 +7,8 @@ from typing import cast
 
 from PySide6.QtCore import (
     QT_TRANSLATE_NOOP as _QT_TRANSLATE_NOOP,
+)
+from PySide6.QtCore import (
     QCoreApplication,
     QLibraryInfo,
     QLocale,

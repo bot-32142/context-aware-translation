@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from context_aware_translation.storage.schema.book_db import SQLiteBookDB
-    from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 
 from context_aware_translation.storage.schema.book_db import TermRecord
 
@@ -89,7 +88,6 @@ def _validate_glossary_json(data: object) -> None:
 
 def import_glossary(
     db: SQLiteBookDB,
-    context_tree_db: ContextTreeDB,
     input_path: Path,
     include_translations: bool = True,
 ) -> int:
@@ -103,7 +101,7 @@ def import_glossary(
     _validate_glossary_json(data)
 
     # Wipe existing data
-    context_tree_db.delete_all()
+    db.delete_all_term_memory(auto_commit=False)
     db.conn.execute("DELETE FROM terms")
 
     # Build and insert term records

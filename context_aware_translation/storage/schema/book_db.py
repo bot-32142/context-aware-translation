@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from context_aware_translation.core.term_memory import TermMemoryVersion
 from context_aware_translation.utils.cjk_normalize import normalize_for_matching
 
 
@@ -101,6 +102,19 @@ CREATE TABLE IF NOT EXISTS chunks (
 );
 """
 
+CREATE_TERM_MEMORY_VERSIONS = """
+CREATE TABLE IF NOT EXISTS term_memory_versions (
+    term TEXT NOT NULL,
+    effective_start_chunk INTEGER NOT NULL,
+    latest_evidence_chunk INTEGER NOT NULL,
+    summary_text TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    source_count INTEGER NOT NULL,
+    created_at REAL NOT NULL,
+    PRIMARY KEY (term, effective_start_chunk)
+);
+"""
+
 CREATE_DOCUMENT = """
 CREATE TABLE IF NOT EXISTS document (
     document_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -134,7 +148,7 @@ class SQLiteBookDB:
 
     def __init__(self, sqlite_path: Path) -> None:
         self.db_path = Path(sqlite_path)
-        self.schema_version = 3
+        self.schema_version = 4
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
         self._configure_connection()
@@ -189,6 +203,8 @@ class SQLiteBookDB:
                 )
                 """
             )
+        if from_version < 4:
+            cur.execute(CREATE_TERM_MEMORY_VERSIONS)
         cur.execute(
             "UPDATE meta SET schema_version = ?, updated_at = ?",
             (self.schema_version, time.time()),
@@ -200,7 +216,12 @@ class SQLiteBookDB:
         cur.execute(CREATE_META)
         cur.execute(CREATE_TERMS)
         cur.execute(CREATE_CHUNKS)
+        cur.execute(CREATE_TERM_MEMORY_VERSIONS)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON chunks(document_id);")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_term_memory_versions_term_effective "
+            "ON term_memory_versions(term, effective_start_chunk);"
+        )
         cur.execute(CREATE_DOCUMENT)
         cur.execute(CREATE_DOCUMENT_SOURCES)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_document_sources_document_id ON document_sources(document_id);")
@@ -470,10 +491,11 @@ class SQLiteBookDB:
         if not keys:
             return 0
         placeholders = ",".join("?" * len(keys))
-        cursor = self.conn.execute(
-            f"DELETE FROM terms WHERE key IN ({placeholders})",
+        self.conn.execute(
+            f"DELETE FROM term_memory_versions WHERE term IN ({placeholders})",
             keys,
         )
+        cursor = self.conn.execute(f"DELETE FROM terms WHERE key IN ({placeholders})", keys)
         self.conn.commit()
         return cursor.rowcount
 
@@ -561,6 +583,100 @@ class SQLiteBookDB:
             translated_name: str | None = row["translated_name"]
             return translated_name
         return None
+
+    def replace_term_memory_versions(
+        self,
+        term: str,
+        versions: Iterable[TermMemoryVersion],
+        auto_commit: bool = True,
+    ) -> None:
+        versions_list = list(versions)
+        self.conn.execute("DELETE FROM term_memory_versions WHERE term = ?", (term,))
+        if versions_list:
+            self.conn.executemany(
+                """
+                INSERT INTO term_memory_versions(
+                    term,
+                    effective_start_chunk,
+                    latest_evidence_chunk,
+                    summary_text,
+                    kind,
+                    source_count,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        version.term,
+                        version.effective_start_chunk,
+                        version.latest_evidence_chunk,
+                        version.summary_text,
+                        version.kind,
+                        version.source_count,
+                        version.created_at,
+                    )
+                    for version in versions_list
+                ],
+            )
+        if auto_commit:
+            self.conn.commit()
+
+    def list_term_memory_versions(self, term: str) -> list[TermMemoryVersion]:
+        rows = self.conn.execute(
+            """
+            SELECT * FROM term_memory_versions
+            WHERE term = ?
+            ORDER BY effective_start_chunk ASC
+            """,
+            (term,),
+        ).fetchall()
+        return [self._row_to_term_memory_version(row) for row in rows]
+
+    def get_latest_term_memory_before(self, term: str, query_chunk: int) -> TermMemoryVersion | None:
+        row = self.conn.execute(
+            """
+            SELECT * FROM term_memory_versions
+            WHERE term = ? AND effective_start_chunk <= ?
+            ORDER BY effective_start_chunk DESC
+            LIMIT 1
+            """,
+            (term, query_chunk),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_term_memory_version(row)
+
+    def list_latest_term_memory_versions(self) -> dict[str, TermMemoryVersion]:
+        rows = self.conn.execute(
+            """
+            SELECT tmv.*
+            FROM term_memory_versions tmv
+            INNER JOIN (
+                SELECT term, MAX(effective_start_chunk) AS max_effective_start_chunk
+                FROM term_memory_versions
+                GROUP BY term
+            ) latest
+            ON latest.term = tmv.term
+            AND latest.max_effective_start_chunk = tmv.effective_start_chunk
+            ORDER BY tmv.term ASC
+            """
+        ).fetchall()
+        return {row["term"]: self._row_to_term_memory_version(row) for row in rows}
+
+    def prune_term_memory_from(self, cutoff_chunk_id: int, auto_commit: bool = True) -> int:
+        cursor = self.conn.execute(
+            "DELETE FROM term_memory_versions WHERE effective_start_chunk >= ? OR latest_evidence_chunk >= ?",
+            (cutoff_chunk_id, cutoff_chunk_id),
+        )
+        if auto_commit:
+            self.conn.commit()
+        return cursor.rowcount
+
+    def delete_all_term_memory(self, auto_commit: bool = True) -> None:
+        self.conn.execute("DELETE FROM term_memory_versions")
+        if auto_commit:
+            self.conn.commit()
 
     def upsert_chunks(self, chunks: Iterable[ChunkRecord], auto_commit: bool = True) -> list[int]:
         """
@@ -826,6 +942,18 @@ class SQLiteBookDB:
             normalized_text=row_dict.get("normalized_text") or "",
         )
 
+    @staticmethod
+    def _row_to_term_memory_version(row: sqlite3.Row) -> TermMemoryVersion:
+        return TermMemoryVersion(
+            term=row["term"],
+            effective_start_chunk=row["effective_start_chunk"],
+            latest_evidence_chunk=row["latest_evidence_chunk"],
+            summary_text=row["summary_text"],
+            kind=row["kind"],
+            source_count=row["source_count"],
+            created_at=row["created_at"],
+        )
+
     # Document table CRUD methods
 
     def get_document_row(self) -> dict | None:
@@ -1003,7 +1131,10 @@ class SQLiteBookDB:
             "INSERT INTO document(document_type, created_at) VALUES (?, ?)",
             (document_type, now),
         )
-        document_id: int = cur.lastrowid  # type: ignore[assignment]
+        lastrowid = cur.lastrowid
+        if lastrowid is None:
+            raise RuntimeError("Failed to insert document")
+        document_id = int(lastrowid)
         if auto_commit:
             self.conn.commit()
         return document_id
@@ -1046,7 +1177,10 @@ class SQLiteBookDB:
                 1 if is_text_added else 0,
             ),
         )
-        source_id: int = cur.lastrowid  # type: ignore[assignment]
+        lastrowid = cur.lastrowid
+        if lastrowid is None:
+            raise RuntimeError("Failed to insert document source")
+        source_id = int(lastrowid)
         if auto_commit:
             self.conn.commit()
         return source_id
@@ -1198,10 +1332,50 @@ class SQLiteBookDB:
         # Delete existing chunks for the document to ensure clean rebuild
         if row is not None:
             document_id = row["document_id"]
+            min_chunk_id = self.get_min_chunk_id_for_document(document_id)
+            deleted_chunk_ids = {
+                int(chunk_id)
+                for (chunk_id,) in self.conn.execute(
+                    "SELECT chunk_id FROM chunks WHERE document_id = ?",
+                    (document_id,),
+                ).fetchall()
+            }
             self.conn.execute(
                 "DELETE FROM chunks WHERE document_id = ?",
                 (document_id,),
             )
+            if min_chunk_id is not None:
+                self.prune_term_memory_from(min_chunk_id, auto_commit=False)
+
+                def _safe_int_key(key: object) -> int | None:
+                    try:
+                        return int(str(key))
+                    except (TypeError, ValueError):
+                        return None
+
+                for term in self.list_terms():
+                    new_descriptions = {
+                        key: value
+                        for key, value in term.descriptions.items()
+                        if (idx := _safe_int_key(key)) is None or idx not in deleted_chunk_ids
+                    }
+                    new_occurrence = {
+                        key: value
+                        for key, value in term.occurrence.items()
+                        if (idx := _safe_int_key(key)) is None or idx not in deleted_chunk_ids
+                    }
+                    if not new_descriptions:
+                        self.conn.execute("DELETE FROM terms WHERE key = ?", (term.key,))
+                    else:
+                        self.conn.execute(
+                            "UPDATE terms SET descriptions_json = ?, occurrence_json = ?, updated_at = ? WHERE key = ?",
+                            (
+                                json.dumps(new_descriptions, ensure_ascii=False),
+                                json.dumps(new_occurrence),
+                                time.time(),
+                                term.key,
+                            ),
+                        )
             # Reset is_text_added for all sources in the document
             # since chunks are deleted, text needs to be re-added
             self.conn.execute(
@@ -1270,6 +1444,7 @@ class SQLiteBookDB:
 
         pruned_count = 0
         deleted_count = 0
+        self.prune_term_memory_from(cutoff_chunk_id, auto_commit=False)
         for term in self.list_terms():
             # term.descriptions and term.occurrence are already parsed dicts
             # Keys are chunk_id strings

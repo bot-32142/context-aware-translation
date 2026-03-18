@@ -679,14 +679,6 @@ class TestPathHelpers:
         expected = library_root / "books" / book.book_id / "book.db"
         assert path == expected
 
-    def test_get_book_context_tree_path(self, book_manager_with_profile: BookManager, library_root: Path) -> None:
-        """Test get_book_context_tree_path()."""
-        book = book_manager_with_profile.create_book(name="Test Book")
-        path = book_manager_with_profile.get_book_context_tree_path(book.book_id)
-
-        expected = library_root / "books" / book.book_id / "context_tree.db"
-        assert path == expected
-
 
 # ============================================================================
 # Test Isolation

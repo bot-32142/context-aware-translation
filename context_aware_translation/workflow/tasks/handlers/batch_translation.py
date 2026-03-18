@@ -74,9 +74,9 @@ class BatchTranslationHandler:
             claims.add(ResourceClaim("doc", book_id, "*"))
         elif isinstance(doc_scope, SomeDocuments):
             claims.update(ResourceClaim("doc", book_id, str(doc_id)) for doc_id in doc_scope.doc_ids)
-        # Shared-resource claims for glossary state and context tree
+        # Shared-resource claims for glossary state and term memory
         claims.add(ResourceClaim("glossary_state", book_id, "*", ClaimMode.READ_SHARED))
-        claims.add(ResourceClaim("context_tree", book_id, "*", ClaimMode.WRITE_COOPERATIVE))
+        claims.add(ResourceClaim("term_memory", book_id, "*", ClaimMode.WRITE_COOPERATIVE))
         return frozenset(claims)
 
     def validate_run(self, record: TaskRecord, payload: Any, deps: WorkerDeps) -> Decision:

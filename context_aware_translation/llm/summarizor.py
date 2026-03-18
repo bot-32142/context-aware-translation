@@ -91,6 +91,58 @@ def _validate_batch_response(
     return merged_description
 
 
+def _build_update_system_prompt() -> str:
+    return """\
+---角色---
+你负责维护术语的翻译记忆摘要。
+
+---目标---
+判断新增描述是否应当更新当前摘要。只有当新增信息会影响术语翻译、身份理解、称谓、关系、类别或关键区分时才更新。注意：`当前摘要` 只是暂存假设，不保证正确。
+
+---规则---
+1) 只保留对翻译有帮助的信息：身份、角色、类别、别名、关键关系、重要区分。
+2) 忽略纯情节推进、重复表述、场景细节、一次性事件。
+3) 如果新增描述只是补充情节、态度、一次性行为、战斗经历、对话内容或其他不影响称呼/理解/区分的细节，默认不要更新。
+4) 只有当新增描述改变了该术语的翻译相关理解（如身份、角色、类别、别名、稳定关系、关键区分）时，才更新摘要。
+5) 如果新增描述看起来仍然指向同一对象或同一含义，就合并成一个更好的短摘要；不要因为存在潜在隐藏剧情就强行拆分。
+6) 只有当描述本身已经明确显示这是两个不同对象/不同含义，而且这种区分会影响翻译时，才用极短分点列出；每点只写最小区分信息。
+7) 若无需更新，输出 {"u":0}；若需要更新，输出 {"u":1,"s":"..."}。`s` 保持原文语言，尽量 1-2句。严格输出 JSON，不要输出额外文本。
+
+---示例---
+若同一个术语在当前文档中确实同时指代两个仍然有效的不同对象，例如一个是“王都的老年司祭”，另一个是“边境军所属的年轻骑兵”，则可以这样输出：
+{"u":1,"s":"- 王都的老年司祭。\n- 边境军所属的年轻骑兵。"}
+"""
+
+
+def _build_update_user_payload(
+    current_summary: str,
+    new_descriptions: list[tuple[int, str]],
+) -> str:
+    payload = {
+        "当前摘要": current_summary,
+        "新增描述": [
+            {
+                "chunk": chunk,
+                "description": description,
+            }
+            for chunk, description in new_descriptions
+        ],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def _validate_update_response(data: dict) -> tuple[bool, str]:
+    should_update = data.get("u")
+    if should_update not in (0, 1, False, True):
+        raise TranslationValidationError("u must be 0 or 1")
+    if not should_update:
+        return False, ""
+    summary = data.get("s", "")
+    if not isinstance(summary, str) or not summary.strip():
+        raise TranslationValidationError("s must be a non-empty string when u=1")
+    return True, summary.strip()
+
+
 async def summarize_descriptions(
     descriptions: list[str],
     summarizor_config: SummarizorConfig,
@@ -146,5 +198,65 @@ async def summarize_descriptions(
 
         raise TranslationValidationError(
             f"[llm_session={session_id}] Failed to obtain valid batch translation/merge after "
+            f"{attempts} attempts: {last_error}"
+        )
+
+
+async def update_term_summary(
+    current_summary: str,
+    new_descriptions: list[tuple[int, str]],
+    summarizor_config: SummarizorConfig,
+    llm_client: LLMClient,
+    cancel_check: Callable[[], bool] | None = None,
+) -> tuple[bool, str]:
+    if not new_descriptions:
+        return False, ""
+
+    with llm_session_scope() as session_id:
+        system_prompt = _build_update_system_prompt()
+        user_payload = _build_update_user_payload(current_summary, new_descriptions)
+
+        attempts = summarizor_config.max_retries + 1
+        last_error: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                raise_if_cancelled(cancel_check)
+                response = await llm_client.chat(
+                    [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_payload},
+                    ],
+                    summarizor_config,
+                    response_format={"type": "json_object"},
+                    cancel_check=cancel_check,
+                )
+                response = clean_llm_response(response)
+                parsed = json.loads(response)
+                return _validate_update_response(parsed)
+            except (json.JSONDecodeError, TranslationValidationError) as e:
+                last_error = e
+                logger.warning(
+                    "[llm_session=%s] Validation error during term-memory update (attempt %s/%s): %s",
+                    session_id,
+                    attempt + 1,
+                    attempts,
+                    e,
+                )
+                continue
+            except Exception as e:
+                if isinstance(e, OperationCancelledError):
+                    raise
+                last_error = e
+                logger.warning(
+                    "[llm_session=%s] Unexpected error during term-memory update (attempt %s/%s): %s",
+                    session_id,
+                    attempt + 1,
+                    attempts,
+                    e,
+                )
+                continue
+
+        raise TranslationValidationError(
+            f"[llm_session={session_id}] Failed to obtain valid term-memory update after "
             f"{attempts} attempts: {last_error}"
         )
