@@ -5,11 +5,17 @@ import contextlib
 import json
 import sqlite3
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from context_aware_translation.core.models import (
+    has_chunk_description_evidence,
+    normalize_term_type,
+    normalize_term_type_state,
+    normalize_term_type_votes,
+)
 from context_aware_translation.core.term_memory import TermMemoryVersion
 from context_aware_translation.utils.cjk_normalize import normalize_for_matching
 
@@ -21,12 +27,22 @@ class TermRecord:
     occurrence: dict
     votes: int
     total_api_calls: int
+    term_type: str = "other"
+    term_type_votes: dict[str, int] | None = None
     new_translation: str | None = None
     translated_name: str | None = None
     ignored: bool = False
     is_reviewed: bool = False
     created_at: float | None = None
     updated_at: float | None = None
+
+    def __post_init__(self) -> None:
+        self.term_type, self.term_type_votes = normalize_term_type_state(
+            self.term_type,
+            self.term_type_votes,
+            self.votes,
+            descriptions=self.descriptions,
+        )
 
 
 @dataclass(frozen=True)
@@ -77,6 +93,8 @@ CREATE TABLE IF NOT EXISTS terms (
     occurrence_json TEXT NOT NULL,
     votes INTEGER NOT NULL,
     total_api_calls INTEGER NOT NULL,
+    term_type TEXT NOT NULL DEFAULT 'other',
+    term_type_votes_json TEXT NOT NULL DEFAULT '{}',
     new_translation TEXT,
     translated_name TEXT,
     ignored INTEGER NOT NULL DEFAULT 0,
@@ -148,7 +166,7 @@ class SQLiteBookDB:
 
     def __init__(self, sqlite_path: Path) -> None:
         self.db_path = Path(sqlite_path)
-        self.schema_version = 4
+        self.schema_version = 6
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
         self._configure_connection()
@@ -161,6 +179,11 @@ class SQLiteBookDB:
 
     def _migrate_schema(self, from_version: int) -> None:
         cur = self.conn.cursor()
+
+        def _has_column(table: str, column: str) -> bool:
+            rows = cur.execute(f"PRAGMA table_info({table})").fetchall()
+            return any(row[1] == column for row in rows)
+
         if from_version < 2:
             cur.execute("ALTER TABLE chunks ADD COLUMN normalized_text TEXT")
 
@@ -205,6 +228,20 @@ class SQLiteBookDB:
             )
         if from_version < 4:
             cur.execute(CREATE_TERM_MEMORY_VERSIONS)
+        if from_version < 5 and not _has_column("terms", "term_type"):
+            cur.execute("ALTER TABLE terms ADD COLUMN term_type TEXT NOT NULL DEFAULT 'other'")
+        if from_version < 6 and not _has_column("terms", "term_type_votes_json"):
+            cur.execute("ALTER TABLE terms ADD COLUMN term_type_votes_json TEXT NOT NULL DEFAULT '{}'")
+        if from_version < 6:
+            rows = cur.execute("SELECT key, term_type, votes, term_type_votes_json FROM terms").fetchall()
+            for row in rows:
+                type_votes = normalize_term_type_votes(json.loads(row["term_type_votes_json"] or "{}"))
+                if not type_votes and row["votes"] > 0:
+                    type_votes = {normalize_term_type(row["term_type"]): row["votes"]}
+                    cur.execute(
+                        "UPDATE terms SET term_type_votes_json = ? WHERE key = ?",
+                        (json.dumps(type_votes, ensure_ascii=False), row["key"]),
+                    )
         cur.execute(
             "UPDATE meta SET schema_version = ?, updated_at = ?",
             (self.schema_version, time.time()),
@@ -278,15 +315,17 @@ class SQLiteBookDB:
                 """
                 INSERT INTO terms(
                     key, descriptions_json, occurrence_json,
-                    votes, total_api_calls, new_translation, translated_name,
-                    ignored, is_reviewed, created_at, updated_at
+                    votes, total_api_calls, term_type, term_type_votes_json, new_translation,
+                    translated_name, ignored, is_reviewed, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(key) DO UPDATE SET
                     descriptions_json=excluded.descriptions_json,
                     occurrence_json=excluded.occurrence_json,
                     votes=excluded.votes,
                     total_api_calls=excluded.total_api_calls,
+                    term_type=excluded.term_type,
+                    term_type_votes_json=excluded.term_type_votes_json,
                     new_translation=excluded.new_translation,
                     translated_name=excluded.translated_name,
                     ignored=excluded.ignored,
@@ -299,6 +338,8 @@ class SQLiteBookDB:
                     occurrence_json,
                     term.votes,
                     term.total_api_calls,
+                    term.term_type,
+                    json.dumps(term.term_type_votes or {}, ensure_ascii=False),
                     term.new_translation,
                     term.translated_name,
                     1 if term.ignored else 0,
@@ -918,6 +959,8 @@ class SQLiteBookDB:
             occurrence=json.loads(row["occurrence_json"]),
             votes=row["votes"],
             total_api_calls=row["total_api_calls"],
+            term_type=normalize_term_type(str(row_dict.get("term_type") or "other")),
+            term_type_votes=json.loads(row_dict.get("term_type_votes_json") or "{}"),
             new_translation=row_dict.get("new_translation"),
             translated_name=row_dict.get("translated_name"),
             ignored=bool(row["ignored"]),
@@ -1304,6 +1347,67 @@ class SQLiteBookDB:
         if auto_commit:
             self.conn.commit()
 
+    @staticmethod
+    def _safe_int_chunk_key(key: object) -> int | None:
+        try:
+            return int(str(key))
+        except (TypeError, ValueError):
+            return None
+
+    @classmethod
+    def _prune_term_for_remaining_chunks(
+        cls,
+        term: TermRecord,
+        *,
+        keep_chunk: Callable[[int], bool],
+    ) -> tuple[dict, dict, bool]:
+        removed_numeric_evidence = False
+        new_descriptions = {}
+        for key, value in term.descriptions.items():
+            idx = cls._safe_int_chunk_key(key)
+            if idx is None:
+                if key == "imported":
+                    new_descriptions[key] = value
+                continue
+            if keep_chunk(idx):
+                new_descriptions[key] = value
+            else:
+                removed_numeric_evidence = True
+        new_occurrence = {
+            key: value
+            for key, value in term.occurrence.items()
+            if (idx := cls._safe_int_chunk_key(key)) is not None and keep_chunk(idx)
+        }
+        return new_descriptions, new_occurrence, removed_numeric_evidence
+
+    def _persist_pruned_term(self, term: TermRecord, *, keep_chunk: Callable[[int], bool]) -> bool:
+        new_descriptions, new_occurrence, removed_numeric_evidence = self._prune_term_for_remaining_chunks(
+            term,
+            keep_chunk=keep_chunk,
+        )
+        if not new_descriptions:
+            self.conn.execute("DELETE FROM terms WHERE key = ?", (term.key,))
+            return False
+        if removed_numeric_evidence and not has_chunk_description_evidence(new_descriptions):
+            term_type = "other"
+            term_type_votes = {}
+        else:
+            term_type = term.term_type
+            term_type_votes = term.term_type_votes or {}
+        self.conn.execute(
+            "UPDATE terms SET descriptions_json = ?, occurrence_json = ?, term_type = ?, "
+            "term_type_votes_json = ?, updated_at = ? WHERE key = ?",
+            (
+                json.dumps(new_descriptions, ensure_ascii=False),
+                json.dumps(new_occurrence),
+                term_type,
+                json.dumps(term_type_votes, ensure_ascii=False),
+                time.time(),
+                term.key,
+            ),
+        )
+        return True
+
     def reset_source_ocr(self, source_id: int, auto_commit: bool = True) -> None:
         """Reset OCR flags for a source so it can be re-OCR'd.
 
@@ -1347,35 +1451,11 @@ class SQLiteBookDB:
             if min_chunk_id is not None:
                 self.prune_term_memory_from(min_chunk_id, auto_commit=False)
 
-                def _safe_int_key(key: object) -> int | None:
-                    try:
-                        return int(str(key))
-                    except (TypeError, ValueError):
-                        return None
+                def keep_remaining_chunk(idx: int) -> bool:
+                    return idx not in deleted_chunk_ids
 
                 for term in self.list_terms():
-                    new_descriptions = {
-                        key: value
-                        for key, value in term.descriptions.items()
-                        if (idx := _safe_int_key(key)) is None or idx not in deleted_chunk_ids
-                    }
-                    new_occurrence = {
-                        key: value
-                        for key, value in term.occurrence.items()
-                        if (idx := _safe_int_key(key)) is None or idx not in deleted_chunk_ids
-                    }
-                    if not new_descriptions:
-                        self.conn.execute("DELETE FROM terms WHERE key = ?", (term.key,))
-                    else:
-                        self.conn.execute(
-                            "UPDATE terms SET descriptions_json = ?, occurrence_json = ?, updated_at = ? WHERE key = ?",
-                            (
-                                json.dumps(new_descriptions, ensure_ascii=False),
-                                json.dumps(new_occurrence),
-                                time.time(),
-                                term.key,
-                            ),
-                        )
+                    self._persist_pruned_term(term, keep_chunk=keep_remaining_chunk)
             # Reset is_text_added for all sources in the document
             # since chunks are deleted, text needs to be re-added
             self.conn.execute(
@@ -1436,39 +1516,18 @@ class SQLiteBookDB:
 
         # Step 3: Prune term descriptions and occurrences
         # list_terms() returns list[TermRecord] dataclass instances
-        def _safe_int_key(k: str) -> int | None:
-            try:
-                return int(k)
-            except ValueError:
-                return None
-
         pruned_count = 0
         deleted_count = 0
         self.prune_term_memory_from(cutoff_chunk_id, auto_commit=False)
+
+        def keep_chunk(idx: int) -> bool:
+            return idx < cutoff_chunk_id
+
         for term in self.list_terms():
-            # term.descriptions and term.occurrence are already parsed dicts
-            # Keys are chunk_id strings
-            new_descriptions = {
-                k: v for k, v in term.descriptions.items() if _safe_int_key(k) is None or int(k) < cutoff_chunk_id
-            }
-            new_occurrence = {
-                k: v for k, v in term.occurrence.items() if _safe_int_key(k) is None or int(k) < cutoff_chunk_id
-            }
-            if not new_descriptions:
-                # Term has no remaining descriptions -- delete it entirely
-                self.conn.execute("DELETE FROM terms WHERE key = ?", (term.key,))
-                deleted_count += 1
-            else:
-                self.conn.execute(
-                    "UPDATE terms SET descriptions_json = ?, occurrence_json = ?, updated_at = ? WHERE key = ?",
-                    (
-                        json.dumps(new_descriptions, ensure_ascii=False),
-                        json.dumps(new_occurrence),
-                        time.time(),
-                        term.key,
-                    ),
-                )
+            if self._persist_pruned_term(term, keep_chunk=keep_chunk):
                 pruned_count += 1
+            else:
+                deleted_count += 1
 
         # Step 4: Reset source flags for affected documents
         if affected_doc_ids:

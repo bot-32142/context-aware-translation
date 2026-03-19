@@ -13,7 +13,7 @@ from transformers import PreTrainedTokenizer
 
 from context_aware_translation.core.cancellation import raise_if_cancelled
 from context_aware_translation.core.context_extractor import ContextExtractor
-from context_aware_translation.core.models import KeyedContext, Term
+from context_aware_translation.core.models import KeyedContext, Term, description_index, ordered_description_values
 from context_aware_translation.core.progress import ProgressCallback, ProgressUpdate, WorkflowStep
 from context_aware_translation.core.term_memory_builder import TermMemoryBuilder
 from context_aware_translation.core.translation_strategies import (
@@ -163,7 +163,7 @@ class ContextManager:
         latest_memory = self.term_repo.get_latest_term_memory_before(term_key, query_index)
         if latest_memory is None:
             return ""
-        return latest_memory.summary_text.strip()
+        return str(getattr(latest_memory, "summary_text", "")).strip()
 
     def _summarize_with_legacy_context_tree(
         self,
@@ -189,11 +189,25 @@ class ContextManager:
             return ""
         return str(max(summaries, key=lambda s: len(str(s).strip())))
 
-    def _raw_description_fallback(self, descriptions: dict[str, str]) -> str:
-        latest_numeric = self._latest_numeric_description_value(descriptions)
-        if latest_numeric:
-            return latest_numeric
-        return self._first_description_value(descriptions)
+    @classmethod
+    def _ordered_description_values(
+        cls,
+        descriptions: dict[str, str],
+        *,
+        query_index: int | None = None,
+    ) -> list[str]:
+        return ordered_description_values(descriptions, query_index=query_index)
+
+    @classmethod
+    def _raw_description_fallback(cls, descriptions: dict[str, str], query_index: int | None = None) -> str:
+        values = cls._ordered_description_values(descriptions, query_index=query_index)
+        if values:
+            return " ".join(values).strip()
+        return ""
+
+    @staticmethod
+    def _term_requires_term_memory(term: Term) -> bool:
+        return term.term_type in {"character", "organization"}
 
     def _best_available_summary(
         self,
@@ -210,7 +224,7 @@ class ContextManager:
         if legacy:
             return legacy
 
-        return self._raw_description_fallback(term.descriptions)
+        return self._raw_description_fallback(term.descriptions, query_index)
 
     def add_text(
         self,
@@ -248,39 +262,40 @@ class ContextManager:
         """
         Build causal term-memory timelines from term descriptions.
         """
+        all_terms = self.term_repo.list_keyed_context()
+        terms = [term for term in all_terms if not term.ignored and term.descriptions]
+        summary_terms = [term for term in terms if self._term_requires_term_memory(term)]
+
+        for term in all_terms:
+            if term.ignored or not term.descriptions or not self._term_requires_term_memory(term):
+                self._replace_term_memory_versions(term.key, [])
+
         terms_data = {
             term.key: {
                 idx: description
                 for chunk_id, description in term.descriptions.items()
                 if (idx := self._description_index(chunk_id)) is not None
             }
-            for term in self.term_repo.list_keyed_context()
-            if not term.ignored and term.descriptions
+            for term in terms
         }
         terms_data = {k: v for k, v in terms_data.items() if v}
         if terms_data and self.term_memory_builder is not None:
-            for term_key, data in terms_data.items():
+            for term in summary_terms:
+                data = terms_data.get(term.key)
+                if not data:
+                    continue
                 versions = self.term_memory_builder.build_versions(
-                    term_key,
+                    term.key,
                     data,
                     cancel_check=cancel_check,
                 )
-                self._replace_term_memory_versions(term_key, versions)
+                self._replace_term_memory_versions(term.key, versions)
         if terms_data:
             self._add_legacy_context_chunks(terms_data, cancel_check=cancel_check)
 
     @staticmethod
     def _description_index(key: object) -> int | None:
-        if key == "imported":
-            return -1
-        if isinstance(key, int):
-            return key
-        raw = str(key).strip()
-        if raw == "imported":
-            return -1
-        if raw.lstrip("-").isdigit():
-            return int(raw)
-        return None
+        return description_index(key)
 
     @classmethod
     def _description_query_index(cls, descriptions: dict[str, str]) -> int:
@@ -290,41 +305,9 @@ class ContextManager:
         return max(numeric_keys) + 1
 
     @classmethod
-    def _ordered_description_values(cls, descriptions: dict[str, str]) -> list[str]:
-        def _sort_key(raw_key: object) -> tuple[int, int | str]:
-            idx = cls._description_index(raw_key)
-            if idx is None:
-                return (2, str(raw_key))
-            if idx == -1:
-                return (0, -1)
-            return (1, idx)
-
-        values: list[str] = []
-        for key in sorted(descriptions.keys(), key=_sort_key):
-            value = descriptions[key]
-            if value and value.strip():
-                values.append(value)
-        return values
-
-    @classmethod
     def _first_description_value(cls, descriptions: dict[str, str]) -> str:
         values = cls._ordered_description_values(descriptions)
         return values[0] if values else ""
-
-    @classmethod
-    def _latest_numeric_description_value(cls, descriptions: dict[str, str]) -> str:
-        numeric_entries: list[tuple[int, str]] = []
-        for raw_key, value in descriptions.items():
-            idx = cls._description_index(raw_key)
-            if idx is None or idx < 0:
-                continue
-            text = value.strip()
-            if text:
-                numeric_entries.append((idx, text))
-        if not numeric_entries:
-            return ""
-        numeric_entries.sort(key=lambda item: item[0])
-        return numeric_entries[-1][1]
 
     def _build_export_description_for_term(
         self,
@@ -339,6 +322,8 @@ class ContextManager:
         if not description_values:
             return ""
         if term.ignored:
+            return " ".join(description_values).strip()
+        if not self._term_requires_term_memory(term):
             return " ".join(description_values).strip()
 
         query_index = self._description_query_index(term.descriptions)
@@ -407,6 +392,8 @@ class ContextManager:
 
     def get_term_description_for_query(self, term: Term, query_index: int) -> str:
         """Return the term description text used for chunk translation prompts."""
+        if not self._term_requires_term_memory(term):
+            return self._raw_description_fallback(term.descriptions, query_index)
         return self._best_available_summary(
             term,
             query_index,
@@ -813,17 +800,10 @@ class TranslationContextManager(ContextManager):
         """Get the earliest description for a term by smallest chunk_id key."""
         if not term.descriptions:
             raise ValueError(f"Term {term.key} has no descriptions")
-
-        def _to_int_key(key: str) -> int:
-            if key == "imported":
-                return -1
-            try:
-                return int(key)
-            except (TypeError, ValueError):
-                return 0
-
-        min_chunk_id_key = min(term.descriptions.keys(), key=_to_int_key)
-        return term.descriptions[min_chunk_id_key]  # type: ignore[no-any-return]
+        description = TranslationContextManager._first_description_value(term.descriptions)
+        if not description:
+            raise ValueError(f"Term {term.key} has no recognized descriptions")
+        return description
 
     @staticmethod
     def _partition_component_terms(component: list[Term]) -> tuple[dict[str, str], list[dict[str, str]]]:

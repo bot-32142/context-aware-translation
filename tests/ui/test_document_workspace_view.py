@@ -91,6 +91,7 @@ def _make_terms_state() -> TermsTableState:
                 term_id=1,
                 term_key="ルフィ",
                 term="ルフィ",
+                term_type="character",
                 translation="Luffy",
                 description="Main character",
                 occurrences=4,
@@ -103,6 +104,7 @@ def _make_terms_state() -> TermsTableState:
                 term_id=2,
                 term_key="ニカ",
                 term="ニカ",
+                term_type="organization",
                 translation="Nika",
                 description="Sun god",
                 occurrences=2,
@@ -202,6 +204,13 @@ def _make_view():
     return view, bus, document_service, terms_service
 
 
+def _cleanup_view(view) -> None:  # noqa: ANN001
+    view.close()
+    QApplication.processEvents()
+    view.cleanup()
+    QApplication.processEvents()
+
+
 def _current_section_widget(view):
     current_section = view.current_section()
     assert current_section is not None
@@ -226,7 +235,7 @@ def test_document_workspace_view_renders_shell_tabs():
         assert root.property("exportLabelText") == "Export"
         assert view.current_section() is DocumentSection.OCR
     finally:
-        view.cleanup()
+        _cleanup_view(view)
 
 
 def test_document_workspace_only_builds_current_section_initially():
@@ -250,7 +259,7 @@ def test_document_workspace_only_builds_current_section_initially():
         assert len(images_calls) == 0
         assert len(terms_calls) == 0
     finally:
-        view.cleanup()
+        _cleanup_view(view)
 
 
 def test_document_workspace_terms_tab_uses_shared_terms_component():
@@ -277,7 +286,7 @@ def test_document_workspace_terms_tab_uses_shared_terms_component():
         assert "filter_noise" in call_names
         assert "update_term_rows" in call_names
     finally:
-        view.cleanup()
+        _cleanup_view(view)
 
 
 def test_document_workspace_terms_context_menu_preserves_multi_selection_and_opens_editors():
@@ -307,7 +316,7 @@ def test_document_workspace_terms_context_menu_preserves_multi_selection_and_ope
             terms_tab.mark_reviewed_action.trigger()
         assert any(name == "bulk_update_terms" for name, _payload in terms_service.calls)
     finally:
-        view.cleanup()
+        _cleanup_view(view)
 
 
 def test_document_workspace_terms_bulk_updates_stay_local_first():
@@ -338,7 +347,7 @@ def test_document_workspace_terms_bulk_updates_stay_local_first():
         assert len(workspace_calls) == initial_workspace_calls
         assert len(terms_calls) == initial_terms_calls
     finally:
-        view.cleanup()
+        _cleanup_view(view)
 
 
 def test_document_workspace_ocr_tab_routes_save_and_run_actions():
@@ -358,7 +367,7 @@ def test_document_workspace_ocr_tab_routes_save_and_run_actions():
         assert "save_ocr" in call_names
         assert call_names.count("run_ocr") == 2
     finally:
-        view.cleanup()
+        _cleanup_view(view)
 
 
 def test_document_workspace_translation_tab_uses_migrated_translation_widget():
@@ -381,7 +390,7 @@ def test_document_workspace_translation_tab_uses_migrated_translation_widget():
         assert "save_translation" in call_names
         assert "run_translation" in call_names
     finally:
-        view.cleanup()
+        _cleanup_view(view)
 
 
 def test_document_workspace_refreshes_on_invalidations():
@@ -404,7 +413,7 @@ def test_document_workspace_refreshes_on_invalidations():
         terms_calls = [name for name, _payload in terms_service.calls if name == "get_document_terms"]
         assert len(terms_calls) == 1
     finally:
-        view.cleanup()
+        _cleanup_view(view)
 
 
 def test_document_workspace_export_tab_runs_document_service():
@@ -463,7 +472,7 @@ def test_document_workspace_export_tab_runs_document_service():
         assert root.property("resultText") == "Export complete."
         assert export_tab.viewmodel.result_text == "Export complete."
     finally:
-        view.cleanup()
+        _cleanup_view(view)
 
 
 def test_document_workspace_images_tab_refits_when_activated():
@@ -499,7 +508,7 @@ def test_document_workspace_images_tab_refits_when_activated():
         images_tab = _current_section_widget(view)
         assert images_tab.image_viewer.transform().m11() > 1.0
     finally:
-        view.cleanup()
+        _cleanup_view(view)
 
 
 def test_document_workspace_invalidation_refresh_preserves_ocr_draft():
@@ -513,7 +522,7 @@ def test_document_workspace_invalidation_refresh_preserves_ocr_draft():
 
         assert ocr_tab.text_edit.toPlainText() == "draft survives"
     finally:
-        view.cleanup()
+        _cleanup_view(view)
 
 
 def test_document_workspace_refresh_handles_workspace_error_without_raising():
@@ -540,7 +549,7 @@ def test_document_workspace_refresh_handles_workspace_error_without_raising():
         mock_warning.assert_called()
         assert view.current_section() is None
     finally:
-        view.cleanup()
+        _cleanup_view(view)
 
 
 def test_document_workspace_event_refresh_handles_child_refresh_error_without_raising():
@@ -559,4 +568,4 @@ def test_document_workspace_event_refresh_handles_child_refresh_error_without_ra
             bus.publish(DocumentInvalidatedEvent(project_id="proj-1", document_id=4))
         mock_warning.assert_called()
     finally:
-        view.cleanup()
+        _cleanup_view(view)

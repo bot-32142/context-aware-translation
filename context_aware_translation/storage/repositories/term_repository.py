@@ -69,6 +69,8 @@ class TermRepository:
             occurrence=record.occurrence,
             votes=record.votes,
             total_api_calls=record.total_api_calls,
+            term_type=record.term_type,
+            term_type_votes=record.term_type_votes or {},
             new_translation=record.new_translation,
             translated_name=record.translated_name,
             ignored=record.ignored,
@@ -77,6 +79,14 @@ class TermRepository:
     def term_from_record(self, record: TermRecord) -> Term:
         """Convert TermRecord to Term for external callers."""
         return self._record_to_term(record)
+
+    @staticmethod
+    def _resolve_term_type(term: Term, existing_record: TermRecord | None = None) -> str:
+        if existing_record is None:
+            return term.term_type
+        if not term.descriptions and term.term_type == "other":
+            return existing_record.term_type
+        return term.term_type
 
     def _term_to_record(self, term: Term, existing_record: TermRecord | None = None) -> TermRecord:
         """Convert Term to TermRecord, preserving existing fields when incoming values are empty."""
@@ -92,6 +102,8 @@ class TermRepository:
                 occurrence=term.occurrence if term.occurrence else existing_record.occurrence,
                 votes=existing_record.votes if preserve_counters else term.votes,
                 total_api_calls=existing_record.total_api_calls if preserve_counters else term.total_api_calls,
+                term_type=self._resolve_term_type(term, existing_record),
+                term_type_votes=term.term_type_votes if term.term_type_votes else existing_record.term_type_votes,
                 new_translation=term.new_translation
                 if term.new_translation is not None
                 else existing_record.new_translation,
@@ -110,6 +122,8 @@ class TermRepository:
             occurrence=term.occurrence,
             votes=term.votes,
             total_api_calls=term.total_api_calls,
+            term_type=self._resolve_term_type(term),
+            term_type_votes=term.term_type_votes,
             new_translation=term.new_translation,
             translated_name=term.translated_name,
             ignored=term.ignored,

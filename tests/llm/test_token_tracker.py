@@ -24,6 +24,7 @@ def registry():
 @pytest.fixture(autouse=True)
 def cleanup_tracker():
     """Ensure tracker is cleaned up after each test."""
+    TokenTracker.shutdown()
     yield
     TokenTracker.shutdown()
 

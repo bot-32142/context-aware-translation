@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
@@ -31,14 +32,18 @@ from context_aware_translation.storage.schema.book_db import (
 
 
 @pytest.fixture
-def temp_term_repository(tmp_path: Path) -> TermRepository:
+def temp_term_repository(tmp_path: Path, request: pytest.FixtureRequest) -> TermRepository:
     """Create a temporary storage manager for testing."""
     db_path = tmp_path / "test.db"
     db = SQLiteBookDB(db_path)
     manager = TermRepository(db)
-    yield manager
-    manager.close()
-    db.close()
+
+    def cleanup() -> None:
+        manager.close()
+        db.close()
+
+    request.addfinalizer(cleanup)
+    return manager
 
 
 # ============================================================================
@@ -199,12 +204,13 @@ def test_apply_batch_merge_terms(temp_term_repository: TermRepository):
     # apply_batch replaces, doesn't merge - so term2 values should be stored
     retrieved = temp_term_repository.get_keyed_context("term1")
     assert retrieved is not None
-    assert retrieved.votes == 2
-    assert retrieved.total_api_calls == 2
+    term_record: Term = cast(Term, retrieved)
+    assert term_record.votes == 2
+    assert term_record.total_api_calls == 2
     # Descriptions are replaced, not merged
-    assert "chunk2" in retrieved.descriptions
+    assert "chunk2" in term_record.descriptions
     # chunk1 is replaced by chunk2
-    assert "chunk1" not in retrieved.descriptions
+    assert "chunk1" not in term_record.descriptions
 
 
 # --- Batch Edge Cases ---
@@ -221,22 +227,28 @@ def test_apply_batch_none_values_in_term(
     temp_term_repository: TermRepository,
 ):
     """Test applying batch with None values in term."""
-    term = Term(
-        key="term1",
-        descriptions=None,  # None should be converted to {}
-        occurrence=None,  # None should be converted to {}
-        votes=1,
-        total_api_calls=1,
-        new_translation=None,
-        translated_name=None,
+    term = cast(
+        Any,
+        Term(
+            key="term1",
+            descriptions={},
+            occurrence={},
+            votes=1,
+            total_api_calls=1,
+            new_translation=None,
+            translated_name=None,
+        ),
     )
+    term.descriptions = None
+    term.occurrence = None
     update = BatchUpdate(keyed_context=[term], chunk_records=[])
     temp_term_repository.apply_batch(update)
 
     retrieved = temp_term_repository.get_keyed_context("term1")
     assert retrieved is not None
-    assert retrieved.descriptions == {}
-    assert retrieved.occurrence == {}
+    term_record: Term = cast(Term, retrieved)
+    assert term_record.descriptions == {}
+    assert term_record.occurrence == {}
 
 
 def test_apply_batch_preserves_created_at(
@@ -255,6 +267,8 @@ def test_apply_batch_preserves_created_at(
 
     # Get the created_at from first insert
     record1 = temp_term_repository.keyed_context_db.get_term("term1")
+    assert record1 is not None
+    assert record1.created_at is not None
     original_created_at = record1.created_at
 
     # Update the term
@@ -270,6 +284,9 @@ def test_apply_batch_preserves_created_at(
 
     # created_at should be preserved
     record2 = temp_term_repository.keyed_context_db.get_term("term1")
+    assert record2 is not None
+    assert record2.created_at is not None
+    assert record2.updated_at is not None
     assert record2.created_at == original_created_at
     # updated_at should be newer
     assert record2.updated_at > original_created_at
@@ -374,8 +391,170 @@ def test_apply_batch_allows_explicit_zero_counter_updates(
 
     retrieved = temp_term_repository.get_keyed_context("term1")
     assert retrieved is not None
-    assert retrieved.votes == 0
-    assert retrieved.total_api_calls == 0
+    term_record: Term = cast(Term, retrieved)
+    assert term_record.votes == 0
+    assert term_record.total_api_calls == 0
+
+
+def test_apply_batch_preserves_existing_specific_term_type_on_partial_update(
+    temp_term_repository: TermRepository,
+):
+    """Partial updates with default other should keep an existing specific term_type."""
+    initial = Term(
+        key="term1",
+        descriptions={"0": "hero"},
+        occurrence={"0": 1},
+        votes=1,
+        total_api_calls=1,
+        term_type="character",
+    )
+    temp_term_repository.apply_batch(BatchUpdate(keyed_context=[initial], chunk_records=[]))
+
+    partial_update = Term(
+        key="term1",
+        descriptions={},
+        occurrence={"1": 2},
+        votes=0,
+        total_api_calls=0,
+        term_type="other",
+        translated_name="Hero",
+    )
+    temp_term_repository.apply_batch(BatchUpdate(keyed_context=[partial_update], chunk_records=[]))
+
+    retrieved = temp_term_repository.get_keyed_context("term1")
+    assert retrieved is not None
+    term_record: Term = cast(Term, retrieved)
+    assert term_record.term_type == "character"
+    assert term_record.occurrence == {"1": 2}
+    assert term_record.translated_name == "Hero"
+
+
+def test_apply_batch_persists_explicit_typed_term_on_insert_and_update(
+    temp_term_repository: TermRepository,
+):
+    """Explicit term_type should persist on both insert and update."""
+    inserted = Term(
+        key="term1",
+        descriptions={"0": "team"},
+        occurrence={"0": 1},
+        votes=1,
+        total_api_calls=1,
+        term_type="organization",
+    )
+    temp_term_repository.apply_batch(BatchUpdate(keyed_context=[inserted], chunk_records=[]))
+
+    after_insert = temp_term_repository.get_keyed_context("term1")
+    assert after_insert is not None
+    inserted_term: Term = cast(Term, after_insert)
+    assert inserted_term.term_type == "organization"
+
+    updated = Term(
+        key="term1",
+        descriptions={"1": "lead"},
+        occurrence={"1": 3},
+        votes=2,
+        total_api_calls=2,
+        term_type="character",
+    )
+    temp_term_repository.apply_batch(BatchUpdate(keyed_context=[updated], chunk_records=[]))
+
+    after_update = temp_term_repository.get_keyed_context("term1")
+    assert after_update is not None
+    updated_term: Term = cast(Term, after_update)
+    assert updated_term.term_type == "character"
+
+
+def test_apply_batch_round_trips_term_type_votes(temp_term_repository: TermRepository):
+    term = Term(
+        key="term1",
+        descriptions={"0": "hero"},
+        occurrence={"0": 1},
+        votes=3,
+        total_api_calls=3,
+        term_type="character",
+        term_type_votes={"character": 2, "organization": 1},
+    )
+
+    temp_term_repository.apply_batch(BatchUpdate(keyed_context=[term], chunk_records=[]))
+
+    retrieved = temp_term_repository.get_keyed_context("term1")
+    assert retrieved is not None
+    term_record: Term = cast(Term, retrieved)
+    assert term_record.term_type == "character"
+    assert term_record.term_type_votes == {"character": 2, "organization": 1}
+
+
+def test_apply_batch_reextracts_pruned_imported_only_term_without_sticky_other_votes(
+    temp_term_repository: TermRepository,
+):
+    db = temp_term_repository.keyed_context_db
+    document_id = db.insert_document("manga")
+    source_id = db.insert_document_source(
+        document_id,
+        0,
+        "image",
+        ocr_json='{"regions": [{"text": "hero"}]}',
+        is_ocr_completed=True,
+        is_text_added=True,
+    )
+    db.upsert_chunks(
+        [
+            TranslationChunkRecord(
+                chunk_id=5,
+                hash="hash-5",
+                text="chunk 5",
+                document_id=document_id,
+                is_extracted=True,
+                is_summarized=True,
+                is_occurrence_mapped=True,
+            )
+        ]
+    )
+    db.upsert_terms(
+        [
+            TermRecord(
+                key="hero",
+                descriptions={"imported": "stable import", "5": "old desc"},
+                occurrence={"5": 1},
+                votes=3,
+                total_api_calls=3,
+                term_type="character",
+                term_type_votes={"character": 3},
+            )
+        ]
+    )
+    db.reset_source_ocr(source_id)
+
+    temp_term_repository.apply_batch(
+        BatchUpdate(
+            keyed_context=[
+                Term(
+                    key="hero",
+                    descriptions={"8": "renewed desc"},
+                    occurrence={"8": 1},
+                    votes=1,
+                    total_api_calls=1,
+                    term_type="character",
+                )
+            ],
+            chunk_records=[
+                TranslationChunkRecord(
+                    chunk_id=8,
+                    hash="hash-8",
+                    text="chunk 8",
+                    document_id=document_id,
+                    is_extracted=True,
+                    is_occurrence_mapped=True,
+                )
+            ],
+        )
+    )
+
+    recovered = temp_term_repository.get_keyed_context("hero")
+    assert recovered is not None
+    recovered_term: Term = cast(Term, recovered)
+    assert recovered_term.term_type == "character"
+    assert recovered_term.term_type_votes == {"character": 1}
 
 
 def test_term_record_with_none_created_at_preserved(
@@ -396,6 +575,7 @@ def test_term_record_with_none_created_at_preserved(
     # Get the record and manually set created_at to None (simulating edge case)
     record = temp_term_repository.keyed_context_db.get_term("term1")
     assert record is not None
+    assert record.created_at is not None
     original_created_at = record.created_at
 
     # Update term - created_at should be preserved even if it was None
@@ -410,6 +590,8 @@ def test_term_record_with_none_created_at_preserved(
     temp_term_repository.apply_batch(update2)
 
     record2 = temp_term_repository.keyed_context_db.get_term("term1")
+    assert record2 is not None
+    assert record2.created_at is not None
     # created_at should be preserved from original
     assert record2.created_at == original_created_at
 
@@ -746,6 +928,7 @@ def test_term_from_record_public_helper(temp_term_repository: TermRepository):
         occurrence={"1": 2},
         votes=3,
         total_api_calls=4,
+        term_type="organization",
         translated_name="翻译",
         ignored=True,
     )
@@ -755,6 +938,7 @@ def test_term_from_record_public_helper(temp_term_repository: TermRepository):
     assert term.occurrence == {"1": 2}
     assert term.votes == 3
     assert term.total_api_calls == 4
+    assert term.term_type == "organization"
     assert term.translated_name == "翻译"
     assert term.ignored is True
 

@@ -488,6 +488,7 @@ async def test_translate_chunks_uses_context_tree_description_for_imported_gloss
         occurrence={},
         votes=1,
         total_api_calls=1,
+        term_type="other",
         translated_name="term1-translation",
     )
     chunk = TranslationChunkRecord(
@@ -518,6 +519,60 @@ async def test_translate_chunks_uses_context_tree_description_for_imported_gloss
 
 
 @pytest.mark.asyncio
+async def test_translate_chunks_other_terms_ignore_context_tree_summary():
+    tokenizer = DummyTokenizer()
+    context_tree = DummyContextTree({"term1": ["late context summary"]})
+    term = Term(
+        key="term1",
+        descriptions={"imported": "Imported glossary description", "5": "later description"},
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        term_type="other",
+        translated_name="term1-translation",
+    )
+    chunk = TranslationChunkRecord(
+        chunk_id=6,
+        hash="hash0",
+        text="term1 appears here",
+        normalized_text="term1 appears here",
+    )
+    term_repo = DummyTermRepo(source_language="English", terms=[term], chunks=[chunk])
+    term_repo.replace_term_memory_versions(
+        "term1",
+        [
+            TermMemoryVersion(
+                term="term1",
+                effective_start_chunk=6,
+                latest_evidence_chunk=5,
+                summary_text="term memory summary",
+                kind="bootstrap",
+                source_count=2,
+                created_at=0.0,
+            )
+        ],
+    )
+    chunk_strategy = CapturingChunkTranslatorStrategy()
+
+    manager = TranslationContextManager(
+        term_repo=term_repo,
+        context_tree=context_tree,
+        context_extractor=DummyContextExtractor(),
+        tokenizer=tokenizer,
+        source_language_detector=DetectLanguageStrategy("English"),
+        glossary_translator=GlossaryTranslatorStrategy(),
+        chunk_translator=chunk_strategy,
+        term_reviewer=None,
+    )
+
+    await manager.translate_chunks(concurrency=1, batch_size=1)
+
+    assert chunk_strategy.translate.await_count == 1
+    sent_terms = chunk_strategy.calls[0]["terms"]
+    assert sent_terms == [("term1", "term1-translation", "Imported glossary description later description")]
+
+
+@pytest.mark.asyncio
 async def test_translate_chunks_prefers_late_context_summary_over_imported_description():
     tokenizer = DummyTokenizer()
     context_tree = DummyContextTree({"term1": ["late context summary"]})
@@ -527,6 +582,7 @@ async def test_translate_chunks_prefers_late_context_summary_over_imported_descr
         occurrence={},
         votes=1,
         total_api_calls=1,
+        term_type="character",
         translated_name="term1-translation",
     )
     chunk = TranslationChunkRecord(

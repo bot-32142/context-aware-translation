@@ -30,6 +30,7 @@ def _make_term(
     descriptions: dict | None = None,
     occurrence: dict | None = None,
     translated_name: str | None = None,
+    term_type: str = "other",
     ignored: bool = False,
     is_reviewed: bool = False,
     votes: int = 1,
@@ -43,6 +44,7 @@ def _make_term(
         occurrence=occurrence or {},
         votes=votes,
         total_api_calls=total_api_calls,
+        term_type=term_type,
         translated_name=translated_name,
         ignored=ignored,
         is_reviewed=is_reviewed,
@@ -65,9 +67,9 @@ class TestExportGlossary:
 
     def test_export_basic_terms(self, temp_db: SQLiteBookDB, tmp_path: Path) -> None:
         terms = [
-            _make_term("hero", descriptions={"0": "the protagonist"}, translated_name="英雄"),
+            _make_term("hero", descriptions={"0": "the protagonist"}, translated_name="英雄", term_type="character"),
             _make_term("villain", descriptions={"1": "the antagonist"}, ignored=True),
-            _make_term("sword", descriptions={"2": "a weapon"}, is_reviewed=True),
+            _make_term("sword", descriptions={"2": "a weapon"}, is_reviewed=True, term_type="organization"),
         ]
         temp_db.upsert_terms(terms)
 
@@ -84,8 +86,11 @@ class TestExportGlossary:
         by_key = {t["key"]: t for t in data["terms"]}
         assert by_key["hero"]["translated_name"] == "英雄"
         assert by_key["hero"]["description"] == "the protagonist"
+        assert by_key["hero"]["term_type"] == "character"
         assert by_key["villain"]["ignored"] is True
+        assert by_key["villain"]["term_type"] == "other"
         assert by_key["sword"]["is_reviewed"] is True
+        assert by_key["sword"]["term_type"] == "organization"
 
     def test_export_description_consolidation(self, temp_db: SQLiteBookDB, tmp_path: Path) -> None:
         terms = [
@@ -178,7 +183,12 @@ class TestImportGlossary:
         self._write_glossary(
             glossary_file,
             [
-                {"key": "hero", "translated_name": "英雄", "description": "the protagonist"},
+                {
+                    "key": "hero",
+                    "translated_name": "英雄",
+                    "description": "the protagonist",
+                    "term_type": "character",
+                },
                 {"key": "villain", "description": "the antagonist", "ignored": True},
             ],
         )
@@ -191,7 +201,23 @@ class TestImportGlossary:
         assert "hero" in by_key
         assert "villain" in by_key
         assert by_key["hero"].translated_name == "英雄"
+        assert by_key["hero"].term_type == "character"
         assert by_key["villain"].ignored is True
+        assert by_key["villain"].term_type == "other"
+
+    def test_import_invalid_term_type_defaults_to_other(self, temp_db: SQLiteBookDB, tmp_path: Path) -> None:
+        glossary_file = tmp_path / "import.json"
+        self._write_glossary(
+            glossary_file,
+            [
+                {"key": "hero", "description": "the protagonist", "term_type": "hero"},
+            ],
+        )
+
+        import_glossary(temp_db, glossary_file)
+
+        terms = temp_db.list_terms()
+        assert terms[0].term_type == "other"
 
     def test_import_overwrites_existing(self, temp_db: SQLiteBookDB, tmp_path: Path) -> None:
         # Pre-populate
@@ -314,6 +340,7 @@ class TestImportGlossary:
         assert t.votes == 1
         assert t.total_api_calls == 1
         assert t.occurrence == {}
+        assert t.term_type == "other"
         assert t.ignored is False
         assert t.is_reviewed is False
 
@@ -360,9 +387,15 @@ class TestRoundTrip:
     def test_roundtrip(self, temp_db: SQLiteBookDB, tmp_path: Path) -> None:
         # Populate original DB
         terms = [
-            _make_term("hero", descriptions={"0": "the protagonist"}, translated_name="英雄", is_reviewed=True),
+            _make_term(
+                "hero",
+                descriptions={"0": "the protagonist"},
+                translated_name="英雄",
+                term_type="character",
+                is_reviewed=True,
+            ),
             _make_term("villain", descriptions={"1": "the antagonist"}, ignored=True),
-            _make_term("sword", descriptions={"2": "a weapon"}, translated_name="剑"),
+            _make_term("sword", descriptions={"2": "a weapon"}, translated_name="剑", term_type="organization"),
         ]
         temp_db.upsert_terms(terms)
 
@@ -391,6 +424,7 @@ class TestRoundTrip:
         for t1, t2 in zip(terms1, terms2):
             assert t1["key"] == t2["key"]
             assert t1["translated_name"] == t2["translated_name"]
+            assert t1["term_type"] == t2["term_type"]
             assert t1["ignored"] == t2["ignored"]
             assert t1["is_reviewed"] == t2["is_reviewed"]
             # Description may differ in format (consolidated vs imported) but content is preserved
@@ -453,8 +487,15 @@ class TestGuards:
         result = _consolidate_description(descs)
         assert result == "only desc"
 
+    def test_consolidate_description_ignores_non_chunk_keys(self) -> None:
+        descs = {"imported": "imported desc", "legacy_key": "legacy desc", "5": "chunk 5 desc"}
+
+        result = _consolidate_description(descs)
+
+        assert result == "imported desc chunk 5 desc"
+
     def test_guard_get_primary_description_imported_wins(self) -> None:
-        """Test that _get_primary_description prioritizes 'imported' key (Guard 1B)."""
+        """Test that _get_primary_description prioritizes recognized keys."""
         from context_aware_translation.core.context_manager import TranslationContextManager
         from context_aware_translation.core.models import Term
 
@@ -469,7 +510,7 @@ class TestGuards:
         assert result == "imported desc"
 
     def test_guard_get_primary_description_imported_only(self) -> None:
-        """Test that _get_primary_description handles imported-only terms (Guard 1B)."""
+        """Test that _get_primary_description handles imported-only terms."""
         from context_aware_translation.core.context_manager import TranslationContextManager
         from context_aware_translation.core.models import Term
 
@@ -482,6 +523,21 @@ class TestGuards:
         )
         result = TranslationContextManager._get_primary_description(term)
         assert result == "only desc"
+
+    def test_guard_get_primary_description_rejects_non_chunk_keys(self) -> None:
+        from context_aware_translation.core.context_manager import TranslationContextManager
+        from context_aware_translation.core.models import Term
+
+        term = Term(
+            key="hero",
+            descriptions={"legacy_key": "legacy desc"},
+            occurrence={},
+            votes=1,
+            total_api_calls=1,
+        )
+
+        with pytest.raises(ValueError, match="recognized descriptions"):
+            TranslationContextManager._get_primary_description(term)
 
     def test_import_compatibility_with_mark_noise_terms(self, temp_db: SQLiteBookDB, tmp_path: Path) -> None:
         """Test that imported terms are NOT marked as noise (Guard 2)."""

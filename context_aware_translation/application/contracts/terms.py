@@ -36,6 +36,7 @@ class TermTableRow(ContractModel):
     term_id: int
     term_key: str
     term: str
+    term_type: str = "other"
     translation: str | None = None
     description: str | None = None
     description_tooltip: str | None = None
