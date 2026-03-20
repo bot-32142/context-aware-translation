@@ -183,6 +183,7 @@ def test_app_setup_preview_exposes_recommended_profile(tmp_path: Path) -> None:
                         default_model="deepseek-chat",
                     ),
                 ],
+                target_language="Japanese",
             )
         )
 
@@ -190,6 +191,7 @@ def test_app_setup_preview_exposes_recommended_profile(tmp_path: Path) -> None:
         assert preview.recommendation is not None
         assert preview.recommendation.routes
         assert preview.recommendation.name == "Recommended"
+        assert preview.recommendation.target_language == "Japanese"
     finally:
         context.close()
 
@@ -202,6 +204,7 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
             SetupWizardRequest(
                 providers=[ProviderKind.GEMINI, ProviderKind.DEEPSEEK],
                 profile_name="Team Default",
+                target_language="Japanese",
                 connections=[
                     ConnectionDraft(display_name="Gemini", provider=ProviderKind.GEMINI, api_key="gkey"),
                     ConnectionDraft(display_name="DeepSeek", provider=ProviderKind.DEEPSEEK, api_key="dkey"),
@@ -209,7 +212,8 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
             )
         )
 
-        connection_names = {profile.name for profile in context.runtime.book_manager.list_endpoint_profiles()}
+        endpoint_profiles = context.runtime.book_manager.list_endpoint_profiles()
+        connection_names = {profile.name for profile in endpoint_profiles}
         assert "recommended-Gemini 2.5 Pro" in connection_names
         assert "recommended-Gemini 3.1 Flash Image Preview" in connection_names
         assert "recommended-DeepSeek Chat" in connection_names
@@ -221,6 +225,9 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
         detail = context.services.app_setup.get_state()
         assert any(profile.name == "Team Default" for profile in detail.shared_profiles)
         assert created_profile.is_default is True
+        assert created_profile.config["translation_target_language"] == "Japanese"
+        assert next(profile for profile in endpoint_profiles if profile.name == "recommended-Gemini 2.5 Pro").api_key == "gkey"
+        assert next(profile for profile in endpoint_profiles if profile.name == "recommended-DeepSeek Chat").api_key == "dkey"
     finally:
         context.close()
 
@@ -302,6 +309,91 @@ def test_setup_wizard_rerun_updates_existing_managed_connections_and_profile(tmp
         ]
         assert len(matching_profiles) == 1
         assert matching_profiles[0].profile_id == initial_profile.profile_id
+    finally:
+        context.close()
+
+
+def test_setup_wizard_rerun_overwrites_manual_managed_connection_edits(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    try:
+        context.services.app_setup.run_setup_wizard(
+            SetupWizardRequest(
+                providers=[ProviderKind.GEMINI],
+                profile_name="Team Default",
+                connections=[
+                    ConnectionDraft(
+                        display_name="Gemini",
+                        provider=ProviderKind.GEMINI,
+                        api_key="gkey-1",
+                    )
+                ],
+            )
+        )
+
+        managed = next(
+            profile
+            for profile in context.runtime.book_manager.list_endpoint_profiles()
+            if profile.name == "recommended-Gemini 2.5 Pro"
+        )
+
+        state = context.services.app_setup.save_connection(
+            SaveConnectionRequest(
+                connection_id=managed.profile_id,
+                connection=ConnectionDraft(
+                    display_name="Gemini Personal Tweak",
+                    provider=ProviderKind.OPENAI_COMPATIBLE,
+                    api_key="custom-key",
+                    base_url="https://example.com/v1",
+                    default_model="custom-model",
+                    description="Local override",
+                    temperature=0.7,
+                    token_limit=1234,
+                    custom_parameters_json=json.dumps({"reasoning_effort": "medium"}),
+                ),
+            )
+        )
+
+        edited = next(connection for connection in state.connections if connection.connection_id == managed.profile_id)
+        assert edited.display_name == "Gemini Personal Tweak"
+        assert edited.is_managed is True
+        assert edited.base_url == "https://example.com/v1"
+        assert edited.default_model == "custom-model"
+        assert edited.token_limit == 1234
+        assert json.loads(edited.custom_parameters_json or "{}") == {"reasoning_effort": "medium"}
+
+        context.services.app_setup.run_setup_wizard(
+            SetupWizardRequest(
+                providers=[ProviderKind.GEMINI],
+                profile_name="Team Default",
+                connections=[
+                    ConnectionDraft(
+                        display_name="Gemini",
+                        provider=ProviderKind.GEMINI,
+                        api_key="gkey-2",
+                        description="Wizard reset",
+                        token_limit=2000,
+                    )
+                ],
+            )
+        )
+
+        rerun = context.runtime.book_manager.get_endpoint_profile(managed.profile_id)
+        assert rerun is not None
+        assert rerun.name == "recommended-Gemini 2.5 Pro"
+        assert rerun.api_key == "gkey-2"
+        assert rerun.base_url == "https://generativelanguage.googleapis.com/v1beta/openai/"
+        assert rerun.model == "gemini-2.5-pro"
+        assert rerun.description == "Wizard reset"
+        assert rerun.token_limit == 2000
+
+        refreshed = next(
+            connection
+            for connection in context.services.app_setup.get_state().connections
+            if connection.connection_id == managed.profile_id
+        )
+        assert refreshed.display_name == "Gemini 2.5 Pro"
+        assert refreshed.is_managed is True
     finally:
         context.close()
 

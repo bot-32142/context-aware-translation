@@ -21,6 +21,11 @@ SQLITE_FILENAME = "terms.db"
 DEFAULT_OUTPUT_DIR = Path(".")
 DEFAULT_WORKING_SUBDIR = "data"
 CONFIG_SNAPSHOT_VERSION = 1
+_INTERNAL_ENDPOINT_PROFILE_KWARGS = frozenset({"provider", "_ui_display_name", "_wizard_template_key"})
+
+
+def _strip_internal_endpoint_profile_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
+    return {str(key): value for key, value in kwargs.items() if str(key) not in _INTERNAL_ENDPOINT_PROFILE_KWARGS}
 
 
 @dataclass
@@ -557,7 +562,7 @@ def _resolve_with_profile(
         model=config.model if config.model is not None else profile.model,
         temperature=config.temperature if config.temperature != 0.0 else profile.temperature,
         concurrency=config.concurrency if config.concurrency != 5 else profile.concurrency,
-        kwargs={**profile.kwargs, **config.kwargs},
+        kwargs=_strip_internal_endpoint_profile_kwargs({**profile.kwargs, **config.kwargs}),
         endpoint_profile=config.endpoint_profile,  # Preserve for token tracking
     )
 

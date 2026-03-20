@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from superqt import QCollapsible
+from superqt import QCollapsible, QSearchableComboBox
 
 from context_aware_translation.application.contracts.app_setup import (
     ConnectionDraft,
@@ -47,6 +47,7 @@ from context_aware_translation.application.contracts.common import (
     UserMessageSeverity,
 )
 from context_aware_translation.application.services.app_setup import AppSetupService
+from context_aware_translation.ui.constants import LANGUAGES
 from context_aware_translation.ui.features.workflow_profile_editor import workflow_step_label_from_text
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
@@ -77,6 +78,9 @@ _CAPABILITY_LABELS: dict[CapabilityCode, str] = {
     CapabilityCode.IMAGE_EDITING: "Image editing",
     CapabilityCode.REASONING_AND_REVIEW: "Reasoning and review",
 }
+
+_DEFAULT_SETUP_WIZARD_TARGET_LANGUAGE = LANGUAGES[0][0] if LANGUAGES else "English"
+
 
 _NEW_PROFILE_ROUTE_SPECS: tuple[tuple[WorkflowStepId, str], ...] = (
     (WorkflowStepId.EXTRACTOR, "Extractor"),
@@ -272,7 +276,7 @@ class ConnectionDraftForm(QWidget):
             self.provider_combo.setCurrentIndex(index)
         self.api_key_edit.setText(draft.api_key or "")
         if preserve_api_key_placeholder and draft.api_key is None:
-            self.api_key_edit.setPlaceholderText(self.tr("Leave blank to keep the current key"))
+            self.api_key_edit.setPlaceholderText(self.tr("Stored API key is hidden. Leave blank to keep it or paste a new key."))
         self.description_edit.setPlainText(draft.description or "")
         self.base_url_edit.setText(draft.base_url or "")
         self.default_model_edit.setText(draft.default_model or "")
@@ -525,6 +529,10 @@ class SetupWizardDialog(QDialog):
             self.setWindowModality(Qt.WindowModality.WindowModal)
         self._service = service
         self._wizard_state = initial_state
+        if not self._service.get_state().shared_profiles and self._wizard_state.target_language == "English":
+            self._wizard_state = self._wizard_state.model_copy(
+                update={"target_language": _DEFAULT_SETUP_WIZARD_TARGET_LANGUAGE}
+            )
         self._preview_state: SetupWizardState | None = None
         self.setWindowTitle(self.tr("Setup Wizard"))
         self.resize(780, 680)
@@ -577,6 +585,7 @@ class SetupWizardDialog(QDialog):
         self._available_providers: list[ProviderCard] = []
         self._provider_inputs: dict[ProviderKind, tuple[QCheckBox, QLineEdit]] = {}
         self._profile_name_edit: QLineEdit | None = None
+        self._target_language_combo: QSearchableComboBox | None = None
 
     def _translate_provider_helper_text(self, text: str | None) -> str:
         if not text:
@@ -591,6 +600,8 @@ class SetupWizardDialog(QDialog):
 
     def _build_page(self) -> None:
         self._clear_page_layout()
+        self._profile_name_edit = None
+        self._target_language_combo = None
 
         if self._page_index == 0:
             self.step_title.setText(self.tr("Choose providers"))
@@ -628,9 +639,30 @@ class SetupWizardDialog(QDialog):
                 return
             profile_name_group = QGroupBox(self.tr("Workflow profile"))
             profile_name_layout = QFormLayout(profile_name_group)
-            suggested_name = preview.recommendation.name if preview.recommendation is not None else "Recommended"
+            suggested_name = preview.profile_name or (
+                preview.recommendation.name if preview.recommendation is not None else "Recommended"
+            )
             self._profile_name_edit = QLineEdit(suggested_name)
+            self._target_language_combo = QSearchableComboBox()
+            self._target_language_combo.setEditable(True)
+            seen_languages: set[str] = set()
+            for display_name, _internal_name in LANGUAGES:
+                if display_name in seen_languages:
+                    continue
+                seen_languages.add(display_name)
+                self._target_language_combo.addItem(display_name)
+            target_language = preview.target_language or (
+                preview.recommendation.target_language
+                if preview.recommendation is not None
+                else _DEFAULT_SETUP_WIZARD_TARGET_LANGUAGE
+            )
+            index = self._target_language_combo.findText(target_language)
+            if index >= 0:
+                self._target_language_combo.setCurrentIndex(index)
+            else:
+                self._target_language_combo.setEditText(target_language)
             profile_name_layout.addRow(self.tr("Profile name"), self._profile_name_edit)
+            profile_name_layout.addRow(self.tr("Target language"), self._target_language_combo)
             self.page_layout.addWidget(profile_name_group)
             for result in preview.test_results:
                 result_group = QGroupBox(result.connection_label)
@@ -701,18 +733,32 @@ class SetupWizardDialog(QDialog):
         ]
         self._wizard_state = self._wizard_state.model_copy(update={"drafts": drafts})
 
+    def _persist_review_inputs(self) -> None:
+        updates: dict[str, str | None] = {}
+        if self._profile_name_edit is not None:
+            updates["profile_name"] = self._profile_name_edit.text().strip() or None
+        if self._target_language_combo is not None:
+            updates["target_language"] = (
+                self._target_language_combo.currentText().strip() or _DEFAULT_SETUP_WIZARD_TARGET_LANGUAGE
+            )
+        if updates:
+            self._wizard_state = self._wizard_state.model_copy(update=updates)
+
     def final_request(self) -> SetupWizardRequest | None:
         if self._preview_state is None:
             return None
+        self._persist_review_inputs()
         return SetupWizardRequest(
             providers=list(self._wizard_state.selected_providers),
             connections=list(self._wizard_state.drafts),
-            profile_name=(self._profile_name_edit.text().strip() if self._profile_name_edit is not None else None),
+            profile_name=self._wizard_state.profile_name,
+            target_language=self._wizard_state.target_language,
         )
 
     def _go_back(self) -> None:
         if self._page_index == 0:
             return
+        self._persist_review_inputs()
         self._page_index -= 1
         self._build_page()
 
@@ -754,6 +800,13 @@ class SetupWizardDialog(QDialog):
                 self.tr("Workflow profile name is required."),
             )
             return
+        if not (request.target_language or "").strip():
+            QMessageBox.warning(
+                self,
+                self.tr("Missing Information"),
+                self.tr("Target language is required."),
+            )
+            return
         self._service.run_setup_wizard(request)
         self.accept()
 
@@ -765,6 +818,8 @@ class SetupWizardDialog(QDialog):
             SetupWizardRequest(
                 providers=list(self._wizard_state.selected_providers),
                 connections=list(self._wizard_state.drafts),
+                profile_name=self._wizard_state.profile_name,
+                target_language=self._wizard_state.target_language,
             )
         )
 

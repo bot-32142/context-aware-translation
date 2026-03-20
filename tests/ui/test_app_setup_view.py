@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from unittest.mock import patch
 
 import pytest
@@ -24,6 +25,7 @@ from context_aware_translation.application.contracts.common import (
     UserMessage,
     UserMessageSeverity,
 )
+from context_aware_translation.ui.constants import LANGUAGES
 from tests.application.fakes import FakeAppSetupService
 
 try:
@@ -137,6 +139,7 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
             )
         ],
         recommendation=_profile(profile_id="recommended", name="Recommended"),
+        target_language="English",
     )
     service = FakeAppSetupService(state=_make_state(), wizard_state=wizard_state, preview_state=preview_state)
     dialog = SetupWizardDialog(service, wizard_state)
@@ -148,13 +151,16 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
     assert dialog._page_index == 1
     assert any(call[0] == "preview_setup_wizard" for call in service.calls)
     assert dialog._profile_name_edit is not None
+    assert dialog._target_language_combo is not None
     dialog._profile_name_edit.setText("Team Default")
+    dialog._target_language_combo.setEditText("Japanese")
 
     dialog._finish()
 
     assert any(call[0] == "run_setup_wizard" for call in service.calls)
     run_request = next(call[1] for call in service.calls if call[0] == "run_setup_wizard")
     assert run_request.profile_name == "Team Default"
+    assert run_request.target_language == "Japanese"
 
 
 def test_setup_wizard_dialog_renders_provider_cards_on_first_page():
@@ -182,6 +188,46 @@ def test_setup_wizard_dialog_renders_provider_cards_on_first_page():
     provider_checkboxes = dialog.page_content.findChildren(type(_provider_checkbox(dialog, ProviderKind.GEMINI)))
     assert len(provider_checkboxes) == 2
     assert _provider_checkbox(dialog, ProviderKind.GEMINI).isChecked() is True
+
+
+def test_setup_wizard_dialog_defaults_target_language_to_first_dropdown_entry():
+    from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
+
+    @dataclass
+    class _EchoPreviewService(FakeAppSetupService):
+        def preview_setup_wizard(self, request):  # noqa: ANN001
+            self.calls.append(("preview_setup_wizard", request))
+            recommendation = _profile(profile_id="recommended", name=request.profile_name or "Recommended").model_copy(
+                update={"target_language": request.target_language or LANGUAGES[0][0]}
+            )
+            return SetupWizardState(
+                available_providers=self.wizard_state.available_providers if self.wizard_state is not None else [],
+                selected_providers=request.providers,
+                drafts=request.connections,
+                recommendation=recommendation,
+                profile_name=request.profile_name,
+                target_language=request.target_language or LANGUAGES[0][0],
+            )
+
+    wizard_state = SetupWizardState(
+        available_providers=[
+            ProviderCard(
+                provider=ProviderKind.GEMINI,
+                label="Gemini",
+                helper_text="Good for image text reading and image editing.",
+            )
+        ]
+    )
+    service = _EchoPreviewService(state=_make_state(needs_wizard=True), wizard_state=wizard_state)
+    dialog = SetupWizardDialog(service, wizard_state)
+
+    _provider_checkbox(dialog, ProviderKind.GEMINI).setChecked(True)
+    _provider_api_key_edit(dialog, ProviderKind.GEMINI).setText("secret")
+    dialog._go_next()
+
+    assert dialog._target_language_combo is not None
+    assert dialog._target_language_combo.currentText() == LANGUAGES[0][0]
+    assert dialog._target_language_combo.itemText(0) == LANGUAGES[0][0]
 
 
 def test_setup_wizard_dialog_collects_api_keys_on_provider_page():
@@ -251,6 +297,51 @@ def test_setup_wizard_dialog_excludes_custom_provider():
     assert dialog._provider_inputs == {}
 
 
+def test_setup_wizard_dialog_preserves_target_language_when_going_back():
+    from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
+
+    @dataclass
+    class _EchoPreviewService(FakeAppSetupService):
+        def preview_setup_wizard(self, request):  # noqa: ANN001
+            self.calls.append(("preview_setup_wizard", request))
+            recommendation = _profile(profile_id="recommended", name=request.profile_name or "Recommended").model_copy(
+                update={"target_language": request.target_language or "English"}
+            )
+            return SetupWizardState(
+                available_providers=self.wizard_state.available_providers if self.wizard_state is not None else [],
+                selected_providers=request.providers,
+                drafts=request.connections,
+                recommendation=recommendation,
+                profile_name=request.profile_name,
+                target_language=request.target_language or "English",
+            )
+
+    wizard_state = SetupWizardState(
+        available_providers=[
+            ProviderCard(
+                provider=ProviderKind.GEMINI,
+                label="Gemini",
+                helper_text="Good for image text reading and image editing.",
+            )
+        ],
+        target_language="English",
+    )
+    service = _EchoPreviewService(state=_make_state(needs_wizard=True), wizard_state=wizard_state)
+    dialog = SetupWizardDialog(service, wizard_state)
+
+    _provider_checkbox(dialog, ProviderKind.GEMINI).setChecked(True)
+    _provider_api_key_edit(dialog, ProviderKind.GEMINI).setText("secret")
+    dialog._go_next()
+    assert dialog._target_language_combo is not None
+    dialog._target_language_combo.setEditText("Japanese")
+
+    dialog._go_back()
+    dialog._go_next()
+
+    assert dialog._target_language_combo is not None
+    assert dialog._target_language_combo.currentText() == "Japanese"
+
+
 def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
     from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
 
@@ -283,6 +374,7 @@ def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
             )
         ],
         recommendation=_profile(profile_id="recommended", name="Recommended"),
+        target_language="English",
     )
     service = FakeAppSetupService(state=_make_state(), wizard_state=wizard_state, preview_state=preview_state)
     dialog = SetupWizardDialog(service, wizard_state)
@@ -291,6 +383,8 @@ def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
     _provider_api_key_edit(dialog, ProviderKind.GEMINI).setText("secret")
     dialog._go_next()
     assert dialog._page_index == 1
+    assert dialog._target_language_combo is not None
+    dialog._target_language_combo.setEditText("Japanese")
 
     dialog._go_back()
     assert dialog._page_index == 0

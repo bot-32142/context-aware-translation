@@ -22,7 +22,7 @@ from context_aware_translation.llm.token_tracker import TokenTracker
 
 logger = logging.getLogger(__name__)
 
-_UNSUPPORTED_OPENAI_CREATE_KWARGS = frozenset({"provider"})
+_UNSUPPORTED_OPENAI_CREATE_KWARGS = frozenset({"provider", "_ui_display_name", "_wizard_template_key"})
 
 # Suppress OpenAI library's DEBUG/INFO/WARNING logging to avoid duplicate logs
 # Our custom logger already logs all necessary information

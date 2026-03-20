@@ -155,6 +155,30 @@ class TestResolveWithProfile:
 
         assert result.kwargs == {}
 
+    def test_internal_profile_metadata_kwargs_are_stripped(self):
+        """App-managed metadata must not leak into resolved LLM kwargs."""
+        profiles = {
+            "test": EndpointProfile(
+                name="test",
+                api_key="key",
+                base_url="https://test.api",
+                model="model",
+                kwargs={
+                    "provider": "gemini",
+                    "_ui_display_name": "Gemini Personal Tweak",
+                    "_wizard_template_key": "gemini:gemini-2.5-pro",
+                    "extra_body": {"google": {"thinking_config": {"thinking_level": "MINIMAL"}}},
+                },
+            )
+        }
+        config = LLMConfig(endpoint_profile="test", kwargs={"reasoning_effort": "low"})
+        result = _resolve_with_profile(config, profiles)
+
+        assert result.kwargs == {
+            "extra_body": {"google": {"thinking_config": {"thinking_level": "MINIMAL"}}},
+            "reasoning_effort": "low",
+        }
+
     def test_translator_batch_config_round_trip(self):
         translator_batch = TranslatorBatchConfig(
             provider="gemini_ai_studio",

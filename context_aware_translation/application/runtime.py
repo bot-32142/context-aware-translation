@@ -69,7 +69,16 @@ if TYPE_CHECKING:
 
 _DEFAULT_PROFILE_NAME = "app-default-profile"
 _UI_SOURCE_PROFILE_ID_KEY = "_ui_source_profile_id"
+_MANAGED_CONNECTION_DISPLAY_NAME_KEY = "_ui_display_name"
+_MANAGED_CONNECTION_TEMPLATE_KEY = "_wizard_template_key"
 _MANAGED_CONNECTION_PREFIXES = ("recommended-",)
+_HIDDEN_CONNECTION_KWARG_KEYS = frozenset(
+    {
+        "provider",
+        _MANAGED_CONNECTION_DISPLAY_NAME_KEY,
+        _MANAGED_CONNECTION_TEMPLATE_KEY,
+    }
+)
 
 _WORKFLOW_STEP_LAYOUT: tuple[tuple[WorkflowStepId, str, str | None], ...] = (
     (WorkflowStepId.EXTRACTOR, "Extractor", "extractor_config"),
@@ -402,6 +411,13 @@ def infer_connection_status(profile: EndpointProfile) -> ConnectionStatus:
     return ConnectionStatus.UNTESTED
 
 
+def wizard_connection_key(provider: ProviderKind, model: str | None) -> str | None:
+    normalized_model = (model or "").strip()
+    if not normalized_model:
+        return None
+    return f"{provider.value}:{normalized_model}"
+
+
 def is_managed_connection_name(name: str) -> bool:
     normalized = name.strip().lower()
     return any(normalized.startswith(prefix) for prefix in _MANAGED_CONNECTION_PREFIXES)
@@ -416,13 +432,41 @@ def public_connection_name(name: str) -> str:
     return stripped
 
 
+def managed_connection_key(profile: EndpointProfile) -> str | None:
+    stored_key = (profile.kwargs or {}).get(_MANAGED_CONNECTION_TEMPLATE_KEY)
+    if isinstance(stored_key, str) and stored_key.strip():
+        return stored_key.strip()
+    if not is_managed_connection_name(profile.name):
+        return None
+    return wizard_connection_key(infer_provider_kind(profile.base_url, profile.model), profile.model)
+
+
+def is_managed_connection(profile: EndpointProfile) -> bool:
+    return managed_connection_key(profile) is not None or is_managed_connection_name(profile.name)
+
+
+def connection_display_name(profile: EndpointProfile) -> str:
+    stored_name = (profile.kwargs or {}).get(_MANAGED_CONNECTION_DISPLAY_NAME_KEY)
+    if isinstance(stored_name, str) and stored_name.strip():
+        return stored_name.strip()
+    return public_connection_name(profile.name)
+
+
+def wizard_connection_key_for_draft(draft: ConnectionDraft) -> str | None:
+    return wizard_connection_key(draft.provider, draft.default_model)
+
+
 def build_connection_summary(profile: EndpointProfile) -> ConnectionSummary:
     provider = infer_provider_kind(profile.base_url, profile.model)
-    kwargs_payload = {str(key): value for key, value in (profile.kwargs or {}).items() if key != "provider"}
-    is_managed = is_managed_connection_name(profile.name)
+    kwargs_payload = {
+        str(key): value
+        for key, value in (profile.kwargs or {}).items()
+        if key not in _HIDDEN_CONNECTION_KWARG_KEYS
+    }
+    is_managed = is_managed_connection(profile)
     return ConnectionSummary(
         connection_id=profile.profile_id,
-        display_name=public_connection_name(profile.name),
+        display_name=connection_display_name(profile),
         is_managed=is_managed,
         provider=provider,
         description=profile.description,

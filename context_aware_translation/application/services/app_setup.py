@@ -22,16 +22,20 @@ from context_aware_translation.application.contracts.common import ProviderKind,
 from context_aware_translation.application.errors import ApplicationErrorCode
 from context_aware_translation.application.runtime import (
     _DEFAULT_PROFILE_NAME,
+    _MANAGED_CONNECTION_DISPLAY_NAME_KEY,
+    _MANAGED_CONNECTION_TEMPLATE_KEY,
     ApplicationRuntime,
     build_connection_summary,
     build_workflow_profile_detail,
     build_workflow_profile_payload,
+    connection_display_name,
     expand_wizard_connection_drafts,
     infer_capabilities,
-    is_managed_connection_name,
-    public_connection_name,
+    is_managed_connection,
+    managed_connection_key,
     raise_application_error,
     recommended_workflow_profile_from_drafts,
+    wizard_connection_key_for_draft,
 )
 from context_aware_translation.storage.models.config_profile import ConfigProfile
 from context_aware_translation.storage.models.endpoint_profile import EndpointProfile
@@ -76,6 +80,17 @@ class DefaultAppSetupService:
         )
 
     def get_wizard_state(self) -> SetupWizardState:
+        target_language = "English"
+        current_default = self._runtime.get_default_profile()
+        if current_default is not None:
+            current_detail = self._profile_detail_from_payload(
+                profile_id=current_default.profile_id,
+                name=current_default.name,
+                config=current_default.config,
+                kind=WorkflowProfileKind.SHARED,
+                is_default=current_default.is_default,
+            )
+            target_language = current_detail.target_language
         return SetupWizardState(
             available_providers=[
                 ProviderCard(
@@ -99,6 +114,7 @@ class DefaultAppSetupService:
                     helper_text="Text translation and image understanding.",
                 ),
             ],
+            target_language=target_language,
         )
 
     def preview_setup_wizard(self, request: SetupWizardRequest) -> SetupWizardState:
@@ -113,9 +129,12 @@ class DefaultAppSetupService:
                 is_default=current_default.is_default,
             )
             target_language = current_detail.target_language
+        if (request.target_language or "").strip():
+            target_language = request.target_language.strip()
+        profile_name = (request.profile_name or "").strip() or None
         recommendation = recommended_workflow_profile_from_drafts(
             request.connections,
-            name=(request.profile_name or "Recommended").strip() or "Recommended",
+            name=profile_name or "Recommended",
             target_language=target_language,
         )
         return SetupWizardState(
@@ -124,6 +143,8 @@ class DefaultAppSetupService:
             drafts=request.connections,
             test_results=[self._test_connection_result(draft) for draft in request.connections],
             recommendation=recommendation,
+            profile_name=profile_name,
+            target_language=target_language,
         )
 
     def save_connection(self, request: SaveConnectionRequest) -> AppSetupState:
@@ -135,11 +156,6 @@ class DefaultAppSetupService:
         existing = self._runtime.book_manager.get_endpoint_profile(connection_id)
         if existing is None:
             raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
-        if is_managed_connection_name(existing.name):
-            raise_application_error(
-                ApplicationErrorCode.PRECONDITION,
-                "Managed wizard connections cannot be deleted directly.",
-            )
         try:
             deleted = self._runtime.book_manager.delete_endpoint_profile(connection_id)
         except sqlite3.IntegrityError as exc:
@@ -162,7 +178,7 @@ class DefaultAppSetupService:
             raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
         try:
             self._runtime.book_manager.create_endpoint_profile(
-                name=self._next_connection_copy_name(public_connection_name(existing.name)),
+                name=self._next_connection_copy_name(connection_display_name(existing)),
                 api_key=existing.api_key,
                 base_url=existing.base_url,
                 model=existing.model,
@@ -190,11 +206,6 @@ class DefaultAppSetupService:
         existing = self._runtime.book_manager.get_endpoint_profile(connection_id)
         if existing is None:
             raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
-        if is_managed_connection_name(existing.name):
-            raise_application_error(
-                ApplicationErrorCode.PRECONDITION,
-                "Managed wizard connections cannot be modified directly.",
-            )
         updated = self._runtime.book_manager.reset_endpoint_tokens(connection_id)
         if updated is None:
             raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
@@ -214,7 +225,7 @@ class DefaultAppSetupService:
 
         saved_ids: dict[str, str] = {}
         for draft in expand_wizard_connection_drafts(request.connections):
-            existing_connection = self._find_connection_by_name(draft.display_name)
+            existing_connection = self._find_connection_for_wizard_draft(draft)
             saved = self._persist_connection(
                 draft,
                 connection_id=(existing_connection.profile_id if existing_connection is not None else None),
@@ -343,7 +354,7 @@ class DefaultAppSetupService:
         is_default: bool,
     ) -> WorkflowProfileDetail:
         endpoint_profiles = self._runtime.book_manager.list_endpoint_profiles()
-        connection_name_by_id = {profile.profile_id: profile.name for profile in endpoint_profiles}
+        connection_name_by_id = {profile.profile_id: connection_display_name(profile) for profile in endpoint_profiles}
         connection_model_by_id = {profile.profile_id: (profile.model or None) for profile in endpoint_profiles}
         return build_workflow_profile_detail(
             profile_id=profile_id,
@@ -405,19 +416,34 @@ class DefaultAppSetupService:
         allow_managed_update: bool = False,
     ) -> EndpointProfile:
         kwargs_payload = self._parse_connection_kwargs(draft)
-        if connection_id:
-            existing = self._runtime.book_manager.get_endpoint_profile(connection_id)
-            if existing is None:
-                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
-            if is_managed_connection_name(existing.name) and not allow_managed_update:
-                raise_application_error(
-                    ApplicationErrorCode.PRECONDITION,
-                    "Managed wizard connections cannot be edited directly. Duplicate the connection if you need a custom copy.",
-                )
+        existing = self._runtime.book_manager.get_endpoint_profile(connection_id) if connection_id else None
+        if connection_id and existing is None:
+            raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Connection not found: {connection_id}")
+
+        managed_key = (
+            managed_connection_key(existing)
+            if existing is not None
+            else (wizard_connection_key_for_draft(draft) if allow_managed_update else None)
+        )
+        if managed_key is not None:
+            kwargs_payload[_MANAGED_CONNECTION_TEMPLATE_KEY] = managed_key
+
+        persisted_name = draft.display_name
+        if existing is not None and is_managed_connection(existing) and not allow_managed_update:
+            persisted_name = existing.name
+            public_name = connection_display_name(existing)
+            if draft.display_name == public_name:
+                kwargs_payload.pop(_MANAGED_CONNECTION_DISPLAY_NAME_KEY, None)
+            else:
+                kwargs_payload[_MANAGED_CONNECTION_DISPLAY_NAME_KEY] = draft.display_name
+        else:
+            kwargs_payload.pop(_MANAGED_CONNECTION_DISPLAY_NAME_KEY, None)
+
+        if existing is not None:
             try:
                 updated = self._runtime.book_manager.update_endpoint_profile(
                     connection_id,
-                    name=draft.display_name,
+                    name=persisted_name,
                     description=draft.description,
                     api_key=existing.api_key if draft.api_key is None else draft.api_key,
                     base_url=existing.base_url if draft.base_url is None else draft.base_url,
@@ -444,7 +470,7 @@ class DefaultAppSetupService:
 
         try:
             return self._runtime.book_manager.create_endpoint_profile(
-                name=draft.display_name,
+                name=persisted_name,
                 api_key=draft.api_key or "",
                 base_url=draft.base_url or "",
                 model=draft.default_model or "",
@@ -462,14 +488,18 @@ class DefaultAppSetupService:
             raise_application_error(
                 ApplicationErrorCode.CONFLICT,
                 "A connection with that name already exists.",
-                connection_name=draft.display_name,
+                connection_name=persisted_name,
                 reason=str(exc),
             )
 
-    def _find_connection_by_name(self, name: str) -> EndpointProfile | None:
-        return next(
-            (profile for profile in self._runtime.book_manager.list_endpoint_profiles() if profile.name == name), None
-        )
+    def _find_connection_for_wizard_draft(self, draft: ConnectionDraft) -> EndpointProfile | None:
+        profiles = self._runtime.book_manager.list_endpoint_profiles()
+        managed_key = wizard_connection_key_for_draft(draft)
+        if managed_key is not None:
+            matched = next((profile for profile in profiles if managed_connection_key(profile) == managed_key), None)
+            if matched is not None:
+                return matched
+        return next((profile for profile in profiles if profile.name == draft.display_name), None)
 
     def _find_profile_by_name(self, name: str) -> ConfigProfile | None:
         return next((profile for profile in self._runtime.book_manager.list_profiles() if profile.name == name), None)

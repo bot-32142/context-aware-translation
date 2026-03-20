@@ -71,6 +71,46 @@ async def test_llm_client_success():
 
 
 @pytest.mark.asyncio
+async def test_llm_client_drops_internal_metadata_kwargs():
+    from context_aware_translation.config import ExtractorConfig
+
+    config = LLMConfig(api_key="test-key", base_url="https://api.test.com/v1")
+    step_config = ExtractorConfig(
+        api_key="test-key",
+        base_url="https://api.test.com/v1",
+        model="test-model",
+        kwargs={
+            "provider": "gemini",
+            "_ui_display_name": "Gemini Personal Tweak",
+            "_wizard_template_key": "gemini:gemini-2.5-pro",
+            "reasoning_effort": "low",
+        },
+    )
+    with patch("context_aware_translation.llm.client.OpenAI") as mock_openai:
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message = MagicMock()
+        mock_response.choices[0].message.content = "Test response"
+        mock_response.usage = None
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai.return_value = mock_client
+
+        client = LLMClient(config)
+        result = await client.chat(
+            messages=[{"role": "user", "content": "test"}],
+            step_config=step_config,
+        )
+
+        assert result == "Test response"
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["reasoning_effort"] == "low"
+        assert "provider" not in call_kwargs
+        assert "_ui_display_name" not in call_kwargs
+        assert "_wizard_template_key" not in call_kwargs
+
+
+@pytest.mark.asyncio
 async def test_llm_client_retry_on_rate_limit():
     from context_aware_translation.config import ExtractorConfig
 

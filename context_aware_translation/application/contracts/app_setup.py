@@ -125,6 +125,7 @@ class SetupWizardRequest(ContractModel):
     providers: list[ProviderKind]
     connections: list[ConnectionDraft]
     profile_name: str | None = None
+    target_language: str | None = None
 
 
 class SetupWizardState(ContractModel):
@@ -133,6 +134,8 @@ class SetupWizardState(ContractModel):
     drafts: list[ConnectionDraft] = Field(default_factory=list)
     test_results: list[ConnectionTestResult] = Field(default_factory=list)
     recommendation: WorkflowProfileDetail | None = None
+    profile_name: str | None = None
+    target_language: str = "English"
 
 
 class AppSetupState(ContractModel):
