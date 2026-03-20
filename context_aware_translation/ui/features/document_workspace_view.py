@@ -30,7 +30,7 @@ from context_aware_translation.application.contracts.document import (
     RunDocumentExportRequest,
 )
 from context_aware_translation.application.contracts.work import ExportDialogState, RunExportRequest
-from context_aware_translation.application.errors import ApplicationError
+from context_aware_translation.application.errors import ApplicationError, ApplicationErrorCode
 from context_aware_translation.application.events import (
     ApplicationEventSubscriber,
     DocumentInvalidatedEvent,
@@ -457,6 +457,7 @@ class DocumentWorkspaceView(QWidget):
         self._work_service = work_service
         self._events = events
         self._state = None
+        self._document_missing = False
         self._section_widgets: dict[DocumentSection, QWidget] = {}
         self._dirty_sections: set[DocumentSection] = set()
         self._refresh_error_sections: set[DocumentSection] = set()
@@ -484,8 +485,13 @@ class DocumentWorkspaceView(QWidget):
         try:
             self._state = self._document_service.get_workspace(self._project_id, self._document_id)
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Document"), exc.payload.message)
+            if exc.payload.code == ApplicationErrorCode.NOT_FOUND:
+                self._document_missing = True
+                self.back_requested.emit()
+                return
+            QMessageBox.warning(self, self.tr("Document"), translate_backend_text(exc.payload.message))
             return
+        self._document_missing = False
         target_section = current_section or self._state.active_tab
         self._dirty_sections.update(self._section_widgets)
         self.shell_host.set_document_context(
@@ -577,6 +583,8 @@ class DocumentWorkspaceView(QWidget):
         self.shell_host.retranslate()
 
     def _on_document_invalidated(self, event: DocumentInvalidatedEvent) -> None:
+        if self._document_missing:
+            return
         if event.project_id not in {None, self._project_id}:
             return
         if event.document_id not in {None, self._document_id}:
@@ -584,6 +592,8 @@ class DocumentWorkspaceView(QWidget):
         self.refresh()
 
     def _on_setup_invalidated(self, event: SetupInvalidatedEvent) -> None:
+        if self._document_missing:
+            return
         if event.project_id not in {None, self._project_id}:
             return
         self.refresh()

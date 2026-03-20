@@ -525,6 +525,37 @@ def test_document_workspace_invalidation_refresh_preserves_ocr_draft():
         _cleanup_view(view)
 
 
+def test_document_workspace_missing_document_navigates_back_without_warning():
+    from context_aware_translation.ui.features.document_workspace_view import DocumentWorkspaceView
+
+    bus = InMemoryApplicationEventBus()
+    document_service = FakeDocumentService(
+        workspace=_make_workspace_state(),
+        ocr=_make_ocr_state(),
+        ocr_page_images={101: None, 102: None},
+    )
+    terms_service = FakeTermsService(project_state=_make_terms_state(), document_state=_make_terms_state())
+    work_service = FakeWorkService(state_by_project={"proj-1": object()})
+    view = DocumentWorkspaceView("proj-1", 4, document_service, terms_service, work_service, bus)
+    back_events: list[bool] = []
+    view.back_requested.connect(lambda: back_events.append(True))
+
+    def _raise_missing(_project_id: str, _document_id: int):
+        raise ApplicationError(
+            ApplicationErrorPayload(code=ApplicationErrorCode.NOT_FOUND, message="Document not found: 4")
+        )
+
+    document_service.get_workspace = _raise_missing
+    try:
+        with patch.object(QMessageBox, "warning") as mock_warning:
+            bus.publish(DocumentInvalidatedEvent(project_id="proj-1", document_id=4))
+        mock_warning.assert_not_called()
+        assert back_events == [True]
+        assert view._document_missing is True
+    finally:
+        _cleanup_view(view)
+
+
 def test_document_workspace_refresh_handles_workspace_error_without_raising():
     from context_aware_translation.ui.features.document_workspace_view import DocumentWorkspaceView
 
