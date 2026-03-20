@@ -578,6 +578,17 @@ class SetupWizardDialog(QDialog):
         self._provider_inputs: dict[ProviderKind, tuple[QCheckBox, QLineEdit]] = {}
         self._profile_name_edit: QLineEdit | None = None
 
+    def _translate_provider_helper_text(self, text: str | None) -> str:
+        if not text:
+            return ""
+        translations = {
+            "Good for image text reading and image editing.": self.tr("Good for image text reading and image editing."),
+            "General-purpose text and image-capable provider.": self.tr("General-purpose text and image-capable provider."),
+            "Low-cost text translation and context building.": self.tr("Low-cost text translation and context building."),
+            "Text translation and image understanding.": self.tr("Text translation and image understanding."),
+        }
+        return translations.get(text, text)
+
     def _build_page(self) -> None:
         self._clear_page_layout()
 
@@ -588,10 +599,11 @@ class SetupWizardDialog(QDialog):
             host_layout = QVBoxLayout(host)
             host_layout.setSpacing(12)
             for provider in self._available_providers:
+                translated_helper_text = self._translate_provider_helper_text(provider.helper_text)
                 group = QGroupBox(provider.label)
                 group_layout = QFormLayout(group)
                 checkbox = QCheckBox(self.tr("Use this provider"))
-                checkbox.setToolTip(provider.helper_text or "")
+                checkbox.setToolTip(translated_helper_text)
                 checkbox.setProperty("provider", provider.provider.value)
                 checkbox.setChecked(provider.provider in self._wizard_state.selected_providers)
                 api_key_edit = QLineEdit()
@@ -601,8 +613,8 @@ class SetupWizardDialog(QDialog):
                 api_key_edit.setEnabled(checkbox.isChecked())
                 checkbox.toggled.connect(api_key_edit.setEnabled)
                 group_layout.addRow(checkbox)
-                if provider.helper_text:
-                    group_layout.addRow(create_tip_label(provider.helper_text))
+                if translated_helper_text:
+                    group_layout.addRow(create_tip_label(translated_helper_text))
                 group_layout.addRow(self.tr("API key"), api_key_edit)
                 self._provider_inputs[provider.provider] = (checkbox, api_key_edit)
                 host_layout.addWidget(group)

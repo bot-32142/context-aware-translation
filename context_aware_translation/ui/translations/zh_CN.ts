@@ -1918,102 +1918,122 @@ All completed results are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../features/app_setup_view.py" line="585"/>
+        <source>Good for image text reading and image editing.</source>
+        <translation>适合图片文字识别和图片编辑。</translation>
+    </message>
+    <message>
+        <location filename="../features/app_setup_view.py" line="586"/>
+        <source>General-purpose text and image-capable provider.</source>
+        <translation>通用型提供商，支持文本处理和图像能力。</translation>
+    </message>
+    <message>
+        <location filename="../features/app_setup_view.py" line="587"/>
+        <source>Low-cost text translation and context building.</source>
+        <translation>适合低成本文本翻译和上下文构建。</translation>
+    </message>
+    <message>
+        <location filename="../features/app_setup_view.py" line="588"/>
+        <source>Text translation and image understanding.</source>
+        <translation>适合文本翻译和图像理解。</translation>
+    </message>
+    <message>
+        <location filename="../features/app_setup_view.py" line="596"/>
         <source>Choose providers</source>
         <translation>选择提供商</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="593"/>
+        <location filename="../features/app_setup_view.py" line="605"/>
         <source>Use this provider</source>
         <translation>使用此提供商</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="599"/>
+        <location filename="../features/app_setup_view.py" line="611"/>
         <source>Paste API key</source>
         <translation>粘贴 API 密钥</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="606"/>
+        <location filename="../features/app_setup_view.py" line="618"/>
         <source>API key</source>
         <translation>API 密钥</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="613"/>
+        <location filename="../features/app_setup_view.py" line="625"/>
         <source>Review workflow profile</source>
         <translation>检查工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="617"/>
+        <location filename="../features/app_setup_view.py" line="629"/>
         <source>Workflow profile</source>
         <translation>工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="621"/>
+        <location filename="../features/app_setup_view.py" line="633"/>
         <source>Profile name</source>
         <translation>配置档案名称</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="631"/>
+        <location filename="../features/app_setup_view.py" line="643"/>
         <source>No supported workflow capabilities detected.</source>
         <translation>未检测到受支持的工作流能力。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="634"/>
+        <location filename="../features/app_setup_view.py" line="646"/>
         <source>Recommended workflow profile</source>
         <translation>推荐工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="640"/>
+        <location filename="../features/app_setup_view.py" line="652"/>
         <source>This will be saved as a shared workflow profile and can be reused across projects.</source>
         <translation>这将保存为共享工作流配置档案，可在多个项目中复用。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="722"/>
+        <location filename="../features/app_setup_view.py" line="734"/>
         <source>API key is required for every selected provider.</source>
         <translation>每个已选提供商都必须填写 API 密钥。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="735"/>
+        <location filename="../features/app_setup_view.py" line="747"/>
         <source>Review the recommended workflow profile before saving setup.</source>
         <translation>请先检查推荐的工作流配置档案再保存设置。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="742"/>
+        <location filename="../features/app_setup_view.py" line="754"/>
         <source>Workflow profile name is required.</source>
         <translation>工作流配置档案名称为必填项。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="644"/>
+        <location filename="../features/app_setup_view.py" line="656"/>
         <source>Connection</source>
         <translation>连接</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="644"/>
+        <location filename="../features/app_setup_view.py" line="656"/>
         <source>Step</source>
         <translation>步骤</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="644"/>
+        <location filename="../features/app_setup_view.py" line="656"/>
         <source>Model</source>
         <translation>模型</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="712"/>
+        <location filename="../features/app_setup_view.py" line="724"/>
         <source>No Providers Selected</source>
         <translation>未选择提供商</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="712"/>
+        <location filename="../features/app_setup_view.py" line="724"/>
         <source>Select at least one provider to continue.</source>
         <translation>请至少选择一个提供商后再继续。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="721"/>
-        <location filename="../features/app_setup_view.py" line="741"/>
+        <location filename="../features/app_setup_view.py" line="733"/>
+        <location filename="../features/app_setup_view.py" line="753"/>
         <source>Missing Information</source>
         <translation>缺少信息</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="734"/>
+        <location filename="../features/app_setup_view.py" line="746"/>
         <source>Wizard Incomplete</source>
         <translation>向导未完成</translation>
     </message>
@@ -2546,78 +2566,113 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>TermsTableWidget</name>
     <message>
-        <location filename="../features/terms_table_widget.py" line="267"/>
+        <location filename="../features/terms_table_widget.py" line="40"/>
+        <source>Source-language term key. During glossary translation, terms can be grouped with similar keys using string-similarity matching.</source>
+        <translation>源语言术语键。术语翻译时，系统可基于字符串相似度将相近术语分组处理。</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_table_widget.py" line="45"/>
+        <source>Target-language term. For untranslated terms, the translator receives up to 3 most similar already-translated terms as references, and similar untranslated terms may be sent together in the same LLM call.</source>
+        <translation>目标语言术语。对未翻译术语，翻译器会收到最多 3 个最相近的已翻译术语作为参考，相近的未翻译术语也可能在同一次 LLM 调用中一起发送。</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_table_widget.py" line="51"/>
+        <source>Primary description built from accumulated context. During chunk translation, only context summaries ending at or before the current chunk are sent.</source>
+        <translation>基于累计上下文生成的主描述。分块翻译时，只会发送结束于当前块或更早位置的上下文摘要。</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_table_widget.py" line="56"/>
+        <source>Number of chunks where this term appears.</source>
+        <translation>此术语出现过的文本块数量。</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_table_widget.py" line="57"/>
+        <source>Number of chunks where the LLM recognized this as a term.</source>
+        <translation>LLM 将其识别为术语的文本块数量。</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_table_widget.py" line="58"/>
+        <source>Ignored terms are excluded from glossary and chunk translation term injection.</source>
+        <translation>已忽略术语不会注入到术语表翻译和正文分块翻译中。</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_table_widget.py" line="61"/>
+        <source>Whether this term has been processed by the Review Terms pass.</source>
+        <translation>该术语是否已在“审核术语”步骤中处理过。</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_table_widget.py" line="274"/>
         <source>Search terms...</source>
         <translation>搜索术语...</translation>
     </message>
     <message>
-        <location filename="../features/terms_table_widget.py" line="269"/>
+        <location filename="../features/terms_table_widget.py" line="276"/>
         <source>All</source>
         <translation>全部</translation>
     </message>
     <message>
-        <location filename="../features/terms_table_widget.py" line="270"/>
+        <location filename="../features/terms_table_widget.py" line="277"/>
         <source>Unreviewed</source>
         <translation>未审核</translation>
     </message>
     <message>
-        <location filename="../features/terms_table_widget.py" line="271"/>
-        <location filename="../features/terms_table_widget.py" line="281"/>
+        <location filename="../features/terms_table_widget.py" line="278"/>
+        <location filename="../features/terms_table_widget.py" line="288"/>
         <source>Ignored</source>
         <translation>已忽略</translation>
     </message>
     <message>
-        <location filename="../features/terms_table_widget.py" line="272"/>
+        <location filename="../features/terms_table_widget.py" line="279"/>
         <source>Translated</source>
         <translation>已翻译</translation>
     </message>
     <message>
-        <location filename="../features/terms_table_widget.py" line="273"/>
+        <location filename="../features/terms_table_widget.py" line="280"/>
         <source>Untranslated</source>
         <translation>未翻译</translation>
     </message>
     <message>
-        <location filename="../features/terms_table_widget.py" line="276"/>
+        <location filename="../features/terms_table_widget.py" line="283"/>
         <source>Term</source>
         <translation>术语</translation>
     </message>
     <message>
-        <location filename="../features/terms_table_widget.py" line="277"/>
+        <location filename="../features/terms_table_widget.py" line="284"/>
         <source>Translation</source>
         <translation>翻译</translation>
     </message>
     <message>
-        <location filename="../features/terms_table_widget.py" line="278"/>
+        <location filename="../features/terms_table_widget.py" line="285"/>
         <source>Description</source>
         <translation>描述</translation>
     </message>
     <message>
-        <location filename="../features/terms_table_widget.py" line="279"/>
+        <location filename="../features/terms_table_widget.py" line="286"/>
         <source>Occurrences</source>
         <translation>出现次数</translation>
     </message>
     <message>
-        <location filename="../features/terms_table_widget.py" line="280"/>
+        <location filename="../features/terms_table_widget.py" line="287"/>
         <source>Recognized</source>
         <translation>识别数</translation>
     </message>
     <message>
-        <location filename="../features/terms_table_widget.py" line="282"/>
+        <location filename="../features/terms_table_widget.py" line="289"/>
         <source>Reviewed</source>
         <translation>已审核</translation>
     </message>
     <message>
-        <location filename="../features/terms_table_widget.py" line="436"/>
+        <location filename="../features/terms_table_widget.py" line="443"/>
         <source>Shared terms for this project. Editing here updates the project terms. Existing translations are unchanged.</source>
         <translation>这是当前项目的共享术语。在此编辑会更新项目术语。现有翻译不会改变。</translation>
     </message>
     <message>
-        <location filename="../features/terms_table_widget.py" line="438"/>
+        <location filename="../features/terms_table_widget.py" line="445"/>
         <source>Terms for the selected document. Editing here updates the shared project terms.</source>
         <translation>这是所选文档的术语。在此编辑会更新共享项目术语。</translation>
     </message>
     <message>
-        <location filename="../features/terms_table_widget.py" line="446"/>
+        <location filename="../features/terms_table_widget.py" line="453"/>
         <source>Showing %1 terms | Reviewed: %2 | Translated: %3 | Ignored: %4</source>
         <translation>显示 %1 个术语 | 已审核：%2 | 已翻译：%3 | 已忽略：%4</translation>
     </message>

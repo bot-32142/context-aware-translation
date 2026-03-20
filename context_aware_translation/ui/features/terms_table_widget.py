@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from PySide6.QtCore import QEvent, QItemSelectionModel, QPoint, QSize, QSortFilterProxyModel, Qt, Signal
+from PySide6.QtCore import (
+    QT_TRANSLATE_NOOP,
+    QEvent,
+    QItemSelectionModel,
+    QPoint,
+    QSize,
+    QSortFilterProxyModel,
+    Qt,
+    Signal,
+)
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -37,23 +46,30 @@ _COLUMN_IGNORED = 5
 _COLUMN_REVIEWED = 6
 
 _HEADER_TOOLTIPS = {
-    _COLUMN_TERM: (
+    _COLUMN_TERM: QT_TRANSLATE_NOOP(
+        "TermsTableWidget",
         "Source-language term key. During glossary translation, terms can be grouped "
-        "with similar keys using string-similarity matching."
+        "with similar keys using string-similarity matching.",
     ),
-    _COLUMN_TRANSLATION: (
+    _COLUMN_TRANSLATION: QT_TRANSLATE_NOOP(
+        "TermsTableWidget",
         "Target-language term. For untranslated terms, the translator receives up to "
         "3 most similar already-translated terms as references, and similar "
-        "untranslated terms may be sent together in the same LLM call."
+        "untranslated terms may be sent together in the same LLM call.",
     ),
-    _COLUMN_DESCRIPTION: (
+    _COLUMN_DESCRIPTION: QT_TRANSLATE_NOOP(
+        "TermsTableWidget",
         "Primary description built from accumulated context. During chunk translation, "
-        "only context summaries ending at or before the current chunk are sent."
+        "only context summaries ending at or before the current chunk are sent.",
     ),
-    _COLUMN_OCCURRENCES: "Number of chunks where this term appears.",
-    _COLUMN_VOTES: "Number of chunks where the LLM recognized this as a term.",
-    _COLUMN_IGNORED: "Ignored terms are excluded from glossary and chunk translation term injection.",
-    _COLUMN_REVIEWED: "Whether this term has been processed by the Review Terms pass.",
+    _COLUMN_OCCURRENCES: QT_TRANSLATE_NOOP("TermsTableWidget", "Number of chunks where this term appears."),
+    _COLUMN_VOTES: QT_TRANSLATE_NOOP("TermsTableWidget", "Number of chunks where the LLM recognized this as a term."),
+    _COLUMN_IGNORED: QT_TRANSLATE_NOOP(
+        "TermsTableWidget", "Ignored terms are excluded from glossary and chunk translation term injection."
+    ),
+    _COLUMN_REVIEWED: QT_TRANSLATE_NOOP(
+        "TermsTableWidget", "Whether this term has been processed by the Review Terms pass."
+    ),
 }
 
 
