@@ -328,26 +328,32 @@ _RUNTIME_MESSAGE_CONTEXT = "RuntimeMessages"
 
 _RUNTIME_STATIC: dict[str, object] = {
     "Async batch translation is unavailable.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "Async batch translation is unavailable."
+        "RuntimeMessages", "Async batch translation is unavailable."
     ),
     "Cannot modify documents while other document tasks are active.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "Cannot modify documents while other document tasks are active."
+        "RuntimeMessages", "Cannot modify documents while other document tasks are active."
     ),
     "Cannot save while another task is actively modifying this document.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "Cannot save while another task is actively modifying this document."
+        "RuntimeMessages", "Cannot save while another task is actively modifying this document."
     ),
     "Complete": QT_TRANSLATE_NOOP("RuntimeMessages", "Complete"),
     "Context not ready yet.": QT_TRANSLATE_NOOP("RuntimeMessages", "Context not ready yet."),
     "Export": QT_TRANSLATE_NOOP("RuntimeMessages", "Export"),
     "Image editing needs a shared connection in App Setup.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "Image editing needs a shared connection in App Setup."
+        "RuntimeMessages", "Image editing needs a shared connection in App Setup."
     ),
     "Image reinsertion blocked.": QT_TRANSLATE_NOOP("RuntimeMessages", "Image reinsertion blocked."),
     "Image reinsertion cancellation requested.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "Image reinsertion cancellation requested."
+        "RuntimeMessages", "Image reinsertion cancellation requested."
     ),
     "Image reinsertion is already running for this document.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "Image reinsertion is already running for this document."
+        "RuntimeMessages", "Image reinsertion is already running for this document."
+    ),
+    "Another OCR task is already running for this document.": QT_TRANSLATE_NOOP(
+        "RuntimeMessages", "Another OCR task is already running for this document."
+    ),
+    "Another terms task is already running for this project.": QT_TRANSLATE_NOOP(
+        "RuntimeMessages", "Another terms task is already running for this project."
     ),
     "Image reinsertion is blocked.": QT_TRANSLATE_NOOP("RuntimeMessages", "Image reinsertion is blocked."),
     "Inspect images": QT_TRANSLATE_NOOP("RuntimeMessages", "Inspect images"),
@@ -357,27 +363,27 @@ _RUNTIME_STATIC: dict[str, object] = {
     "No document state changed.": QT_TRANSLATE_NOOP("RuntimeMessages", "No document state changed."),
     "No documents were deleted.": QT_TRANSLATE_NOOP("RuntimeMessages", "No documents were deleted."),
     "No image pages are available for OCR in this document.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "No image pages are available for OCR in this document."
+        "RuntimeMessages", "No image pages are available for OCR in this document."
     ),
     "No OCR text detected on this page.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "No OCR text detected on this page."
+        "RuntimeMessages", "No OCR text detected on this page."
     ),
     "No pending images need reinsertion.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "No pending images need reinsertion."
+        "RuntimeMessages", "No pending images need reinsertion."
     ),
     "No translatable units are ready in this document.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "No translatable units are ready in this document."
+        "RuntimeMessages", "No translatable units are ready in this document."
     ),
     "No translated images are ready for reinsertion.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "No translated images are ready for reinsertion."
+        "RuntimeMessages", "No translated images are ready for reinsertion."
     ),
     "Not started": QT_TRANSLATE_NOOP("RuntimeMessages", "Not started"),
     "OCR cancellation requested.": QT_TRANSLATE_NOOP("RuntimeMessages", "OCR cancellation requested."),
     "OCR is already running for this document.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "OCR is already running for this document."
+        "RuntimeMessages", "OCR is already running for this document."
     ),
     "OCR is locked after terms or translation have started for this document.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "OCR is locked after terms or translation have started for this document."
+        "RuntimeMessages", "OCR is locked after terms or translation have started for this document."
     ),
     "Open": QT_TRANSLATE_NOOP("RuntimeMessages", "Open"),
     "Open Images": QT_TRANSLATE_NOOP("RuntimeMessages", "Open Images"),
@@ -389,36 +395,36 @@ _RUNTIME_STATIC: dict[str, object] = {
     "Ready to export": QT_TRANSLATE_NOOP("RuntimeMessages", "Ready to export"),
     "Read text from images": QT_TRANSLATE_NOOP("RuntimeMessages", "Read text from images"),
     "Reinsert Selected is available only for manga and EPUB documents.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "Reinsert Selected is available only for manga and EPUB documents."
+        "RuntimeMessages", "Reinsert Selected is available only for manga and EPUB documents."
     ),
     "Retranslate chunk": QT_TRANSLATE_NOOP("RuntimeMessages", "Retranslate chunk"),
     "Retranslate is currently unavailable.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "Retranslate is currently unavailable."
+        "RuntimeMessages", "Retranslate is currently unavailable."
     ),
     "Review terms": QT_TRANSLATE_NOOP("RuntimeMessages", "Review terms"),
     "Submit async batch": QT_TRANSLATE_NOOP("RuntimeMessages", "Submit async batch"),
     "Target language is not configured for this project.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "Target language is not configured for this project."
+        "RuntimeMessages", "Target language is not configured for this project."
     ),
     "The selected image is no longer available.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "The selected image is no longer available."
+        "RuntimeMessages", "The selected image is no longer available."
     ),
     "This page could not be aligned to a translation unit. Rebuild terms after OCR changes.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT,
+        "RuntimeMessages",
         "This page could not be aligned to a translation unit. Rebuild terms after OCR changes.",
     ),
     "Translate terms": QT_TRANSLATE_NOOP("RuntimeMessages", "Translate terms"),
     "Translate text": QT_TRANSLATE_NOOP("RuntimeMessages", "Translate text"),
     "Translate this document before putting text back into images.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "Translate this document before putting text back into images."
+        "RuntimeMessages", "Translate this document before putting text back into images."
     ),
     "Translated units": QT_TRANSLATE_NOOP("RuntimeMessages", "Translated units"),
     "Translation is already running for this document.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "Translation is already running for this document."
+        "RuntimeMessages", "Translation is already running for this document."
     ),
     "Translation is unavailable.": QT_TRANSLATE_NOOP("RuntimeMessages", "Translation is unavailable."),
     "Translation needs a shared connection in App Setup.": QT_TRANSLATE_NOOP(
-        _RUNTIME_MESSAGE_CONTEXT, "Translation needs a shared connection in App Setup."
+        "RuntimeMessages", "Translation needs a shared connection in App Setup."
     ),
     "Waiting in order": QT_TRANSLATE_NOOP("RuntimeMessages", "Waiting in order"),
 }
@@ -480,123 +486,123 @@ _TASK_DECISION_CODE_CONTEXT = "TaskDecisionCode"
 
 _TASK_DECISION_REASON_STATIC: dict[str, object] = {
     "All selected documents must be manga type for manga translation.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "All selected documents must be manga type for manga translation."
+        "TaskDecisionReason", "All selected documents must be manga type for manga translation."
     ),
     "Already running": QT_TRANSLATE_NOOP("TaskDecisionReason", "Already running"),
     "Batch translation does not support manga documents.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "Batch translation does not support manga documents."
+        "TaskDecisionReason", "Batch translation does not support manga documents."
     ),
     "Blocked by active task claims": QT_TRANSLATE_NOOP("TaskDecisionReason", "Blocked by active task claims"),
     "Book has no documents to translate.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "Book has no documents to translate."
+        "TaskDecisionReason", "Book has no documents to translate."
     ),
     "Book has no documents.": QT_TRANSLATE_NOOP("TaskDecisionReason", "Book has no documents."),
     "Cancel requested, cannot run": QT_TRANSLATE_NOOP("TaskDecisionReason", "Cancel requested, cannot run"),
     "Cannot delete active task": QT_TRANSLATE_NOOP("TaskDecisionReason", "Cannot delete active task"),
     "Cannot load config for this book. Check that a profile or custom config is assigned.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT,
+        "TaskDecisionReason",
         "Cannot load config for this book. Check that a profile or custom config is assigned.",
     ),
     "Cannot open book database.": QT_TRANSLATE_NOOP("TaskDecisionReason", "Cannot open book database."),
     "Chunk retranslation is interactive-only": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "Chunk retranslation is interactive-only"
+        "TaskDecisionReason", "Chunk retranslation is interactive-only"
     ),
     "Claims conflict with active tasks": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "Claims conflict with active tasks"
+        "TaskDecisionReason", "Claims conflict with active tasks"
     ),
     "Image reembedding is disabled in current config.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "Image reembedding is disabled in current config."
+        "TaskDecisionReason", "Image reembedding is disabled in current config."
     ),
     "Image reembedding is disabled. Enable OCR image reembedding in your book config.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT,
+        "TaskDecisionReason",
         "Image reembedding is disabled. Enable OCR image reembedding in your book config.",
     ),
     "Manga translation requires explicit user initiation": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "Manga translation requires explicit user initiation"
+        "TaskDecisionReason", "Manga translation requires explicit user initiation"
     ),
     "No documents are pending glossary build.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "No documents are pending glossary build."
+        "TaskDecisionReason", "No documents are pending glossary build."
     ),
     "No documents selected.": QT_TRANSLATE_NOOP("TaskDecisionReason", "No documents selected."),
     "No pending OCR sources found for this document.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "No pending OCR sources found for this document."
+        "TaskDecisionReason", "No pending OCR sources found for this document."
     ),
     "No pending OCR sources found for this document. All sources may already be OCR-completed.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT,
+        "TaskDecisionReason",
         "No pending OCR sources found for this document. All sources may already be OCR-completed.",
     ),
     "No terms are pending review.": QT_TRANSLATE_NOOP("TaskDecisionReason", "No terms are pending review."),
     "No terms found in glossary. Cannot export empty glossary.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "No terms found in glossary. Cannot export empty glossary."
+        "TaskDecisionReason", "No terms found in glossary. Cannot export empty glossary."
     ),
     "No translated chunks found. Translate documents before running image reembedding.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT,
+        "TaskDecisionReason",
         "No translated chunks found. Translate documents before running image reembedding.",
     ),
     "No untranslated terms found.": QT_TRANSLATE_NOOP("TaskDecisionReason", "No untranslated terms found."),
     "OCR requires explicit user initiation": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "OCR requires explicit user initiation"
+        "TaskDecisionReason", "OCR requires explicit user initiation"
     ),
     "OCR task requires exactly one document_id in params.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "OCR task requires exactly one document_id in params."
+        "TaskDecisionReason", "OCR task requires exactly one document_id in params."
     ),
     "Review config not set. Please configure review settings.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "Review config not set. Please configure review settings."
+        "TaskDecisionReason", "Review config not set. Please configure review settings."
     ),
     "Selected documents include manga type(s). Use translation_manga task instead.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "Selected documents include manga type(s). Use translation_manga task instead."
+        "TaskDecisionReason", "Selected documents include manga type(s). Use translation_manga task instead."
     ),
     "Selected documents no longer exist.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "Selected documents no longer exist."
+        "TaskDecisionReason", "Selected documents no longer exist."
     ),
     "Task already completed": QT_TRANSLATE_NOOP("TaskDecisionReason", "Task already completed"),
     "Task is already in terminal state": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "Task is already in terminal state"
+        "TaskDecisionReason", "Task is already in terminal state"
     ),
     "Task is already running": QT_TRANSLATE_NOOP("TaskDecisionReason", "Task is already running"),
     "Task is being cancelled": QT_TRANSLATE_NOOP("TaskDecisionReason", "Task is being cancelled"),
     "chunk_id is required for chunk_retranslation": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "chunk_id is required for chunk_retranslation"
+        "TaskDecisionReason", "chunk_id is required for chunk_retranslation"
     ),
     "chunk_id missing from task payload": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "chunk_id missing from task payload"
+        "TaskDecisionReason", "chunk_id missing from task payload"
     ),
     "document_id is required for chunk_retranslation": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "document_id is required for chunk_retranslation"
+        "TaskDecisionReason", "document_id is required for chunk_retranslation"
     ),
     "document_id missing from task payload": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "document_id missing from task payload"
+        "TaskDecisionReason", "document_id missing from task payload"
     ),
     "document_ids must be a list[int] or null.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "document_ids must be a list[int] or null."
+        "TaskDecisionReason", "document_ids must be a list[int] or null."
     ),
     "document_ids must contain only integers.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "document_ids must contain only integers."
+        "TaskDecisionReason", "document_ids must contain only integers."
     ),
     "image_reembedding_config is required for image reembedding.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "image_reembedding_config is required for image reembedding."
+        "TaskDecisionReason", "image_reembedding_config is required for image reembedding."
     ),
     "image_reembedding_config is required for image reembedding. Please configure it in your book settings.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT,
+        "TaskDecisionReason",
         "image_reembedding_config is required for image reembedding. Please configure it in your book settings.",
     ),
     "manga_translator_config is required to translate manga documents.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "manga_translator_config is required to translate manga documents."
+        "TaskDecisionReason", "manga_translator_config is required to translate manga documents."
     ),
     "manga_translator_config is required to translate manga documents. Please configure it in your book settings.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT,
+        "TaskDecisionReason",
         "manga_translator_config is required to translate manga documents. Please configure it in your book settings.",
     ),
     "ocr_config is required for OCR tasks. Please configure it in your book settings.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT,
+        "TaskDecisionReason",
         "ocr_config is required for OCR tasks. Please configure it in your book settings.",
     ),
     "source_ids must be a list.": QT_TRANSLATE_NOOP("TaskDecisionReason", "source_ids must be a list."),
     "source_ids must be a list[int] or null.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "source_ids must be a list[int] or null."
+        "TaskDecisionReason", "source_ids must be a list[int] or null."
     ),
     "source_ids must contain only integers.": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_REASON_CONTEXT, "source_ids must contain only integers."
+        "TaskDecisionReason", "source_ids must contain only integers."
     ),
 }
 
@@ -621,7 +627,7 @@ _TASK_DECISION_REASON_PATTERNS: list[tuple[re.Pattern[str], object]] = [
     (
         re.compile(r"Document type '([^']+)' does not support OCR\. Supported types: (.+)\."),
         QT_TRANSLATE_NOOP(
-            _TASK_DECISION_REASON_CONTEXT, "Document type '%1' does not support OCR. Supported types: %2."
+            "TaskDecisionReason", "Document type '%1' does not support OCR. Supported types: %2."
         ),
     ),
     (
@@ -631,13 +637,13 @@ _TASK_DECISION_REASON_PATTERNS: list[tuple[re.Pattern[str], object]] = [
     (
         re.compile(r"Document type\(s\) (.+) do not support image reembedding\. Supported types: (.+)"),
         QT_TRANSLATE_NOOP(
-            _TASK_DECISION_REASON_CONTEXT, "Document type(s) %1 do not support image reembedding. Supported types: %2"
+            "TaskDecisionReason", "Document type(s) %1 do not support image reembedding. Supported types: %2"
         ),
     ),
     (
         re.compile(r"Document (\d+) has pending OCR\. Complete OCR before translating\."),
         QT_TRANSLATE_NOOP(
-            _TASK_DECISION_REASON_CONTEXT, "Document %1 has pending OCR. Complete OCR before translating."
+            "TaskDecisionReason", "Document %1 has pending OCR. Complete OCR before translating."
         ),
     ),
     (
@@ -666,15 +672,15 @@ _TASK_DECISION_REASON_PATTERNS: list[tuple[re.Pattern[str], object]] = [
 _TASK_DECISION_CODE_LABELS: dict[str, object] = {
     "blocked_claim_conflict": QT_TRANSLATE_NOOP("TaskDecisionCode", "Blocked by active task claims"),
     "config_snapshot_unavailable": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_CODE_CONTEXT,
+        "TaskDecisionCode",
         "Cannot load config for this book. Check that a profile or custom config is assigned.",
     ),
     "task_not_found": QT_TRANSLATE_NOOP("TaskDecisionCode", "Task not found"),
     "no_terms": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_CODE_CONTEXT, "No terms found in glossary. Cannot export empty glossary."
+        "TaskDecisionCode", "No terms found in glossary. Cannot export empty glossary."
     ),
     "no_review_config": QT_TRANSLATE_NOOP(
-        _TASK_DECISION_CODE_CONTEXT, "Review config not set. Please configure review settings."
+        "TaskDecisionCode", "Review config not set. Please configure review settings."
     ),
     "no_pending_terms": QT_TRANSLATE_NOOP("TaskDecisionCode", "No terms are pending review."),
     "stale_selection": QT_TRANSLATE_NOOP("TaskDecisionCode", "Selected document(s) are no longer pending."),
@@ -699,12 +705,12 @@ def _translate_task(text: str) -> str:
 def _translate_task_decision_reason(reason: str) -> str:
     label = _TASK_DECISION_REASON_STATIC.get(reason)
     if label is not None:
-        return QCoreApplication.translate(_TASK_DECISION_REASON_CONTEXT, label)
+        return QCoreApplication.translate("TaskDecisionReason", label)
 
     for pattern, template in _TASK_DECISION_REASON_PATTERNS:
         matched = pattern.fullmatch(reason)
         if matched:
-            return qarg(QCoreApplication.translate(_TASK_DECISION_REASON_CONTEXT, template), *matched.groups())
+            return qarg(QCoreApplication.translate("TaskDecisionReason", template), *matched.groups())
     return reason
 
 
@@ -736,7 +742,7 @@ def translate_runtime_text(text: str) -> str:
     """Translate backend/runtime English text shown directly in the UI."""
     label = _RUNTIME_STATIC.get(text)
     if label is not None:
-        return QCoreApplication.translate(_RUNTIME_MESSAGE_CONTEXT, label)
+        return QCoreApplication.translate("RuntimeMessages", label)
 
     for pattern, template in _RUNTIME_PATTERNS:
         matched = pattern.fullmatch(text)
@@ -746,7 +752,7 @@ def translate_runtime_text(text: str) -> str:
         template_text = cast(str, template)
         if template_text == "Blocked by %1 on Document %2.":
             groups[0] = translate_runtime_text(groups[0])
-        return qarg(QCoreApplication.translate(_RUNTIME_MESSAGE_CONTEXT, template_text), *groups)
+        return qarg(QCoreApplication.translate("RuntimeMessages", template_text), *groups)
     return text
 
 
@@ -800,13 +806,13 @@ def translate_task_block_reason(reason: str | None, code: str | None = None) -> 
         if code_text and code_text != "ok":
             label = _TASK_DECISION_CODE_LABELS.get(code_text)
             if label is not None:
-                return QCoreApplication.translate(_TASK_DECISION_CODE_CONTEXT, cast(str, label))
+                return QCoreApplication.translate("TaskDecisionCode", cast(str, label))
         return translated_reason
 
     if code_text and code_text != "ok":
         label = _TASK_DECISION_CODE_LABELS.get(code_text)
         if label is not None:
-            return QCoreApplication.translate(_TASK_DECISION_CODE_CONTEXT, cast(str, label))
+            return QCoreApplication.translate("TaskDecisionCode", cast(str, label))
         return _humanize_token(code_text)
     return ""
 

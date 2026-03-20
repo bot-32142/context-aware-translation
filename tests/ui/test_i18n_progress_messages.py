@@ -39,3 +39,19 @@ def test_translate_task_block_reason_code_mapping_without_translator():
 
 def test_translate_task_block_reason_unknown_code_humanized():
     assert i18n.translate_task_block_reason(None, "custom_error_code") == "Custom Error Code"
+
+
+def test_translate_backend_text_runtime_warning_uses_runtime_map(monkeypatch):
+    monkeypatch.setattr(i18n.QCoreApplication, "translate", lambda _ctx, text: f"T:{text}")
+    assert (
+        i18n.translate_backend_text("Image reinsertion is already running for this document.")
+        == "T:Image reinsertion is already running for this document."
+    )
+    assert (
+        i18n.translate_backend_text("Another OCR task is already running for this document.")
+        == "T:Another OCR task is already running for this document."
+    )
+    assert (
+        i18n.translate_backend_text("Another terms task is already running for this project.")
+        == "T:Another terms task is already running for this project."
+    )

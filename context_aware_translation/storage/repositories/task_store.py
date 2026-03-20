@@ -203,6 +203,10 @@ class TaskStore:
                 raise KeyError(f"Task not found: {task_id}")
             return record
 
+        status = updates.get("status")
+        if status in {"queued", "running"} and "last_error" not in updates:
+            updates["last_error"] = None
+
         updates["updated_at"] = time.time()
         # SAFETY: column names are validated against _ALLOWED_UPDATE_COLUMNS above.
         assignments = ", ".join(f"{column} = ?" for column in updates)

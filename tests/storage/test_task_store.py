@@ -101,6 +101,23 @@ def test_task_store_instances_share_file_lock_for_writes(tmp_path):
     assert finished.is_set()
 
 
+def test_update_clears_last_error_when_task_requeues_or_restarts(tmp_path):
+    db_path = tmp_path / "tasks.db"
+    store = TaskStore(db_path)
+    try:
+        created = store.create(book_id="book-3", task_type="translation", status="failed")
+        failed = store.update(created.task_id, last_error="boom")
+        assert failed.last_error == "boom"
+
+        queued = store.update(created.task_id, status="queued")
+        running = store.update(created.task_id, status="running")
+    finally:
+        store.close()
+
+    assert queued.last_error is None
+    assert running.last_error is None
+
+
 def test_update_changes_fields_and_bumps_updated_at(tmp_path):
     db_path = tmp_path / "tasks.db"
     store = TaskStore(db_path)
