@@ -31,6 +31,23 @@ def _ensure_qt_app() -> QApplication:
     return app
 
 
+def _build_configured_context(tmp_path: Path):
+    context = build_application_context(library_root=tmp_path)
+    context.services.app_setup.run_setup_wizard(
+        SetupWizardRequest(
+            providers=[ProviderKind.OPENAI],
+            connections=[
+                ConnectionDraft(
+                    display_name="OpenAI",
+                    provider=ProviderKind.OPENAI,
+                    api_key="test-key",
+                )
+            ],
+        )
+    )
+    return context
+
+
 def _configure_project_for_task_preflights(context, project_id: str) -> None:  # noqa: ANN001
     endpoint = context.runtime.book_manager.create_endpoint_profile(
         name=f"Test Endpoint {project_id}",
@@ -59,16 +76,16 @@ def test_build_application_context_exposes_services(tmp_path: Path) -> None:
     context = build_application_context(library_root=tmp_path)
     try:
         setup_state = context.services.app_setup.get_state()
-        assert setup_state.connections
-        assert setup_state.shared_profiles
-        assert any(profile.is_default for profile in setup_state.shared_profiles)
+        assert setup_state.connections == []
+        assert setup_state.shared_profiles == []
+        assert context.services.app_setup.get_wizard_state().available_providers
     finally:
         context.close()
 
 
 def test_projects_service_can_create_and_list_projects(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="One Piece", target_language="English")
@@ -83,7 +100,7 @@ def test_projects_service_can_create_and_list_projects(tmp_path: Path) -> None:
 
 def test_project_setup_and_work_queries_use_service_boundary(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Manga Test", target_language="English")
@@ -106,7 +123,7 @@ def test_workboard_builds_labels_without_per_document_metadata_queries(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Manga Test", target_language="English")
@@ -291,7 +308,7 @@ def test_setup_wizard_rerun_updates_existing_managed_connections_and_profile(tmp
 
 def test_project_specific_profile_remains_usable_without_shared_profiles(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Setup Target", target_language="English")
@@ -421,7 +438,7 @@ def test_app_setup_delete_connection_invalidates_dependent_surfaces(tmp_path: Pa
 
 def test_projects_delete_invalidates_all_affected_surfaces(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     seen: list[str] = []
     subscription = context.events.subscribe(lambda event: seen.append(event.kind.value))
     try:
@@ -497,7 +514,7 @@ def test_application_context_close_keeps_runtime_resources_open_while_workers_st
 
 def test_terms_update_missing_term_raises_not_found(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Terms Missing", target_language="English")
@@ -523,7 +540,7 @@ def test_terms_update_missing_term_raises_not_found(tmp_path: Path) -> None:
 
 def test_terms_update_request_rejects_removed_description_field(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Terms Manual Edit", target_language="English")

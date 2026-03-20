@@ -6,7 +6,12 @@ from PySide6.QtWidgets import QApplication
 
 from context_aware_translation.adapters.qt.application_event_bridge import QtApplicationEventBridge
 from context_aware_translation.application.composition import build_application_context
-from context_aware_translation.application.contracts.app_setup import SaveWorkflowProfileRequest
+from context_aware_translation.application.contracts.app_setup import (
+    ConnectionDraft,
+    SaveWorkflowProfileRequest,
+    SetupWizardRequest,
+)
+from context_aware_translation.application.contracts.common import ProviderKind
 from context_aware_translation.application.contracts.projects import CreateProjectRequest
 from context_aware_translation.application.events import (
     ApplicationEventKind,
@@ -22,6 +27,23 @@ def _ensure_qt_app() -> QApplication:
         app = QApplication([])
     assert isinstance(app, QApplication)
     return app
+
+
+def _build_configured_context(tmp_path: Path):
+    context = build_application_context(library_root=tmp_path)
+    context.services.app_setup.run_setup_wizard(
+        SetupWizardRequest(
+            providers=[ProviderKind.OPENAI],
+            connections=[
+                ConnectionDraft(
+                    display_name="OpenAI",
+                    provider=ProviderKind.OPENAI,
+                    api_key="test-key",
+                )
+            ],
+        )
+    )
+    return context
 
 
 def test_event_bus_filters_and_unsubscribes() -> None:
@@ -63,7 +85,7 @@ def test_event_bus_isolates_subscriber_failures() -> None:
 
 def test_services_publish_invalidation_events(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     seen: list[ApplicationEventKind] = []
     subscription = context.events.subscribe(lambda event: seen.append(event.kind))
     try:
@@ -87,7 +109,7 @@ def test_services_publish_invalidation_events(tmp_path: Path) -> None:
 
 def test_task_engine_signal_is_forwarded_to_application_events(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     seen: list[ApplicationEventKind] = []
     subscription = context.events.subscribe(lambda event: seen.append(event.kind))
     try:
@@ -109,7 +131,7 @@ def test_task_engine_signal_is_forwarded_to_application_events(tmp_path: Path) -
 
 def test_worker_task_change_uses_single_coalesced_application_event_flush(tmp_path: Path) -> None:
     app = _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     seen: list[ApplicationEventKind] = []
     subscription = context.events.subscribe(lambda event: seen.append(event.kind))
     try:

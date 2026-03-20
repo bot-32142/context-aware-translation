@@ -9,6 +9,8 @@ import pytest
 from PySide6.QtWidgets import QApplication
 
 from context_aware_translation.application.composition import build_application_context
+from context_aware_translation.application.contracts.app_setup import ConnectionDraft, SetupWizardRequest
+from context_aware_translation.application.contracts.common import ProviderKind
 from context_aware_translation.application.contracts.document import OCRTextElement, RunOCRRequest, SaveOCRPageRequest
 from context_aware_translation.application.contracts.projects import CreateProjectRequest
 from context_aware_translation.application.errors import ApplicationError, ApplicationErrorCode
@@ -23,6 +25,23 @@ def _ensure_qt_app() -> QApplication:
         app = QApplication([])
     assert isinstance(app, QApplication)
     return app
+
+
+def _build_configured_context(tmp_path: Path):
+    context = build_application_context(library_root=tmp_path)
+    context.services.app_setup.run_setup_wizard(
+        SetupWizardRequest(
+            providers=[ProviderKind.OPENAI],
+            connections=[
+                ConnectionDraft(
+                    display_name="OpenAI",
+                    provider=ProviderKind.OPENAI,
+                    api_key="test-key",
+                )
+            ],
+        )
+    )
+    return context
 
 
 def _tiny_png_bytes() -> bytes:
@@ -61,7 +80,7 @@ def _configure_project_for_ocr(context, project_id: str) -> None:
 
 def test_document_service_get_ocr_allows_current_page_rerun_after_completion(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         project = context.services.projects.create_project(
             CreateProjectRequest(name="OCR Project", target_language="English")
@@ -99,7 +118,7 @@ def test_document_service_get_ocr_allows_current_page_rerun_after_completion(tmp
 
 def test_document_service_run_ocr_is_blocked_after_chunking_starts(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         project = context.services.projects.create_project(
             CreateProjectRequest(name="OCR Run Blocked", target_language="English")
@@ -150,7 +169,7 @@ def test_document_service_run_ocr_is_blocked_after_chunking_starts(tmp_path: Pat
 
 def test_document_service_save_ocr_preserves_structured_payload_shape(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         project = context.services.projects.create_project(
             CreateProjectRequest(name="OCR Structured", target_language="English")
@@ -218,7 +237,7 @@ def test_document_service_save_ocr_preserves_structured_payload_shape(tmp_path: 
 
 def test_document_service_save_ocr_is_blocked_after_chunking_starts(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         project = context.services.projects.create_project(
             CreateProjectRequest(name="OCR After Chunking", target_language="English")
@@ -286,7 +305,7 @@ def test_document_service_save_ocr_is_blocked_after_chunking_starts(tmp_path: Pa
 
 def test_document_service_save_ocr_does_not_invalidate_later_documents_when_blocked(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     seen_events: list[object] = []
     subscription = context.events.subscribe(lambda event: seen_events.append(event))
     try:
@@ -353,7 +372,7 @@ def test_document_service_save_ocr_does_not_invalidate_later_documents_when_bloc
 
 def test_document_service_translation_run_blocker_prefers_translation_context(tmp_path: Path, monkeypatch) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         project = context.services.projects.create_project(
             CreateProjectRequest(name="Translation Blocker", target_language="English")
@@ -407,7 +426,7 @@ def test_document_service_translation_run_blocker_prefers_translation_context(tm
 
 def test_document_service_get_images_manga_without_ocr_config_is_setup_blocked(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         project = context.services.projects.create_project(
             CreateProjectRequest(name="Manga Images Without OCR Config", target_language="English")
@@ -441,7 +460,7 @@ def test_document_service_get_images_manga_without_ocr_config_is_setup_blocked(t
 
 def test_document_service_get_images_hides_unsupported_document_type_blocker(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         project = context.services.projects.create_project(
             CreateProjectRequest(name="Plain Text Images", target_language="English")
@@ -469,7 +488,7 @@ def test_document_service_get_images_hides_unsupported_document_type_blocker(tmp
 
 def test_epub_asset_migration_hides_non_image_sources_from_ocr_and_workboard(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         project = context.services.projects.create_project(
             CreateProjectRequest(name="EPUB OCR Migration", target_language="English")

@@ -69,7 +69,7 @@ if TYPE_CHECKING:
 
 _DEFAULT_PROFILE_NAME = "app-default-profile"
 _UI_SOURCE_PROFILE_ID_KEY = "_ui_source_profile_id"
-_MANAGED_CONNECTION_PREFIXES = ("recommended-", "system-default-")
+_MANAGED_CONNECTION_PREFIXES = ("recommended-",)
 
 _WORKFLOW_STEP_LAYOUT: tuple[tuple[WorkflowStepId, str, str | None], ...] = (
     (WorkflowStepId.EXTRACTOR, "Extractor", "extractor_config"),
