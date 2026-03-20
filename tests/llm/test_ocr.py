@@ -10,6 +10,8 @@ from context_aware_translation.config import OCRConfig
 from context_aware_translation.llm.epub_ocr import ocr_epub_image
 from context_aware_translation.llm.manga_ocr import (
     MANGA_OCR_SYSTEM_PROMPT,
+    detect_manga_text_regions,
+    normalize_manga_text_lines,
     ocr_manga_image,
     ocr_manga_image_with_regions,
 )
@@ -37,6 +39,10 @@ def test_manga_ocr_prompt_enforces_one_line_per_text_box_output():
     assert "Do not merge multiple boxes into one line" in MANGA_OCR_SYSTEM_PROMPT
 
 
+def test_normalize_manga_text_lines_accepts_line_sequences():
+    assert normalize_manga_text_lines([" line1 ", "!!!", "line2\nline3", " "]) == ["line1", "line2", "line3"]
+
+
 @pytest.mark.asyncio
 async def test_ocr_image_runs_once_when_max_retries_is_zero():
     llm_client = _MockLLMClient('{"page_type":"content","content":[]}')
@@ -55,7 +61,24 @@ async def test_ocr_image_runs_once_when_max_retries_is_zero():
 
 
 @pytest.mark.asyncio
-async def test_ocr_manga_image_runs_two_passes_when_max_retries_is_zero():
+async def test_ocr_manga_image_runs_once_when_max_retries_is_zero():
+    image_bytes = _png_bytes(100, 100)
+    llm_client = _MockLLMClient('{"text":"hello"}')
+    ocr_config = OCRConfig(
+        api_key="test-key",
+        base_url="https://api.test.com/v1",
+        model="test-model",
+        max_retries=0,
+    )
+
+    result = await ocr_manga_image(image_bytes, "image/png", llm_client, ocr_config)
+
+    assert llm_client.chat.await_count == 1
+    assert result == "hello"
+
+
+@pytest.mark.asyncio
+async def test_ocr_manga_image_with_regions_runs_two_passes_when_max_retries_is_zero():
     image_bytes = _png_bytes(100, 100)
     llm_client = _MockLLMClient(
         [
@@ -70,10 +93,13 @@ async def test_ocr_manga_image_runs_two_passes_when_max_retries_is_zero():
         max_retries=0,
     )
 
-    result = await ocr_manga_image(image_bytes, "image/png", llm_client, ocr_config)
+    payload = await ocr_manga_image_with_regions(image_bytes, "image/png", llm_client, ocr_config)
 
     assert llm_client.chat.await_count == 2
-    assert result == "hello"
+    assert payload == {
+        "text": "hello",
+        "regions": [{"x": 0.1, "y": 0.1, "width": 0.3, "height": 0.2, "text": "hello"}],
+    }
 
 
 @pytest.mark.asyncio
@@ -102,11 +128,10 @@ async def test_ocr_manga_image_with_regions_filters_symbol_only_lines() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ocr_manga_image_with_regions_retries_bbox_on_non_normalized_coordinates() -> None:
+async def test_detect_manga_text_regions_retries_bbox_on_non_integer_coordinates() -> None:
     image_bytes = _png_bytes(100, 100)
     llm_client = _MockLLMClient(
         [
-            '{"text":"line1"}',
             '{"image_width":100,"image_height":100,"regions":[{"x":0.10,"y":20,"width":30,"height":40,"text":"line1"}]}',
             '{"image_width":100,"image_height":100,"regions":[{"x":10,"y":20,"width":30,"height":40,"text":"line1"}]}',
         ]
@@ -118,18 +143,17 @@ async def test_ocr_manga_image_with_regions_retries_bbox_on_non_normalized_coord
         max_retries=0,
     )
 
-    payload = await ocr_manga_image_with_regions(image_bytes, "image/png", llm_client, ocr_config)
+    regions = await detect_manga_text_regions(image_bytes, "image/png", llm_client, ocr_config, ["line1"])
 
-    assert llm_client.chat.await_count == 3
-    assert payload["text"] == "line1"
-    assert payload["regions"][0]["x"] == pytest.approx(0.10)
-    third_call_messages = llm_client.chat.await_args_list[2].kwargs["messages"]
-    third_call_user_prompt = third_call_messages[1]["content"][1]["text"]
-    assert "Previous response was invalid" in third_call_user_prompt
+    assert llm_client.chat.await_count == 2
+    assert regions[0]["x"] == pytest.approx(0.10)
+    second_call_messages = llm_client.chat.await_args_list[1].kwargs["messages"]
+    second_call_user_prompt = second_call_messages[1]["content"][1]["text"]
+    assert "Previous response was invalid" in second_call_user_prompt
 
 
 @pytest.mark.asyncio
-async def test_ocr_manga_image_with_regions_strips_newlines_in_region_text() -> None:
+async def test_ocr_manga_image_with_regions_uses_detected_line_order_for_region_text() -> None:
     image_bytes = _png_bytes(100, 100)
     llm_client = _MockLLMClient(
         [
@@ -146,8 +170,8 @@ async def test_ocr_manga_image_with_regions_strips_newlines_in_region_text() -> 
 
     payload = await ocr_manga_image_with_regions(image_bytes, "image/png", llm_client, ocr_config)
 
-    assert payload["text"] == "AB"
-    assert payload["regions"][0]["text"] == "AB"
+    assert payload["text"] == "line1"
+    assert payload["regions"][0]["text"] == "line1"
 
 
 @pytest.mark.asyncio

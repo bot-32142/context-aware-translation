@@ -1343,6 +1343,14 @@ class DefaultDocumentService:
                 project_id=project_id,
                 document_id=document_id,
             )
+        if decision_code == "no_manga_ocr_config":
+            return make_blocker(
+                blocker_code_for_decision_code(decision_code),
+                reason or "Image reinsertion is blocked.",
+                target_kind=NavigationTargetKind.PROJECT_SETUP,
+                project_id=project_id,
+                document_id=document_id,
+            )
         return make_blocker(
             blocker_code_for_decision_code(decision_code),
             reason or "Image reinsertion is blocked.",

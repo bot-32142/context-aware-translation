@@ -94,21 +94,21 @@ def _create_manga_document(context, project_id: str) -> tuple[int, int, int, int
             document_id,
             0,
             "image",
-            ocr_json=json.dumps({"regions": [{"text": "一行目\n二行目"}]}),
+            ocr_json=json.dumps({"text": "一行目\n二行目"}),
             is_ocr_completed=True,
         )
         source_2 = dbx.document_repo.insert_document_source(
             document_id,
             1,
             "image",
-            ocr_json=json.dumps({"regions": [{"text": ""}]}),
+            ocr_json=json.dumps({"text": ""}),
             is_ocr_completed=True,
         )
         source_3 = dbx.document_repo.insert_document_source(
             document_id,
             2,
             "image",
-            ocr_json=json.dumps({"regions": [{"text": "最後のページ"}]}),
+            ocr_json=json.dumps({"text": "最後のページ"}),
             is_ocr_completed=True,
         )
     _insert_chunk(

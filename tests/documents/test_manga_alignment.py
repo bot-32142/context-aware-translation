@@ -43,11 +43,17 @@ def test_align_sources_to_chunks_non_strict_maps_intersection() -> None:
     assert mapping == {0: 0, 1: 1}
 
 
-def test_extract_ocr_text_prefers_regions_and_strips_embedded_newlines() -> None:
-    ocr_json = '{"text":"legacy","regions":[{"text":"A\\nB"},{"text":"C\\r\\nD"},{"text":" E "}]}'
+def test_extract_ocr_text_returns_text_when_present() -> None:
+    ocr_json = '{"text":"fresh","regions":[{"text":"stale"}]}'
 
-    assert extract_ocr_text(ocr_json) == "AB\nCD\nE"
+    assert extract_ocr_text(ocr_json) == "fresh"
 
 
-def test_extract_ocr_text_falls_back_to_text_when_regions_missing() -> None:
+def test_extract_ocr_text_returns_empty_when_text_missing() -> None:
+    ocr_json = '{"regions":[{"text":"A\\nB"},{"text":"C\\r\\nD"},{"text":" E "}]}'
+
+    assert extract_ocr_text(ocr_json) == ""
+
+
+def test_extract_ocr_text_returns_text_when_regions_missing() -> None:
     assert extract_ocr_text('{"text":"line1\\nline2"}') == "line1\nline2"

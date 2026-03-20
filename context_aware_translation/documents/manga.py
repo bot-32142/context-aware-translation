@@ -23,19 +23,19 @@ from context_aware_translation.documents.manga_reembed_planner import (
     build_manga_crop_plans,
     crop_to_png_bytes,
     normalize_to_size,
-    parse_regions_from_ocr_json,
+    parse_regions_payload,
     render_live_crop,
     stitch_plan,
 )
 from context_aware_translation.llm import image_generator, manga_ocr
+from context_aware_translation.llm.client import LLMClient
 from context_aware_translation.utils.file_utils import IMAGE_EXTENSIONS, classify_file, get_mime_type, scan_folder
 from context_aware_translation.utils.image_utils import compress_image_for_ocr, validate_image_bytes
 from context_aware_translation.utils.pandoc_export import export_pandoc
-from context_aware_translation.utils.symbol_check import symbol_only
 
 if TYPE_CHECKING:
     from context_aware_translation.config import ImageReembeddingConfig, OCRConfig
-    from context_aware_translation.llm.client import LLMClient
+    from context_aware_translation.documents.manga_reembed_planner import TextRegion
     from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 
 logger = logging.getLogger(__name__)
@@ -57,19 +57,6 @@ def _mime_to_ext(mime_type: str) -> str:
 
 def _get_manga_reembed_params() -> tuple[float, int]:
     return 0.15, 6
-
-
-def _split_lines(text: str) -> list[str]:
-    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
-    lines: list[str] = []
-    for raw_line in normalized.split("\n"):
-        line = raw_line.strip()
-        if not line:
-            continue
-        if symbol_only(line):
-            continue
-        lines.append(line)
-    return lines
 
 
 class _LegacyFullPageFallback(Exception):
@@ -257,11 +244,10 @@ class MangaDocument(Document):
         cancel_check: Callable[[], bool] | None = None,
         on_item_processed: Callable[[], None] | None = None,
     ) -> int:
-        """OCR using manga text extraction + normalized text-region bboxes."""
+        """OCR manga pages into text-only payloads."""
         raise_if_cancelled(cancel_check)
         if self._ocr_config is None:
             raise ValueError("ocr_config is required for process_ocr")
-
         ocr_config = self._ocr_config
 
         if source_ids is None:
@@ -287,7 +273,7 @@ class MangaDocument(Document):
             raise_if_cancelled(cancel_check)
             async with semaphore:
                 raise_if_cancelled(cancel_check)
-                ocr_payload = await manga_ocr.ocr_manga_image_with_regions(
+                ocr_text = await manga_ocr.ocr_manga_image(
                     image_bytes=img_bytes,
                     mime_type=mime_type,
                     llm_client=llm_client,
@@ -295,7 +281,7 @@ class MangaDocument(Document):
                     cancel_check=cancel_check,
                 )
                 raise_if_cancelled(cancel_check)
-                ocr_result = json.dumps(ocr_payload, ensure_ascii=False)
+                ocr_result = json.dumps({"text": ocr_text}, ensure_ascii=False)
                 self.repo.update_source_ocr(sources[index]["source_id"], ocr_result)
                 self.repo.update_source_ocr_completed(sources[index]["source_id"])
                 if on_item_processed is not None:
@@ -387,8 +373,9 @@ class MangaDocument(Document):
         Uses existing DB cache to skip already-done items unless force=True.
         Returns count of pages newly generated.
         """
-        generator = image_generator.create_image_generator(image_reembedding_config)
-        semaphore = asyncio.Semaphore(image_reembedding_config.concurrency)
+        if self._ocr_config is None:
+            raise ValueError("ocr_config is required for manga reembed")
+        ocr_config = self._ocr_config
 
         sources = self.repo.get_document_sources(self.document_id)
         sources_sorted = sorted(sources, key=lambda s: s["sequence_number"])
@@ -419,6 +406,10 @@ class MangaDocument(Document):
         if total == 0:
             return 0
 
+        generator = image_generator.create_image_generator(image_reembedding_config)
+        ocr_llm_client: LLMClient | None = None
+        semaphore = asyncio.Semaphore(image_reembedding_config.concurrency)
+
         completed = 0
         progress_lock = asyncio.Lock()
         context_pad_ratio, context_pad_px = _get_manga_reembed_params()
@@ -438,24 +429,47 @@ class MangaDocument(Document):
                 cancel_check=cancel_check,
             )
 
-        async def _reembed_with_grouped_crops(
+        def _get_ocr_llm_client() -> LLMClient:
+            nonlocal ocr_llm_client
+            if ocr_llm_client is None:
+                ocr_llm_client = LLMClient(ocr_config)
+            return ocr_llm_client
+
+        async def _detect_grouped_regions(
             *,
             image_bytes: bytes,
-            ocr_json: str | None,
+            mime_type: str,
+            original_text: str,
+        ) -> tuple[Image.Image, list[TextRegion]]:
+            with Image.open(io.BytesIO(image_bytes)) as opened_page:
+                page = opened_page.convert("RGB")
+
+            ocr_lines = manga_ocr.normalize_manga_text_lines(original_text)
+            if not ocr_lines:
+                raise ValueError("No OCR lines available for bbox detection")
+            detected_regions = await manga_ocr.detect_manga_text_regions(
+                image_bytes=image_bytes,
+                mime_type=mime_type,
+                llm_client=_get_ocr_llm_client(),
+                ocr_config=ocr_config,
+                text_lines=ocr_lines,
+                cancel_check=cancel_check,
+            )
+            regions = parse_regions_payload(detected_regions, page_w=page.width, page_h=page.height)
+            if not regions:
+                raise ValueError("No normalized regions detected")
+            return page, regions
+
+        async def _apply_grouped_crop_edits(
+            *,
+            page: Image.Image,
+            regions: list[TextRegion],
             translated_text: str,
         ) -> bytes:
-            page = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-            try:
-                regions = parse_regions_from_ocr_json(ocr_json, page_w=page.width, page_h=page.height)
-            except Exception as exc:
-                raise _LegacyFullPageFallback(f"Invalid or missing regions: {exc}") from exc
-            if not regions:
-                raise _LegacyFullPageFallback("No normalized regions available")
-
-            translated_lines = _split_lines(translated_text)
+            translated_lines = manga_ocr.normalize_manga_text_lines(translated_text)
             if len(translated_lines) != len(regions):
                 raise _LegacyFullPageFallback(
-                    f"Translation line count mismatch: expected {len(regions)} from OCR regions, got {len(translated_lines)}"
+                    f"Translation line count mismatch: expected {len(regions)} from detected regions, got {len(translated_lines)}"
                 )
 
             plans = build_manga_crop_plans(
@@ -465,7 +479,7 @@ class MangaDocument(Document):
                 context_pad_px=context_pad_px,
             )
             if not plans:
-                raise _LegacyFullPageFallback("No valid crop plans generated from OCR regions")
+                raise _LegacyFullPageFallback("No valid crop plans generated from detected regions")
 
             stitched = page.copy()
             for plan in plans:
@@ -474,7 +488,6 @@ class MangaDocument(Document):
                 translated_group_lines = [translated_lines[idx] for idx in plan.member_indices]
                 original_group_text = "\n".join(original_group_lines)
                 translated_group_text = "\n".join(translated_group_lines)
-
                 if not original_group_text.strip() and not translated_group_text.strip():
                     continue
 
@@ -487,11 +500,35 @@ class MangaDocument(Document):
                     text_replacements,
                     cancel_check=cancel_check,
                 )
-                edited = Image.open(io.BytesIO(edited_bytes)).convert("RGB")
+                with Image.open(io.BytesIO(edited_bytes)) as edited_crop:
+                    edited = edited_crop.convert("RGB")
                 edited = normalize_to_size(edited, target_w=plan.crop_side, target_h=plan.crop_side)
                 stitch_plan(stitched_page=stitched, plan=plan, edited_crop=edited)
 
             return crop_to_png_bytes(stitched)
+
+        async def _reembed_with_grouped_crops(
+            *,
+            image_bytes: bytes,
+            mime_type: str,
+            original_text: str,
+            translated_text: str,
+        ) -> bytes:
+            try:
+                page, regions = await _detect_grouped_regions(
+                    image_bytes=image_bytes,
+                    mime_type=mime_type,
+                    original_text=original_text,
+                )
+            except OperationCancelledError:
+                raise
+            except Exception as exc:
+                raise _LegacyFullPageFallback(f"Invalid or missing detected regions: {exc}") from exc
+            return await _apply_grouped_crop_edits(
+                page=page,
+                regions=regions,
+                translated_text=translated_text,
+            )
 
         async def process_page(source: dict) -> None:
             nonlocal completed
@@ -513,7 +550,8 @@ class MangaDocument(Document):
                 try:
                     new_bytes = await _reembed_with_grouped_crops(
                         image_bytes=image_bytes,
-                        ocr_json=source.get("ocr_json"),
+                        mime_type=mime_type,
+                        original_text=original_text,
                         translated_text=translated,
                     )
                 except _LegacyFullPageFallback as grouped_error:

@@ -405,6 +405,40 @@ def test_document_service_translation_run_blocker_prefers_translation_context(tm
         context.close()
 
 
+def test_document_service_get_images_manga_without_ocr_config_is_setup_blocked(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    try:
+        project = context.services.projects.create_project(
+            CreateProjectRequest(name="Manga Images Without OCR Config", target_language="English")
+        )
+        project_id = project.project.project_id
+        _configure_project_for_ocr(context, project_id)
+        config = context.runtime.get_effective_config_payload(project_id)
+        config.pop("ocr_config", None)
+        context.runtime.book_manager.set_book_custom_config(project_id, config)
+
+        db, repo = _open_repo(context, project_id)
+        try:
+            document_id = repo.insert_document("manga")
+            db.commit()
+        finally:
+            db.close()
+
+        state = context.services.document.get_images(project_id, document_id)
+
+        assert not state.toolbar.can_run_pending
+        assert not state.toolbar.can_force_all
+        assert state.toolbar.run_pending_blocker is not None
+        assert state.toolbar.force_all_blocker is not None
+        assert state.toolbar.run_pending_blocker.target is not None
+        assert state.toolbar.force_all_blocker.target is not None
+        assert state.toolbar.run_pending_blocker.target.kind == "project_setup"
+        assert state.toolbar.force_all_blocker.target.kind == "project_setup"
+    finally:
+        context.close()
+
+
 def test_document_service_get_images_hides_unsupported_document_type_blocker(tmp_path: Path) -> None:
     _ensure_qt_app()
     context = build_application_context(library_root=tmp_path)

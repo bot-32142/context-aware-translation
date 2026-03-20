@@ -7,7 +7,7 @@ import io
 import json
 import logging
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
 from PIL import Image
@@ -58,6 +58,26 @@ Required schema:
 }"""
 
 
+def normalize_manga_text_lines(text_or_lines: str | Sequence[str]) -> list[str]:
+    """Normalize manga text into non-empty, non-symbol lines."""
+    raw_lines: list[str] = []
+    if isinstance(text_or_lines, str):
+        raw_lines.extend(text_or_lines.replace("\r\n", "\n").replace("\r", "\n").split("\n"))
+    else:
+        for line in text_or_lines:
+            raw_lines.extend(str(line).replace("\r\n", "\n").replace("\r", "\n").split("\n"))
+
+    lines: list[str] = []
+    for raw_line in raw_lines:
+        line = raw_line.strip()
+        if not line:
+            continue
+        if symbol_only(line):
+            continue
+        lines.append(line)
+    return lines
+
+
 def _build_image_data_uri(image_bytes: bytes, mime_type: str) -> str:
     """Encode image bytes as a base64 data URI."""
     b64 = base64.b64encode(image_bytes).decode("ascii")
@@ -74,24 +94,6 @@ def _clean_json_response(text: str) -> str:
     if text.endswith("```"):
         text = text[:-3]
     return text.strip()
-
-
-def _split_nonempty_lines(text: str) -> list[str]:
-    """Split OCR text into lines, dropping empty/symbol-only entries."""
-    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
-    lines: list[str] = []
-    for raw_line in normalized.split("\n"):
-        line = raw_line.strip()
-        if not line:
-            continue
-        if symbol_only(line):
-            continue
-        lines.append(line)
-    return lines
-
-
-def _strip_newlines(text: str) -> str:
-    return text.replace("\r\n", "").replace("\r", "").replace("\n", "")
 
 
 def _parse_json_object(raw: str) -> dict[str, Any]:
@@ -116,7 +118,7 @@ def _parse_int_pixel(value: Any, *, name: str) -> int:
 def _extract_normalized_regions_from_pixel_payload(
     payload: dict[str, Any],
     *,
-    expected_count: int,
+    expected_lines: Sequence[str],
     image_w: int,
     image_h: int,
 ) -> list[dict[str, Any]]:
@@ -130,8 +132,8 @@ def _extract_normalized_regions_from_pixel_payload(
     regions = payload.get("regions")
     if not isinstance(regions, list):
         raise ValueError("Missing or invalid 'regions' field")
-    if len(regions) != expected_count:
-        raise ValueError(f"Expected {expected_count} regions, got {len(regions)}")
+    if len(regions) != len(expected_lines):
+        raise ValueError(f"Expected {len(expected_lines)} regions, got {len(regions)}")
 
     normalized_regions: list[dict[str, Any]] = []
     for idx, region in enumerate(regions):
@@ -152,18 +154,164 @@ def _extract_normalized_regions_from_pixel_payload(
         if x + width > image_w or y + height > image_h:
             raise ValueError("Region exceeds image bounds")
 
-        text_raw = region.get("text", "")
-        text = _strip_newlines(str(text_raw if text_raw is not None else "")).strip()
         normalized_regions.append(
             {
                 "x": x / image_w,
                 "y": y / image_h,
                 "width": width / image_w,
                 "height": height / image_h,
-                "text": text,
+                "text": expected_lines[idx],
             }
         )
     return normalized_regions
+
+
+async def _ocr_manga_image_text_lines(
+    image_bytes: bytes,
+    mime_type: str,
+    llm_client: LLMClient,
+    ocr_config: OCRConfig,
+    *,
+    session_id: str,
+    cancel_check: Callable[[], bool] | None = None,
+) -> list[str]:
+    data_uri = _build_image_data_uri(image_bytes, mime_type)
+    attempts = ocr_config.max_retries + 1
+    for attempt in range(attempts):
+        raise_if_cancelled(cancel_check)
+        try:
+            messages: list[dict[str, Any]] = [
+                {"role": "system", "content": MANGA_OCR_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": data_uri}},
+                        {"type": "text", "text": "Extract all readable text from this manga page."},
+                    ],
+                },
+            ]
+            response = await llm_client.chat(
+                messages=messages,
+                step_config=ocr_config,
+                response_format={"type": "json_object"},
+                cancel_check=cancel_check,
+            )
+            payload = _parse_json_object(response)
+            return normalize_manga_text_lines(str(payload.get("text", "")))
+        except Exception as exc:
+            if isinstance(exc, OperationCancelledError):
+                raise
+            if attempt >= attempts - 1:
+                raise Exception(f"[llm_session={session_id}] Manga OCR failed after exhausting all attempts.") from exc
+            logger.warning(
+                "[llm_session=%s] Manga OCR attempt %s/%s failed: %s",
+                session_id,
+                attempt + 1,
+                attempts,
+                exc,
+            )
+    raise RuntimeError("Unreachable: Manga OCR retry loop did not return")
+
+
+async def _detect_manga_text_regions(
+    image_bytes: bytes,
+    mime_type: str,
+    llm_client: LLMClient,
+    ocr_config: OCRConfig,
+    *,
+    normalized_lines: Sequence[str],
+    session_id: str,
+    cancel_check: Callable[[], bool] | None = None,
+) -> list[dict[str, Any]]:
+    with Image.open(io.BytesIO(image_bytes)) as image:
+        image_w, image_h = image.size
+    if image_w <= 0 or image_h <= 0:
+        raise ValueError("Invalid image dimensions for manga OCR")
+    if not normalized_lines:
+        return []
+
+    data_uri = _build_image_data_uri(image_bytes, mime_type)
+    text_lines_payload = "\n".join(normalized_lines)
+    bbox_attempts = max(ocr_config.max_retries + 1, 2)
+    bbox_last_error: Exception | None = None
+
+    for bbox_attempt in range(bbox_attempts):
+        raise_if_cancelled(cancel_check)
+        retry_note = ""
+        if bbox_attempt > 0 and bbox_last_error is not None:
+            retry_note = f"""
+
+Previous response was invalid: {bbox_last_error}
+Please correct and regenerate."""
+        bbox_user_prompt = f"""Detected text lines in reading order:
+{text_lines_payload}
+
+Image frame:
+- image_width: {image_w}
+- image_height: {image_h}
+
+Return EXACTLY {len(normalized_lines)} regions in the same order.{retry_note}"""
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": MANGA_OCR_BBOX_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": data_uri}},
+                    {"type": "text", "text": bbox_user_prompt},
+                ],
+            },
+        ]
+        response = await llm_client.chat(
+            messages=messages,
+            step_config=ocr_config,
+            response_format={"type": "json_object"},
+            cancel_check=cancel_check,
+        )
+        try:
+            payload = _parse_json_object(response)
+            return _extract_normalized_regions_from_pixel_payload(
+                payload,
+                expected_lines=normalized_lines,
+                image_w=image_w,
+                image_h=image_h,
+            )
+        except Exception as exc:
+            bbox_last_error = exc
+            if bbox_attempt >= bbox_attempts - 1:
+                raise
+            logger.warning(
+                "[llm_session=%s] Manga OCR bbox attempt %s/%s invalid output: %s",
+                session_id,
+                bbox_attempt + 1,
+                bbox_attempts,
+                exc,
+            )
+
+    raise RuntimeError("Unreachable: bbox retry loop did not produce regions")
+
+
+async def detect_manga_text_regions(
+    image_bytes: bytes,
+    mime_type: str,
+    llm_client: LLMClient,
+    ocr_config: OCRConfig,
+    text_lines: Sequence[str],
+    cancel_check: Callable[[], bool] | None = None,
+) -> list[dict[str, Any]]:
+    """Detect normalized manga text regions for already-extracted OCR lines."""
+    normalized_lines = normalize_manga_text_lines(text_lines)
+    if not normalized_lines:
+        return []
+    with llm_session_scope() as session_id:
+        return await _detect_manga_text_regions(
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            llm_client=llm_client,
+            ocr_config=ocr_config,
+            normalized_lines=normalized_lines,
+            session_id=session_id,
+            cancel_check=cancel_check,
+        )
 
 
 async def ocr_manga_image_with_regions(
@@ -173,118 +321,28 @@ async def ocr_manga_image_with_regions(
     ocr_config: OCRConfig,
     cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
-    """Extract manga OCR text + normalized text-region bboxes."""
+    """Extract manga OCR text and detect normalized text-region bboxes."""
     with llm_session_scope() as session_id:
-        with Image.open(io.BytesIO(image_bytes)) as image:
-            image_w, image_h = image.size
-        if image_w <= 0 or image_h <= 0:
-            raise ValueError("Invalid image dimensions for manga OCR")
-
-        data_uri = _build_image_data_uri(image_bytes, mime_type)
-        attempts = ocr_config.max_retries + 1
-        for attempt in range(attempts):
-            raise_if_cancelled(cancel_check)
-            try:
-                text_pass_messages: list[dict[str, Any]] = [
-                    {"role": "system", "content": MANGA_OCR_SYSTEM_PROMPT},
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "image_url", "image_url": {"url": data_uri}},
-                            {"type": "text", "text": "Extract all readable text from this manga page."},
-                        ],
-                    },
-                ]
-                text_pass_response = await llm_client.chat(
-                    messages=text_pass_messages,
-                    step_config=ocr_config,
-                    response_format={"type": "json_object"},
-                    cancel_check=cancel_check,
-                )
-                text_payload = _parse_json_object(text_pass_response)
-                text_lines = _split_nonempty_lines(str(text_payload.get("text", "")))
-
-                if not text_lines:
-                    return {"text": "", "regions": []}
-
-                text_lines_payload = "\n".join(text_lines)
-                bbox_attempts = max(ocr_config.max_retries + 1, 2)
-                bbox_last_error: Exception | None = None
-                regions: list[dict[str, Any]] | None = None
-                for bbox_attempt in range(bbox_attempts):
-                    retry_note = ""
-                    if bbox_attempt > 0 and bbox_last_error is not None:
-                        retry_note = f"""
-
-Previous response was invalid: {bbox_last_error}
-Please correct and regenerate."""
-                    bbox_user_prompt = f"""Detected text lines in reading order:
-{text_lines_payload}
-
-Image frame:
-- image_width: {image_w}
-- image_height: {image_h}
-
-Return EXACTLY {len(text_lines)} regions in the same order.{retry_note}"""
-                    bbox_pass_messages: list[dict[str, Any]] = [
-                        {"role": "system", "content": MANGA_OCR_BBOX_SYSTEM_PROMPT},
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "image_url", "image_url": {"url": data_uri}},
-                                {"type": "text", "text": bbox_user_prompt},
-                            ],
-                        },
-                    ]
-                    bbox_pass_response = await llm_client.chat(
-                        messages=bbox_pass_messages,
-                        step_config=ocr_config,
-                        response_format={"type": "json_object"},
-                        cancel_check=cancel_check,
-                    )
-                    try:
-                        bbox_payload = _parse_json_object(bbox_pass_response)
-                        regions = _extract_normalized_regions_from_pixel_payload(
-                            bbox_payload,
-                            expected_count=len(text_lines),
-                            image_w=image_w,
-                            image_h=image_h,
-                        )
-                        break
-                    except Exception as bbox_error:
-                        bbox_last_error = bbox_error
-                        if bbox_attempt >= bbox_attempts - 1:
-                            raise
-                        logger.warning(
-                            "[llm_session=%s] Manga OCR bbox attempt %s/%s invalid output: %s",
-                            session_id,
-                            bbox_attempt + 1,
-                            bbox_attempts,
-                            bbox_error,
-                        )
-
-                if regions is None:
-                    raise RuntimeError("Unreachable: bbox retry loop did not produce regions")
-
-                return {
-                    "text": "\n".join(str(region.get("text", "")) for region in regions),
-                    "regions": regions,
-                }
-            except Exception as e:
-                if isinstance(e, OperationCancelledError):
-                    raise
-                if attempt >= attempts - 1:
-                    raise Exception(
-                        f"[llm_session={session_id}] Manga OCR failed after exhausting all attempts."
-                    ) from e
-                logger.warning(
-                    "[llm_session=%s] Manga OCR attempt %s/%s failed: %s",
-                    session_id,
-                    attempt + 1,
-                    attempts,
-                    e,
-                )
-        raise RuntimeError("Unreachable: Manga OCR retry loop did not return")
+        text_lines = await _ocr_manga_image_text_lines(
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            llm_client=llm_client,
+            ocr_config=ocr_config,
+            session_id=session_id,
+            cancel_check=cancel_check,
+        )
+        if not text_lines:
+            return {"text": "", "regions": []}
+        regions = await _detect_manga_text_regions(
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            llm_client=llm_client,
+            ocr_config=ocr_config,
+            normalized_lines=text_lines,
+            session_id=session_id,
+            cancel_check=cancel_check,
+        )
+        return {"text": "\n".join(text_lines), "regions": regions}
 
 
 async def ocr_manga_image(
@@ -294,15 +352,14 @@ async def ocr_manga_image(
     ocr_config: OCRConfig,
     cancel_check: Callable[[], bool] | None = None,
 ) -> str:
-    """Extract plain text from a manga page using vision LLM.
-
-    Returns plain text string (not structured OCR items).
-    """
-    payload = await ocr_manga_image_with_regions(
-        image_bytes=image_bytes,
-        mime_type=mime_type,
-        llm_client=llm_client,
-        ocr_config=ocr_config,
-        cancel_check=cancel_check,
-    )
-    return str(payload.get("text", ""))
+    """Extract plain text from a manga page using a single OCR pass."""
+    with llm_session_scope() as session_id:
+        text_lines = await _ocr_manga_image_text_lines(
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            llm_client=llm_client,
+            ocr_config=ocr_config,
+            session_id=session_id,
+            cancel_check=cancel_check,
+        )
+        return "\n".join(text_lines)
