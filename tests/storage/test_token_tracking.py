@@ -1,6 +1,8 @@
 """Tests for token tracking in DB layer."""
 
 import tempfile
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -123,6 +125,43 @@ class TestEndpointProfileTokenFields:
         assert ep.output_tokens_used == 0
         assert ep.cached_input_tokens_used == 0
         assert ep.uncached_input_tokens_used == 0
+
+
+def test_registry_db_instances_share_file_lock_for_writes():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.db"
+        first = RegistryDB(db_path)
+        second = RegistryDB(db_path)
+        finished = threading.Event()
+        errors: list[Exception] = []
+
+        def insert_from_second() -> None:
+            try:
+                second.insert_endpoint_profile(_make_profile(name="second"))
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+            finally:
+                finished.set()
+
+        lock_acquired = False
+        try:
+            first._lock.acquire()
+            lock_acquired = True
+            worker = threading.Thread(target=insert_from_second)
+            worker.start()
+            time.sleep(0.2)
+            assert not finished.is_set()
+            first._lock.release()
+            lock_acquired = False
+            worker.join(2)
+        finally:
+            if lock_acquired:
+                first._lock.release()
+            first.close()
+            second.close()
+
+        assert errors == []
+        assert finished.is_set()
 
 
 class TestDBTokenTracking:

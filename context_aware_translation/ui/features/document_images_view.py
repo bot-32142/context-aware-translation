@@ -220,6 +220,9 @@ class DocumentImagesView(QWidget):
             return [self.tr("Put text back into images")]
         return []
 
+    def get_navigation_blocking_operations(self) -> list[str]:
+        return []
+
     def request_cancel_running_operations(self, *, include_engine_tasks: bool = False) -> None:
         if include_engine_tasks and self._state is not None and self._state.active_task_id is not None:
             self._cancel()

@@ -214,6 +214,15 @@ class WorkView(QWidget):
             return self._document_view.get_running_operations()
         return []
 
+    def get_navigation_blocking_operations(self) -> list[str]:
+        if self._document_view is not None and self.stack.currentWidget() is self._document_view:
+            get_navigation_blockers = getattr(self._document_view, "get_navigation_blocking_operations", None)
+            if callable(get_navigation_blockers):
+                blockers = get_navigation_blockers()
+                return blockers if isinstance(blockers, list) else []
+            return self._document_view.get_running_operations()
+        return []
+
     def request_cancel_running_operations(self, *, include_engine_tasks: bool = False) -> None:
         if self._document_view is not None and self.stack.currentWidget() is self._document_view:
             self._document_view.request_cancel_running_operations(include_engine_tasks=include_engine_tasks)

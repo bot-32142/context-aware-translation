@@ -7,8 +7,9 @@ import sqlite3
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from functools import wraps
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from context_aware_translation.core.models import (
     has_chunk_description_evidence,
@@ -17,6 +18,7 @@ from context_aware_translation.core.models import (
     normalize_term_type_votes,
 )
 from context_aware_translation.core.term_memory import TermMemoryVersion
+from context_aware_translation.storage.sqlite_locking import get_sqlite_file_lock
 from context_aware_translation.utils.cjk_normalize import normalize_for_matching
 
 
@@ -159,6 +161,42 @@ CREATE TABLE IF NOT EXISTS document_sources (
 """
 
 
+_F = TypeVar("_F", bound=Callable[..., object])
+
+
+def _serialized_write(*, auto_commit_param: str | None = "auto_commit") -> Callable[[_F], _F]:
+    def decorator(func: _F) -> _F:
+        signature = __import__("inspect").signature(func)
+
+        @wraps(func)
+        def wrapper(self: SQLiteBookDB, *args: object, **kwargs: object):
+            auto_commit = True
+            if auto_commit_param is not None:
+                bound = signature.bind(self, *args, **kwargs)
+                bound.apply_defaults()
+                auto_commit = bool(bound.arguments.get(auto_commit_param, True))
+
+            acquired = self._acquire_write_lock(hold_until_transaction_end=not auto_commit)
+            try:
+                return func(self, *args, **kwargs)
+            except Exception:
+                if acquired and not auto_commit:
+                    with contextlib.suppress(Exception):
+                        if self.conn.in_transaction:
+                            self.conn.rollback()
+                    self._release_transaction_write_lock()
+                raise
+            finally:
+                if auto_commit and self._holds_write_lock and not self.conn.in_transaction:
+                    self._release_transaction_write_lock()
+                if acquired and auto_commit:
+                    self._release_temporary_write_lock()
+
+        return wrapper  # type: ignore[return-value]
+
+    return decorator
+
+
 class SQLiteBookDB:
     """
     SQLite-backed term store that owns term, chunk, and link tables.
@@ -169,6 +207,8 @@ class SQLiteBookDB:
         self.schema_version = 6
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
+        self._write_lock = get_sqlite_file_lock(self.db_path)
+        self._holds_write_lock = False
         self._configure_connection()
         self._init_schema()
 
@@ -286,6 +326,23 @@ class SQLiteBookDB:
             elif version > self.schema_version:
                 raise RuntimeError(f"Database schema version {version} is newer than supported {self.schema_version}")
 
+    def _acquire_write_lock(self, *, hold_until_transaction_end: bool) -> bool:
+        if self._holds_write_lock:
+            return False
+        self._write_lock.acquire()
+        if hold_until_transaction_end:
+            self._holds_write_lock = True
+        return True
+
+    def _release_temporary_write_lock(self) -> None:
+        self._write_lock.release()
+
+    def _release_transaction_write_lock(self) -> None:
+        if not self._holds_write_lock:
+            return
+        self._holds_write_lock = False
+        self._write_lock.release()
+
     def refresh(self) -> None:
         """End any implicit read transaction so the next query sees fresh data.
 
@@ -297,14 +354,22 @@ class SQLiteBookDB:
         self.conn.rollback()
 
     def begin(self) -> None:
+        self._acquire_write_lock(hold_until_transaction_end=True)
         self.conn.execute("BEGIN;")
 
     def commit(self) -> None:
-        self.conn.commit()
+        try:
+            self.conn.commit()
+        finally:
+            self._release_transaction_write_lock()
 
     def rollback(self) -> None:
-        self.conn.rollback()
+        try:
+            self.conn.rollback()
+        finally:
+            self._release_transaction_write_lock()
 
+    @_serialized_write()
     def upsert_terms(self, terms: Iterable[TermRecord], auto_commit: bool = True) -> None:
         now = time.time()
         cur = self.conn.cursor()
@@ -458,6 +523,7 @@ class SQLiteBookDB:
         rows = self.conn.execute("SELECT * FROM terms WHERE translated_name IS NULL OR translated_name = ''").fetchall()
         return [self._row_to_term(r) for r in rows]
 
+    @_serialized_write(auto_commit_param=None)
     def update_terms_bulk(
         self,
         keys: list[str],
@@ -502,6 +568,7 @@ class SQLiteBookDB:
         self.conn.commit()
         return cursor.rowcount
 
+    @_serialized_write(auto_commit_param=None)
     def update_term_rows(self, rows: Iterable[TermRowUpdate]) -> int:
         updates = list(rows)
         if not updates:
@@ -527,6 +594,7 @@ class SQLiteBookDB:
             )
         return cursor.rowcount
 
+    @_serialized_write(auto_commit_param=None)
     def delete_terms(self, keys: list[str]) -> int:
         """Delete terms by keys. Returns count of deleted terms."""
         if not keys:
@@ -625,6 +693,7 @@ class SQLiteBookDB:
             return translated_name
         return None
 
+    @_serialized_write()
     def replace_term_memory_versions(
         self,
         term: str,
@@ -705,6 +774,7 @@ class SQLiteBookDB:
         ).fetchall()
         return {row["term"]: self._row_to_term_memory_version(row) for row in rows}
 
+    @_serialized_write()
     def prune_term_memory_from(self, cutoff_chunk_id: int, auto_commit: bool = True) -> int:
         cursor = self.conn.execute(
             "DELETE FROM term_memory_versions WHERE effective_start_chunk >= ? OR latest_evidence_chunk >= ?",
@@ -714,11 +784,13 @@ class SQLiteBookDB:
             self.conn.commit()
         return cursor.rowcount
 
+    @_serialized_write()
     def delete_all_term_memory(self, auto_commit: bool = True) -> None:
         self.conn.execute("DELETE FROM term_memory_versions")
         if auto_commit:
             self.conn.commit()
 
+    @_serialized_write()
     def upsert_chunks(self, chunks: Iterable[ChunkRecord], auto_commit: bool = True) -> list[int]:
         """
         Insert chunk metadata; skip duplicates by hash. Returns list of chunk_ids
@@ -916,6 +988,7 @@ class SQLiteBookDB:
                 result[doc_id].append(chunk)
         return result
 
+    @_serialized_write(auto_commit_param=None)
     def set_source_language(self, source_language: str) -> None:
         """Set the source language in the meta table."""
         cur = self.conn.cursor()
@@ -939,6 +1012,7 @@ class SQLiteBookDB:
         last_noise_filtered_at: float | None = row["last_noise_filtered_at"]
         return last_noise_filtered_at
 
+    @_serialized_write(auto_commit_param=None)
     def set_last_noise_filtered_at(self, timestamp: float) -> None:
         """Set the last_noise_filtered_at checkpoint in the meta table."""
         cur = self.conn.cursor()
@@ -946,6 +1020,9 @@ class SQLiteBookDB:
         self.conn.commit()
 
     def close(self) -> None:
+        with contextlib.suppress(Exception):
+            if self.conn.in_transaction or self._holds_write_lock:
+                self.rollback()
         with contextlib.suppress(Exception):
             self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
         self.conn.close()
@@ -1166,6 +1243,7 @@ class SQLiteBookDB:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    @_serialized_write()
     def insert_document(self, document_type: str, auto_commit: bool = True) -> int:
         """Insert a new document. Returns document_id."""
         now = time.time()
@@ -1182,6 +1260,7 @@ class SQLiteBookDB:
             self.conn.commit()
         return document_id
 
+    @_serialized_write()
     def insert_document_source(
         self,
         document_id: int,
@@ -1320,6 +1399,7 @@ class SQLiteBookDB:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    @_serialized_write()
     def update_source_ocr(self, source_id: int, ocr_json: str, auto_commit: bool = True) -> None:
         """Update source's ocr_json field."""
         self.conn.execute(
@@ -1329,6 +1409,7 @@ class SQLiteBookDB:
         if auto_commit:
             self.conn.commit()
 
+    @_serialized_write()
     def update_source_ocr_completed(self, source_id: int, auto_commit: bool = True) -> None:
         """Mark source's is_ocr_completed=1."""
         self.conn.execute(
@@ -1338,6 +1419,7 @@ class SQLiteBookDB:
         if auto_commit:
             self.conn.commit()
 
+    @_serialized_write()
     def update_source_text_added(self, source_id: int, auto_commit: bool = True) -> None:
         """Mark source's is_text_added=1."""
         self.conn.execute(
@@ -1408,6 +1490,7 @@ class SQLiteBookDB:
         )
         return True
 
+    @_serialized_write()
     def reset_source_ocr(self, source_id: int, auto_commit: bool = True) -> None:
         """Reset OCR flags for a source so it can be re-OCR'd.
 
@@ -1490,6 +1573,7 @@ class SQLiteBookDB:
         ).fetchall()
         return [row["document_id"] for row in rows]
 
+    @_serialized_write()
     def reset_documents_from(self, cutoff_chunk_id: int, auto_commit: bool = True) -> dict:
         """Stack-based document reset: delete all data from cutoff_chunk_id onward.
 
@@ -1548,6 +1632,7 @@ class SQLiteBookDB:
             "deleted_terms": deleted_count,
         }
 
+    @_serialized_write()
     def delete_documents_from(self, document_id: int, auto_commit: bool = True) -> dict:
         """Stack-based document deletion.
 
@@ -1622,6 +1707,7 @@ class SQLiteBookDB:
             "deleted_documents": deleted_documents,
         }
 
+    @_serialized_write()
     def update_all_sources_text_added(self, document_id: int, auto_commit: bool = True) -> None:
         """Mark all sources for a document as is_text_added=1."""
         self.conn.execute(
@@ -1631,6 +1717,7 @@ class SQLiteBookDB:
         if auto_commit:
             self.conn.commit()
 
+    @_serialized_write(auto_commit_param=None)
     def save_reembedded_image(self, document_id: int, element_idx: int, image_bytes: bytes, mime_type: str) -> None:
         """Persist a single reembedded image using atomic JSON update."""
         b64_data = base64.b64encode(image_bytes).decode("utf-8")

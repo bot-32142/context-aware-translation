@@ -54,6 +54,7 @@ class GlossaryTranslationHandler:
         return frozenset(
             {
                 ResourceClaim("glossary_state", book_id, "*", ClaimMode.WRITE_EXCLUSIVE),
+                ResourceClaim("doc", book_id, "*", ClaimMode.WRITE_EXCLUSIVE),
             }
         )
 

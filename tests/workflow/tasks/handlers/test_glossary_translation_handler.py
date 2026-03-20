@@ -4,6 +4,7 @@ import time
 from unittest.mock import MagicMock, patch
 
 from context_aware_translation.storage.repositories.task_store import TaskRecord
+from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 from context_aware_translation.workflow.tasks.handlers.glossary_translation import GlossaryTranslationHandler
 
 
@@ -33,6 +34,13 @@ def _make_record(
 
 
 handler = GlossaryTranslationHandler()
+
+
+def test_claims_include_glossary_and_doc_write_locks():
+    record = _make_record()
+    claims = handler.claims(record, {})
+    assert ResourceClaim("glossary_state", "book-1", "*", ClaimMode.WRITE_EXCLUSIVE) in claims
+    assert ResourceClaim("doc", "book-1", "*", ClaimMode.WRITE_EXCLUSIVE) in claims
 
 
 def test_validate_submit_denied_when_only_ignored_terms(tmp_path):

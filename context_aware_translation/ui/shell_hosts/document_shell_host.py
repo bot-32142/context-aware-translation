@@ -125,6 +125,16 @@ class DocumentShellHost(HybridShellHost):
         running = get_running_operations()
         return running if isinstance(running, list) else []
 
+    def get_navigation_blocking_operations(self) -> list[str]:
+        current_widget = self.content_stack.currentWidget()
+        if current_widget is None:
+            return []
+        get_navigation_blockers = getattr(current_widget, "get_navigation_blocking_operations", None)
+        if callable(get_navigation_blockers):
+            blockers = get_navigation_blockers()
+            return blockers if isinstance(blockers, list) else []
+        return self.get_running_operations()
+
     def request_cancel_running_operations(self, *, include_engine_tasks: bool = False) -> None:
         current_widget = self.content_stack.currentWidget()
         if current_widget is None:

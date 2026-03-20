@@ -137,6 +137,7 @@ _WIZARD_MODEL_CATALOG: dict[ProviderKind, tuple[WizardModelTemplate, ...]] = {
             "Gemini 3 Flash Preview",
             "gemini-3-flash-preview",
             "https://generativelanguage.googleapis.com/v1beta/openai/",
+            timeout=300,
         ),
         WizardModelTemplate(
             ProviderKind.GEMINI,

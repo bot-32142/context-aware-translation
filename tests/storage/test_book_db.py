@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 import time
 from collections.abc import Generator
 from pathlib import Path
@@ -140,6 +141,58 @@ def test_term_db_init(temp_db: SQLiteBookDB):
     assert meta is not None
     assert meta["schema_version"] == temp_db.schema_version
     assert temp_db.schema_version == 6
+
+
+def test_write_lock_serializes_writers_across_connections(tmp_path: Path) -> None:
+    db_path = tmp_path / "locked.db"
+    SQLiteBookDB(db_path).close()
+
+    started = threading.Event()
+    release = threading.Event()
+    second_finished = threading.Event()
+    errors: list[Exception] = []
+
+    def writer_one() -> None:
+        db = SQLiteBookDB(db_path)
+        try:
+            db.begin()
+            db.upsert_chunks([ChunkRecord(chunk_id=1, hash="chunk-1", text="hello")], auto_commit=False)
+            started.set()
+            assert release.wait(2)
+            db.commit()
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+        finally:
+            db.close()
+
+    def writer_two() -> None:
+        try:
+            assert started.wait(2)
+            db = SQLiteBookDB(db_path)
+            try:
+                db.set_source_language("Japanese")
+            finally:
+                db.close()
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+        finally:
+            second_finished.set()
+
+    first = threading.Thread(target=writer_one)
+    second = threading.Thread(target=writer_two)
+    first.start()
+    assert started.wait(2)
+    second.start()
+
+    time.sleep(0.2)
+    assert not second_finished.is_set()
+
+    release.set()
+    first.join(2)
+    second.join(2)
+
+    assert errors == []
+    assert second_finished.is_set()
 
 
 def test_fresh_db_term_rows_default_term_type_to_other(temp_db: SQLiteBookDB):

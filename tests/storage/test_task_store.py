@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 
 import pytest
@@ -62,6 +63,42 @@ def test_get_returns_correct_record_after_create(tmp_path):
     assert fetched.document_ids_json == "[1,2,3]"
     assert fetched.payload_json == '{"key":"val"}'
     assert fetched.phase == "prepare"
+
+
+def test_task_store_instances_share_file_lock_for_writes(tmp_path):
+    db_path = tmp_path / "tasks.db"
+    first_store = TaskStore(db_path)
+    second_store = TaskStore(db_path)
+    finished = threading.Event()
+    errors: list[Exception] = []
+
+    def create_from_second_store() -> None:
+        try:
+            second_store.create(book_id="book-2", task_type="translation")
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+        finally:
+            finished.set()
+
+    lock_acquired = False
+    try:
+        first_store._lock.acquire()
+        lock_acquired = True
+        worker = threading.Thread(target=create_from_second_store)
+        worker.start()
+        time.sleep(0.2)
+        assert not finished.is_set()
+        first_store._lock.release()
+        lock_acquired = False
+        worker.join(2)
+    finally:
+        if lock_acquired:
+            first_store._lock.release()
+        first_store.close()
+        second_store.close()
+
+    assert errors == []
+    assert finished.is_set()
 
 
 def test_update_changes_fields_and_bumps_updated_at(tmp_path):

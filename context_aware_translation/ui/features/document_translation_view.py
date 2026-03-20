@@ -315,6 +315,9 @@ class DocumentTranslationView(QWidget):
             return []
         return [self._state.active_task_id]
 
+    def get_navigation_blocking_operations(self) -> list[str]:
+        return []
+
     def _apply_state(self, state: DocumentTranslationState, *, previous_unit_id: str | None) -> None:
         self._prune_drafts(state)
         self._state = state

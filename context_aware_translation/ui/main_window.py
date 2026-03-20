@@ -43,6 +43,7 @@ from context_aware_translation.ui.window_controllers import (
     ProjectSessionManager,
     QueueDockController,
     cleanup_widget,
+    navigation_blockers_for,
     request_cancel_for,
     running_operations_for,
 )
@@ -255,10 +256,10 @@ class MainWindow(QMainWindow):
         cleanup_widget(widget)
 
     def _get_book_running_operations(self) -> list[str]:
-        """Return running operations in the current project shell."""
+        """Return navigation-blocking operations in the current project shell."""
         if getattr(self, "_is_closing", False):
             return []
-        return MainWindow._running_operations_for(self._current_project_widget())
+        return navigation_blockers_for(self._current_project_widget())
 
     def _warn_running_operations(self, operations: list[str] | None = None) -> bool:
         """Show a warning if operations are running. Returns True if user wants to proceed."""

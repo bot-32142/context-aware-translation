@@ -558,6 +558,13 @@ class DocumentWorkspaceView(QWidget):
     def get_running_operations(self) -> list[str]:
         return self.shell_host.get_running_operations()
 
+    def get_navigation_blocking_operations(self) -> list[str]:
+        get_navigation_blockers = getattr(self.shell_host, "get_navigation_blocking_operations", None)
+        if callable(get_navigation_blockers):
+            blockers = get_navigation_blockers()
+            return blockers if isinstance(blockers, list) else []
+        return self.shell_host.get_running_operations()
+
     def request_cancel_running_operations(self, *, include_engine_tasks: bool = False) -> None:
         self.shell_host.request_cancel_running_operations(include_engine_tasks=include_engine_tasks)
 

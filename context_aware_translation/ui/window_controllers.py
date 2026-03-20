@@ -15,6 +15,14 @@ def running_operations_for(widget: object) -> list[str]:
     return running if isinstance(running, list) else []
 
 
+def navigation_blockers_for(widget: object) -> list[str]:
+    get_navigation_blockers = getattr(widget, "get_navigation_blocking_operations", None)
+    if callable(get_navigation_blockers):
+        blockers = get_navigation_blockers()
+        return blockers if isinstance(blockers, list) else []
+    return running_operations_for(widget)
+
+
 def request_cancel_for(widget: object, *, include_engine_tasks: bool = False) -> None:
     request_cancel = getattr(widget, "request_cancel_running_operations", None)
     if callable(request_cancel):
