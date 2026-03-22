@@ -402,7 +402,9 @@ class AppSettingsPane(QWidget):
             return
         title = self.tr("Delete Connection") if len(connections) == 1 else self.tr("Delete Connections")
         message = (
-            self.tr("Delete the selected connection? Existing profiles or projects may stop working until setup is fixed.")
+            self.tr(
+                "Delete the selected connection? Existing profiles or projects may stop working until setup is fixed."
+            )
             if len(connections) == 1
             else self.tr(
                 "Delete the selected connections? Existing profiles or projects may stop working until setup is fixed."

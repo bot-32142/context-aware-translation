@@ -30,6 +30,7 @@ def _openai_supports_reasoning_effort_none(model: str) -> bool:
     normalized = model.strip().lower()
     return normalized.startswith("o") or normalized.startswith("gpt-5")
 
+
 # Suppress OpenAI library's DEBUG/INFO/WARNING logging to avoid duplicate logs
 # Our custom logger already logs all necessary information
 logging.getLogger("openai").setLevel(logging.ERROR)

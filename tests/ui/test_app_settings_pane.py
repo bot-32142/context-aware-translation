@@ -298,7 +298,9 @@ def test_app_settings_pane_supports_multi_select_connection_delete():
 
     _select_rows(view.connections_table, [0, 1])
 
-    duplicate_action = next(button for button in view.viewmodel.action_buttons if button["action"] == "duplicate_connection")
+    duplicate_action = next(
+        button for button in view.viewmodel.action_buttons if button["action"] == "duplicate_connection"
+    )
     delete_action = next(button for button in view.viewmodel.action_buttons if button["action"] == "delete_connection")
     assert duplicate_action["enabled"] is False
     assert delete_action["enabled"] is True
@@ -319,8 +321,12 @@ def test_app_settings_pane_supports_multi_select_profile_delete():
     view._on_tab_requested("profiles")
     _select_rows(view.profiles_table, [0, 1])
 
-    duplicate_action = next(button for button in view.viewmodel.action_buttons if button["action"] == "duplicate_profile")
-    default_action = next(button for button in view.viewmodel.action_buttons if button["action"] == "set_default_profile")
+    duplicate_action = next(
+        button for button in view.viewmodel.action_buttons if button["action"] == "duplicate_profile"
+    )
+    default_action = next(
+        button for button in view.viewmodel.action_buttons if button["action"] == "set_default_profile"
+    )
     delete_action = next(button for button in view.viewmodel.action_buttons if button["action"] == "delete_profile")
     assert duplicate_action["enabled"] is False
     assert default_action["enabled"] is False

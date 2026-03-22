@@ -276,7 +276,9 @@ class ConnectionDraftForm(QWidget):
             self.provider_combo.setCurrentIndex(index)
         self.api_key_edit.setText(draft.api_key or "")
         if preserve_api_key_placeholder and draft.api_key is None:
-            self.api_key_edit.setPlaceholderText(self.tr("Stored API key is hidden. Leave blank to keep it or paste a new key."))
+            self.api_key_edit.setPlaceholderText(
+                self.tr("Stored API key is hidden. Leave blank to keep it or paste a new key.")
+            )
         self.description_edit.setPlainText(draft.description or "")
         self.base_url_edit.setText(draft.base_url or "")
         self.default_model_edit.setText(draft.default_model or "")
@@ -590,8 +592,12 @@ class SetupWizardDialog(QDialog):
             return ""
         translations = {
             "Good for image text reading and image editing.": self.tr("Good for image text reading and image editing."),
-            "General-purpose text and image-capable provider.": self.tr("General-purpose text and image-capable provider."),
-            "Low-cost text translation and context building.": self.tr("Low-cost text translation and context building."),
+            "General-purpose text and image-capable provider.": self.tr(
+                "General-purpose text and image-capable provider."
+            ),
+            "Low-cost text translation and context building.": self.tr(
+                "Low-cost text translation and context building."
+            ),
             "Text translation and image understanding.": self.tr("Text translation and image understanding."),
         }
         return translations.get(text, text)
