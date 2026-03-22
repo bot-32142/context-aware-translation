@@ -28,6 +28,12 @@ def _strip_internal_endpoint_profile_kwargs(kwargs: dict[str, Any]) -> dict[str,
     return {str(key): value for key, value in kwargs.items() if str(key) not in _INTERNAL_ENDPOINT_PROFILE_KWARGS}
 
 
+def _explicit_llm_fields(data: dict[str, Any], config_class: type[LLMConfig]) -> set[str]:
+    valid_field_names = {field_info.name for field_info in fields(config_class)}
+    valid_field_names.discard("_explicit_fields")
+    return {str(key) for key in data if str(key) in valid_field_names}
+
+
 @dataclass
 class EndpointProfile:
     """
@@ -93,6 +99,8 @@ class LLMConfig:
     endpoint_profile: str | None = None
     # Additional kwargs for LLM API calls (merged with passed kwargs, passed kwargs take precedence)
     kwargs: dict[str, Any] = field(default_factory=dict)
+    # Track which fields were explicitly present in persisted payloads.
+    _explicit_fields: set[str] = field(default_factory=set, repr=False, compare=False)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary for JSON storage."""
@@ -112,8 +120,10 @@ class LLMConfig:
     @classmethod
     def from_dict(cls: type[T], data: dict[str, Any]) -> T:
         """Create from dictionary, ignoring unknown keys for forward/backward compatibility."""
-        valid_field_names = {f.name for f in fields(cls)}
+        valid_field_names = {field_info.name for field_info in fields(cls)}
+        valid_field_names.discard("_explicit_fields")
         filtered_data = {k: v for k, v in data.items() if k in valid_field_names}
+        filtered_data["_explicit_fields"] = _explicit_llm_fields(data, cls)
         return cls(**filtered_data)
 
 
@@ -140,16 +150,17 @@ class ExtractorConfig(LLMConfig):
     def from_dict(cls, data: dict[str, Any]) -> ExtractorConfig:
         """Create from dictionary."""
         return cls(
-            api_key=data.get("api_key", ""),
-            base_url=data.get("base_url", ""),
+            api_key=data.get("api_key"),
+            base_url=data.get("base_url"),
             api_version=data.get("api_version"),
             timeout=data.get("timeout", 60),
             max_retries=data.get("max_retries", 3),
-            model=data.get("model", ""),
+            model=data.get("model"),
             temperature=data.get("temperature", 0.0),
             concurrency=data.get("concurrency", 5),
             endpoint_profile=data.get("endpoint_profile"),
             kwargs=data.get("kwargs", {}),
+            _explicit_fields=_explicit_llm_fields(data, cls),
             max_gleaning=data.get("max_gleaning", 3),
             max_term_name_length=data.get("max_term_name_length", 200),
         )
@@ -176,16 +187,17 @@ class SummarizorConfig(LLMConfig):
     def from_dict(cls, data: dict[str, Any]) -> SummarizorConfig:
         """Create from dictionary."""
         return cls(
-            api_key=data.get("api_key", ""),
-            base_url=data.get("base_url", ""),
+            api_key=data.get("api_key"),
+            base_url=data.get("base_url"),
             api_version=data.get("api_version"),
             timeout=data.get("timeout", 60),
             max_retries=data.get("max_retries", 3),
-            model=data.get("model", ""),
+            model=data.get("model"),
             temperature=data.get("temperature", 0.0),
             concurrency=data.get("concurrency", 5),
             endpoint_profile=data.get("endpoint_profile"),
             kwargs=data.get("kwargs", {}),
+            _explicit_fields=_explicit_llm_fields(data, cls),
             max_term_description_length=data.get("max_term_description_length", 1200),
         )
 
@@ -217,16 +229,17 @@ class TranslatorConfig(LLMConfig):
     def from_dict(cls, data: dict[str, Any]) -> TranslatorConfig:
         """Create from dictionary."""
         return cls(
-            api_key=data.get("api_key", ""),
-            base_url=data.get("base_url", ""),
+            api_key=data.get("api_key"),
+            base_url=data.get("base_url"),
             api_version=data.get("api_version"),
             timeout=data.get("timeout", 60),
             max_retries=data.get("max_retries", 3),
-            model=data.get("model", ""),
+            model=data.get("model"),
             temperature=data.get("temperature", 0.0),
             concurrency=data.get("concurrency", 5),
             endpoint_profile=data.get("endpoint_profile"),
             kwargs=data.get("kwargs", {}),
+            _explicit_fields=_explicit_llm_fields(data, cls),
             enable_polish=data.get("enable_polish", True),
             num_of_chunks_per_llm_call=data.get("num_of_chunks_per_llm_call", 3),
             max_tokens_per_llm_call=data.get("max_tokens_per_llm_call", 4000),
@@ -305,16 +318,17 @@ class MangaTranslatorConfig(LLMConfig):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> MangaTranslatorConfig:
         return cls(
-            api_key=data.get("api_key", ""),
-            base_url=data.get("base_url", ""),
+            api_key=data.get("api_key"),
+            base_url=data.get("base_url"),
             api_version=data.get("api_version"),
             timeout=data.get("timeout", 300),
             max_retries=data.get("max_retries", 3),
-            model=data.get("model", ""),
+            model=data.get("model"),
             temperature=data.get("temperature", 0.0),
             concurrency=data.get("concurrency", 5),
             endpoint_profile=data.get("endpoint_profile"),
             kwargs=data.get("kwargs", {}),
+            _explicit_fields=_explicit_llm_fields(data, cls),
         )
 
 
@@ -352,16 +366,17 @@ class ImageReembeddingConfig(LLMConfig):
     def from_dict(cls, data: dict[str, Any]) -> ImageReembeddingConfig:
         """Create from dictionary."""
         return cls(
-            api_key=data.get("api_key", ""),
-            base_url=data.get("base_url", ""),
+            api_key=data.get("api_key"),
+            base_url=data.get("base_url"),
             api_version=data.get("api_version"),
             timeout=data.get("timeout", 60),
             max_retries=data.get("max_retries", 3),
-            model=data.get("model", ""),
+            model=data.get("model"),
             temperature=data.get("temperature", 0.0),
             concurrency=data.get("concurrency", 5),
             endpoint_profile=data.get("endpoint_profile"),
             kwargs=data.get("kwargs", {}),
+            _explicit_fields=_explicit_llm_fields(data, cls),
             backend=data.get("backend", ImageBackend.GEMINI),
         )
 
@@ -391,16 +406,17 @@ class OCRConfig(LLMConfig):
     def from_dict(cls, data: dict[str, Any]) -> OCRConfig:
         """Create from dictionary."""
         return cls(
-            api_key=data.get("api_key", ""),
-            base_url=data.get("base_url", ""),
+            api_key=data.get("api_key"),
+            base_url=data.get("base_url"),
             api_version=data.get("api_version"),
             timeout=data.get("timeout", 60),
             max_retries=data.get("max_retries", 3),
-            model=data.get("model", ""),
+            model=data.get("model"),
             temperature=data.get("temperature", 0.0),
             concurrency=data.get("concurrency", 5),
             endpoint_profile=data.get("endpoint_profile"),
             kwargs=data.get("kwargs", {}),
+            _explicit_fields=_explicit_llm_fields(data, cls),
             strip_llm_artifacts=data.get("strip_llm_artifacts", True),
             ocr_dpi=data.get("ocr_dpi", 150),
         )
@@ -552,18 +568,21 @@ def _resolve_with_profile(
 
     profile = profiles[config.endpoint_profile]
 
-    # Create new LLMConfig with profile as base, config values override
+    explicit_fields = config._explicit_fields if hasattr(config, "_explicit_fields") else set()
+
+    # Create new LLMConfig with profile as base, config values override.
     return LLMConfig(
         api_key=config.api_key if config.api_key is not None else profile.api_key,
         base_url=config.base_url if config.base_url is not None else profile.base_url,
         api_version=config.api_version if config.api_version is not None else profile.api_version,
-        timeout=config.timeout if config.timeout != 120.0 else profile.timeout,
-        max_retries=config.max_retries if config.max_retries != 3 else profile.max_retries,
+        timeout=config.timeout if "timeout" in explicit_fields else profile.timeout,
+        max_retries=config.max_retries if "max_retries" in explicit_fields else profile.max_retries,
         model=config.model if config.model is not None else profile.model,
-        temperature=config.temperature if config.temperature != 0.0 else profile.temperature,
-        concurrency=config.concurrency if config.concurrency != 5 else profile.concurrency,
+        temperature=config.temperature if "temperature" in explicit_fields else profile.temperature,
+        concurrency=config.concurrency if "concurrency" in explicit_fields else profile.concurrency,
         kwargs=_strip_internal_endpoint_profile_kwargs({**profile.kwargs, **config.kwargs}),
         endpoint_profile=config.endpoint_profile,  # Preserve for token tracking
+        _explicit_fields=set(explicit_fields),
     )
 
 

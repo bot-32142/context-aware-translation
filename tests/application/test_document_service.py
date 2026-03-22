@@ -16,7 +16,7 @@ from context_aware_translation.application.contracts.projects import CreateProje
 from context_aware_translation.application.errors import ApplicationError, ApplicationErrorCode
 from context_aware_translation.application.events import DocumentInvalidatedEvent
 from context_aware_translation.storage.repositories.document_repository import DocumentRepository
-from context_aware_translation.storage.schema.book_db import ChunkRecord, SQLiteBookDB
+from context_aware_translation.storage.schema.book_db import ChunkRecord, SQLiteBookDB, TranslationChunkRecord
 
 
 def _ensure_qt_app() -> QApplication:
@@ -420,6 +420,79 @@ def test_document_service_translation_run_blocker_prefers_translation_context(tm
         assert state.run_action.blocker is not None
         assert state.run_action.blocker.target is not None
         assert state.run_action.blocker.target.kind == "app_setup"
+    finally:
+        context.close()
+
+
+def test_document_service_get_images_prefers_translation_running_message_on_claim_conflict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        project = context.services.projects.create_project(
+            CreateProjectRequest(name="Manga Images While Translating", target_language="English")
+        )
+        project_id = project.project.project_id
+        _configure_project_for_ocr(context, project_id)
+
+        db, repo = _open_repo(context, project_id)
+        try:
+            document_id = repo.insert_document("manga")
+            repo.insert_document_source(
+                document_id,
+                0,
+                "image",
+                binary_content=_tiny_png_bytes(),
+                mime_type="image/png",
+                ocr_json=json.dumps({"text": "jp line"}, ensure_ascii=False),
+                is_ocr_completed=True,
+            )
+            db.upsert_chunks(
+                [
+                    TranslationChunkRecord(
+                        chunk_id=1,
+                        hash="chunk-1",
+                        text="jp line",
+                        translation="en line",
+                        document_id=document_id,
+                        is_extracted=True,
+                        is_summarized=True,
+                        is_translated=True,
+                    )
+                ]
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        original_preflight = context.runtime.task_engine.preflight
+
+        def _preflight(task_type, book_id, params, action):  # noqa: ANN001
+            if task_type == "image_reembedding":
+                from context_aware_translation.workflow.tasks.models import Decision
+
+                return Decision(allowed=False, code="blocked_claim_conflict", reason="Task is already running")
+            return original_preflight(task_type, book_id, params, action)
+
+        monkeypatch.setattr(context.runtime.task_engine, "preflight", _preflight, raising=True)
+        monkeypatch.setattr(
+            context.services.document,
+            "_active_translation_task",
+            lambda _project_id, _document_id: object(),
+            raising=True,
+        )
+
+        state = context.services.document.get_images(project_id, document_id)
+
+        assert not state.toolbar.can_run_pending
+        assert state.toolbar.run_pending_blocker is not None
+        assert state.toolbar.run_pending_blocker.message == "Translation is already running for this document."
+        assert state.toolbar.force_all_blocker is not None
+        assert state.toolbar.force_all_blocker.message == "Translation is already running for this document."
+        assert state.assets
+        assert state.assets[0].run_blocker is not None
+        assert state.assets[0].run_blocker.message == "Translation is already running for this document."
     finally:
         context.close()
 

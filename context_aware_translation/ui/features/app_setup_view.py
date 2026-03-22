@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -49,6 +48,7 @@ from context_aware_translation.application.contracts.common import (
 from context_aware_translation.application.services.app_setup import AppSetupService
 from context_aware_translation.ui.constants import LANGUAGES
 from context_aware_translation.ui.features.workflow_profile_editor import workflow_step_label_from_text
+from context_aware_translation.ui.json_utils import parse_json_object_text
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
 from context_aware_translation.ui.widgets.table_support import (
@@ -336,11 +336,9 @@ class ConnectionDraftForm(QWidget):
             return False, self.tr("API key is required.")
         if draft.custom_parameters_json:
             try:
-                parsed = json.loads(draft.custom_parameters_json)
-            except json.JSONDecodeError:
-                return False, self.tr("Custom parameters must be valid JSON.")
-            if not isinstance(parsed, dict):
-                return False, self.tr("Custom parameters must be a JSON object.")
+                parse_json_object_text(draft.custom_parameters_json, tr=self.tr)
+            except ValueError as exc:
+                return False, str(exc)
         if draft.provider is ProviderKind.OPENAI_COMPATIBLE and (not draft.base_url or not draft.default_model):
             return False, self.tr("Custom connections require base URL and default model.")
         return True, None

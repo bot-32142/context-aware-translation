@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Any
 
 from pydantic import Field
 
@@ -89,7 +90,7 @@ class WorkflowStepRoute(ContractModel):
     connection_id: str | None = None
     connection_label: str | None = None
     model: str | None = None
-    step_config: dict[str, bool | int | float | str | None] = Field(default_factory=dict)
+    step_config: dict[str, Any] = Field(default_factory=dict)
 
 
 class WorkflowProfileDetail(ContractModel):

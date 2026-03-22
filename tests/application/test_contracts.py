@@ -257,13 +257,33 @@ def test_recommended_workflow_profile_uses_ranked_step_rules() -> None:
     assert route_map[WorkflowStepId.EXTRACTOR].model == "deepseek-chat"
     assert route_map[WorkflowStepId.SUMMARIZER].model == "deepseek-chat"
     assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].model == "gemini-2.5-flash"
+    assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
     assert route_map[WorkflowStepId.TRANSLATOR].model == "gemini-2.5-pro"
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
     assert route_map[WorkflowStepId.REVIEWER].model == "gemini-2.5-pro"
     assert route_map[WorkflowStepId.OCR].model == "gemini-3-flash-preview"
+    assert route_map[WorkflowStepId.OCR].step_config["kwargs"] == {"reasoning_effort": "none"}
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].model == "gemini-3.1-flash-image-preview"
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].step_config["backend"] == "gemini"
+    assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].step_config["kwargs"] == {"reasoning_effort": "none"}
     assert route_map[WorkflowStepId.MANGA_TRANSLATOR].model == "gemini-2.5-pro"
+    assert route_map[WorkflowStepId.MANGA_TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
     assert route_map[WorkflowStepId.TRANSLATOR_BATCH].model == "gemini-2.5-pro"
+    assert route_map[WorkflowStepId.TRANSLATOR_BATCH].step_config["thinking_mode"] == "low"
+
+
+def test_recommended_workflow_profile_skips_unsupported_openai_ocr_reasoning_none() -> None:
+    detail = recommended_workflow_profile_from_drafts(
+        [ConnectionDraft(display_name="OpenAI", provider=ProviderKind.OPENAI, api_key="okey")],
+        name="Wizard Profile",
+        target_language="English",
+    )
+
+    route_map = {route.step_id: route for route in detail.routes}
+    assert route_map[WorkflowStepId.OCR].model == "gpt-4.1-mini"
+    assert route_map[WorkflowStepId.OCR].step_config == {}
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
+    assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].step_config == {"backend": "openai"}
 
 
 def test_terms_queue_and_errors_expose_ui_safe_contracts() -> None:
@@ -332,11 +352,16 @@ def test_workflow_profile_round_trips_step_advanced_config() -> None:
             "endpoint_profile": "conn-gemini",
             "ocr_dpi": 200,
             "strip_llm_artifacts": False,
+            "kwargs": {"reasoning_effort": "none"},
         },
         "translator_config": {
             "endpoint_profile": "conn-openai",
+            "temperature": 0.4,
+            "timeout": 180,
+            "concurrency": 2,
             "max_tokens_per_llm_call": 6000,
             "chunk_size": 1200,
+            "kwargs": {"reasoning_effort": "low"},
         },
         "image_reembedding_config": {
             "endpoint_profile": "conn-gemini",
@@ -370,6 +395,17 @@ def test_workflow_profile_round_trips_step_advanced_config() -> None:
     assert ocr_route.step_config == {
         "ocr_dpi": 200,
         "strip_llm_artifacts": False,
+        "kwargs": {"reasoning_effort": "none"},
+    }
+
+    translator_route = next(route for route in detail.routes if route.step_id is WorkflowStepId.TRANSLATOR)
+    assert translator_route.step_config == {
+        "temperature": 0.4,
+        "timeout": 180,
+        "concurrency": 2,
+        "max_tokens_per_llm_call": 6000,
+        "chunk_size": 1200,
+        "kwargs": {"reasoning_effort": "low"},
     }
 
     batch_route = next(route for route in detail.routes if route.step_id is WorkflowStepId.TRANSLATOR_BATCH)
@@ -384,7 +420,12 @@ def test_workflow_profile_round_trips_step_advanced_config() -> None:
     payload = build_workflow_profile_payload(base_config=None, profile=detail)
     assert payload["ocr_config"]["ocr_dpi"] == 200
     assert payload["ocr_config"]["strip_llm_artifacts"] is False
+    assert payload["ocr_config"]["kwargs"] == {"reasoning_effort": "none"}
+    assert payload["translator_config"]["temperature"] == 0.4
+    assert payload["translator_config"]["timeout"] == 180
+    assert payload["translator_config"]["concurrency"] == 2
     assert payload["translator_config"]["chunk_size"] == 1200
+    assert payload["translator_config"]["kwargs"] == {"reasoning_effort": "low"}
     assert payload["image_reembedding_config"]["backend"] == "openai"
     assert payload["translator_batch_config"]["model"] == "gemini-2.5-flash"
     assert payload["translator_batch_config"]["thinking_mode"] == "medium"

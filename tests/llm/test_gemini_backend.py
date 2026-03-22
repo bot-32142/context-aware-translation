@@ -87,3 +87,36 @@ async def test_edit_image_reconciles_unattributed_total_tokens_into_reasoning() 
     )
     assert token_usage["reasoning_tokens"] == 70
     assert accounted == token_usage["total_tokens"] == 200
+
+
+@pytest.mark.asyncio
+async def test_edit_image_disables_gemini_thinking_when_reasoning_effort_none() -> None:
+    usage_meta = SimpleNamespace(
+        prompt_token_count=10,
+        cached_content_token_count=0,
+        candidates_token_count=5,
+        thoughts_token_count=0,
+        tool_use_prompt_token_count=0,
+        total_token_count=15,
+    )
+    mock_client = MagicMock()
+    mock_client.models.generate_content.return_value = _build_response(usage_meta)
+
+    with patch(
+        "context_aware_translation.llm.image_backends.gemini_backend.genai.Client",
+        return_value=mock_client,
+    ):
+        generator = GeminiImageGenerator(
+            ImageReembeddingConfig(
+                api_key="test-key",
+                model="gemini-2.0-flash-exp-image-generation",
+                kwargs={"reasoning_effort": "none"},
+            )
+        )
+
+    await generator.edit_image(b"fake-bytes", "image/png", [("原文", "translated text")])
+
+    config = mock_client.models.generate_content.call_args.kwargs["config"]
+    assert config.response_modalities == ["TEXT", "IMAGE"]
+    assert config.thinking_config is not None
+    assert config.thinking_config.thinking_budget == 0

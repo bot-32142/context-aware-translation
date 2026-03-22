@@ -80,6 +80,34 @@ _HIDDEN_CONNECTION_KWARG_KEYS = frozenset(
     }
 )
 
+_WIZARD_REASONING_EFFORT_BY_STEP: dict[WorkflowStepId, str] = {
+    WorkflowStepId.GLOSSARY_TRANSLATOR: "low",
+    WorkflowStepId.TRANSLATOR: "low",
+    WorkflowStepId.OCR: "none",
+    WorkflowStepId.IMAGE_REEMBEDDING: "none",
+    WorkflowStepId.MANGA_TRANSLATOR: "low",
+}
+
+
+def _openai_supports_reasoning_effort_none(model: str | None) -> bool:
+    normalized = str(model or "").strip().lower()
+    return normalized.startswith("o") or normalized.startswith("gpt-5")
+
+
+def _wizard_reasoning_kwargs(step_id: WorkflowStepId, selected: ConnectionDraft | None) -> dict[str, str] | None:
+    if selected is None:
+        return None
+    reasoning_effort = _WIZARD_REASONING_EFFORT_BY_STEP.get(step_id)
+    if reasoning_effort is None:
+        return None
+    if (
+        selected.provider is ProviderKind.OPENAI
+        and reasoning_effort == "none"
+        and not _openai_supports_reasoning_effort_none(selected.default_model)
+    ):
+        return None
+    return {"reasoning_effort": reasoning_effort}
+
 _WORKFLOW_STEP_LAYOUT: tuple[tuple[WorkflowStepId, str, str | None], ...] = (
     (WorkflowStepId.EXTRACTOR, "Extractor", "extractor_config"),
     (WorkflowStepId.SUMMARIZER, "Summarizer", "summarizor_config"),
@@ -520,7 +548,7 @@ def read_source_profile_id(config: dict[str, Any]) -> str | None:
     return str(value) if isinstance(value, str) and value.strip() else None
 
 
-def _step_payload_without_routing(step_payload: dict[str, Any]) -> dict[str, bool | int | float | str | None]:
+def _step_payload_without_routing(step_payload: dict[str, Any]) -> dict[str, Any]:
     return {
         str(key): value
         for key, value in step_payload.items()
@@ -567,8 +595,8 @@ def _build_batch_route(step_label: str, config: dict[str, Any]) -> WorkflowStepR
     )
 
 
-def _build_standard_step_payload(route: WorkflowStepRoute) -> dict[str, bool | int | float | str | None]:
-    payload: dict[str, bool | int | float | str | None] = {
+def _build_standard_step_payload(route: WorkflowStepRoute) -> dict[str, Any]:
+    payload: dict[str, Any] = {
         str(key): value for key, value in route.step_config.items() if value is not None
     }
     if route.connection_id:
@@ -582,8 +610,8 @@ def _build_standard_step_payload(route: WorkflowStepRoute) -> dict[str, bool | i
     return payload
 
 
-def _build_batch_step_payload(route: WorkflowStepRoute) -> dict[str, bool | int | float | str | None]:
-    payload: dict[str, bool | int | float | str | None] = {
+def _build_batch_step_payload(route: WorkflowStepRoute) -> dict[str, Any]:
+    payload: dict[str, Any] = {
         str(key): value for key, value in route.step_config.items() if value is not None
     }
     if route.model:
@@ -745,7 +773,7 @@ def _recommended_step_route(
                 "provider": "gemini_ai_studio",
                 "api_key": gemini_batch.api_key or "",
                 "batch_size": 100,
-                "thinking_mode": "auto",
+                "thinking_mode": "low",
             },
         )
 
@@ -755,7 +783,10 @@ def _recommended_step_route(
         if selected is not None:
             break
 
-    step_config: dict[str, bool | int | float | str | None] = {}
+    step_config: dict[str, Any] = {}
+    reasoning_kwargs = _wizard_reasoning_kwargs(step_id, selected)
+    if reasoning_kwargs is not None:
+        step_config["kwargs"] = reasoning_kwargs
     if step_id is WorkflowStepId.IMAGE_REEMBEDDING and selected is not None:
         if selected.provider is ProviderKind.GEMINI:
             step_config["backend"] = "gemini"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -332,12 +333,18 @@ def _order_plans_by_dependencies(plans: list[MangaCropPlan]) -> list[MangaCropPl
     return ordered
 
 
-def parse_regions_payload(
-    raw_regions: object,
+def parse_regions_from_ocr_json(
+    ocr_json: str | None,
     *,
     page_w: int,
     page_h: int,
 ) -> list[TextRegion]:
+    if not ocr_json:
+        return []
+    payload = json.loads(ocr_json)
+    if not isinstance(payload, dict):
+        return []
+    raw_regions = payload.get("regions")
     if not isinstance(raw_regions, list) or not raw_regions:
         return []
 

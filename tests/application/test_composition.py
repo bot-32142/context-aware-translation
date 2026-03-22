@@ -226,6 +226,12 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
         assert any(profile.name == "Team Default" for profile in detail.shared_profiles)
         assert created_profile.is_default is True
         assert created_profile.config["translation_target_language"] == "Japanese"
+        assert created_profile.config["glossary_config"]["kwargs"] == {"reasoning_effort": "low"}
+        assert created_profile.config["translator_config"]["kwargs"] == {"reasoning_effort": "low"}
+        assert created_profile.config["ocr_config"]["kwargs"] == {"reasoning_effort": "none"}
+        assert created_profile.config["image_reembedding_config"]["kwargs"] == {"reasoning_effort": "none"}
+        assert created_profile.config["manga_translator_config"]["kwargs"] == {"reasoning_effort": "low"}
+        assert created_profile.config["translator_batch_config"]["thinking_mode"] == "low"
         assert next(profile for profile in endpoint_profiles if profile.name == "recommended-Gemini 2.5 Pro").api_key == "gkey"
         assert next(profile for profile in endpoint_profiles if profile.name == "recommended-DeepSeek Chat").api_key == "dkey"
         assert next(profile for profile in endpoint_profiles if profile.name == "recommended-Gemini 3 Flash Preview").timeout == 300

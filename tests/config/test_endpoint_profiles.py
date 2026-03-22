@@ -109,6 +109,37 @@ class TestResolveWithProfile:
         with pytest.raises(ValueError, match="not found"):
             _resolve_with_profile(config, profiles)
 
+    def test_explicit_default_scalars_override_profile(self):
+        """Explicit default-valued overrides still beat profile values."""
+        profiles = {
+            "prod": EndpointProfile(
+                name="prod",
+                api_key="prod-key",
+                base_url="https://prod.api",
+                model="prod-model",
+                timeout=240.0,
+                max_retries=7,
+                temperature=0.8,
+                concurrency=11,
+            )
+        }
+        config = LLMConfig.from_dict(
+            {
+                "endpoint_profile": "prod",
+                "timeout": 120.0,
+                "max_retries": 3,
+                "temperature": 0.0,
+                "concurrency": 5,
+            }
+        )
+
+        result = _resolve_with_profile(config, profiles)
+
+        assert result.timeout == 120.0
+        assert result.max_retries == 3
+        assert result.temperature == 0.0
+        assert result.concurrency == 5
+
     def test_kwargs_merged(self):
         """Profile and config kwargs are merged correctly."""
         profiles = {

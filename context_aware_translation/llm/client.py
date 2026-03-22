@@ -23,6 +23,12 @@ from context_aware_translation.llm.token_tracker import TokenTracker
 logger = logging.getLogger(__name__)
 
 _UNSUPPORTED_OPENAI_CREATE_KWARGS = frozenset({"provider", "_ui_display_name", "_wizard_template_key"})
+_OPENAI_BASE_URL_PREFIX = "https://api.openai.com/"
+
+
+def _openai_supports_reasoning_effort_none(model: str) -> bool:
+    normalized = model.strip().lower()
+    return normalized.startswith("o") or normalized.startswith("gpt-5")
 
 # Suppress OpenAI library's DEBUG/INFO/WARNING logging to avoid duplicate logs
 # Our custom logger already logs all necessary information
@@ -38,8 +44,20 @@ class LLMAuthError(LLMError):
     pass
 
 
-def _sanitize_openai_create_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
-    removed = _UNSUPPORTED_OPENAI_CREATE_KWARGS.intersection(kwargs)
+def _sanitize_openai_create_kwargs(
+    *,
+    model: str,
+    base_url: str | None,
+    kwargs: dict[str, Any],
+) -> dict[str, Any]:
+    removed = set(_UNSUPPORTED_OPENAI_CREATE_KWARGS.intersection(kwargs))
+    if (
+        kwargs.get("reasoning_effort") == "none"
+        and isinstance(base_url, str)
+        and base_url.startswith(_OPENAI_BASE_URL_PREFIX)
+        and not _openai_supports_reasoning_effort_none(model)
+    ):
+        removed.add("reasoning_effort")
     if not removed:
         return kwargs
     sanitized = {key: value for key, value in kwargs.items() if key not in removed}
@@ -355,7 +373,11 @@ class LLMClient:
             client = self._get_client_for_step(step_config)
             # Merge step_config.kwargs with passed kwargs (passed kwargs take precedence)
             # step_config is already resolved at config initialization time, so all values are filled
-            merged_kwargs = _sanitize_openai_create_kwargs({**step_config.kwargs, **kwargs})
+            merged_kwargs = _sanitize_openai_create_kwargs(
+                model=str(kwargs.get("model") or step_config.model or ""),
+                base_url=step_config.base_url,
+                kwargs={**step_config.kwargs, **kwargs},
+            )
 
             # Check token limit before making the call
             tracker = TokenTracker.get()

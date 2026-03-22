@@ -47,6 +47,8 @@ class BaseImageGenerator:
             "2) Preserve the original style, layout, and non-text visual content.\n"
             "3) Keep replacement text in the same regions as the original text.\n"
             "4) Do not invent extra text not present in the mapping.\n"
+            "5) Make sure all original text is cleared and all translated text is added.\n"
+
             "Return only the edited image."
         )
 

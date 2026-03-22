@@ -15,7 +15,6 @@ from context_aware_translation.application.events import ApplicationEventSubscri
 from context_aware_translation.application.services.project_setup import ProjectSetupService
 from context_aware_translation.ui.chrome_sizing import sync_qml_host_height
 from context_aware_translation.ui.features.workflow_profile_editor import (
-    ADVANCED_STEP_IDS,
     ConnectionChoice,
     WorkflowRoutesEditor,
     validate_workflow_routes,
@@ -106,7 +105,6 @@ class ProjectSettingsPane(QWidget):
         self.routes_editor = WorkflowRoutesEditor(
             [],
             [],
-            advanced_step_ids=ADVANCED_STEP_IDS,
             hint_text=self.tr("Use the Advanced column to edit step-specific settings."),
             max_visible_rows=6,
             parent=self.routes_group,

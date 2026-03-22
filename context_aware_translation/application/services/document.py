@@ -1326,7 +1326,7 @@ class DefaultDocumentService:
             return setup_blocker
         lowered = reason.lower()
         if decision_code == "blocked_claim_conflict":
-            return self._active_task_blocker(project_id=project_id, document_id=document_id)
+            return self._image_claim_conflict_blocker(project_id=project_id, document_id=document_id)
         if "translate documents before running image reembedding" in lowered or "no translated chunks found" in lowered:
             return make_blocker(
                 BlockerCode.NEEDS_REVIEW,
@@ -1386,6 +1386,27 @@ class DefaultDocumentService:
             BlockerCode.ALREADY_RUNNING_ELSEWHERE,
             "Image reinsertion is already running for this document.",
             target_kind=NavigationTargetKind.DOCUMENT_IMAGES,
+            project_id=project_id,
+            document_id=document_id,
+        )
+
+    def _image_claim_conflict_blocker(self, *, project_id: str, document_id: int) -> BlockerInfo:
+        if self._find_active_image_reembedding_task(project_id, document_id) is not None:
+            return self._active_task_blocker(project_id=project_id, document_id=document_id)
+        if self._active_translation_task(project_id, document_id) is not None:
+            return self._translation_active_task_blocker(project_id=project_id, document_id=document_id)
+        if self._get_active_ocr_task(project_id, document_id) is not None:
+            return make_blocker(
+                BlockerCode.ALREADY_RUNNING_ELSEWHERE,
+                "OCR is already running for this document.",
+                target_kind=NavigationTargetKind.QUEUE,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        return make_blocker(
+            BlockerCode.ALREADY_RUNNING_ELSEWHERE,
+            "Another task is already running for this document.",
+            target_kind=NavigationTargetKind.QUEUE,
             project_id=project_id,
             document_id=document_id,
         )
