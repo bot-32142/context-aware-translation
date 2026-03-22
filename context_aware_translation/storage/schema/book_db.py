@@ -169,7 +169,7 @@ def _serialized_write(*, auto_commit_param: str | None = "auto_commit") -> Calla
         signature = __import__("inspect").signature(func)
 
         @wraps(func)
-        def wrapper(self: SQLiteBookDB, *args: object, **kwargs: object):
+        def wrapper(self: SQLiteBookDB, *args: object, **kwargs: object) -> object:
             auto_commit = True
             if auto_commit_param is not None:
                 bound = signature.bind(self, *args, **kwargs)

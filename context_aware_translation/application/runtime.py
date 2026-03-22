@@ -108,6 +108,7 @@ def _wizard_reasoning_kwargs(step_id: WorkflowStepId, selected: ConnectionDraft 
         return None
     return {"reasoning_effort": reasoning_effort}
 
+
 _WORKFLOW_STEP_LAYOUT: tuple[tuple[WorkflowStepId, str, str | None], ...] = (
     (WorkflowStepId.EXTRACTOR, "Extractor", "extractor_config"),
     (WorkflowStepId.SUMMARIZER, "Summarizer", "summarizor_config"),
@@ -326,7 +327,7 @@ class ApplicationRuntime:
             queue_item_id=record.task_id,
             message=UserMessage(
                 severity=UserMessageSeverity.INFO,
-                text=f"{task_type} queued.",
+                text=f"{title_for_task(task_type)} queued.",
             ),
         )
 
@@ -488,9 +489,7 @@ def wizard_connection_key_for_draft(draft: ConnectionDraft) -> str | None:
 def build_connection_summary(profile: EndpointProfile) -> ConnectionSummary:
     provider = infer_provider_kind(profile.base_url, profile.model)
     kwargs_payload = {
-        str(key): value
-        for key, value in (profile.kwargs or {}).items()
-        if key not in _HIDDEN_CONNECTION_KWARG_KEYS
+        str(key): value for key, value in (profile.kwargs or {}).items() if key not in _HIDDEN_CONNECTION_KWARG_KEYS
     }
     is_managed = is_managed_connection(profile)
     return ConnectionSummary(
@@ -596,9 +595,7 @@ def _build_batch_route(step_label: str, config: dict[str, Any]) -> WorkflowStepR
 
 
 def _build_standard_step_payload(route: WorkflowStepRoute) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        str(key): value for key, value in route.step_config.items() if value is not None
-    }
+    payload: dict[str, Any] = {str(key): value for key, value in route.step_config.items() if value is not None}
     if route.connection_id:
         payload["endpoint_profile"] = route.connection_id
     if route.model:
@@ -611,9 +608,7 @@ def _build_standard_step_payload(route: WorkflowStepRoute) -> dict[str, Any]:
 
 
 def _build_batch_step_payload(route: WorkflowStepRoute) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        str(key): value for key, value in route.step_config.items() if value is not None
-    }
+    payload: dict[str, Any] = {str(key): value for key, value in route.step_config.items() if value is not None}
     if route.model:
         payload["model"] = route.model
     return payload

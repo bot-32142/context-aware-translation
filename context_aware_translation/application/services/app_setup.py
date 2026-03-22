@@ -129,8 +129,9 @@ class DefaultAppSetupService:
                 is_default=current_default.is_default,
             )
             target_language = current_detail.target_language
-        if (request.target_language or "").strip():
-            target_language = request.target_language.strip()
+        requested_target_language = (request.target_language or "").strip()
+        if requested_target_language:
+            target_language = requested_target_language
         profile_name = (request.profile_name or "").strip() or None
         recommendation = recommended_workflow_profile_from_drafts(
             request.connections,
@@ -440,6 +441,7 @@ class DefaultAppSetupService:
             kwargs_payload.pop(_MANAGED_CONNECTION_DISPLAY_NAME_KEY, None)
 
         if existing is not None:
+            assert connection_id is not None
             try:
                 updated = self._runtime.book_manager.update_endpoint_profile(
                     connection_id,

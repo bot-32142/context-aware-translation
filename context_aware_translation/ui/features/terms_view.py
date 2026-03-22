@@ -69,6 +69,7 @@ class TermsView(QWidget):
         self._state: TermsTableState | None = None
         self._loaded_once = False
         self._needs_refresh = False
+        self._message_is_transient = False
         self._event_bridge: QtApplicationEventBridge | None = None
         self._pending_local_terms_invalidations = 0
         self.viewmodel = (
@@ -199,6 +200,7 @@ class TermsView(QWidget):
             set_button_tone(button)
 
     def refresh(self) -> None:
+        self._clear_transient_message()
         if self._is_document_scope:
             document_id = self.document_id
             if document_id is None:
@@ -466,14 +468,15 @@ class TermsView(QWidget):
         except ApplicationError as exc:
             self._show_application_error(self.tr("Export Terms"), exc)
             return
+        self.refresh()
         self._show_message(
             UserMessageSeverity.INFO,
             self.tr(
                 "Terms export was queued. Context summaries will be built in the background if needed. "
                 "Check Queue for progress."
             ),
+            transient=True,
         )
-        self.refresh()
 
     def _on_term_rows_update_requested(self, rows: list[TermTableRow]) -> None:
         state = self._state
@@ -498,8 +501,8 @@ class TermsView(QWidget):
             accepted.message.text if accepted.message is not None else (success_message or self.tr("Task queued."))
         )
         severity = accepted.message.severity if accepted.message is not None else UserMessageSeverity.INFO
-        self._show_message(severity, message)
         self.refresh()
+        self._show_message(severity, message, transient=True)
 
     def _run_bulk_update(
         self,
@@ -628,11 +631,25 @@ class TermsView(QWidget):
         QMessageBox.warning(self, title, translated)
         self._show_message(UserMessageSeverity.ERROR, translated, show_dialog=False)
 
-    def _show_message(self, severity: UserMessageSeverity, text: str, *, show_dialog: bool = False) -> None:
+    def _show_message(
+        self,
+        severity: UserMessageSeverity,
+        text: str,
+        *,
+        show_dialog: bool = False,
+        transient: bool = False,
+    ) -> None:
         translated = translate_backend_text(text)
         self.table_panel.set_message(severity, translated)
+        self._message_is_transient = transient and bool(translated)
         if show_dialog:
             QMessageBox.information(self, self.tr("Terms"), translated)
+
+    def _clear_transient_message(self) -> None:
+        if not self._message_is_transient:
+            return
+        self.table_panel.clear_message()
+        self._message_is_transient = False
 
     def _persist_local_terms_write(self, action, *, title: str) -> bool:  # noqa: ANN001
         tracks_invalidation = self._event_bridge is not None

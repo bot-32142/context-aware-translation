@@ -193,6 +193,45 @@ def test_document_images_view_renders_backend_state_and_runs_actions():
         view.deleteLater()
 
 
+def test_document_images_view_clears_transient_queue_message_on_refresh():
+    from context_aware_translation.ui.features.document_images_view import DocumentImagesView
+
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        images=_images_state(),
+        ocr_page_images={101: b"image-1", 102: b"image-2"},
+    )
+
+    def _run(request):  # noqa: ANN001
+        service.calls.append(("run_image_reinsertion", request))
+        service.images = _images_state(active_task_id="task-1")
+        return AcceptedCommand(
+            command_name="run_image_reinsertion",
+            message=UserMessage(severity=UserMessageSeverity.INFO, text="Queued."),
+        )
+
+    service.run_image_reinsertion = _run
+    view = DocumentImagesView("proj-1", 4, service)
+    try:
+        view.refresh()
+        root = view.chrome_host.rootObject()
+        assert root is not None
+
+        root.runSelectedRequested.emit()
+
+        assert root.property("messageText") == "Queued."
+
+        service.images = _images_state(active_task_id="task-1").model_copy(
+            update={"progress": ProgressInfo(current=2, total=2, label="apply")}
+        )
+        view.refresh()
+
+        assert root.property("messageText") == ""
+        assert root.property("progressVisible") is True
+    finally:
+        view.deleteLater()
+
+
 def test_document_images_view_cancels_active_task():
     from context_aware_translation.ui.features.document_images_view import DocumentImagesView
 
@@ -441,6 +480,42 @@ def test_document_images_view_run_and_cancel_refresh_state_immediately():
         assert view._state is not None and view._state.active_task_id is None
         assert view.progress_widget.isHidden() is True
         assert view.run_selected_button.isEnabled() is True
+    finally:
+        view.deleteLater()
+
+
+def test_document_images_view_refreshes_state_after_run_error():
+    from context_aware_translation.ui.features.document_images_view import DocumentImagesView
+
+    idle_state = _images_state(active_task_id=None)
+    running_state = _images_state(active_task_id="task-1")
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        images=idle_state,
+        ocr_page_images={101: b"image-1", 102: b"image-2"},
+    )
+
+    def _run(request):  # noqa: ANN001
+        service.calls.append(("run_image_reinsertion", request))
+        service.images = running_state
+        raise ApplicationError(
+            ApplicationErrorPayload(
+                code=ApplicationErrorCode.BLOCKED,
+                message="Image reinsertion is already running for this document.",
+            )
+        )
+
+    service.run_image_reinsertion = _run
+    view = DocumentImagesView("proj-1", 4, service)
+    try:
+        view.refresh()
+
+        view.run_selected_button.click()
+
+        assert view._state is not None and view._state.active_task_id == "task-1"
+        assert view.progress_widget.isHidden() is False
+        assert view.run_selected_button.isEnabled() is False
+        assert view.message_label.text() == "Image reinsertion is already running for this document."
     finally:
         view.deleteLater()
 

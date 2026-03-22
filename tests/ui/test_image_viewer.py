@@ -31,51 +31,90 @@ def test_zoom_respects_upper_and_lower_bounds():
     from context_aware_translation.ui.widgets.image_viewer import ImageViewer
 
     viewer = ImageViewer()
-    viewer.reset_zoom()
+    try:
+        viewer.reset_zoom()
 
-    viewer._zoom(1000.0)
-    assert viewer._zoom_factor == pytest.approx(50.0)
-    assert viewer.transform().m11() == pytest.approx(50.0)
+        viewer._zoom(1000.0)
+        assert viewer._zoom_factor == pytest.approx(50.0)
+        assert viewer.transform().m11() == pytest.approx(50.0)
 
-    viewer._zoom(1e-6)
-    assert viewer._zoom_factor == pytest.approx(0.05)
-    assert viewer.transform().m11() == pytest.approx(0.05)
+        viewer._zoom(1e-6)
+        assert viewer._zoom_factor == pytest.approx(0.05)
+        assert viewer.transform().m11() == pytest.approx(0.05)
+    finally:
+        viewer.close()
+        viewer.deleteLater()
 
 
 def test_set_image_invalid_data_clears_previous_pixmap():
     from context_aware_translation.ui.widgets.image_viewer import ImageViewer
 
     viewer = ImageViewer()
-    viewer.set_image(_VALID_PNG)
-    assert viewer.pixmap_item is not None
+    try:
+        viewer.set_image(_VALID_PNG)
+        assert viewer.pixmap_item is not None
 
-    viewer.set_image(b"not-an-image")
-    assert viewer.pixmap_item is None
+        viewer.set_image(b"not-an-image")
+        assert viewer.pixmap_item is None
+        assert viewer._fit_timer.isActive() is False
+    finally:
+        viewer.close()
+        viewer.deleteLater()
 
 
 def test_deferred_auto_fit_remains_pending_until_post_layout_fit():
     from context_aware_translation.ui.widgets.image_viewer import ImageViewer
 
     viewer = ImageViewer()
-    viewer.resize(400, 300)
-    viewer.show()
-    viewer.set_image(_VALID_PNG)
+    try:
+        viewer.resize(400, 300)
+        viewer.show()
+        viewer.set_image(_VALID_PNG)
 
-    assert viewer.pixmap_item is not None
-    assert viewer._auto_fit_pending is True
+        assert viewer.pixmap_item is not None
+        assert viewer._auto_fit_pending is True
 
-    viewer._fit_pending_image()
+        viewer._fit_pending_image()
 
-    assert viewer._auto_fit_pending is False
+        assert viewer._auto_fit_pending is False
+    finally:
+        viewer.close()
+        viewer.deleteLater()
+
+
+def test_manual_zoom_cancels_pending_auto_fit():
+    from context_aware_translation.ui.widgets.image_viewer import ImageViewer
+
+    viewer = ImageViewer()
+    try:
+        viewer.resize(400, 300)
+        viewer.show()
+        viewer.set_image(_VALID_PNG)
+
+        assert viewer._auto_fit_pending is True
+        assert viewer._fit_timer.isActive() is True
+
+        viewer.zoom_in()
+
+        assert viewer._auto_fit_pending is False
+        assert viewer._fit_timer.isActive() is False
+    finally:
+        viewer.close()
+        viewer.deleteLater()
 
 
 def test_deferred_auto_fit_does_not_finalize_while_hidden():
     from context_aware_translation.ui.widgets.image_viewer import ImageViewer
 
     viewer = ImageViewer()
-    viewer.set_image(_VALID_PNG)
-    viewer.hide()
+    try:
+        viewer.set_image(_VALID_PNG)
+        viewer.hide()
 
-    viewer._fit_pending_image()
+        viewer._fit_pending_image()
 
-    assert viewer._auto_fit_pending is True
+        assert viewer._auto_fit_pending is True
+        assert viewer._fit_timer.isActive() is False
+    finally:
+        viewer.close()
+        viewer.deleteLater()

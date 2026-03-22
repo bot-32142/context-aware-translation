@@ -116,6 +116,7 @@ class DocumentTranslationView(QWidget):
         self._supports_batch = False
         self._progress_text_value = ""
         self._message_text_value = ""
+        self._message_is_transient = False
         self._polish_enabled = True
         self._can_translate = False
         self._can_batch = False
@@ -320,6 +321,7 @@ class DocumentTranslationView(QWidget):
 
     def _apply_state(self, state: DocumentTranslationState, *, previous_unit_id: str | None) -> None:
         self._prune_drafts(state)
+        self._clear_transient_message()
         self._state = state
         self._supports_batch = state.supports_batch
         self._progress_text_value = self._progress_text(state)
@@ -492,9 +494,9 @@ class DocumentTranslationView(QWidget):
             return
         self._refresh_with_suppressed_drafts({unit.unit_id})
         if command.message is not None:
-            self._set_message(command.message.severity, command.message.text)
+            self._set_message(command.message.severity, command.message.text, transient=True)
         else:
-            self._set_message(UserMessageSeverity.INFO, self.tr("Retranslate queued."))
+            self._set_message(UserMessageSeverity.INFO, self.tr("Retranslate queued."), transient=True)
 
     def _translate_document(self) -> None:
         try:
@@ -516,9 +518,9 @@ class DocumentTranslationView(QWidget):
         affected_unit_ids = {unit.unit_id for unit in self._state.units} if self._state is not None else set()
         self._refresh_with_suppressed_drafts(affected_unit_ids)
         if command.message is not None:
-            self._set_message(command.message.severity, command.message.text)
+            self._set_message(command.message.severity, command.message.text, transient=True)
         else:
-            self._set_message(UserMessageSeverity.INFO, self.tr("Translation queued."))
+            self._set_message(UserMessageSeverity.INFO, self.tr("Translation queued."), transient=True)
 
     def _submit_batch_translation(self) -> None:
         try:
@@ -543,14 +545,21 @@ class DocumentTranslationView(QWidget):
         affected_unit_ids = {unit.unit_id for unit in self._state.units} if self._state is not None else set()
         self._refresh_with_suppressed_drafts(affected_unit_ids)
         if command.message is not None:
-            self._set_message(command.message.severity, command.message.text)
+            self._set_message(command.message.severity, command.message.text, transient=True)
         else:
-            self._set_message(UserMessageSeverity.INFO, self.tr("Async batch translation queued."))
+            self._set_message(UserMessageSeverity.INFO, self.tr("Async batch translation queued."), transient=True)
 
-    def _set_message(self, severity: UserMessageSeverity, text: str) -> None:
+    def _set_message(self, severity: UserMessageSeverity, text: str, *, transient: bool = False) -> None:
         _ = severity
         self._message_text_value = translate_backend_text(text)
+        self._message_is_transient = transient and bool(self._message_text_value)
         self._sync_chrome_state()
+
+    def _clear_transient_message(self) -> None:
+        if not self._message_is_transient:
+            return
+        self._message_text_value = ""
+        self._message_is_transient = False
 
     def _capture_current_draft(self) -> None:
         unit = self._rendered_unit()

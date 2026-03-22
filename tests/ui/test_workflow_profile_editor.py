@@ -404,7 +404,6 @@ def test_step_advanced_config_dialog_updates_route_config():
     }
 
 
-
 def test_workflow_profile_editor_shows_advanced_button_for_each_step():
     from context_aware_translation.ui.features import workflow_profile_editor as editor_module
 

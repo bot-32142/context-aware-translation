@@ -443,9 +443,7 @@ class StepAdvancedConfigDialog(QDialog):
 
         self._form_layout.addRow(
             create_tip_label(
-                self.tr(
-                    "Connection overrides apply only to this workflow step and override the selected connection."
-                )
+                self.tr("Connection overrides apply only to this workflow step and override the selected connection.")
             )
         )
 
@@ -1050,6 +1048,9 @@ class WorkflowProfileEditorDialog(QDialog):
         self._original_profile = profile
         self._connection_choices = connection_choices
         self._allow_name_edit = allow_name_edit
+        self._layout_refresh_timer = QTimer(self)
+        self._layout_refresh_timer.setSingleShot(True)
+        self._layout_refresh_timer.timeout.connect(self._refresh_body_layout)
         self.setWindowTitle(self.tr("Workflow Profile"))
         self.setMinimumSize(780, 260)
         self.setSizeGripEnabled(True)
@@ -1134,7 +1135,7 @@ class WorkflowProfileEditorDialog(QDialog):
         set_button_tone(footer.button(QDialogButtonBox.StandardButton.Cancel), "ghost")
         for section in (self.general_section, self.routes_section):
             section.toggled.connect(self._refresh_body_layout)
-        QTimer.singleShot(0, self._refresh_body_layout)
+        self._schedule_body_layout_refresh()
         self.resize(
             max(self.minimumWidth(), min(self.sizeHint().width(), 920)), min(max(self.sizeHint().height(), 420), 720)
         )
@@ -1177,6 +1178,9 @@ class WorkflowProfileEditorDialog(QDialog):
         if layout is not None:
             layout.activate()
 
+    def _schedule_body_layout_refresh(self) -> None:
+        self._layout_refresh_timer.start(0)
+
     def _sync_section_height(self, section: QCollapsible) -> None:
         content = section.content()
         if section.isExpanded():
@@ -1205,4 +1209,4 @@ class WorkflowProfileEditorDialog(QDialog):
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
-        QTimer.singleShot(0, self._refresh_body_layout)
+        self._schedule_body_layout_refresh()

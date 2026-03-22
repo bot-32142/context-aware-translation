@@ -555,6 +555,41 @@ def test_document_translation_view_shows_queue_message_over_progress_text():
         view.deleteLater()
 
 
+def test_document_translation_view_clears_transient_queue_message_on_refresh():
+    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
+
+    running_state = _make_state().model_copy(
+        update={
+            "progress": ProgressInfo(current=2, total=5, label="Running translation"),
+            "active_task_id": "task-42",
+        }
+    )
+    service = FakeDocumentService(
+        workspace=running_state.workspace,
+        translation=running_state,
+        command_result=AcceptedCommand(
+            command_name="run_translation",
+            message=UserMessage(severity=UserMessageSeverity.INFO, text="Translation queued."),
+        ),
+    )
+    view = DocumentTranslationView(service, "proj-1", 4)
+    try:
+        view.refresh()
+
+        _chrome_signal(view, "translateRequested").emit()
+
+        assert view.viewmodel.progress_text == "Translation queued."
+
+        service.translation = running_state.model_copy(
+            update={"progress": ProgressInfo(current=3, total=5, label="Running translation")}
+        )
+        view.refresh()
+
+        assert view.viewmodel.progress_text == "Progress: 3/5 | Active task: task-42"
+    finally:
+        view.deleteLater()
+
+
 def test_document_translation_view_find_next_keeps_match_below_floating_panel():
     from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
 
