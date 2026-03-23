@@ -43,8 +43,8 @@ from context_aware_translation.application.services.document import DocumentServ
 from context_aware_translation.application.services.terms import TermsService
 from context_aware_translation.application.services.work import WorkService
 from context_aware_translation.ui.chrome_sizing import sync_qml_host_height
-from context_aware_translation.ui.i18n import translate_backend_text
 from context_aware_translation.ui.features.document_workspace_view import DocumentWorkspaceView, WorkExportDialog
+from context_aware_translation.ui.i18n import translate_backend_text
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.viewmodels.work_home import WorkHomeViewModel
@@ -211,6 +211,15 @@ class WorkView(QWidget):
 
     def get_running_operations(self) -> list[str]:
         if self._document_view is not None and self.stack.currentWidget() is self._document_view:
+            return self._document_view.get_running_operations()
+        return []
+
+    def get_navigation_blocking_operations(self) -> list[str]:
+        if self._document_view is not None and self.stack.currentWidget() is self._document_view:
+            get_navigation_blockers = getattr(self._document_view, "get_navigation_blocking_operations", None)
+            if callable(get_navigation_blockers):
+                blockers = get_navigation_blockers()
+                return blockers if isinstance(blockers, list) else []
             return self._document_view.get_running_operations()
         return []
 

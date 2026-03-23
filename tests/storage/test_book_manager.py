@@ -272,7 +272,7 @@ class TestBookCreationWithProfiles:
 
     def test_create_book_requires_profile(self, book_manager: BookManager) -> None:
         """Test that creating a book without any profiles raises error."""
-        with pytest.raises(ValueError, match="Create a profile before"):
+        with pytest.raises(ValueError, match="Open App Setup"):
             book_manager.create_book(name="Test Book")
 
     def test_create_book_uses_default_profile(self, book_manager_with_profile: BookManager, library_root: Path) -> None:
@@ -679,14 +679,6 @@ class TestPathHelpers:
         expected = library_root / "books" / book.book_id / "book.db"
         assert path == expected
 
-    def test_get_book_context_tree_path(self, book_manager_with_profile: BookManager, library_root: Path) -> None:
-        """Test get_book_context_tree_path()."""
-        book = book_manager_with_profile.create_book(name="Test Book")
-        path = book_manager_with_profile.get_book_context_tree_path(book.book_id)
-
-        expected = library_root / "books" / book.book_id / "context_tree.db"
-        assert path == expected
-
 
 # ============================================================================
 # Test Isolation
@@ -889,106 +881,6 @@ class TestConfigPersistenceValidation:
         retrieved = book_manager.get_endpoint_profile(endpoint.profile_id)
         assert retrieved is not None
         assert retrieved.kwargs == {}
-
-    def test_seed_system_defaults_on_empty_db(
-        self,
-        library_root: Path,
-    ) -> None:
-        """Test that seed_system_defaults creates default endpoints and config profile."""
-        manager = BookManager(library_root)
-        try:
-            manager.seed_system_defaults()
-
-            # Should have 3 endpoint profiles
-            endpoints = manager.list_endpoint_profiles()
-            assert len(endpoints) == 3
-            names = {ep.name for ep in endpoints}
-            assert names == {"system-default-gemini-pro", "system-default-gemini-flash", "system-default-deepseek"}
-
-            # Check Gemini endpoint
-            gemini = manager.get_endpoint_profile("system-default-gemini-pro")
-            assert gemini is not None
-            assert gemini.base_url == "https://generativelanguage.googleapis.com/v1beta/openai/"
-            assert gemini.model == "gemini-2.5-pro"
-            assert gemini.is_default is True  # first inserted becomes default
-
-            # Check Gemini Flash endpoint
-            gemini_flash = manager.get_endpoint_profile("system-default-gemini-flash")
-            assert gemini_flash is not None
-            assert gemini_flash.base_url == "https://generativelanguage.googleapis.com/v1beta/openai/"
-            assert gemini_flash.model == "gemini-3-flash-preview"
-
-            # Check DeepSeek endpoint
-            deepseek = manager.get_endpoint_profile("system-default-deepseek")
-            assert deepseek is not None
-            assert deepseek.base_url == "https://api.deepseek.com"
-            assert deepseek.model == "deepseek-chat"
-
-            # Should have 1 config profile
-            profiles = manager.list_profiles()
-            assert len(profiles) == 1
-            profile = profiles[0]
-            assert profile.name == "system-default-profile"
-            assert profile.is_default is True
-            config = profile.config
-            assert config["translation_target_language"] == "简体中文"
-            assert config["extractor_config"]["endpoint_profile"] == "system-default-deepseek"
-            assert config["summarizor_config"]["endpoint_profile"] == "system-default-deepseek"
-            assert config["glossary_config"]["endpoint_profile"] == "system-default-gemini-flash"
-            assert config["translator_config"]["endpoint_profile"] == "system-default-gemini-pro"
-            assert config["review_config"]["endpoint_profile"] == "system-default-gemini-flash"
-            assert config["ocr_config"]["endpoint_profile"] == "system-default-gemini-flash"
-        finally:
-            manager.close()
-
-    def test_seed_system_defaults_skipped_when_endpoints_exist(
-        self,
-        book_manager: BookManager,
-    ) -> None:
-        """Test that seeding is skipped if endpoint profiles already exist."""
-        book_manager.create_endpoint_profile(
-            name="user-endpoint",
-            api_key="key",
-            base_url="https://example.com",
-            model="model",
-        )
-
-        book_manager.seed_system_defaults()
-
-        # Should only have the user-created endpoint, no system defaults
-        endpoints = book_manager.list_endpoint_profiles()
-        assert len(endpoints) == 1
-        assert endpoints[0].name == "user-endpoint"
-
-    def test_seed_system_defaults_skipped_when_profiles_exist(
-        self,
-        book_manager: BookManager,
-        sample_config: dict[str, Any],
-    ) -> None:
-        """Test that seeding is skipped if config profiles already exist."""
-        book_manager.create_profile(name="user-profile", config=sample_config)
-
-        book_manager.seed_system_defaults()
-
-        # Should only have the user-created profile, no system defaults
-        profiles = book_manager.list_profiles()
-        assert len(profiles) == 1
-        assert profiles[0].name == "user-profile"
-
-    def test_seed_system_defaults_idempotent(
-        self,
-        library_root: Path,
-    ) -> None:
-        """Test that calling seed_system_defaults twice is safe."""
-        manager = BookManager(library_root)
-        try:
-            manager.seed_system_defaults()
-            manager.seed_system_defaults()  # second call should be a no-op
-
-            assert len(manager.list_endpoint_profiles()) == 3
-            assert len(manager.list_profiles()) == 1
-        finally:
-            manager.close()
 
     def test_profile_config_can_reference_registry_endpoint_profile_by_id(
         self,

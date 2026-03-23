@@ -78,11 +78,10 @@ def test_task_type():
 
 
 def test_decode_payload_returns_dict():
-    record = _make_record(payload_json='{"output_path": "/tmp/glossary.xlsx", "skip_context": false}')
+    record = _make_record(payload_json='{"output_path": "/tmp/glossary.xlsx"}')
     payload = handler.decode_payload(record)
     assert isinstance(payload, dict)
     assert payload["output_path"] == "/tmp/glossary.xlsx"
-    assert payload["skip_context"] is False
 
 
 # --- scope ---
@@ -98,11 +97,11 @@ def test_scope_returns_no_documents():
 # --- claims ---
 
 
-def test_claims_always_include_glossary_and_context_tree():
-    record = _make_record(payload_json='{"output_path": "/tmp/glossary.xlsx", "skip_context": true}')
+def test_claims_always_include_glossary_and_term_memory():
+    record = _make_record(payload_json='{"output_path": "/tmp/glossary.xlsx"}')
     claims = handler.claims(record, {})
     expected_glossary = ResourceClaim("glossary_state", "book-1", "*", ClaimMode.READ_SHARED)
-    expected_context = ResourceClaim("context_tree", "book-1", "*", ClaimMode.WRITE_COOPERATIVE)
+    expected_context = ResourceClaim("term_memory", "book-1", "*", ClaimMode.WRITE_COOPERATIVE)
     assert expected_glossary in claims
     assert expected_context in claims
     assert len(claims) == 2
@@ -418,9 +417,7 @@ def test_build_worker_extracts_output_path_from_payload():
     from context_aware_translation.adapters.qt.workers.glossary_export_task_worker import GlossaryExportTaskWorker
 
     deps = MagicMock()
-    record = _make_record(
-        status=STATUS_QUEUED, payload_json='{"output_path": "/custom/path/glossary.xlsx", "skip_context": true}'
-    )
+    record = _make_record(status=STATUS_QUEUED, payload_json='{"output_path": "/custom/path/glossary.xlsx"}')
     payload = handler.decode_payload(record)
     worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
     assert isinstance(worker, GlossaryExportTaskWorker)

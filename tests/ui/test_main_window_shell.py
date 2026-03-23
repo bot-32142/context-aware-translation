@@ -275,12 +275,18 @@ class _FakeWorkView(QWidget):
         self.terms_service = terms_service
         self.events = events
         self.running_operations: list[str] = []
+        self.navigation_blocking_operations: list[str] | None = None
         self.cancel_requests: list[bool] = []
         self.cleanup_calls = 0
         self.routed_targets: list[NavigationTarget] = []
 
     def get_running_operations(self) -> list[str]:
         return list(self.running_operations)
+
+    def get_navigation_blocking_operations(self) -> list[str]:
+        if self.navigation_blocking_operations is None:
+            return list(self.running_operations)
+        return list(self.navigation_blocking_operations)
 
     def request_cancel_running_operations(self, *, include_engine_tasks: bool = False) -> None:
         self.cancel_requests.append(include_engine_tasks)
@@ -410,6 +416,15 @@ class _FakeProjectShellHost(QWidget):
         if not callable(get_running_operations):
             return []
         return get_running_operations()
+
+    def get_navigation_blocking_operations(self) -> list[str]:
+        work_widget = self._work_widget
+        if work_widget is None:
+            return []
+        get_navigation_blockers = getattr(work_widget, "get_navigation_blocking_operations", None)
+        if not callable(get_navigation_blockers):
+            return self.get_running_operations()
+        return get_navigation_blockers()
 
     def request_cancel_running_operations(self, *, include_engine_tasks: bool = False) -> None:
         work_widget = self._work_widget
@@ -646,6 +661,28 @@ def test_main_window_routes_navigation_targets_through_route_bridge():
         patch_stack.close()
 
 
+def test_main_window_projects_navigation_ignores_background_engine_tasks():
+    window, _context, patch_stack = _make_window()
+    try:
+        window.open_project("project-1", "One Piece")
+        current_shell = window._view_registry["project_project-1"]
+        assert isinstance(current_shell, _FakeProjectShellHost)
+        assert isinstance(current_shell.work_widget, _FakeWorkView)
+        current_shell.work_widget.running_operations = ["OCR"]
+        current_shell.work_widget.navigation_blocking_operations = []
+
+        with patch.object(window, "_warn_running_operations") as warn:
+            window._show_projects_surface()
+
+        warn.assert_not_called()
+        assert current_shell.work_widget.cancel_requests == []
+        assert window._current_book_id is None
+        assert window._app_shell.current_view_key == "projects"
+    finally:
+        window.close()
+        patch_stack.close()
+
+
 def test_main_window_cross_project_navigation_uses_running_operation_warning_flow():
     window, context, patch_stack = _make_window()
     try:
@@ -764,6 +801,20 @@ def test_main_window_queue_can_close_after_delete_empties_list():
         assert shell.current_surface == "work"
     finally:
         window.close()
+        patch_stack.close()
+
+
+def test_main_window_close_keeps_store_open_while_task_engine_still_running():
+    window, context, patch_stack = _make_window()
+    try:
+        context.runtime.task_engine._has_running_work = True
+
+        window.close()
+
+        assert context.runtime.task_engine.close_calls == 1
+        context.runtime.task_store.close.assert_not_called()
+        context.runtime.book_manager.close.assert_not_called()
+    finally:
         patch_stack.close()
 
 

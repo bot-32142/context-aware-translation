@@ -39,6 +39,12 @@ def test_terms_pane_viewmodel_tracks_labels_and_toolbar_state():
         can_filter=True,
         can_import=True,
         can_export=False,
+        build_tooltip="",
+        translate_tooltip="Ready to translate untranslated terms.",
+        review_tooltip="Ready to review extracted terms.",
+        filter_tooltip="Filter out unlikely glossary entries.",
+        import_tooltip="Import terms from a glossary file.",
+        export_tooltip="",
     )
 
     assert viewmodel.can_translate is True
@@ -46,6 +52,8 @@ def test_terms_pane_viewmodel_tracks_labels_and_toolbar_state():
     assert viewmodel.can_filter is True
     assert viewmodel.can_import is True
     assert viewmodel.can_export is False
+    assert viewmodel.translate_tooltip == "Ready to translate untranslated terms."
+    assert viewmodel.review_tooltip == "Ready to review extracted terms."
 
 
 def test_terms_pane_viewmodel_tracks_document_scope_labels_and_build_state():
@@ -64,8 +72,16 @@ def test_terms_pane_viewmodel_tracks_document_scope_labels_and_build_state():
         can_filter=True,
         can_import=False,
         can_export=False,
+        build_tooltip="Build terms from the current document.",
+        translate_tooltip="Translate document-scoped terms.",
+        review_tooltip="Review is unavailable until translation finishes.",
+        filter_tooltip="Filter rare terms in this document.",
+        import_tooltip="",
+        export_tooltip="",
     )
 
     assert viewmodel.can_build is True
     assert viewmodel.can_translate is True
     assert viewmodel.can_review is False
+    assert viewmodel.build_tooltip == "Build terms from the current document."
+    assert viewmodel.translate_tooltip == "Translate document-scoped terms."

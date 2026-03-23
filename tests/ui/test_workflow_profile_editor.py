@@ -10,7 +10,6 @@ from context_aware_translation.application.contracts.app_setup import (
 )
 from context_aware_translation.application.runtime import build_workflow_profile_payload
 from context_aware_translation.ui.features.workflow_profile_editor import (
-    ADVANCED_STEP_IDS,
     ConnectionChoice,
     WorkflowProfileEditorDialog,
     WorkflowRoutesEditor,
@@ -133,7 +132,6 @@ def test_workflow_routes_editor_exposes_step_specific_tooltips():
                 default_model="gemini-3-flash-preview",
             )
         ],
-        advanced_step_ids=ADVANCED_STEP_IDS,
         hint_text="hint",
     )
 
@@ -280,7 +278,6 @@ def test_workflow_routes_editor_leaves_bottom_clearance_for_last_visible_row():
                 default_model="gemini-3-flash-preview",
             )
         ],
-        advanced_step_ids=ADVANCED_STEP_IDS,
         hint_text="hint",
         max_visible_rows=6,
     )
@@ -381,21 +378,33 @@ def test_step_advanced_config_dialog_updates_route_config():
         connection_id="conn-gemini",
         connection_label="Gemini",
         model="gemini-3-flash-preview",
-        step_config={"ocr_dpi": 150, "strip_llm_artifacts": True},
+        step_config={
+            "ocr_dpi": 150,
+            "strip_llm_artifacts": True,
+            "timeout": 90,
+            "kwargs": {"reasoning_effort": "none", "top_p": 0.2},
+        },
     )
 
     dialog = StepAdvancedConfigDialog(route)
     dialog.ocr_dpi_spin.setValue(200)
     dialog.strip_artifacts_check.setChecked(False)
+    dialog.timeout_override_checkbox.setChecked(False)
+    dialog.temperature_override_checkbox.setChecked(True)
+    dialog.temperature_override_spin.setValue(0.3)
+    dialog.reasoning_effort_combo.setCurrentIndex(dialog.reasoning_effort_combo.findData("low"))
+    dialog.custom_parameters_edit.setPlainText('{"top_p": 0.2, "verbosity": "low"}')
 
     updated = dialog.route()
     assert updated.step_config == {
         "ocr_dpi": 200,
         "strip_llm_artifacts": False,
+        "temperature": 0.3,
+        "kwargs": {"reasoning_effort": "low", "top_p": 0.2, "verbosity": "low"},
     }
 
 
-def test_workflow_profile_editor_only_shows_advanced_button_for_configurable_steps():
+def test_workflow_profile_editor_shows_advanced_button_for_each_step():
     from context_aware_translation.ui.features import workflow_profile_editor as editor_module
 
     profile = WorkflowProfileDetail(
@@ -416,7 +425,7 @@ def test_workflow_profile_editor_only_shows_advanced_button_for_configurable_ste
                 step_label="Image reembedding",
                 connection_id="conn-gemini",
                 connection_label="Gemini",
-                model="gemini-3.1-flash-image-preview",
+                model="gemini-3-pro-image-preview",
             ),
         ],
     )
@@ -431,7 +440,7 @@ def test_workflow_profile_editor_only_shows_advanced_button_for_configurable_ste
             ConnectionChoice(
                 connection_id="conn-gemini",
                 label="Gemini",
-                default_model="gemini-3.1-flash-image-preview",
+                default_model="gemini-3-pro-image-preview",
             ),
         ],
         allow_name_edit=True,
@@ -451,17 +460,17 @@ def test_workflow_profile_editor_only_shows_advanced_button_for_configurable_ste
     original = editor_module.StepAdvancedConfigDialog
     editor_module.StepAdvancedConfigDialog = _FakeStepDialog
     try:
-        advanced_cell = dialog.routes_table.cellWidget(0, 3)
-        assert advanced_cell is not None
-        advanced_button = advanced_cell.findChild(QPushButton)
-        assert advanced_button is not None
-        advanced_button.click()
+        for row in range(2):
+            advanced_cell = dialog.routes_table.cellWidget(row, 3)
+            assert advanced_cell is not None
+            advanced_button = advanced_cell.findChild(QPushButton)
+            assert advanced_button is not None
+            advanced_button.click()
     finally:
         editor_module.StepAdvancedConfigDialog = original
 
-    assert opened == [WorkflowStepId.TRANSLATOR]
-    assert parent_widgets == [dialog]
-    assert dialog.routes_table.item(1, 3).text() == "—"
+    assert opened == [WorkflowStepId.TRANSLATOR, WorkflowStepId.IMAGE_REEMBEDDING]
+    assert parent_widgets == [dialog, dialog]
 
 
 def test_image_reembedding_backend_is_inferred_when_profile_payload_is_built():
@@ -497,7 +506,9 @@ def test_image_reembedding_backend_is_inferred_when_profile_payload_is_built():
 
     assert payload["image_reembedding_config"]["backend"] == "openai"
     assert dialog.routes_table.item(0, 0).text() == "Image reembedding"
-    assert dialog.routes_table.item(0, 3).text() == "—"
+    advanced_cell = dialog.routes_table.cellWidget(0, 3)
+    assert advanced_cell is not None
+    assert advanced_cell.findChild(QPushButton) is not None
 
 
 def test_translator_batch_model_is_edited_from_main_model_column():
@@ -554,7 +565,7 @@ def test_workflow_routes_editor_requires_batch_api_key_and_model_when_enabled():
             },
         )
     ]
-    editor = WorkflowRoutesEditor(routes, [], advanced_step_ids=ADVANCED_STEP_IDS, hint_text="hint")
+    editor = WorkflowRoutesEditor(routes, [], hint_text="hint")
 
     assert editor.validate_routes() == "Translator batch requires a model when enabled."
 

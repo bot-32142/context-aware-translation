@@ -80,4 +80,6 @@ def build_task_engine(
     for handler_type in _DEFAULT_HANDLER_TYPES:
         task_engine.register_handler(handler_type())
 
+    task_engine.recover_interrupted_tasks()
+
     return task_engine, worker_deps

@@ -11,10 +11,15 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
+import time
+from collections.abc import Generator
 from pathlib import Path
+from typing import cast
 
 import pytest
 
+from context_aware_translation.core.term_memory import TermMemoryVersion
 from context_aware_translation.storage.schema.book_db import (
     ChunkRecord,
     SQLiteBookDB,
@@ -28,7 +33,7 @@ from context_aware_translation.storage.schema.book_db import (
 
 
 @pytest.fixture
-def temp_db(tmp_path: Path) -> SQLiteBookDB:
+def temp_db(tmp_path: Path) -> Generator[SQLiteBookDB, None, None]:
     """Create a temporary database for testing."""
     db_path = tmp_path / "test.db"
     db = SQLiteBookDB(db_path)
@@ -135,7 +140,79 @@ def test_term_db_init(temp_db: SQLiteBookDB):
     meta = temp_db.conn.execute("SELECT schema_version FROM meta").fetchone()
     assert meta is not None
     assert meta["schema_version"] == temp_db.schema_version
-    assert temp_db.schema_version == 3
+    assert temp_db.schema_version == 6
+
+
+def test_write_lock_serializes_writers_across_connections(tmp_path: Path) -> None:
+    db_path = tmp_path / "locked.db"
+    SQLiteBookDB(db_path).close()
+
+    started = threading.Event()
+    release = threading.Event()
+    second_finished = threading.Event()
+    errors: list[Exception] = []
+
+    def writer_one() -> None:
+        db = SQLiteBookDB(db_path)
+        try:
+            db.begin()
+            db.upsert_chunks([ChunkRecord(chunk_id=1, hash="chunk-1", text="hello")], auto_commit=False)
+            started.set()
+            assert release.wait(2)
+            db.commit()
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+        finally:
+            db.close()
+
+    def writer_two() -> None:
+        try:
+            assert started.wait(2)
+            db = SQLiteBookDB(db_path)
+            try:
+                db.set_source_language("Japanese")
+            finally:
+                db.close()
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+        finally:
+            second_finished.set()
+
+    first = threading.Thread(target=writer_one)
+    second = threading.Thread(target=writer_two)
+    first.start()
+    assert started.wait(2)
+    second.start()
+
+    time.sleep(0.2)
+    assert not second_finished.is_set()
+
+    release.set()
+    first.join(2)
+    second.join(2)
+
+    assert errors == []
+    assert second_finished.is_set()
+
+
+def test_fresh_db_term_rows_default_term_type_to_other(temp_db: SQLiteBookDB):
+    """Fresh DB term rows should default term_type to other."""
+    now = time.time()
+    temp_db.conn.execute(
+        """
+        INSERT INTO terms(
+            key, descriptions_json, occurrence_json, votes, total_api_calls,
+            new_translation, translated_name, ignored, is_reviewed, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        ("term1", "{}", "{}", 1, 1, None, None, 0, 0, now, now),
+    )
+    temp_db.conn.commit()
+
+    row = temp_db.conn.execute("SELECT term_type FROM terms WHERE key = ?", ("term1",)).fetchone()
+    assert row is not None
+    assert row["term_type"] == "other"
 
 
 # --- Term Operations ---
@@ -172,6 +249,166 @@ def test_upsert_terms(temp_db: SQLiteBookDB):
     retrieved2 = temp_db.get_term("term2")
     assert retrieved2 is not None
     assert retrieved2.key == "term2"
+
+
+def test_upsert_terms_round_trips_term_type(temp_db: SQLiteBookDB):
+    """Upsert/get should preserve term_type."""
+    temp_db.upsert_terms(
+        [
+            TermRecord(
+                key="term1",
+                descriptions={"chunk1": "description1"},
+                occurrence={"chunk1": 1},
+                votes=1,
+                total_api_calls=1,
+                term_type="character",
+            )
+        ]
+    )
+
+    retrieved = temp_db.get_term("term1")
+    assert retrieved is not None
+    assert retrieved.term_type == "character"
+    assert retrieved.term_type_votes == {"character": 1}
+
+
+def test_migrate_schema_v4_to_v6_adds_term_type_and_votes_backfill(tmp_path: Path):
+    """Migrating schema version 4 should add term_type and per-type vote totals."""
+    db_path = tmp_path / "legacy-v4.db"
+    conn = sqlite3.connect(db_path)
+    now = time.time()
+    conn.execute(
+        """
+        CREATE TABLE meta (
+            schema_version INTEGER NOT NULL,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            source_language TEXT,
+            last_noise_filtered_at REAL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE terms (
+            key TEXT PRIMARY KEY,
+            descriptions_json TEXT NOT NULL,
+            occurrence_json TEXT NOT NULL,
+            votes INTEGER NOT NULL,
+            total_api_calls INTEGER NOT NULL,
+            new_translation TEXT,
+            translated_name TEXT,
+            ignored INTEGER NOT NULL DEFAULT 0,
+            is_reviewed INTEGER NOT NULL DEFAULT 0,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO meta(schema_version, created_at, updated_at) VALUES (?, ?, ?)",
+        (4, now, now),
+    )
+    conn.execute(
+        """
+        INSERT INTO terms(
+            key, descriptions_json, occurrence_json, votes, total_api_calls,
+            new_translation, translated_name, ignored, is_reviewed, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        ("legacy-term", '{"1": "desc"}', '{"1": 1}', 2, 3, None, None, 0, 0, now, now),
+    )
+    conn.commit()
+    conn.close()
+
+    db = SQLiteBookDB(db_path)
+    try:
+        meta = db.conn.execute("SELECT schema_version FROM meta").fetchone()
+        assert meta is not None
+        assert meta["schema_version"] == 6
+
+        row = db.conn.execute(
+            "SELECT term_type, term_type_votes_json FROM terms WHERE key = ?",
+            ("legacy-term",),
+        ).fetchone()
+        assert row is not None
+        assert row["term_type"] == "other"
+        assert json.loads(row["term_type_votes_json"]) == {"other": 2}
+
+        term = db.get_term("legacy-term")
+        assert term is not None
+        assert term.term_type == "other"
+        assert term.term_type_votes == {"other": 2}
+    finally:
+        db.close()
+
+
+def test_migrate_schema_v5_to_v6_adds_term_type_votes_without_touching_type(tmp_path: Path):
+    db_path = tmp_path / "legacy-v5.db"
+    conn = sqlite3.connect(db_path)
+    now = time.time()
+    conn.execute(
+        """
+        CREATE TABLE meta (
+            schema_version INTEGER NOT NULL,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            source_language TEXT,
+            last_noise_filtered_at REAL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE terms (
+            key TEXT PRIMARY KEY,
+            descriptions_json TEXT NOT NULL,
+            occurrence_json TEXT NOT NULL,
+            votes INTEGER NOT NULL,
+            total_api_calls INTEGER NOT NULL,
+            term_type TEXT NOT NULL DEFAULT 'other',
+            new_translation TEXT,
+            translated_name TEXT,
+            ignored INTEGER NOT NULL DEFAULT 0,
+            is_reviewed INTEGER NOT NULL DEFAULT 0,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO meta(schema_version, created_at, updated_at) VALUES (?, ?, ?)",
+        (5, now, now),
+    )
+    conn.execute(
+        """
+        INSERT INTO terms(
+            key, descriptions_json, occurrence_json, votes, total_api_calls,
+            term_type, new_translation, translated_name, ignored, is_reviewed, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        ("legacy-term", '{"1": "desc"}', '{"1": 1}', 3, 3, "organization", None, None, 0, 0, now, now),
+    )
+    conn.commit()
+    conn.close()
+
+    db = SQLiteBookDB(db_path)
+    try:
+        meta = db.conn.execute("SELECT schema_version FROM meta").fetchone()
+        assert meta is not None
+        assert meta["schema_version"] == 6
+
+        row = db.conn.execute(
+            "SELECT term_type, term_type_votes_json FROM terms WHERE key = ?",
+            ("legacy-term",),
+        ).fetchone()
+        assert row is not None
+        assert row["term_type"] == "organization"
+        assert json.loads(row["term_type_votes_json"]) == {"organization": 3}
+    finally:
+        db.close()
 
 
 def test_upsert_terms_update_existing(temp_db: SQLiteBookDB):
@@ -438,7 +675,7 @@ def test_upsert_terms_none_descriptions(temp_db: SQLiteBookDB):
     """Test upserting term with None descriptions."""
     term = TermRecord(
         key="term1",
-        descriptions=None,  # Should be handled as {}
+        descriptions=cast(dict, None),  # Should be handled as {}
         occurrence={},
         votes=1,
         total_api_calls=1,
@@ -455,7 +692,7 @@ def test_upsert_terms_none_occurrence(temp_db: SQLiteBookDB):
     term = TermRecord(
         key="term1",
         descriptions={},
-        occurrence=None,  # Should be handled as {}
+        occurrence=cast(dict, None),  # Should be handled as {}
         votes=1,
         total_api_calls=1,
     )
@@ -1450,3 +1687,209 @@ def test_transaction_commit(temp_db: SQLiteBookDB):
 
     # Term should exist after commit
     assert temp_db.get_term("term1") is not None
+
+
+def test_reset_source_ocr_prunes_term_memory_for_removed_document_chunks(temp_db: SQLiteBookDB):
+    document_id = temp_db.insert_document("manga")
+    source_id = temp_db.insert_document_source(
+        document_id,
+        0,
+        "image",
+        ocr_json=json.dumps({"regions": [{"text": "hello"}]}),
+        is_ocr_completed=True,
+        is_text_added=True,
+    )
+    temp_db.upsert_chunks(
+        [
+            TranslationChunkRecord(
+                chunk_id=5,
+                hash="hash-5",
+                text="chunk 5",
+                document_id=document_id,
+                is_extracted=True,
+                is_summarized=True,
+                is_occurrence_mapped=True,
+            )
+        ]
+    )
+    temp_db.upsert_terms(
+        [
+            TermRecord(
+                key="hero",
+                descriptions={"5": "hero desc", "imported": "stable import"},
+                occurrence={"5": 1},
+                votes=1,
+                total_api_calls=1,
+                term_type="character",
+                term_type_votes={"character": 1},
+            )
+        ]
+    )
+    temp_db.replace_term_memory_versions(
+        "hero",
+        [
+            TermMemoryVersion(
+                term="hero",
+                effective_start_chunk=5,
+                latest_evidence_chunk=5,
+                summary_text="stale summary",
+                kind="bootstrap",
+                source_count=1,
+                created_at=time.time(),
+            )
+        ],
+    )
+
+    temp_db.reset_source_ocr(source_id)
+
+    assert temp_db.list_chunks(document_id=document_id) == []
+    assert temp_db.list_term_memory_versions("hero") == []
+    hero = temp_db.get_term("hero")
+    assert hero is not None
+    assert hero.descriptions == {"imported": "stable import"}
+    assert hero.occurrence == {}
+    assert hero.term_type == "other"
+    assert hero.term_type_votes == {}
+
+
+def test_reset_source_ocr_preserves_later_document_term_evidence(temp_db: SQLiteBookDB):
+    first_document_id = temp_db.insert_document("manga")
+    first_source_id = temp_db.insert_document_source(
+        first_document_id,
+        0,
+        "image",
+        ocr_json=json.dumps({"regions": [{"text": "first"}]}),
+        is_ocr_completed=True,
+        is_text_added=True,
+    )
+    second_document_id = temp_db.insert_document("manga")
+    temp_db.insert_document_source(
+        second_document_id,
+        0,
+        "image",
+        ocr_json=json.dumps({"regions": [{"text": "second"}]}),
+        is_ocr_completed=True,
+        is_text_added=True,
+    )
+    temp_db.upsert_chunks(
+        [
+            TranslationChunkRecord(
+                chunk_id=5,
+                hash="hash-5",
+                text="chunk 5",
+                document_id=first_document_id,
+                is_extracted=True,
+                is_summarized=True,
+                is_occurrence_mapped=True,
+            ),
+            TranslationChunkRecord(
+                chunk_id=20,
+                hash="hash-20",
+                text="chunk 20",
+                document_id=second_document_id,
+                is_extracted=True,
+                is_summarized=True,
+                is_occurrence_mapped=True,
+            ),
+        ]
+    )
+    temp_db.upsert_terms(
+        [
+            TermRecord(
+                key="hero",
+                descriptions={"5": "first doc desc", "20": "second doc desc"},
+                occurrence={"5": 1, "20": 1},
+                votes=2,
+                total_api_calls=2,
+                term_type="organization",
+                term_type_votes={"organization": 2},
+            )
+        ]
+    )
+    temp_db.replace_term_memory_versions(
+        "hero",
+        [
+            TermMemoryVersion(
+                term="hero",
+                effective_start_chunk=6,
+                latest_evidence_chunk=5,
+                summary_text="first doc summary",
+                kind="bootstrap",
+                source_count=1,
+                created_at=time.time(),
+            ),
+            TermMemoryVersion(
+                term="hero",
+                effective_start_chunk=21,
+                latest_evidence_chunk=20,
+                summary_text="second doc summary",
+                kind="revision",
+                source_count=2,
+                created_at=time.time(),
+            ),
+        ],
+    )
+
+    temp_db.reset_source_ocr(first_source_id)
+
+    hero = temp_db.get_term("hero")
+    assert hero is not None
+    assert hero.descriptions == {"20": "second doc desc"}
+    assert hero.occurrence == {"20": 1}
+    assert hero.term_type == "organization"
+    assert hero.term_type_votes == {"organization": 2}
+    assert temp_db.list_chunks(document_id=first_document_id) == []
+    remaining_chunks = temp_db.list_chunks(document_id=second_document_id)
+    assert len(remaining_chunks) == 1
+    assert remaining_chunks[0].chunk_id == 20
+
+
+def test_reset_documents_from_preserves_term_type_when_chunk_evidence_survives(temp_db: SQLiteBookDB):
+    first_document_id = temp_db.insert_document("manga")
+    second_document_id = temp_db.insert_document("manga")
+    temp_db.upsert_chunks(
+        [
+            TranslationChunkRecord(
+                chunk_id=5,
+                hash="hash-5",
+                text="chunk 5",
+                document_id=first_document_id,
+                is_extracted=True,
+                is_summarized=True,
+                is_occurrence_mapped=True,
+            ),
+            TranslationChunkRecord(
+                chunk_id=20,
+                hash="hash-20",
+                text="chunk 20",
+                document_id=second_document_id,
+                is_extracted=True,
+                is_summarized=True,
+                is_occurrence_mapped=True,
+            ),
+        ]
+    )
+    temp_db.upsert_terms(
+        [
+            TermRecord(
+                key="hero",
+                descriptions={"5": "first doc desc", "20": "second doc desc"},
+                occurrence={"5": 1, "20": 1},
+                votes=2,
+                total_api_calls=2,
+                term_type="character",
+                term_type_votes={"character": 2},
+            )
+        ]
+    )
+
+    result = temp_db.reset_documents_from(10)
+
+    hero = temp_db.get_term("hero")
+    assert hero is not None
+    assert hero.descriptions == {"5": "first doc desc"}
+    assert hero.occurrence == {"5": 1}
+    assert hero.term_type == "character"
+    assert hero.term_type_votes == {"character": 2}
+    assert result["deleted_chunks"] == 1
+    assert result["pruned_terms"] == 1

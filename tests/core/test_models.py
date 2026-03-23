@@ -2,7 +2,23 @@ from __future__ import annotations
 
 import pytest
 
-from context_aware_translation.core.models import Term
+from context_aware_translation.core.models import (
+    Term,
+    description_index,
+    ordered_description_entries,
+    ordered_description_values,
+)
+
+
+def _make_term(*, votes: int = 1, term_type: str = "other") -> Term:
+    return Term(
+        key="test_key",
+        descriptions={},
+        occurrence={},
+        votes=votes,
+        total_api_calls=1,
+        term_type=term_type,
+    )
 
 
 def test_term_creation():
@@ -23,6 +39,120 @@ def test_term_creation():
     assert term.new_translation is None
     assert term.translated_name is None
     assert term.ignored is False
+
+
+def test_term_defaults_term_type_to_other() -> None:
+    term = _make_term()
+
+    assert term.term_type == "other"
+
+
+def test_term_without_chunk_evidence_does_not_backfill_other_votes() -> None:
+    term = Term(
+        key="imported_only",
+        descriptions={"imported": "stable import"},
+        occurrence={},
+        votes=3,
+        total_api_calls=3,
+        term_type="other",
+        term_type_votes={},
+    )
+
+    assert term.term_type == "other"
+    assert term.term_type_votes == {}
+
+
+@pytest.mark.parametrize(
+    ("raw_term_type", "expected_term_type"),
+    [
+        (None, "other"),
+        ("", "other"),
+        ("unknown", "other"),
+        ("character_name", "other"),
+        ("organization-name", "other"),
+        (" CHARACTER ", "character"),
+    ],
+)
+def test_term_normalizes_term_type_values(raw_term_type: str | None, expected_term_type: str) -> None:
+    term = _make_term(term_type=raw_term_type)
+
+    assert term.term_type == expected_term_type
+
+
+def test_description_index_recognizes_imported_and_numeric_keys() -> None:
+    assert description_index("imported") == -1
+    assert description_index("5") == 5
+    assert description_index(7) == 7
+    assert description_index("legacy_key") is None
+
+
+def test_ordered_description_helpers_ignore_unrecognized_keys_and_future_entries() -> None:
+    descriptions = {
+        "legacy_key": "legacy desc",
+        "12": "future desc",
+        "imported": "imported desc",
+        "5": "chunk 5 desc",
+        "0": "chunk 0 desc",
+    }
+
+    assert ordered_description_entries(descriptions) == [
+        ("imported", "imported desc"),
+        ("0", "chunk 0 desc"),
+        ("5", "chunk 5 desc"),
+        ("12", "future desc"),
+    ]
+    assert ordered_description_values(descriptions, query_index=10) == [
+        "imported desc",
+        "chunk 0 desc",
+        "chunk 5 desc",
+    ]
+
+
+def test_term_merge_prefers_summary_worthy_type_over_other() -> None:
+    term = _make_term(votes=1, term_type="other")
+    other = _make_term(votes=1, term_type="organization")
+
+    term.merge(other)
+
+    assert term.term_type == "organization"
+
+
+def test_term_merge_prefers_higher_vote_summary_worthy_type() -> None:
+    term = _make_term(votes=2, term_type="organization")
+    other = _make_term(votes=5, term_type="character")
+
+    term.merge(other)
+
+    assert term.term_type == "character"
+
+
+def test_term_merge_tie_breaks_character_over_organization() -> None:
+    term = _make_term(votes=3, term_type="organization")
+    other = _make_term(votes=3, term_type="character")
+
+    term.merge(other)
+
+    assert term.term_type == "character"
+
+
+def test_term_merge_preserves_per_type_vote_totals_across_multiple_merges() -> None:
+    term = _make_term(votes=2, term_type="character")
+
+    term.merge(_make_term(votes=1, term_type="organization"))
+    term.merge(_make_term(votes=1, term_type="organization"))
+
+    assert term.term_type == "character"
+    assert term.term_type_votes == {"character": 2, "organization": 2}
+
+
+def test_term_merge_changes_type_once_competing_type_overtakes_total_votes() -> None:
+    term = _make_term(votes=2, term_type="character")
+
+    term.merge(_make_term(votes=1, term_type="organization"))
+    term.merge(_make_term(votes=2, term_type="organization"))
+
+    assert term.term_type == "organization"
+    assert term.term_type_votes == {"character": 2, "organization": 3}
 
 
 def test_term_get_key():

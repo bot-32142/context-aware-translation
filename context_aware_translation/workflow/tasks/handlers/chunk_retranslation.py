@@ -74,7 +74,7 @@ class ChunkRetranslationHandler:
             # Prevent duplicate concurrent retranslation for the exact same chunk.
             claims.add(ResourceClaim("chunk", book_id, str(chunk_id)))
         claims.add(ResourceClaim("glossary_state", book_id, "*", ClaimMode.READ_SHARED))
-        claims.add(ResourceClaim("context_tree", book_id, "*", ClaimMode.WRITE_COOPERATIVE))
+        claims.add(ResourceClaim("term_memory", book_id, "*", ClaimMode.WRITE_COOPERATIVE))
         return frozenset(claims)
 
     def can(self, action: TaskAction, record: TaskRecord, payload: Any, snapshot: ActionSnapshot) -> Decision:

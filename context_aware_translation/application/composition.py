@@ -64,7 +64,6 @@ def build_application_context(
 
     event_bus = InMemoryApplicationEventBus()
     book_manager = BookManager(library_root)
-    book_manager.seed_system_defaults()
     TokenTracker.initialize(book_manager.registry)
 
     task_store = TaskStore(book_manager.library_root / "task_store.db")

@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from PySide6.QtCore import QCoreApplication
 
 from context_aware_translation.application.composition import build_application_context
+from context_aware_translation.application.contracts.app_setup import ConnectionDraft, SetupWizardRequest
+from context_aware_translation.application.contracts.common import ProviderKind
 from context_aware_translation.application.contracts.document import RunDocumentExportRequest
 from context_aware_translation.application.contracts.projects import CreateProjectRequest
 from context_aware_translation.application.contracts.work import PrepareExportRequest, RunExportRequest
@@ -17,6 +19,23 @@ def _ensure_qt_app() -> QCoreApplication:
     if app is None:
         app = QCoreApplication([])
     return app
+
+
+def _build_configured_context(tmp_path: Path):
+    context = build_application_context(library_root=tmp_path)
+    context.services.app_setup.run_setup_wizard(
+        SetupWizardRequest(
+            providers=[ProviderKind.OPENAI],
+            connections=[
+                ConnectionDraft(
+                    display_name="OpenAI",
+                    provider=ProviderKind.OPENAI,
+                    api_key="test-key",
+                )
+            ],
+        )
+    )
+    return context
 
 
 def _insert_text_document(
@@ -57,7 +76,7 @@ def _insert_text_document(
 
 def test_prepare_export_exposes_fallback_and_preserve_structure(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Export Test", target_language="English")
@@ -79,7 +98,7 @@ def test_prepare_export_exposes_fallback_and_preserve_structure(tmp_path: Path) 
 
 def test_work_run_export_calls_backend_ops_with_options(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Export Run", target_language="English")
@@ -126,7 +145,7 @@ def test_work_run_export_calls_backend_ops_with_options(tmp_path: Path) -> None:
 
 def test_document_export_state_and_execution_use_document_service(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Document Export", target_language="English")

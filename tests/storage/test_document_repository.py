@@ -10,11 +10,14 @@ Tests are organized to match the code structure:
 
 from __future__ import annotations
 
+import time
 from unittest.mock import MagicMock
 
 import pytest
 
+from context_aware_translation.core.term_memory import TermMemoryVersion
 from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+from context_aware_translation.storage.schema.book_db import SQLiteBookDB, TermRecord, TranslationChunkRecord
 
 # ============================================================================
 # Fixtures
@@ -345,3 +348,84 @@ def test_delete_documents_stack_reports_missing_document(document_repository: Do
 
     assert result["document_exists"] is False
     assert result["deleted_documents"] == 0
+
+
+def test_reset_document_stack_prunes_book_term_memory(tmp_path):
+    book_db = SQLiteBookDB(tmp_path / "book.db")
+    try:
+        now = time.time()
+        book_db.insert_document("text")
+        book_db.insert_document("text")
+        book_db.insert_document_source(1, 0, "text", text_content="doc1")
+        book_db.insert_document_source(2, 0, "text", text_content="doc2")
+        book_db.upsert_chunks(
+            [
+                TranslationChunkRecord(
+                    chunk_id=0,
+                    hash="h0",
+                    text="c0",
+                    document_id=1,
+                    is_extracted=True,
+                    is_summarized=False,
+                    is_occurrence_mapped=True,
+                    is_translated=False,
+                    translation=None,
+                ),
+                TranslationChunkRecord(
+                    chunk_id=10,
+                    hash="h10",
+                    text="c10",
+                    document_id=2,
+                    is_extracted=True,
+                    is_summarized=False,
+                    is_occurrence_mapped=True,
+                    is_translated=False,
+                    translation=None,
+                ),
+            ]
+        )
+        book_db.upsert_terms(
+            [
+                TermRecord(
+                    key="hero",
+                    descriptions={"0": "early desc", "10": "late desc"},
+                    occurrence={"0": 1, "10": 1},
+                    votes=1,
+                    total_api_calls=1,
+                    created_at=now,
+                    updated_at=now,
+                )
+            ]
+        )
+        book_db.replace_term_memory_versions(
+            "hero",
+            [
+                TermMemoryVersion(
+                    term="hero",
+                    effective_start_chunk=1,
+                    latest_evidence_chunk=0,
+                    summary_text="early summary",
+                    kind="bootstrap",
+                    source_count=1,
+                    created_at=now,
+                ),
+                TermMemoryVersion(
+                    term="hero",
+                    effective_start_chunk=11,
+                    latest_evidence_chunk=10,
+                    summary_text="late summary",
+                    kind="revision",
+                    source_count=2,
+                    created_at=now,
+                ),
+            ],
+        )
+
+        repo = DocumentRepository(book_db)
+        result = repo.reset_document_stack(2)
+
+        assert result["document_exists"] is True
+        versions = book_db.list_term_memory_versions("hero")
+        assert [version.summary_text for version in versions] == ["early summary"]
+    finally:
+        book_db.close()

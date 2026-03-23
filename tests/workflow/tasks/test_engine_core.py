@@ -282,11 +282,13 @@ class TestRerunSnapshot:
             status=STATUS_CANCELLED,
             config_snapshot_json=_VALID_SNAPSHOT,
         )
+        engine._store.update(record.task_id, last_error="boom")
 
         result = engine.rerun(record.task_id)
 
         assert result.status == STATUS_QUEUED
         assert result.config_snapshot_json == new_snapshot
+        assert result.last_error is None
         engine.close()
 
     def test_rerun_raises_when_capture_fails(self, tmp_path):

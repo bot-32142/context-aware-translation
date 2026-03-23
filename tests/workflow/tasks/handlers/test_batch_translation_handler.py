@@ -117,7 +117,7 @@ def test_claims_wildcard_for_all_documents():
         {
             ResourceClaim("doc", "book-1", "*"),
             ResourceClaim("glossary_state", "book-1", "*", ClaimMode.READ_SHARED),
-            ResourceClaim("context_tree", "book-1", "*", ClaimMode.WRITE_COOPERATIVE),
+            ResourceClaim("term_memory", "book-1", "*", ClaimMode.WRITE_COOPERATIVE),
         }
     )
 
@@ -130,7 +130,7 @@ def test_claims_per_doc_for_some_documents():
             ResourceClaim("doc", "book-1", "5"),
             ResourceClaim("doc", "book-1", "7"),
             ResourceClaim("glossary_state", "book-1", "*", ClaimMode.READ_SHARED),
-            ResourceClaim("context_tree", "book-1", "*", ClaimMode.WRITE_COOPERATIVE),
+            ResourceClaim("term_memory", "book-1", "*", ClaimMode.WRITE_COOPERATIVE),
         }
     )
 

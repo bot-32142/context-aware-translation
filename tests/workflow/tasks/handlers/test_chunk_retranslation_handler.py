@@ -75,11 +75,10 @@ def test_decode_payload_empty():
 
 
 def test_decode_payload_valid():
-    record = _make_record(payload_json='{"chunk_id": 7, "document_id": 3, "skip_context": true}')
+    record = _make_record(payload_json='{"chunk_id": 7, "document_id": 3}')
     payload = handler.decode_payload(record)
     assert payload["chunk_id"] == 7
     assert payload["document_id"] == 3
-    assert payload["skip_context"] is True
 
 
 def test_scope_from_payload_document_id():
@@ -112,7 +111,7 @@ def test_claims_specific_doc():
     assert ResourceClaim("doc", "book-1", "4", ClaimMode.WRITE_COOPERATIVE) in claims
     assert ResourceClaim("chunk", "book-1", "1") in claims
     assert ResourceClaim("glossary_state", "book-1", "*", ClaimMode.READ_SHARED) in claims
-    assert ResourceClaim("context_tree", "book-1", "*", ClaimMode.WRITE_COOPERATIVE) in claims
+    assert ResourceClaim("term_memory", "book-1", "*", ClaimMode.WRITE_COOPERATIVE) in claims
     assert ResourceClaim("doc", "book-1", "*") not in claims
 
 
@@ -330,7 +329,7 @@ def test_build_worker_run_returns_chunk_retranslation_task_worker():
     deps = MagicMock()
     record = _make_record(
         status=STATUS_QUEUED,
-        payload_json=json.dumps({"chunk_id": 3, "document_id": 7, "skip_context": False}),
+        payload_json=json.dumps({"chunk_id": 3, "document_id": 7}),
     )
     payload = handler.decode_payload(record)
     worker = handler.build_worker(TaskAction.RUN, record, payload, deps)

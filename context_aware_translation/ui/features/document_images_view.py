@@ -58,6 +58,7 @@ class DocumentImagesView(QWidget):
         self._assets: list[ImageAssetState] = []
         self._current_index: int | None = None
         self._preview_cache: dict[tuple[str, str], bytes] = {}
+        self._message_is_transient = False
         self._chrome_resize_timer = QTimer(self)
         self._chrome_resize_timer.setSingleShot(True)
         self._chrome_resize_timer.timeout.connect(self._sync_chrome_height)
@@ -206,18 +207,23 @@ class DocumentImagesView(QWidget):
         self.progress_widget.cancelled.connect(self._cancel)
         self.progress_widget.hide()
 
-    def refresh(self) -> None:
+    def refresh(self) -> bool:
         previous_asset_id = self._selected_asset_id()
         try:
             state = self._service.get_images(self._project_id, self._document_id)
         except ApplicationError as exc:
             self._set_message(exc.payload.message)
-            return
+            return False
+        self._clear_transient_message()
         self._apply_state(state, previous_asset_id=previous_asset_id)
+        return True
 
     def get_running_operations(self) -> list[str]:
         if self._state is not None and self._state.active_task_id is not None:
             return [self.tr("Put text back into images")]
+        return []
+
+    def get_navigation_blocking_operations(self) -> list[str]:
         return []
 
     def request_cancel_running_operations(self, *, include_engine_tasks: bool = False) -> None:
@@ -495,9 +501,18 @@ class DocumentImagesView(QWidget):
         elif blocker.target.kind is NavigationTargetKind.PROJECT_SETUP:
             self.open_project_setup_requested.emit()
 
-    def _set_message(self, text: str) -> None:
+    def _set_message(self, text: str, *, transient: bool = False) -> None:
         self.message_label.setText(translate_backend_text(text))
         self.message_label.show()
+        self._message_is_transient = transient and bool(text)
+        self._sync_chrome_state()
+
+    def _clear_transient_message(self) -> None:
+        if not self._message_is_transient:
+            return
+        self.message_label.clear()
+        self.message_label.hide()
+        self._message_is_transient = False
         self._sync_chrome_state()
 
     def _show_index(self, index: int) -> None:
@@ -538,10 +553,14 @@ class DocumentImagesView(QWidget):
         try:
             result = action()
         except ApplicationError as exc:
+            self.refresh()
             self._set_message(exc.payload.message)
         else:
-            self._set_message(result.message.text if result.message is not None else fallback_message)
-        self.refresh()
+            if self.refresh():
+                self._set_message(
+                    result.message.text if result.message is not None else fallback_message,
+                    transient=True,
+                )
 
     def _run_reinsertion(
         self,

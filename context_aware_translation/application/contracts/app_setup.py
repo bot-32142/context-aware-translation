@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Any
 
 from pydantic import Field
 
@@ -89,7 +90,7 @@ class WorkflowStepRoute(ContractModel):
     connection_id: str | None = None
     connection_label: str | None = None
     model: str | None = None
-    step_config: dict[str, bool | int | float | str | None] = Field(default_factory=dict)
+    step_config: dict[str, Any] = Field(default_factory=dict)
 
 
 class WorkflowProfileDetail(ContractModel):
@@ -125,6 +126,7 @@ class SetupWizardRequest(ContractModel):
     providers: list[ProviderKind]
     connections: list[ConnectionDraft]
     profile_name: str | None = None
+    target_language: str | None = None
 
 
 class SetupWizardState(ContractModel):
@@ -133,6 +135,8 @@ class SetupWizardState(ContractModel):
     drafts: list[ConnectionDraft] = Field(default_factory=list)
     test_results: list[ConnectionTestResult] = Field(default_factory=list)
     recommendation: WorkflowProfileDetail | None = None
+    profile_name: str | None = None
+    target_language: str = "English"
 
 
 class AppSetupState(ContractModel):

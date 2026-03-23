@@ -69,7 +69,44 @@ if TYPE_CHECKING:
 
 _DEFAULT_PROFILE_NAME = "app-default-profile"
 _UI_SOURCE_PROFILE_ID_KEY = "_ui_source_profile_id"
-_MANAGED_CONNECTION_PREFIXES = ("recommended-", "system-default-")
+_MANAGED_CONNECTION_DISPLAY_NAME_KEY = "_ui_display_name"
+_MANAGED_CONNECTION_TEMPLATE_KEY = "_wizard_template_key"
+_MANAGED_CONNECTION_PREFIXES = ("recommended-",)
+_HIDDEN_CONNECTION_KWARG_KEYS = frozenset(
+    {
+        "provider",
+        _MANAGED_CONNECTION_DISPLAY_NAME_KEY,
+        _MANAGED_CONNECTION_TEMPLATE_KEY,
+    }
+)
+
+_WIZARD_REASONING_EFFORT_BY_STEP: dict[WorkflowStepId, str] = {
+    WorkflowStepId.GLOSSARY_TRANSLATOR: "low",
+    WorkflowStepId.TRANSLATOR: "low",
+    WorkflowStepId.OCR: "none",
+    WorkflowStepId.MANGA_TRANSLATOR: "low",
+}
+
+
+def _openai_supports_reasoning_effort_none(model: str | None) -> bool:
+    normalized = str(model or "").strip().lower()
+    return normalized.startswith("o") or normalized.startswith("gpt-5")
+
+
+def _wizard_reasoning_kwargs(step_id: WorkflowStepId, selected: ConnectionDraft | None) -> dict[str, str] | None:
+    if selected is None:
+        return None
+    reasoning_effort = _WIZARD_REASONING_EFFORT_BY_STEP.get(step_id)
+    if reasoning_effort is None:
+        return None
+    if (
+        selected.provider is ProviderKind.OPENAI
+        and reasoning_effort == "none"
+        and not _openai_supports_reasoning_effort_none(selected.default_model)
+    ):
+        return None
+    return {"reasoning_effort": reasoning_effort}
+
 
 _WORKFLOW_STEP_LAYOUT: tuple[tuple[WorkflowStepId, str, str | None], ...] = (
     (WorkflowStepId.EXTRACTOR, "Extractor", "extractor_config"),
@@ -128,11 +165,12 @@ _WIZARD_MODEL_CATALOG: dict[ProviderKind, tuple[WizardModelTemplate, ...]] = {
             "Gemini 3 Flash Preview",
             "gemini-3-flash-preview",
             "https://generativelanguage.googleapis.com/v1beta/openai/",
+            timeout=300,
         ),
         WizardModelTemplate(
             ProviderKind.GEMINI,
-            "Gemini 3.1 Flash Image Preview",
-            "gemini-3.1-flash-image-preview",
+            "Gemini 3 Pro Image Preview",
+            "gemini-3-pro-image-preview",
             "https://generativelanguage.googleapis.com/v1beta/openai/",
             timeout=300,
             concurrency=2,
@@ -206,7 +244,7 @@ _STEP_RECOMMENDATION_ORDER: dict[WorkflowStepId, tuple[StepModelPreference, ...]
         StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
     ),
     WorkflowStepId.IMAGE_REEMBEDDING: (
-        StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-flash-image-preview"),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-3-pro-image-preview"),
         StepModelPreference(ProviderKind.OPENAI, "gpt-image-1"),
     ),
     WorkflowStepId.MANGA_TRANSLATOR: (
@@ -288,7 +326,7 @@ class ApplicationRuntime:
             queue_item_id=record.task_id,
             message=UserMessage(
                 severity=UserMessageSeverity.INFO,
-                text=f"{task_type} queued.",
+                text=f"{title_for_task(task_type)} queued.",
             ),
         )
 
@@ -402,6 +440,13 @@ def infer_connection_status(profile: EndpointProfile) -> ConnectionStatus:
     return ConnectionStatus.UNTESTED
 
 
+def wizard_connection_key(provider: ProviderKind, model: str | None) -> str | None:
+    normalized_model = (model or "").strip()
+    if not normalized_model:
+        return None
+    return f"{provider.value}:{normalized_model}"
+
+
 def is_managed_connection_name(name: str) -> bool:
     normalized = name.strip().lower()
     return any(normalized.startswith(prefix) for prefix in _MANAGED_CONNECTION_PREFIXES)
@@ -416,13 +461,39 @@ def public_connection_name(name: str) -> str:
     return stripped
 
 
+def managed_connection_key(profile: EndpointProfile) -> str | None:
+    stored_key = (profile.kwargs or {}).get(_MANAGED_CONNECTION_TEMPLATE_KEY)
+    if isinstance(stored_key, str) and stored_key.strip():
+        return stored_key.strip()
+    if not is_managed_connection_name(profile.name):
+        return None
+    return wizard_connection_key(infer_provider_kind(profile.base_url, profile.model), profile.model)
+
+
+def is_managed_connection(profile: EndpointProfile) -> bool:
+    return managed_connection_key(profile) is not None or is_managed_connection_name(profile.name)
+
+
+def connection_display_name(profile: EndpointProfile) -> str:
+    stored_name = (profile.kwargs or {}).get(_MANAGED_CONNECTION_DISPLAY_NAME_KEY)
+    if isinstance(stored_name, str) and stored_name.strip():
+        return stored_name.strip()
+    return public_connection_name(profile.name)
+
+
+def wizard_connection_key_for_draft(draft: ConnectionDraft) -> str | None:
+    return wizard_connection_key(draft.provider, draft.default_model)
+
+
 def build_connection_summary(profile: EndpointProfile) -> ConnectionSummary:
     provider = infer_provider_kind(profile.base_url, profile.model)
-    kwargs_payload = {str(key): value for key, value in (profile.kwargs or {}).items() if key != "provider"}
-    is_managed = is_managed_connection_name(profile.name)
+    kwargs_payload = {
+        str(key): value for key, value in (profile.kwargs or {}).items() if key not in _HIDDEN_CONNECTION_KWARG_KEYS
+    }
+    is_managed = is_managed_connection(profile)
     return ConnectionSummary(
         connection_id=profile.profile_id,
-        display_name=public_connection_name(profile.name),
+        display_name=connection_display_name(profile),
         is_managed=is_managed,
         provider=provider,
         description=profile.description,
@@ -475,7 +546,7 @@ def read_source_profile_id(config: dict[str, Any]) -> str | None:
     return str(value) if isinstance(value, str) and value.strip() else None
 
 
-def _step_payload_without_routing(step_payload: dict[str, Any]) -> dict[str, bool | int | float | str | None]:
+def _step_payload_without_routing(step_payload: dict[str, Any]) -> dict[str, Any]:
     return {
         str(key): value
         for key, value in step_payload.items()
@@ -522,10 +593,8 @@ def _build_batch_route(step_label: str, config: dict[str, Any]) -> WorkflowStepR
     )
 
 
-def _build_standard_step_payload(route: WorkflowStepRoute) -> dict[str, bool | int | float | str | None]:
-    payload: dict[str, bool | int | float | str | None] = {
-        str(key): value for key, value in route.step_config.items() if value is not None
-    }
+def _build_standard_step_payload(route: WorkflowStepRoute) -> dict[str, Any]:
+    payload: dict[str, Any] = {str(key): value for key, value in route.step_config.items() if value is not None}
     if route.connection_id:
         payload["endpoint_profile"] = route.connection_id
     if route.model:
@@ -537,10 +606,8 @@ def _build_standard_step_payload(route: WorkflowStepRoute) -> dict[str, bool | i
     return payload
 
 
-def _build_batch_step_payload(route: WorkflowStepRoute) -> dict[str, bool | int | float | str | None]:
-    payload: dict[str, bool | int | float | str | None] = {
-        str(key): value for key, value in route.step_config.items() if value is not None
-    }
+def _build_batch_step_payload(route: WorkflowStepRoute) -> dict[str, Any]:
+    payload: dict[str, Any] = {str(key): value for key, value in route.step_config.items() if value is not None}
     if route.model:
         payload["model"] = route.model
     return payload
@@ -700,7 +767,7 @@ def _recommended_step_route(
                 "provider": "gemini_ai_studio",
                 "api_key": gemini_batch.api_key or "",
                 "batch_size": 100,
-                "thinking_mode": "auto",
+                "thinking_mode": "low",
             },
         )
 
@@ -710,7 +777,10 @@ def _recommended_step_route(
         if selected is not None:
             break
 
-    step_config: dict[str, bool | int | float | str | None] = {}
+    step_config: dict[str, Any] = {}
+    reasoning_kwargs = _wizard_reasoning_kwargs(step_id, selected)
+    if reasoning_kwargs is not None:
+        step_config["kwargs"] = reasoning_kwargs
     if step_id is WorkflowStepId.IMAGE_REEMBEDDING and selected is not None:
         if selected.provider is ProviderKind.GEMINI:
             step_config["backend"] = "gemini"

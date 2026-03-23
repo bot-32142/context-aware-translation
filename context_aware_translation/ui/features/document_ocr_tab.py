@@ -350,6 +350,7 @@ class DocumentOCRTab(QWidget):
         self._state: DocumentOCRState | None = None
         self._current_page_index: int | None = None
         self._page_drafts: dict[int, _PageDraft] = {}
+        self._message_is_transient = False
         self._element_to_bbox: dict[int, int] = {}
         self._bbox_to_element: dict[int, int] = {}
         self._chrome_resize_timer = QTimer(self)
@@ -488,25 +489,30 @@ class DocumentOCRTab(QWidget):
         self.empty_label.setParent(self)
         self.empty_label.hide()
 
-    def refresh(self) -> None:
-        self._refresh_with_draft_exclusions(set())
+    def refresh(self) -> bool:
+        return self._refresh_with_draft_exclusions(set())
 
-    def _refresh_with_draft_exclusions(self, excluded_source_ids: set[int]) -> None:
+    def _refresh_with_draft_exclusions(self, excluded_source_ids: set[int]) -> bool:
         current_source_id = self._current_page.source_id if self._current_page is not None else None
         self._remember_current_draft(excluded_source_ids=excluded_source_ids)
         try:
             self._state = self._service.get_ocr(self._project_id, self._document_id)
         except ApplicationError as exc:
             self._set_message(exc.payload.message)
-            return
+            return False
+        self._clear_transient_message()
         self._sync_pages(current_source_id=current_source_id)
         self._apply_actions()
         self._apply_progress()
         self._sync_chrome_state()
+        return True
 
     def get_running_operations(self) -> list[str]:
         if self._state is not None and self._state.active_task_id is not None:
             return ["ocr"]
+        return []
+
+    def get_navigation_blocking_operations(self) -> list[str]:
         return []
 
     def request_cancel_running_operations(self, *, include_engine_tasks: bool = False) -> None:
@@ -816,9 +822,12 @@ class DocumentOCRTab(QWidget):
             QMessageBox.warning(self, self.tr("OCR"), translate_backend_text(exc.payload.message))
             self.refresh()
             return
-        self._set_message(result.message.text if result.message is not None else self.tr("OCR queued."))
         self._clear_page_drafts({page.source_id})
-        self._refresh_with_draft_exclusions({page.source_id})
+        if self._refresh_with_draft_exclusions({page.source_id}):
+            self._set_message(
+                result.message.text if result.message is not None else self.tr("OCR queued."),
+                transient=True,
+            )
 
     def _run_pending(self) -> None:
         affected_source_ids = self._pending_page_source_ids()
@@ -830,9 +839,12 @@ class DocumentOCRTab(QWidget):
             QMessageBox.warning(self, self.tr("OCR"), translate_backend_text(exc.payload.message))
             self.refresh()
             return
-        self._set_message(result.message.text if result.message is not None else self.tr("OCR queued."))
         self._clear_page_drafts(affected_source_ids)
-        self._refresh_with_draft_exclusions(affected_source_ids)
+        if self._refresh_with_draft_exclusions(affected_source_ids):
+            self._set_message(
+                result.message.text if result.message is not None else self.tr("OCR queued."),
+                transient=True,
+            )
 
     def _cancel_ocr(self) -> None:
         if self._state is None or self._state.active_task_id is None:
@@ -845,8 +857,11 @@ class DocumentOCRTab(QWidget):
             QMessageBox.warning(self, self.tr("OCR"), translate_backend_text(exc.payload.message))
             self.refresh()
             return
-        self._set_message(result.message.text if result.message is not None else self.tr("OCR cancellation requested."))
-        self.refresh()
+        if self.refresh():
+            self._set_message(
+                result.message.text if result.message is not None else self.tr("OCR cancellation requested."),
+                transient=True,
+            )
 
     def _remember_current_draft(self, *, excluded_source_ids: set[int] | None = None) -> None:
         page = self._current_page
@@ -895,15 +910,22 @@ class DocumentOCRTab(QWidget):
         if draft.extracted_text is not None:
             self.text_edit.setPlainText(draft.extracted_text)
 
-    def _set_message(self, text: str) -> None:
+    def _set_message(self, text: str, *, transient: bool = False) -> None:
         if not text:
             self.message_label.hide()
             self.message_label.clear()
+            self._message_is_transient = False
             self._sync_chrome_state()
             return
         self.message_label.setText(translate_backend_text(text))
         self.message_label.show()
+        self._message_is_transient = transient
         self._sync_chrome_state()
+
+    def _clear_transient_message(self) -> None:
+        if not self._message_is_transient:
+            return
+        self._set_message("")
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:

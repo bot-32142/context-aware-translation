@@ -77,10 +77,9 @@ def test_decode_payload_empty():
 
 
 def test_decode_payload_valid():
-    record = _make_record(payload_json='{"force": true, "skip_context": false}')
+    record = _make_record(payload_json='{"force": true}')
     payload = handler.decode_payload(record)
     assert payload["force"] is True
-    assert payload["skip_context"] is False
 
 
 def test_scope_all_documents_when_no_ids():
@@ -114,7 +113,7 @@ def test_claims_all_docs_when_scope_is_all():
     claims = handler.claims(record, {})
     assert ResourceClaim("doc", "book-1", "*") in claims
     assert ResourceClaim("glossary_state", "book-1", "*", ClaimMode.READ_SHARED) in claims
-    assert ResourceClaim("context_tree", "book-1", "*", ClaimMode.WRITE_COOPERATIVE) in claims
+    assert ResourceClaim("term_memory", "book-1", "*", ClaimMode.WRITE_COOPERATIVE) in claims
 
 
 def test_claims_specific_docs_when_scope_is_some():
@@ -342,7 +341,7 @@ def test_build_worker_run_returns_translation_text_task_worker():
     record = _make_record(
         status=STATUS_QUEUED,
         document_ids_json=json.dumps([1, 2]),
-        payload_json=json.dumps({"force": True, "skip_context": False}),
+        payload_json=json.dumps({"force": True}),
     )
     payload = handler.decode_payload(record)
     worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
@@ -360,10 +359,13 @@ def test_build_worker_run_filters_to_non_manga_document_ids():
     record = _make_record(
         status=STATUS_QUEUED,
         document_ids_json=json.dumps(doc_ids),
-        payload_json=json.dumps({"force": False, "skip_context": False}),
+        payload_json=json.dumps({"force": False}),
     )
     payload = handler.decode_payload(record)
     worker = handler.build_worker(TaskAction.RUN, record, payload, deps)
+    from context_aware_translation.adapters.qt.workers.translation_text_task_worker import TranslationTextTaskWorker
+
+    assert isinstance(worker, TranslationTextTaskWorker)
     assert worker._document_ids == doc_ids
 
 
@@ -394,7 +396,7 @@ def test_build_worker_run_passes_config_snapshot_to_worker():
     deps = MagicMock()
     record = _make_record(
         status=STATUS_QUEUED,
-        payload_json=json.dumps({"force": False, "skip_context": False}),
+        payload_json=json.dumps({"force": False}),
         config_snapshot_json=snapshot,
     )
     payload = handler.decode_payload(record)

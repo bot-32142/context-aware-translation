@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 from PySide6.QtWidgets import QApplication
 
 from context_aware_translation.application.composition import build_application_context
@@ -15,10 +16,11 @@ from context_aware_translation.application.contracts.app_setup import (
 )
 from context_aware_translation.application.contracts.common import ProviderKind
 from context_aware_translation.application.contracts.project_setup import SaveProjectSetupRequest
-from context_aware_translation.application.contracts.projects import CreateProjectRequest
+from context_aware_translation.application.contracts.projects import CreateProjectRequest, UpdateProjectRequest
 from context_aware_translation.application.contracts.terms import UpdateTermRequest
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+from context_aware_translation.storage.schema.book_db import TermRecord
 
 
 def _ensure_qt_app() -> QApplication:
@@ -27,6 +29,23 @@ def _ensure_qt_app() -> QApplication:
         app = QApplication([])
     assert isinstance(app, QApplication)
     return app
+
+
+def _build_configured_context(tmp_path: Path):
+    context = build_application_context(library_root=tmp_path)
+    context.services.app_setup.run_setup_wizard(
+        SetupWizardRequest(
+            providers=[ProviderKind.OPENAI],
+            connections=[
+                ConnectionDraft(
+                    display_name="OpenAI",
+                    provider=ProviderKind.OPENAI,
+                    api_key="test-key",
+                )
+            ],
+        )
+    )
+    return context
 
 
 def _configure_project_for_task_preflights(context, project_id: str) -> None:  # noqa: ANN001
@@ -57,16 +76,16 @@ def test_build_application_context_exposes_services(tmp_path: Path) -> None:
     context = build_application_context(library_root=tmp_path)
     try:
         setup_state = context.services.app_setup.get_state()
-        assert setup_state.connections
-        assert setup_state.shared_profiles
-        assert any(profile.is_default for profile in setup_state.shared_profiles)
+        assert setup_state.connections == []
+        assert setup_state.shared_profiles == []
+        assert context.services.app_setup.get_wizard_state().available_providers
     finally:
         context.close()
 
 
 def test_projects_service_can_create_and_list_projects(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="One Piece", target_language="English")
@@ -79,9 +98,82 @@ def test_projects_service_can_create_and_list_projects(tmp_path: Path) -> None:
         context.close()
 
 
+def test_projects_service_creates_project_with_selected_workflow_profile(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        default_profile = context.runtime.book_manager.list_profiles()[0]
+        alternate_config = dict(default_profile.config)
+        alternate_config["translation_target_language"] = "Japanese"
+        alternate_profile = context.runtime.book_manager.create_profile(
+            name="Japanese Profile",
+            config=alternate_config,
+        )
+
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Profile Pick", workflow_profile_id=alternate_profile.profile_id)
+        )
+        project_id = created.project.project_id
+        book = context.runtime.get_book(project_id)
+        project_setup = context.services.project_setup.get_state(project_id)
+
+        assert book.profile_id == alternate_profile.profile_id
+        assert created.target_language == "Japanese"
+        assert project_setup.selected_shared_profile_id == alternate_profile.profile_id
+    finally:
+        context.close()
+
+
+def test_projects_service_preserves_selected_profile_when_overriding_target_language(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        shared_profile = context.runtime.book_manager.list_profiles()[0]
+
+        created = context.services.projects.create_project(
+            CreateProjectRequest(
+                name="Profile Override",
+                workflow_profile_id=shared_profile.profile_id,
+                target_language="Chinese",
+            )
+        )
+        project_id = created.project.project_id
+        book = context.runtime.get_book(project_id)
+        config = context.runtime.get_effective_config_payload(project_id)
+        project_setup = context.services.project_setup.get_state(project_id)
+
+        assert book.profile_id is None
+        assert config["translation_target_language"] == "Chinese"
+        assert config["_ui_source_profile_id"] == shared_profile.profile_id
+        assert project_setup.selected_shared_profile_id == shared_profile.profile_id
+    finally:
+        context.close()
+
+
+def test_projects_service_preserves_source_profile_when_editing_target_language(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        shared_profile = context.runtime.book_manager.list_profiles()[0]
+        created = context.services.projects.create_project(CreateProjectRequest(name="Edit Target"))
+        project_id = created.project.project_id
+
+        context.services.projects.update_project(UpdateProjectRequest(project_id=project_id, target_language="Chinese"))
+
+        book = context.runtime.get_book(project_id)
+        config = context.runtime.get_effective_config_payload(project_id)
+        project_setup = context.services.project_setup.get_state(project_id)
+
+        assert book.profile_id is None
+        assert config["_ui_source_profile_id"] == shared_profile.profile_id
+        assert project_setup.selected_shared_profile_id == shared_profile.profile_id
+    finally:
+        context.close()
+
+
 def test_project_setup_and_work_queries_use_service_boundary(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Manga Test", target_language="English")
@@ -104,7 +196,7 @@ def test_workboard_builds_labels_without_per_document_metadata_queries(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Manga Test", target_language="English")
@@ -164,6 +256,7 @@ def test_app_setup_preview_exposes_recommended_profile(tmp_path: Path) -> None:
                         default_model="deepseek-chat",
                     ),
                 ],
+                target_language="Japanese",
             )
         )
 
@@ -171,6 +264,7 @@ def test_app_setup_preview_exposes_recommended_profile(tmp_path: Path) -> None:
         assert preview.recommendation is not None
         assert preview.recommendation.routes
         assert preview.recommendation.name == "Recommended"
+        assert preview.recommendation.target_language == "Japanese"
     finally:
         context.close()
 
@@ -183,6 +277,7 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
             SetupWizardRequest(
                 providers=[ProviderKind.GEMINI, ProviderKind.DEEPSEEK],
                 profile_name="Team Default",
+                target_language="Japanese",
                 connections=[
                     ConnectionDraft(display_name="Gemini", provider=ProviderKind.GEMINI, api_key="gkey"),
                     ConnectionDraft(display_name="DeepSeek", provider=ProviderKind.DEEPSEEK, api_key="dkey"),
@@ -190,9 +285,10 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
             )
         )
 
-        connection_names = {profile.name for profile in context.runtime.book_manager.list_endpoint_profiles()}
+        endpoint_profiles = context.runtime.book_manager.list_endpoint_profiles()
+        connection_names = {profile.name for profile in endpoint_profiles}
         assert "recommended-Gemini 2.5 Pro" in connection_names
-        assert "recommended-Gemini 3.1 Flash Image Preview" in connection_names
+        assert "recommended-Gemini 3 Pro Image Preview" in connection_names
         assert "recommended-DeepSeek Chat" in connection_names
         assert "recommended-DeepSeek Reasoner" in connection_names
 
@@ -202,6 +298,35 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
         detail = context.services.app_setup.get_state()
         assert any(profile.name == "Team Default" for profile in detail.shared_profiles)
         assert created_profile.is_default is True
+        assert created_profile.config["translation_target_language"] == "Japanese"
+        assert created_profile.config["glossary_config"]["kwargs"] == {"reasoning_effort": "low"}
+        assert created_profile.config["translator_config"]["kwargs"] == {"reasoning_effort": "low"}
+        assert created_profile.config["ocr_config"]["kwargs"] == {"reasoning_effort": "none"}
+        assert created_profile.config["image_reembedding_config"] == {
+            "endpoint_profile": next(
+                profile.profile_id
+                for profile in endpoint_profiles
+                if profile.name == "recommended-Gemini 3 Pro Image Preview"
+            ),
+            "model": "gemini-3-pro-image-preview",
+            "backend": "gemini",
+        }
+        assert created_profile.config["manga_translator_config"]["kwargs"] == {"reasoning_effort": "low"}
+        assert created_profile.config["translator_batch_config"]["thinking_mode"] == "low"
+        assert (
+            next(profile for profile in endpoint_profiles if profile.name == "recommended-Gemini 2.5 Pro").api_key
+            == "gkey"
+        )
+        assert (
+            next(profile for profile in endpoint_profiles if profile.name == "recommended-DeepSeek Chat").api_key
+            == "dkey"
+        )
+        assert (
+            next(
+                profile for profile in endpoint_profiles if profile.name == "recommended-Gemini 3 Flash Preview"
+            ).timeout
+            == 300
+        )
     finally:
         context.close()
 
@@ -287,9 +412,94 @@ def test_setup_wizard_rerun_updates_existing_managed_connections_and_profile(tmp
         context.close()
 
 
-def test_project_specific_profile_remains_usable_without_shared_profiles(tmp_path: Path) -> None:
+def test_setup_wizard_rerun_overwrites_manual_managed_connection_edits(tmp_path: Path) -> None:
     _ensure_qt_app()
     context = build_application_context(library_root=tmp_path)
+    try:
+        context.services.app_setup.run_setup_wizard(
+            SetupWizardRequest(
+                providers=[ProviderKind.GEMINI],
+                profile_name="Team Default",
+                connections=[
+                    ConnectionDraft(
+                        display_name="Gemini",
+                        provider=ProviderKind.GEMINI,
+                        api_key="gkey-1",
+                    )
+                ],
+            )
+        )
+
+        managed = next(
+            profile
+            for profile in context.runtime.book_manager.list_endpoint_profiles()
+            if profile.name == "recommended-Gemini 2.5 Pro"
+        )
+
+        state = context.services.app_setup.save_connection(
+            SaveConnectionRequest(
+                connection_id=managed.profile_id,
+                connection=ConnectionDraft(
+                    display_name="Gemini Personal Tweak",
+                    provider=ProviderKind.OPENAI_COMPATIBLE,
+                    api_key="custom-key",
+                    base_url="https://example.com/v1",
+                    default_model="custom-model",
+                    description="Local override",
+                    temperature=0.7,
+                    token_limit=1234,
+                    custom_parameters_json=json.dumps({"reasoning_effort": "medium"}),
+                ),
+            )
+        )
+
+        edited = next(connection for connection in state.connections if connection.connection_id == managed.profile_id)
+        assert edited.display_name == "Gemini Personal Tweak"
+        assert edited.is_managed is True
+        assert edited.base_url == "https://example.com/v1"
+        assert edited.default_model == "custom-model"
+        assert edited.token_limit == 1234
+        assert json.loads(edited.custom_parameters_json or "{}") == {"reasoning_effort": "medium"}
+
+        context.services.app_setup.run_setup_wizard(
+            SetupWizardRequest(
+                providers=[ProviderKind.GEMINI],
+                profile_name="Team Default",
+                connections=[
+                    ConnectionDraft(
+                        display_name="Gemini",
+                        provider=ProviderKind.GEMINI,
+                        api_key="gkey-2",
+                        description="Wizard reset",
+                        token_limit=2000,
+                    )
+                ],
+            )
+        )
+
+        rerun = context.runtime.book_manager.get_endpoint_profile(managed.profile_id)
+        assert rerun is not None
+        assert rerun.name == "recommended-Gemini 2.5 Pro"
+        assert rerun.api_key == "gkey-2"
+        assert rerun.base_url == "https://generativelanguage.googleapis.com/v1beta/openai/"
+        assert rerun.model == "gemini-2.5-pro"
+        assert rerun.description == "Wizard reset"
+        assert rerun.token_limit == 2000
+
+        refreshed = next(
+            connection
+            for connection in context.services.app_setup.get_state().connections
+            if connection.connection_id == managed.profile_id
+        )
+        assert refreshed.display_name == "Gemini 2.5 Pro"
+        assert refreshed.is_managed is True
+    finally:
+        context.close()
+
+
+def test_project_specific_profile_remains_usable_without_shared_profiles(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Setup Target", target_language="English")
@@ -419,7 +629,7 @@ def test_app_setup_delete_connection_invalidates_dependent_surfaces(tmp_path: Pa
 
 def test_projects_delete_invalidates_all_affected_surfaces(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     seen: list[str] = []
     subscription = context.events.subscribe(lambda event: seen.append(event.kind.value))
     try:
@@ -495,7 +705,7 @@ def test_application_context_close_keeps_runtime_resources_open_while_workers_st
 
 def test_terms_update_missing_term_raises_not_found(tmp_path: Path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Terms Missing", target_language="English")
@@ -515,5 +725,43 @@ def test_terms_update_missing_term_raises_not_found(tmp_path: Path) -> None:
             )
 
         assert exc_info.value.payload.code == "not_found"
+    finally:
+        context.close()
+
+
+def test_terms_update_request_rejects_removed_description_field(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Terms Manual Edit", target_language="English")
+        )
+        project_id = created.project.project_id
+        _configure_project_for_task_preflights(context, project_id)
+
+        with context.runtime.open_book_db(project_id) as dbx:
+            dbx.term_repo.upsert_terms(
+                [
+                    TermRecord(
+                        key="ルフィ",
+                        descriptions={"1": "Main character"},
+                        occurrence={"1": 1},
+                        votes=1,
+                        total_api_calls=1,
+                    )
+                ]
+            )
+
+        scope = context.services.terms.get_project_terms(project_id).scope
+
+        with pytest.raises(ValidationError):
+            UpdateTermRequest.model_validate(
+                {
+                    "scope": scope,
+                    "term_id": 1,
+                    "term_key": "ルフィ",
+                    "description": "Pirate captain",
+                }
+            )
     finally:
         context.close()

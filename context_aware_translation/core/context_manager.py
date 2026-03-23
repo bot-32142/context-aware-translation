@@ -13,14 +13,15 @@ from transformers import PreTrainedTokenizer
 
 from context_aware_translation.core.cancellation import raise_if_cancelled
 from context_aware_translation.core.context_extractor import ContextExtractor
-from context_aware_translation.core.context_tree import ContextTree
-from context_aware_translation.core.models import KeyedContext, Term
+from context_aware_translation.core.models import KeyedContext, Term, description_index, ordered_description_values
 from context_aware_translation.core.progress import ProgressCallback, ProgressUpdate, WorkflowStep
+from context_aware_translation.core.term_memory_builder import TermMemoryBuilder
 from context_aware_translation.core.translation_strategies import (
     ChunkTranslationStrategy,
     DocumentTypeHandler,
     GlossaryTranslationStrategy,
     SourceLanguageDetector,
+    TermMemoryUpdater,
     TermReviewer,
 )
 from context_aware_translation.storage.repositories.term_repository import (
@@ -95,13 +96,29 @@ class ChunkTranslationInputs:
     batches: list[list[TranslationChunkRecord]]
 
 
+@dataclass(frozen=True)
+class _LegacyContextTreeAdapter:
+    context_tree: Any | None
+
+    def call(self, method_name: str, *args: Any, **kwargs: Any) -> Any | None:
+        if self.context_tree is None:
+            return None
+        method = getattr(self.context_tree, method_name, None)
+        if not callable(method):
+            return None
+        return method(*args, **kwargs)
+
+
 class ContextManager:
     def __init__(
         self,
         context_extractor: ContextExtractor,
         term_repo: TermRepository,
-        context_tree: ContextTree,
         tokenizer: PreTrainedTokenizer,
+        *,
+        context_tree: Any | None = None,
+        term_memory_builder: TermMemoryBuilder | None = None,
+        owns_context_tree: bool = True,
     ) -> None:
         # Initialize storage manager
         self.term_repo: TermRepository = term_repo
@@ -110,15 +127,104 @@ class ContextManager:
         # Lock for thread-safe merge operations
         self._merge_lock = threading.Lock()
         self.context_tree = context_tree
+        self.term_memory_builder = term_memory_builder
+        self._owns_context_tree = owns_context_tree
+
+    @property
+    def context_tree(self) -> Any | None:
+        return self._context_tree
+
+    @context_tree.setter
+    def context_tree(self, value: Any | None) -> None:
+        self._context_tree = value
+        self._legacy_context_tree = _LegacyContextTreeAdapter(value)
 
     def close(self) -> None:
         """
         Close all services. Should only be called during application shutdown.
         """
-        if hasattr(self.context_tree, "close") and getattr(self, "_owns_context_tree", True):
-            self.context_tree.close()
-        if hasattr(self.term_repo, "close"):
-            self.term_repo.close()
+        if self.term_memory_builder is not None:
+            self.term_memory_builder.close()
+        if self._owns_context_tree:
+            self._legacy_context_tree.call("close")
+        self.term_repo.close()
+
+    def _replace_term_memory_versions(self, term_key: str, versions: list[Any]) -> None:
+        self.term_repo.replace_term_memory_versions(term_key, versions)
+
+    def _add_legacy_context_chunks(
+        self,
+        terms_data: dict[str, dict[int, str]],
+        cancel_check: Callable[[], bool] | None = None,
+    ) -> None:
+        self._legacy_context_tree.call("add_chunks", terms_data, cancel_check=cancel_check)
+
+    def _get_term_memory_summary_before(self, term_key: str, query_index: int) -> str:
+        latest_memory = self.term_repo.get_latest_term_memory_before(term_key, query_index)
+        if latest_memory is None:
+            return ""
+        return str(getattr(latest_memory, "summary_text", "")).strip()
+
+    def _summarize_with_legacy_context_tree(
+        self,
+        term_key: str,
+        query_index: int,
+        *,
+        cancel_check: Callable[[], bool] | None = None,
+    ) -> str:
+        summary = self._legacy_context_tree.call(
+            "summarize_term_fully",
+            term_key,
+            query_index,
+            cancel_check=cancel_check,
+        )
+        return summary.strip() if isinstance(summary, str) else ""
+
+    def _get_query_summary_from_legacy_context_tree(self, term_key: str, query_index: int) -> str:
+        context_values = self._legacy_context_tree.call("get_context", term_key, query_index)
+        if context_values is None:
+            return ""
+        summaries = [s for s in context_values if s and s.strip()]
+        if not summaries:
+            return ""
+        return str(max(summaries, key=lambda s: len(str(s).strip())))
+
+    @classmethod
+    def _ordered_description_values(
+        cls,
+        descriptions: dict[str, str],
+        *,
+        query_index: int | None = None,
+    ) -> list[str]:
+        return ordered_description_values(descriptions, query_index=query_index)
+
+    @classmethod
+    def _raw_description_fallback(cls, descriptions: dict[str, str], query_index: int | None = None) -> str:
+        values = cls._ordered_description_values(descriptions, query_index=query_index)
+        if values:
+            return " ".join(values).strip()
+        return ""
+
+    @staticmethod
+    def _term_requires_term_memory(term: Term) -> bool:
+        return term.term_type in {"character", "organization"}
+
+    def _best_available_summary(
+        self,
+        term: Term,
+        query_index: int,
+        *,
+        legacy_summary: Callable[[], str],
+    ) -> str:
+        term_memory_summary = self._get_term_memory_summary_before(term.key, query_index)
+        if term_memory_summary:
+            return term_memory_summary
+
+        legacy = legacy_summary()
+        if legacy:
+            return legacy
+
+        return self._raw_description_fallback(term.descriptions, query_index)
 
     def add_text(
         self,
@@ -154,34 +260,42 @@ class ContextManager:
 
     def build_context_tree(self, cancel_check: Callable[[], bool] | None = None) -> None:
         """
-        Build context tree from chunks that are not summarized yet.
-        Context tree is shared across all documents.
+        Build causal term-memory timelines from term descriptions.
         """
+        all_terms = self.term_repo.list_keyed_context()
+        terms = [term for term in all_terms if not term.ignored and term.descriptions]
+        summary_terms = [term for term in terms if self._term_requires_term_memory(term)]
+
+        for term in all_terms:
+            if term.ignored or not term.descriptions or not self._term_requires_term_memory(term):
+                self._replace_term_memory_versions(term.key, [])
+
         terms_data = {
             term.key: {
                 idx: description
                 for chunk_id, description in term.descriptions.items()
                 if (idx := self._description_index(chunk_id)) is not None
             }
-            for term in self.term_repo.list_keyed_context()
-            if not term.ignored and term.descriptions
+            for term in terms
         }
         terms_data = {k: v for k, v in terms_data.items() if v}
+        if terms_data and self.term_memory_builder is not None:
+            for term in summary_terms:
+                data = terms_data.get(term.key)
+                if not data:
+                    continue
+                versions = self.term_memory_builder.build_versions(
+                    term.key,
+                    data,
+                    cancel_check=cancel_check,
+                )
+                self._replace_term_memory_versions(term.key, versions)
         if terms_data:
-            self.context_tree.add_chunks(terms_data, cancel_check=cancel_check)
+            self._add_legacy_context_chunks(terms_data, cancel_check=cancel_check)
 
     @staticmethod
     def _description_index(key: object) -> int | None:
-        if key == "imported":
-            return -1
-        if isinstance(key, int):
-            return key
-        raw = str(key).strip()
-        if raw == "imported":
-            return -1
-        if raw.lstrip("-").isdigit():
-            return int(raw)
-        return None
+        return description_index(key)
 
     @classmethod
     def _description_query_index(cls, descriptions: dict[str, str]) -> int:
@@ -189,23 +303,6 @@ class ContextManager:
         if not numeric_keys:
             return 0
         return max(numeric_keys) + 1
-
-    @classmethod
-    def _ordered_description_values(cls, descriptions: dict[str, str]) -> list[str]:
-        def _sort_key(raw_key: object) -> tuple[int, int | str]:
-            idx = cls._description_index(raw_key)
-            if idx is None:
-                return (2, str(raw_key))
-            if idx == -1:
-                return (0, -1)
-            return (1, idx)
-
-        values: list[str] = []
-        for key in sorted(descriptions.keys(), key=_sort_key):
-            value = descriptions[key]
-            if value and value.strip():
-                values.append(value)
-        return values
 
     @classmethod
     def _first_description_value(cls, descriptions: dict[str, str]) -> str:
@@ -226,16 +323,23 @@ class ContextManager:
             return ""
         if term.ignored:
             return " ".join(description_values).strip()
+        if not self._term_requires_term_memory(term):
+            return " ".join(description_values).strip()
 
         query_index = self._description_query_index(term.descriptions)
-        summary = self.context_tree.summarize_term_fully(term.key, query_index, cancel_check=cancel_check)
-        if summary.strip():
+        summary = self._best_available_summary(
+            term,
+            query_index,
+            legacy_summary=lambda: self._summarize_with_legacy_context_tree(
+                term.key,
+                query_index,
+                cancel_check=cancel_check,
+            ),
+        )
+        if summary:
             return summary
 
-        raise ValueError(
-            f"Failed to summarize glossary term '{term.key}' for export. "
-            "All non-ignored terms must have a context-tree summary."
-        )
+        raise ValueError(f"Failed to build glossary term '{term.key}' for export.")
 
     @staticmethod
     def _export_term_progress_message(*, current: int, total: int) -> str:
@@ -248,8 +352,8 @@ class ContextManager:
     ) -> dict[str, str]:
         """Build one export description for every glossary term.
 
-        Descriptions are fully summarized via context-tree nodes (persisted for
-        future reuse).
+        Descriptions prefer term-memory summaries, then legacy context-tree
+        summaries, then raw term descriptions.
         """
         self.build_context_tree(cancel_check=cancel_check)
         terms = self.term_repo.list_keyed_context()
@@ -288,14 +392,13 @@ class ContextManager:
 
     def get_term_description_for_query(self, term: Term, query_index: int) -> str:
         """Return the term description text used for chunk translation prompts."""
-        longest = self.context_tree.get_longest_context_summary(term.key, query_index)
-        if longest.strip():
-            return longest
-        summaries = [s for s in self.context_tree.get_context(term.key, query_index) if s and s.strip()]
-        if not summaries:
-            return ""
-        # Prefer a single strongest context summary instead of concatenating all prior nodes.
-        return max(summaries, key=lambda s: len(s.strip()))
+        if not self._term_requires_term_memory(term):
+            return self._raw_description_fallback(term.descriptions, query_index)
+        return self._best_available_summary(
+            term,
+            query_index,
+            legacy_summary=lambda: self._get_query_summary_from_legacy_context_tree(term.key, query_index),
+        )
 
     async def extract_keyed_context(
         self,
@@ -407,34 +510,39 @@ class TranslationContextManager(ContextManager):
     def __init__(
         self,
         term_repo: TermRepository,
-        context_tree: ContextTree,
         context_extractor: ContextExtractor,
         tokenizer: PreTrainedTokenizer,
         *,
+        context_tree: Any | None = None,
         source_language_detector: SourceLanguageDetector,
         glossary_translator: GlossaryTranslationStrategy,
         chunk_translator: ChunkTranslationStrategy,
         term_reviewer: TermReviewer | None = None,
         owns_context_tree: bool = True,
+        term_memory_updater: TermMemoryUpdater | None = None,
     ) -> None:
         """
         Initialize the TranslationContextManager.
 
         Args:
             storage_manager: The storage manager for persisting terms and chunks
-            context_tree: The context tree for managing context
             context_extractor: The context extractor for extracting terms from chunks
             tokenizer: Tokenizer for text processing
-            owns_context_tree: If False, close() will not close the context_tree
         """
-        # Store BEFORE super().__init__ which doesn't know about this param
-        self._owns_context_tree = owns_context_tree
         self.term_repo = term_repo
         self.source_language_detector: SourceLanguageDetector = source_language_detector
         self.glossary_translator: GlossaryTranslationStrategy = glossary_translator
         self.chunk_translator: ChunkTranslationStrategy = chunk_translator
         self.term_reviewer: TermReviewer | None = term_reviewer
-        super().__init__(context_extractor, self.term_repo, context_tree, tokenizer)
+        term_memory_builder = TermMemoryBuilder(term_memory_updater) if term_memory_updater is not None else None
+        super().__init__(
+            context_extractor,
+            self.term_repo,
+            tokenizer,
+            context_tree=context_tree,
+            term_memory_builder=term_memory_builder,
+            owns_context_tree=owns_context_tree,
+        )
 
     async def detect_language(self, cancel_check: Callable[[], bool] | None = None) -> None:
         """
@@ -692,17 +800,10 @@ class TranslationContextManager(ContextManager):
         """Get the earliest description for a term by smallest chunk_id key."""
         if not term.descriptions:
             raise ValueError(f"Term {term.key} has no descriptions")
-
-        def _to_int_key(key: str) -> int:
-            if key == "imported":
-                return -1
-            try:
-                return int(key)
-            except (TypeError, ValueError):
-                return 0
-
-        min_chunk_id_key = min(term.descriptions.keys(), key=_to_int_key)
-        return term.descriptions[min_chunk_id_key]  # type: ignore[no-any-return]
+        description = TranslationContextManager._first_description_value(term.descriptions)
+        if not description:
+            raise ValueError(f"Term {term.key} has no recognized descriptions")
+        return description
 
     @staticmethod
     def _partition_component_terms(component: list[Term]) -> tuple[dict[str, str], list[dict[str, str]]]:

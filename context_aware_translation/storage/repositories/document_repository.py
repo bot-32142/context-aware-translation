@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from context_aware_translation.documents.base import is_ocr_required_for_type
-from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 
 if TYPE_CHECKING:
     from context_aware_translation.storage.schema.book_db import SQLiteBookDB
@@ -187,9 +185,8 @@ class DocumentRepository:
     def reset_document_stack(
         self,
         document_id: int,
-        context_tree_db_path: Path | None = None,
     ) -> dict:
-        """Stack-based document reset: context tree + book.db.
+        """Stack-based document reset: book.db.
 
         Resets processing state for the target document and all documents
         added after it (by chunk_id ordering). Does NOT delete the documents
@@ -197,13 +194,10 @@ class DocumentRepository:
 
         Ordering (critical):
           1. Capture cutoff chunk_id BEFORE any deletion
-          2. Clean context tree DB (separate DB, fail-safe)
-          3. Clean book.db: delete chunks >= cutoff, prune terms, reset is_text_added
+          2. Clean book.db: delete chunks >= cutoff, prune terms, reset is_text_added
 
         Args:
             document_id: The document to reset.
-            context_tree_db_path: Path to context_tree.db. If None, context tree
-                cleanup is skipped.
 
         Returns:
             Dict with cutoff, affected_document_ids, deleted_chunks, etc.
@@ -221,17 +215,8 @@ class DocumentRepository:
 
         cutoff = self._min_chunk_id_for_documents(affected_doc_ids)
 
-        if cutoff is not None and context_tree_db_path is not None:
-            # Step 2: Clean context tree (separate DB -- do first for fail-safety)
-            ct_db = ContextTreeDB(context_tree_db_path)
-            try:
-                ct_db.delete_nodes_from_index(cutoff)
-                ct_db.rollback_metadata_to_index(cutoff)
-            finally:
-                ct_db.close()
-
         if cutoff is not None:
-            # Step 3: Clean book.db (chunks, terms, flags)
+            # Step 2: Clean book.db (chunks, terms, flags)
             result = self.db.reset_documents_from(cutoff)
         else:
             result = {
@@ -248,22 +233,18 @@ class DocumentRepository:
     def delete_documents_stack(
         self,
         document_id: int,
-        context_tree_db_path: Path | None = None,
     ) -> dict:
-        """Stack-based document deletion: context tree + book.db + documents.
+        """Stack-based document deletion: book.db + documents.
 
         Deletes the target document and all documents added after it,
         including their sources, chunks, and term data.
 
         Ordering (critical):
           1. Capture cutoff chunk_id BEFORE any deletion
-          2. Clean context tree DB (separate DB, fail-safe)
-          3. Clean book.db: delete chunks/terms, then delete sources and documents
+          2. Clean book.db: delete chunks/terms, then delete sources and documents
 
         Args:
             document_id: The document to delete.
-            context_tree_db_path: Path to context_tree.db. If None, context tree
-                cleanup is skipped.
 
         Returns:
             Dict with cutoff, affected_document_ids, deleted_chunks,
@@ -285,16 +266,7 @@ class DocumentRepository:
 
         cutoff = self._min_chunk_id_for_documents(affected_doc_ids)
 
-        if cutoff is not None and context_tree_db_path is not None:
-            # Step 2: Clean context tree (separate DB -- do first for fail-safety)
-            ct_db = ContextTreeDB(context_tree_db_path)
-            try:
-                ct_db.delete_nodes_from_index(cutoff)
-                ct_db.rollback_metadata_to_index(cutoff)
-            finally:
-                ct_db.close()
-
-        # Step 3: Delete documents (handles chunk/term reset + source/doc deletion)
+        # Step 2: Delete documents (handles chunk/term reset + source/doc deletion)
         result = self.db.delete_documents_from(document_id)
         result["document_exists"] = True
         result["cutoff"] = cutoff

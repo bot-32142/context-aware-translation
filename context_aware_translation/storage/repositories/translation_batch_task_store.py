@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import sqlite3
-import threading
 import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from context_aware_translation.storage.sqlite_locking import get_sqlite_file_lock
 
 STATUS_QUEUED = "queued"
 STATUS_RUNNING = "running"
@@ -46,7 +47,6 @@ CREATE TABLE IF NOT EXISTS translation_batch_tasks (
     payload_json TEXT NOT NULL,
     document_ids_json TEXT,
     force INTEGER NOT NULL,
-    skip_context INTEGER NOT NULL,
     total_items INTEGER NOT NULL,
     completed_items INTEGER NOT NULL,
     failed_items INTEGER NOT NULL,
@@ -97,7 +97,6 @@ class TranslationBatchTaskRecord:
     payload_json: str
     document_ids_json: str | None
     force: bool
-    skip_context: bool
     total_items: int
     completed_items: int
     failed_items: int
@@ -117,7 +116,7 @@ class TranslationBatchTaskStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
-        self._lock = threading.RLock()
+        self._lock = get_sqlite_file_lock(self.db_path)
         self._configure_connection()
         self._init_schema()
 
@@ -130,6 +129,9 @@ class TranslationBatchTaskStore:
         with self._lock:
             cur = self.conn.cursor()
             cur.execute(CREATE_TRANSLATION_BATCH_TASKS)
+            existing_cols = {row[1] for row in cur.execute("PRAGMA table_info(translation_batch_tasks)").fetchall()}
+            if "skip_context" in existing_cols:
+                cur.execute("ALTER TABLE translation_batch_tasks DROP COLUMN skip_context")
             cur.execute(CREATE_TRANSLATION_BATCH_TASKS_BOOK_INDEX)
             cur.execute(CREATE_TRANSLATION_BATCH_TASKS_STATUS_INDEX)
             self.conn.commit()
@@ -145,7 +147,6 @@ class TranslationBatchTaskStore:
         payload_json: str = "{}",
         document_ids_json: str | None = None,
         force: bool = False,
-        skip_context: bool = False,
     ) -> TranslationBatchTaskRecord:
         now = time.time()
         task_id = uuid.uuid4().hex
@@ -160,7 +161,6 @@ class TranslationBatchTaskStore:
                     payload_json,
                     document_ids_json,
                     force,
-                    skip_context,
                     total_items,
                     completed_items,
                     failed_items,
@@ -171,7 +171,7 @@ class TranslationBatchTaskStore:
                     created_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)
                 """,
                 (
                     task_id,
@@ -181,7 +181,6 @@ class TranslationBatchTaskStore:
                     payload_json,
                     document_ids_json,
                     int(force),
-                    int(skip_context),
                     0,
                     0,
                     0,
@@ -302,7 +301,6 @@ class TranslationBatchTaskStore:
             payload_json=str(row["payload_json"]),
             document_ids_json=str(row["document_ids_json"]) if row["document_ids_json"] is not None else None,
             force=bool(row["force"]),
-            skip_context=bool(row["skip_context"]),
             total_items=int(row["total_items"]),
             completed_items=int(row["completed_items"]),
             failed_items=int(row["failed_items"]),

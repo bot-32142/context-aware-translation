@@ -117,12 +117,12 @@ def test_claims_all_docs_when_scope_is_all():
     assert ResourceClaim("glossary_state", "book-1", "*", ClaimMode.READ_SHARED) in claims
 
 
-def test_claims_include_context_tree():
-    """Manga translation claims context_tree, aligned with workflow.translate()."""
+def test_claims_include_term_memory():
+    """Manga translation claims term_memory, aligned with workflow.translate()."""
     record = _make_record(document_ids_json=None)
     claims = handler.claims(record, {})
-    context_tree_claims = [c for c in claims if c.namespace == "context_tree"]
-    assert context_tree_claims == [ResourceClaim("context_tree", "book-1", "*", ClaimMode.WRITE_COOPERATIVE)]
+    term_memory_claims = [c for c in claims if c.namespace == "term_memory"]
+    assert term_memory_claims == [ResourceClaim("term_memory", "book-1", "*", ClaimMode.WRITE_COOPERATIVE)]
 
 
 def test_claims_specific_docs_when_scope_is_some():

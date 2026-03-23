@@ -109,6 +109,37 @@ class TestResolveWithProfile:
         with pytest.raises(ValueError, match="not found"):
             _resolve_with_profile(config, profiles)
 
+    def test_explicit_default_scalars_override_profile(self):
+        """Explicit default-valued overrides still beat profile values."""
+        profiles = {
+            "prod": EndpointProfile(
+                name="prod",
+                api_key="prod-key",
+                base_url="https://prod.api",
+                model="prod-model",
+                timeout=240.0,
+                max_retries=7,
+                temperature=0.8,
+                concurrency=11,
+            )
+        }
+        config = LLMConfig.from_dict(
+            {
+                "endpoint_profile": "prod",
+                "timeout": 120.0,
+                "max_retries": 3,
+                "temperature": 0.0,
+                "concurrency": 5,
+            }
+        )
+
+        result = _resolve_with_profile(config, profiles)
+
+        assert result.timeout == 120.0
+        assert result.max_retries == 3
+        assert result.temperature == 0.0
+        assert result.concurrency == 5
+
     def test_kwargs_merged(self):
         """Profile and config kwargs are merged correctly."""
         profiles = {
@@ -154,6 +185,30 @@ class TestResolveWithProfile:
         result = _resolve_with_profile(config, profiles)
 
         assert result.kwargs == {}
+
+    def test_internal_profile_metadata_kwargs_are_stripped(self):
+        """App-managed metadata must not leak into resolved LLM kwargs."""
+        profiles = {
+            "test": EndpointProfile(
+                name="test",
+                api_key="key",
+                base_url="https://test.api",
+                model="model",
+                kwargs={
+                    "provider": "gemini",
+                    "_ui_display_name": "Gemini Personal Tweak",
+                    "_wizard_template_key": "gemini:gemini-2.5-pro",
+                    "extra_body": {"google": {"thinking_config": {"thinking_level": "MINIMAL"}}},
+                },
+            )
+        }
+        config = LLMConfig(endpoint_profile="test", kwargs={"reasoning_effort": "low"})
+        result = _resolve_with_profile(config, profiles)
+
+        assert result.kwargs == {
+            "extra_body": {"google": {"thinking_config": {"thinking_level": "MINIMAL"}}},
+            "reasoning_effort": "low",
+        }
 
     def test_translator_batch_config_round_trip(self):
         translator_batch = TranslatorBatchConfig(
@@ -411,7 +466,6 @@ class TestRuntimeConfigSnapshot:
 
             runtime = config.get_workflow_runtime_config()
             assert runtime.sqlite_path == config.sqlite_path
-            assert runtime.context_tree_sqlite_path == config.context_tree_sqlite_path
             assert runtime.extractor_config.model == "m"
             assert runtime.summarizor_config.model == "m"
             assert runtime.translator_config.model == "m"

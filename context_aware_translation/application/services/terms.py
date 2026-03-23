@@ -43,8 +43,8 @@ from context_aware_translation.application.runtime import (
     make_document_ref,
     raise_application_error,
 )
+from context_aware_translation.core.models import description_index, ordered_description_entries
 from context_aware_translation.storage.schema.book_db import TermRecord, TermRowUpdate
-from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 from context_aware_translation.workflow.tasks.models import TaskAction
 
@@ -127,8 +127,6 @@ class DefaultTermsService:
                 )
             if request.translation is not None:
                 record.translated_name = request.translation
-            if request.description is not None:
-                record.descriptions = {**record.descriptions, "manual": request.description}
             if request.ignored is not None:
                 record.ignored = request.ignored
             if request.reviewed is not None:
@@ -216,11 +214,7 @@ class DefaultTermsService:
         if blocker is not None:
             self._raise_blocked_blocker(blocker, project_id=request.project_id)
         with self._runtime.open_book_db(request.project_id) as dbx:
-            context_tree_db = ContextTreeDB(self._runtime.book_manager.get_book_context_tree_path(request.project_id))
-            try:
-                import_glossary(dbx.db, context_tree_db, Path(request.input_path))
-            finally:
-                context_tree_db.close()
+            import_glossary(dbx.db, Path(request.input_path))
         self._runtime.invalidate_terms(request.project_id)
         return self.get_project_terms(request.project_id)
 
@@ -304,6 +298,7 @@ class DefaultTermsService:
             term_id=int(record.key) if record.key.isdigit() else hash(record.key),
             term_key=record.key,
             term=record.key,
+            term_type=record.term_type,
             translation=record.translated_name,
             description=self._primary_description(record),
             description_tooltip=self._description_tooltip(record),
@@ -326,11 +321,13 @@ class DefaultTermsService:
 
     @staticmethod
     def _recognized_chunk_count(record: TermRecord) -> int:
-        return sum(1 for key in (record.descriptions or {}) if str(key).lstrip("-").isdigit())
+        return sum(1 for key in (record.descriptions or {}) if (idx := description_index(key)) is not None and idx >= 0)
 
     @staticmethod
     def _max_chunk_id(record: TermRecord) -> int:
-        chunk_ids = [int(key) for key in (record.descriptions or {}) if str(key).lstrip("-").isdigit()]
+        chunk_ids = [
+            idx for key in (record.descriptions or {}) if (idx := description_index(key)) is not None and idx >= 0
+        ]
         return max(chunk_ids) if chunk_ids else -1
 
     @classmethod
@@ -347,15 +344,7 @@ class DefaultTermsService:
 
     @staticmethod
     def _sorted_description_entries(record: TermRecord) -> list[tuple[str, str]]:
-        entries = list((record.descriptions or {}).items())
-
-        def _sort_key(item_with_index: tuple[int, tuple[str, str]]) -> tuple[int, int, int]:
-            index, (key, _value) = item_with_index
-            if str(key).lstrip("-").isdigit():
-                return (0, int(key), index)
-            return (1, index, 0)
-
-        return [item for _index, item in sorted(enumerate(entries), key=_sort_key)]
+        return ordered_description_entries(record.descriptions or {})
 
     def _build_toolbar_state(
         self,

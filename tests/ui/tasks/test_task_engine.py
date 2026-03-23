@@ -182,7 +182,7 @@ def test_preflight_creation_returns_decision_for_batch_handler(engine, tmp_path)
     decision = engine.preflight(
         "batch_translation",
         "book-preflight",
-        {"document_ids": [1, 2], "force": False, "skip_context": False},
+        {"document_ids": [1, 2], "force": False},
         TaskAction.RUN,
     )
     assert decision.allowed is True
@@ -370,6 +370,88 @@ def test_close_stops_autorun_timer(tmp_path, mock_deps):
     eng.close()
 
     assert eng._autorun_timer is None or not eng._autorun_timer.isActive()
+
+
+def test_recover_interrupted_tasks_requeues_local_autorun_work(engine, tmp_store):
+    from context_aware_translation.workflow.tasks.models import Decision
+
+    handler = _make_handler("image_reembedding")
+    handler.can_autorun.side_effect = lambda record, _payload, _snapshot: Decision(allowed=record.status == "queued")
+    engine.register_handler(handler)
+    record = tmp_store.create(book_id="book-reembed", task_type="image_reembedding", status="running")
+
+    affected = engine.recover_interrupted_tasks()
+
+    updated = tmp_store.get(record.task_id)
+    assert affected == ["book-reembed"]
+    assert updated is not None
+    assert updated.status == "queued"
+    assert updated.cancel_requested is False
+
+
+def test_recover_interrupted_tasks_fails_non_resumable_local_work(engine, tmp_store):
+    from context_aware_translation.workflow.tasks.models import Decision
+
+    handler = _make_handler("ocr")
+    handler.can_autorun.return_value = Decision(allowed=False)
+    engine.register_handler(handler)
+    record = tmp_store.create(book_id="book-ocr", task_type="ocr", status="running")
+
+    affected = engine.recover_interrupted_tasks()
+
+    updated = tmp_store.get(record.task_id)
+    assert affected == ["book-ocr"]
+    assert updated is not None
+    assert updated.status == "failed"
+    assert updated.cancel_requested is False
+    assert updated.last_error is not None
+    assert "app closed" in updated.last_error
+
+
+def test_recover_interrupted_tasks_cancels_stale_local_cancel_requests(engine, tmp_store):
+    from context_aware_translation.workflow.tasks.models import Decision
+
+    handler = _make_handler("image_reembedding")
+    handler.can_autorun.side_effect = lambda record, _payload, _snapshot: Decision(allowed=record.status == "queued")
+    engine.register_handler(handler)
+    record = tmp_store.create(book_id="book-cancel", task_type="image_reembedding", status="cancel_requested")
+
+    affected = engine.recover_interrupted_tasks()
+
+    updated = tmp_store.get(record.task_id)
+    assert affected == ["book-cancel"]
+    assert updated is not None
+    assert updated.status == "cancelled"
+    assert updated.cancel_requested is False
+
+
+def test_build_task_engine_recovers_interrupted_image_reembedding(tmp_path):
+    from context_aware_translation.storage.repositories.task_store import TaskStore
+    from context_aware_translation.workflow.task_runtime import build_task_engine
+
+    book_manager = MagicMock()
+    store = TaskStore(tmp_path / "tasks_runtime_recovery.db")
+    engine = None
+    record = store.create(
+        book_id="book-runtime",
+        task_type="image_reembedding",
+        status="running",
+        document_ids_json=json.dumps([1]),
+        payload_json=json.dumps({"force": True, "source_ids": [101]}),
+    )
+
+    try:
+        engine, _deps = build_task_engine(book_manager=book_manager, task_store=store)
+        updated = store.get(record.task_id)
+
+        assert updated is not None
+        assert updated.status == "queued"
+        assert updated.cancel_requested is False
+    finally:
+        if engine is not None:
+            engine.close()
+        if engine is not None and not engine.has_running_work():
+            store.close()
 
 
 # ------------------------------------------------------------------

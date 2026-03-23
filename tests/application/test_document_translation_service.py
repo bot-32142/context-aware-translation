@@ -8,7 +8,13 @@ from unittest.mock import MagicMock, patch
 from PySide6.QtWidgets import QApplication
 
 from context_aware_translation.application.composition import build_application_context
-from context_aware_translation.application.contracts.common import AcceptedCommand, ProjectRef, SurfaceStatus
+from context_aware_translation.application.contracts.app_setup import ConnectionDraft, SetupWizardRequest
+from context_aware_translation.application.contracts.common import (
+    AcceptedCommand,
+    ProjectRef,
+    ProviderKind,
+    SurfaceStatus,
+)
 from context_aware_translation.application.contracts.document import (
     RetranslateRequest,
     RunDocumentTranslationRequest,
@@ -27,6 +33,23 @@ def _ensure_qt_app() -> QApplication:
     if app is None:
         app = QApplication([])
     return app
+
+
+def _build_configured_context(tmp_path):
+    context = build_application_context(library_root=tmp_path)
+    context.services.app_setup.run_setup_wizard(
+        SetupWizardRequest(
+            providers=[ProviderKind.OPENAI],
+            connections=[
+                ConnectionDraft(
+                    display_name="OpenAI",
+                    provider=ProviderKind.OPENAI,
+                    api_key="test-key",
+                )
+            ],
+        )
+    )
+    return context
 
 
 def _empty_terms(project_id: str) -> TermsTableState:
@@ -94,21 +117,21 @@ def _create_manga_document(context, project_id: str) -> tuple[int, int, int, int
             document_id,
             0,
             "image",
-            ocr_json=json.dumps({"regions": [{"text": "一行目\n二行目"}]}),
+            ocr_json=json.dumps({"text": "一行目\n二行目"}),
             is_ocr_completed=True,
         )
         source_2 = dbx.document_repo.insert_document_source(
             document_id,
             1,
             "image",
-            ocr_json=json.dumps({"regions": [{"text": ""}]}),
+            ocr_json=json.dumps({"text": ""}),
             is_ocr_completed=True,
         )
         source_3 = dbx.document_repo.insert_document_source(
             document_id,
             2,
             "image",
-            ocr_json=json.dumps({"regions": [{"text": "最後のページ"}]}),
+            ocr_json=json.dumps({"text": "最後のページ"}),
             is_ocr_completed=True,
         )
     _insert_chunk(
@@ -132,7 +155,7 @@ def _create_manga_document(context, project_id: str) -> tuple[int, int, int, int
 
 def test_get_translation_builds_text_units_and_progress(tmp_path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Text Doc", target_language="English")
@@ -164,7 +187,7 @@ def test_get_translation_builds_text_units_and_progress(tmp_path) -> None:
 
 def test_save_translation_rejects_line_count_mismatch_for_chunk(tmp_path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Text Doc", target_language="English")
@@ -195,7 +218,7 @@ def test_save_translation_rejects_line_count_mismatch_for_chunk(tmp_path) -> Non
 
 def test_get_translation_builds_manga_page_units_and_art_only_blockers(tmp_path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Manga Doc", target_language="English")
@@ -227,7 +250,7 @@ def test_get_translation_builds_manga_page_units_and_art_only_blockers(tmp_path)
 
 def test_retranslate_manga_page_submits_scoped_translation_task(tmp_path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Manga Doc", target_language="English")
@@ -263,7 +286,7 @@ def test_retranslate_manga_page_submits_scoped_translation_task(tmp_path) -> Non
 
 def test_retranslate_text_chunk_submits_document_scoped_task(tmp_path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Text Doc", target_language="English")
@@ -299,7 +322,7 @@ def test_retranslate_text_chunk_submits_document_scoped_task(tmp_path) -> None:
 
 def test_run_translation_submits_document_translation_task(tmp_path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Text Doc", target_language="English")
@@ -330,7 +353,7 @@ def test_run_translation_submits_document_translation_task(tmp_path) -> None:
 
 def test_run_translation_submits_batch_translation_task_with_polish_flag(tmp_path) -> None:
     _ensure_qt_app()
-    context = build_application_context(library_root=tmp_path)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Text Doc", target_language="English")

@@ -10,6 +10,7 @@ from context_aware_translation.application.contracts.projects import (
     ProjectsScreenState,
     ProjectSummary,
     UpdateProjectRequest,
+    WorkflowProfileOption,
 )
 from tests.application.fakes import FakeProjectsService
 
@@ -45,6 +46,19 @@ def _projects_service() -> FakeProjectsService:
         project_summary=summary,
         create_result=summary,
         update_result=summary,
+        workflow_profiles=[
+            WorkflowProfileOption(
+                profile_id="profile-default",
+                name="Default Profile",
+                target_language="English",
+                is_default=True,
+            ),
+            WorkflowProfileOption(
+                profile_id="profile-ja",
+                name="Japanese Profile",
+                target_language="Japanese",
+            ),
+        ],
     )
 
 
@@ -85,12 +99,22 @@ def test_library_view_runs_create_edit_and_delete_through_service() -> None:
             def target_language(self) -> str:
                 return "Chinese"
 
+            @property
+            def workflow_profile_id(self) -> str:
+                return "profile-ja"
+
         with patch("context_aware_translation.ui.features.library_view._ProjectDialog", _FakeCreateDialog):
             emitted: list[tuple[str, str]] = []
             view.book_opened.connect(lambda project_id, name: emitted.append((project_id, name)))
             view._on_new_project()
         assert any(
-            name == "create_project" and payload == CreateProjectRequest(name="New Project", target_language="Chinese")
+            name == "create_project"
+            and payload
+            == CreateProjectRequest(
+                name="New Project",
+                target_language="Chinese",
+                workflow_profile_id="profile-ja",
+            )
             for name, payload in service.calls
         )
         assert emitted == [("project-1", "One Piece")]
@@ -168,6 +192,39 @@ def test_project_dialog_uses_dropdown_for_target_language() -> None:
         assert dialog.target_language_combo.currentText() == "English"
         dialog.target_language_combo.setCurrentIndex(0)
         assert dialog.target_language is None
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        QApplication.processEvents()
+
+
+def test_project_dialog_exposes_workflow_profile_selection() -> None:
+    dialog = _ProjectDialog(
+        title="New Project",
+        workflow_profiles=[
+            WorkflowProfileOption(
+                profile_id="profile-default",
+                name="Default Profile",
+                target_language="English",
+                is_default=True,
+            ),
+            WorkflowProfileOption(
+                profile_id="profile-ja",
+                name="Japanese Profile",
+                target_language="Japanese",
+            ),
+        ],
+    )
+    try:
+        assert dialog.workflow_profile_combo is not None
+        assert dialog.workflow_profile_combo.objectName() == "projectWorkflowProfileCombo"
+        assert dialog.workflow_profile_id == "profile-default"
+        assert dialog.target_language == "English"
+
+        dialog.workflow_profile_combo.setCurrentIndex(1)
+
+        assert dialog.workflow_profile_id == "profile-ja"
+        assert dialog.target_language == "Japanese"
     finally:
         dialog.close()
         dialog.deleteLater()

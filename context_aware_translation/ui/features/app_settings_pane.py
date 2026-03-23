@@ -32,14 +32,14 @@ from context_aware_translation.application.services.app_setup import AppSetupSer
 from context_aware_translation.ui.chrome_sizing import sync_qml_host_height
 from context_aware_translation.ui.features.app_setup_view import (
     _NEW_PROFILE_ROUTE_SPECS,
-    _provider_label,
     ConnectionEditorDialog,
     SetupWizardDialog,
+    _provider_label,
 )
-from context_aware_translation.ui.features.workflow_profile_editor import workflow_step_label
 from context_aware_translation.ui.features.workflow_profile_editor import (
     ConnectionChoice,
     WorkflowProfileEditorDialog,
+    workflow_step_label,
 )
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.viewmodels.app_settings_pane import AppSettingsPaneViewModel
@@ -84,7 +84,11 @@ class AppSettingsPane(QWidget):
         self.connections_table.setHorizontalHeaderLabels(
             [self.tr("Name"), self.tr("Provider"), self.tr("Status"), self.tr("Model"), self.tr("Base URL")]
         )
-        configure_readonly_row_table(self.connections_table, vertical_policy=QSizePolicy.Policy.Expanding)
+        configure_readonly_row_table(
+            self.connections_table,
+            selection_mode=QTableWidget.SelectionMode.ExtendedSelection,
+            vertical_policy=QSizePolicy.Policy.Expanding,
+        )
         apply_header_resize_modes(
             self.connections_table,
             (
@@ -106,7 +110,11 @@ class AppSettingsPane(QWidget):
         profiles_layout.setContentsMargins(0, 12, 0, 0)
         self.profiles_table = QTableWidget(0, 3)
         self.profiles_table.setHorizontalHeaderLabels([self.tr("Name"), self.tr("Target language"), self.tr("Default")])
-        configure_readonly_row_table(self.profiles_table, vertical_policy=QSizePolicy.Policy.Expanding)
+        configure_readonly_row_table(
+            self.profiles_table,
+            selection_mode=QTableWidget.SelectionMode.ExtendedSelection,
+            vertical_policy=QSizePolicy.Policy.Expanding,
+        )
         apply_header_resize_modes(
             self.profiles_table,
             (
@@ -187,8 +195,9 @@ class AppSettingsPane(QWidget):
     def _action_buttons(self) -> list[dict[str, object]]:
         if self._current_tab == "profiles":
             has_connections = bool(self._state and self._state.connections)
-            selected_profile = self._selected_profile()
-            selected = selected_profile is not None
+            selected_profiles = self._selected_profiles()
+            selected_count = len(selected_profiles)
+            selected_profile = selected_profiles[0] if selected_count == 1 else None
             return [
                 {
                     "action": "add_profile",
@@ -200,28 +209,28 @@ class AppSettingsPane(QWidget):
                 {
                     "action": "duplicate_profile",
                     "label": self.tr("Duplicate"),
-                    "enabled": selected,
+                    "enabled": selected_count == 1,
                     "primary": False,
                     "tooltip": self.tr("Copy the selected workflow profile so you can edit it safely."),
                 },
                 {
                     "action": "set_default_profile",
                     "label": self.tr("Set Default"),
-                    "enabled": selected and not bool(selected_profile and selected_profile.is_default),
+                    "enabled": selected_count == 1 and not bool(selected_profile and selected_profile.is_default),
                     "primary": False,
                     "tooltip": self.tr("Make the selected workflow profile the default for new projects."),
                 },
                 {
                     "action": "delete_profile",
                     "label": self.tr("Delete"),
-                    "enabled": selected,
+                    "enabled": selected_count > 0,
                     "primary": False,
-                    "tooltip": self.tr("Delete the selected workflow profile."),
+                    "tooltip": self.tr("Delete the selected workflow profiles."),
                 },
             ]
 
-        selected_connection = self._selected_connection()
-        selected = selected_connection is not None
+        selected_connections = self._selected_connections()
+        selected_count = len(selected_connections)
         return [
             {
                 "action": "run_wizard",
@@ -244,16 +253,16 @@ class AppSettingsPane(QWidget):
             {
                 "action": "duplicate_connection",
                 "label": self.tr("Duplicate"),
-                "enabled": selected,
+                "enabled": selected_count == 1,
                 "primary": False,
                 "tooltip": self.tr("Copy the selected connection so you can adjust it without changing the original."),
             },
             {
                 "action": "delete_connection",
                 "label": self.tr("Delete"),
-                "enabled": selected and not bool(selected_connection and selected_connection.is_managed),
+                "enabled": selected_count > 0,
                 "primary": False,
-                "tooltip": self.tr("Delete the selected reusable connection."),
+                "tooltip": self.tr("Delete the selected reusable connections."),
             },
         ]
 
@@ -278,11 +287,7 @@ class AppSettingsPane(QWidget):
         for connection in connections:
             row = self.connections_table.rowCount()
             self.connections_table.insertRow(row)
-            name_item = self._set_table_item(
-                self.connections_table, row, 0, connection.display_name, connection.connection_id
-            )
-            if connection.is_managed:
-                name_item.setToolTip(self.tr("Managed by the setup wizard. Duplicate it if you need an editable copy."))
+            self._set_table_item(self.connections_table, row, 0, connection.display_name, connection.connection_id)
             provider_label = self.tr(_provider_label(connection.provider))
             self._set_table_item(self.connections_table, row, 1, provider_label)
             self._set_table_item(
@@ -307,28 +312,44 @@ class AppSettingsPane(QWidget):
         if state.shared_profiles:
             self.profiles_table.selectRow(default_row)
 
-    def _selected_table_row(self, table: QTableWidget) -> int | None:
-        rows = table.selectionModel().selectedRows()
-        if not rows:
-            return None
-        row = rows[0].row()
-        return row if row >= 0 else None
+    def _selected_table_rows(self, table: QTableWidget) -> list[int]:
+        selection_model = table.selectionModel()
+        if selection_model is None:
+            return []
+        rows = sorted(index.row() for index in selection_model.selectedRows() if index.row() >= 0)
+        return rows
 
-    def _selected_connection(self) -> ConnectionSummary | None:
-        if self._state is None:
-            return None
-        row = self._selected_table_row(self.connections_table)
-        if row is None or row >= len(self._state.connections):
+    def _connection_at_row(self, row: int) -> ConnectionSummary | None:
+        if self._state is None or row < 0 or row >= len(self._state.connections):
             return None
         return self._state.connections[row]
 
-    def _selected_profile(self) -> WorkflowProfileDetail | None:
-        if self._state is None:
-            return None
-        row = self._selected_table_row(self.profiles_table)
-        if row is None or row >= len(self._state.shared_profiles):
+    def _profile_at_row(self, row: int) -> WorkflowProfileDetail | None:
+        if self._state is None or row < 0 or row >= len(self._state.shared_profiles):
             return None
         return self._state.shared_profiles[row]
+
+    def _selected_connections(self) -> list[ConnectionSummary]:
+        return [
+            connection
+            for row in self._selected_table_rows(self.connections_table)
+            if (connection := self._connection_at_row(row)) is not None
+        ]
+
+    def _selected_connection(self) -> ConnectionSummary | None:
+        selected = self._selected_connections()
+        return selected[0] if len(selected) == 1 else None
+
+    def _selected_profiles(self) -> list[WorkflowProfileDetail]:
+        return [
+            profile
+            for row in self._selected_table_rows(self.profiles_table)
+            if (profile := self._profile_at_row(row)) is not None
+        ]
+
+    def _selected_profile(self) -> WorkflowProfileDetail | None:
+        selected = self._selected_profiles()
+        return selected[0] if len(selected) == 1 else None
 
     def _on_run_wizard(self) -> None:
         dialog = SetupWizardDialog(
@@ -376,17 +397,22 @@ class AppSettingsPane(QWidget):
             self._mutate(lambda: self._service.save_connection(dialog.request()))
 
     def _on_delete_connection(self) -> None:
-        connection = self._selected_connection()
-        if connection is None:
+        connections = self._selected_connections()
+        if not connections:
             return
-        if not self._confirm(
-            self.tr("Delete Connection"),
+        title = self.tr("Delete Connection") if len(connections) == 1 else self.tr("Delete Connections")
+        message = (
             self.tr(
                 "Delete the selected connection? Existing profiles or projects may stop working until setup is fixed."
-            ),
-        ):
+            )
+            if len(connections) == 1
+            else self.tr(
+                "Delete the selected connections? Existing profiles or projects may stop working until setup is fixed."
+            )
+        )
+        if not self._confirm(title, message):
             return
-        self._mutate(lambda: self._service.delete_connection(connection.connection_id))
+        self._mutate(lambda: [self._service.delete_connection(connection.connection_id) for connection in connections])
 
     def _on_duplicate_connection(self) -> None:
         connection = self._selected_connection()
@@ -423,16 +449,19 @@ class AppSettingsPane(QWidget):
         )
 
     def _on_delete_profile(self) -> None:
-        profile = self._selected_profile()
-        if profile is None:
+        profiles = self._selected_profiles()
+        if not profiles:
             return
-        if not self._confirm(
-            self.tr("Delete Workflow Profile"),
-            self.tr("Delete the selected workflow profile? Projects using it will need setup first."),
-        ):
+        title = self.tr("Delete Workflow Profile") if len(profiles) == 1 else self.tr("Delete Workflow Profiles")
+        message = (
+            self.tr("Delete the selected workflow profile? Projects using it will need setup first.")
+            if len(profiles) == 1
+            else self.tr("Delete the selected workflow profiles? Projects using them will need setup first.")
+        )
+        if not self._confirm(title, message):
             return
         try:
-            self._mutate(lambda: self._service.delete_workflow_profile(profile.profile_id))
+            self._mutate(lambda: [self._service.delete_workflow_profile(profile.profile_id) for profile in profiles])
         except Exception as exc:
             QMessageBox.warning(self, self.tr("App Setup"), str(exc))
 
@@ -455,12 +484,15 @@ class AppSettingsPane(QWidget):
             )
         )
 
-    def _on_profile_double_clicked(self, _row: int, _column: int) -> None:
-        self._edit_profile()
+    def _on_profile_double_clicked(self, row: int, _column: int) -> None:
+        profile = self._profile_at_row(row)
+        if profile is None:
+            return
+        self._edit_profile(profile)
 
-    def _on_connection_double_clicked(self, _row: int, _column: int) -> None:
-        connection = self._selected_connection()
-        if connection is None or connection.is_managed:
+    def _on_connection_double_clicked(self, row: int, _column: int) -> None:
+        connection = self._connection_at_row(row)
+        if connection is None:
             return
         self._edit_connection(connection)
 

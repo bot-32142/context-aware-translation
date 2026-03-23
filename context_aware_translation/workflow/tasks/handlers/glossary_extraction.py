@@ -72,12 +72,18 @@ class GlossaryExtractionHandler:
         return SomeDocuments(record.book_id, frozenset(int(i) for i in ids))
 
     def claims(self, record: TaskRecord, payload: Any) -> frozenset[ResourceClaim]:
+        doc_scope = self.scope(record, payload)
         book_id = record.book_id
-        return frozenset(
-            {
-                ResourceClaim("glossary_state", book_id, "*", ClaimMode.WRITE_EXCLUSIVE),
-            }
-        )
+        claims: set[ResourceClaim] = {
+            ResourceClaim("glossary_state", book_id, "*", ClaimMode.WRITE_EXCLUSIVE),
+        }
+        if isinstance(doc_scope, AllDocuments):
+            claims.add(ResourceClaim("doc", book_id, "*", ClaimMode.WRITE_EXCLUSIVE))
+        elif isinstance(doc_scope, SomeDocuments):
+            claims.update(
+                ResourceClaim("doc", book_id, str(doc_id), ClaimMode.WRITE_EXCLUSIVE) for doc_id in doc_scope.doc_ids
+            )
+        return frozenset(claims)
 
     def can(self, action: TaskAction, record: TaskRecord, payload: Any, snapshot: ActionSnapshot) -> Decision:
         status = record.status

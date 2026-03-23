@@ -210,78 +210,6 @@ class BookManager:
         self.registry.set_default_profile(profile_id)
 
     # =========================================================================
-    # System Default Seeding
-    # =========================================================================
-
-    def seed_system_defaults(self) -> None:
-        """Seed system-default endpoint and config profiles for first-time users.
-
-        Only seeds if both endpoint_profiles and config_profiles tables are empty.
-        Creates three endpoint profiles (Gemini Pro, Gemini Flash, DeepSeek) and one
-        config profile following recommended practices from the README.
-        """
-        if self.registry.has_any_endpoint_profile() or self.registry.has_any_profile():
-            return
-
-        now = time.time()
-
-        # --- Endpoint Profiles ---
-        gemini = EndpointProfile(
-            profile_id="system-default-gemini-pro",
-            name="system-default-gemini-pro",
-            created_at=now,
-            updated_at=now,
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            model="gemini-2.5-pro",
-            temperature=0.0,
-            kwargs={"reasoning_effort": "low"},
-        )
-        self.registry.insert_endpoint_profile(gemini)
-
-        gemini_flash = EndpointProfile(
-            profile_id="system-default-gemini-flash",
-            name="system-default-gemini-flash",
-            created_at=now,
-            updated_at=now,
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            model="gemini-3-flash-preview",
-            temperature=0.0,
-        )
-        self.registry.insert_endpoint_profile(gemini_flash)
-
-        deepseek = EndpointProfile(
-            profile_id="system-default-deepseek",
-            name="system-default-deepseek",
-            created_at=now,
-            updated_at=now,
-            base_url="https://api.deepseek.com",
-            model="deepseek-chat",
-            temperature=0.0,
-        )
-        self.registry.insert_endpoint_profile(deepseek)
-
-        # --- Config Profile (follows README best practices) ---
-        # DeepSeek for extraction/summarization (low-cost caching model)
-        # Gemini for translation (high-quality translation model)
-        default_config = ConfigProfile(
-            profile_id="system-default-profile",
-            name="system-default-profile",
-            created_at=now,
-            updated_at=now,
-            config={
-                "translation_target_language": "简体中文",
-                "extractor_config": {"endpoint_profile": "system-default-deepseek"},
-                "summarizor_config": {"endpoint_profile": "system-default-deepseek"},
-                "glossary_config": {"endpoint_profile": "system-default-gemini-flash"},
-                "translator_config": {"endpoint_profile": "system-default-gemini-pro"},
-                "review_config": {"endpoint_profile": "system-default-gemini-flash"},
-                "ocr_config": {"endpoint_profile": "system-default-gemini-flash"},
-                "manga_translator_config": {"endpoint_profile": "system-default-gemini-pro"},
-            },
-        )
-        self.registry.insert_profile(default_config)
-
-    # =========================================================================
     # Endpoint Profile Management
     # =========================================================================
 
@@ -454,7 +382,7 @@ class BookManager:
         """
         # Enforce: at least one profile must exist
         if not self.registry.has_any_profile():
-            raise ValueError("Create a profile before importing books")
+            raise ValueError("Open App Setup and create a workflow profile before importing books")
 
         # Determine config source
         if custom_config is not None:
@@ -666,18 +594,6 @@ class BookManager:
             Path to book.db
         """
         return self.get_book_path(book_id) / "book.db"
-
-    def get_book_context_tree_path(self, book_id: str) -> Path:
-        """
-        Get path to context_tree.db.
-
-        Args:
-            book_id: Book identifier
-
-        Returns:
-            Path to context_tree.db
-        """
-        return self.get_book_path(book_id) / "context_tree.db"
 
     def validate_book_name(self, name: str) -> str | None:
         """

@@ -16,7 +16,7 @@ from context_aware_translation.llm.glossary_translator import translate_glossary
 from context_aware_translation.llm.language_detector import detect_source_language
 from context_aware_translation.llm.manga_translator import translate_manga_pages
 from context_aware_translation.llm.reviewer import review_batch
-from context_aware_translation.llm.summarizor import summarize_descriptions
+from context_aware_translation.llm.summarizor import summarize_descriptions, update_term_summary
 from context_aware_translation.llm.translator import translate_chunk
 
 if TYPE_CHECKING:
@@ -134,6 +134,45 @@ class LLMDescriptionSummarizer:
     async def summarize(self, descriptions: list[str], cancel_check: Callable[[], bool] | None = None) -> str:
         return await summarize_descriptions(
             descriptions,
+            self.summarizor_config,
+            self.llm_client,
+            cancel_check=cancel_check,
+        )
+
+
+@final
+class LLMTermMemoryUpdater:
+    """Term-memory updater backed by summarization LLM calls."""
+
+    def __init__(
+        self,
+        summarizor_config: SummarizorConfig,
+        llm_client: LLMClient,
+    ) -> None:
+        self.summarizor_config = summarizor_config
+        self.llm_client = llm_client
+
+    async def bootstrap_summary(
+        self,
+        descriptions: list[str],
+        cancel_check: Callable[[], bool] | None = None,
+    ) -> str:
+        return await summarize_descriptions(
+            descriptions,
+            self.summarizor_config,
+            self.llm_client,
+            cancel_check=cancel_check,
+        )
+
+    async def update_summary(
+        self,
+        current_summary: str,
+        new_descriptions: list[tuple[int, str]],
+        cancel_check: Callable[[], bool] | None = None,
+    ) -> tuple[bool, str]:
+        return await update_term_summary(
+            current_summary,
+            new_descriptions,
             self.summarizor_config,
             self.llm_client,
             cancel_check=cancel_check,

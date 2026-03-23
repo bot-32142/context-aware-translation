@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from PIL import Image
 
+from context_aware_translation.config import OCRConfig
 from context_aware_translation.documents.manga import MangaDocument
 
 
@@ -36,7 +37,7 @@ async def test_process_ocr_with_empty_source_ids_processes_none():
     mock_ocr_config.ocr_dpi = 150
 
     with patch(
-        "context_aware_translation.llm.manga_ocr.ocr_manga_image_with_regions",
+        "context_aware_translation.llm.manga_ocr.ocr_manga_image",
         new_callable=AsyncMock,
     ) as mock_ocr:
         doc = MangaDocument(mock_repo, 1, mock_ocr_config)
@@ -49,7 +50,7 @@ async def test_process_ocr_with_empty_source_ids_processes_none():
 
 
 @pytest.mark.asyncio
-async def test_process_ocr_persists_regions_payload() -> None:
+async def test_process_ocr_persists_text_payload() -> None:
     mock_repo = MagicMock()
     mock_repo.get_document_sources_needing_ocr.return_value = [
         {
@@ -64,24 +65,24 @@ async def test_process_ocr_persists_regions_payload() -> None:
     mock_ocr_config.concurrency = 1
     mock_ocr_config.ocr_dpi = 150
 
-    payload = {
-        "text": "line1",
-        "regions": [{"x": 0.1, "y": 0.1, "width": 0.2, "height": 0.1, "text": "line1"}],
-    }
     with patch(
-        "context_aware_translation.llm.manga_ocr.ocr_manga_image_with_regions",
+        "context_aware_translation.llm.manga_ocr.ocr_manga_image",
         new_callable=AsyncMock,
     ) as mock_ocr:
-        mock_ocr.return_value = payload
-        doc = MangaDocument(mock_repo, 1, mock_ocr_config)
-        processed = await doc.process_ocr(MagicMock())
+        mock_ocr.return_value = "line1"
+        with patch(
+            "context_aware_translation.documents.manga._prepare_manga_ocr_image",
+            return_value=(_png_bytes(1000, 1000), "image/png"),
+        ) as mock_prepare:
+            doc = MangaDocument(mock_repo, 1, mock_ocr_config)
+            processed = await doc.process_ocr(MagicMock())
 
     assert processed == 1
+    mock_prepare.assert_called_once_with(_png_bytes(), ocr_dpi=mock_ocr_config.ocr_dpi)
     update_call = mock_repo.update_source_ocr.call_args
     assert update_call is not None
     saved_payload = json.loads(update_call.args[1])
-    assert saved_payload["text"] == "line1"
-    assert isinstance(saved_payload.get("regions"), list)
+    assert saved_payload == {"text": "line1"}
 
 
 def test_do_import_rejects_invalid_folder_images(tmp_path: Path, temp_config):
@@ -126,8 +127,8 @@ async def test_reembed_preserves_inner_exception_as_cause() -> None:
     ]
     mock_repo.load_reembedded_images.return_value = {}
 
-    mock_ocr_config = MagicMock()
-    doc = MangaDocument(mock_repo, 1, mock_ocr_config)
+    ocr_config = OCRConfig(api_key="test-key", base_url="https://api.test.com/v1", model="test-model")
+    doc = MangaDocument(mock_repo, 1, ocr_config)
     await doc.set_text(["EN PAGE 1"])
 
     image_reembedding_config = MagicMock()
@@ -141,6 +142,16 @@ async def test_reembed_preserves_inner_exception_as_cause() -> None:
             "context_aware_translation.llm.image_generator.create_image_generator",
             return_value=mock_generator,
         ),
+        patch(
+            "context_aware_translation.llm.manga_ocr.detect_manga_text_regions",
+            new=AsyncMock(
+                return_value={
+                    "text": "jp1",
+                    "regions": [{"x": 0.1, "y": 0.1, "width": 0.5, "height": 0.5, "text": "jp1"}],
+                }
+            ),
+        ),
+        patch("context_aware_translation.llm.client.OpenAI", return_value=MagicMock()),
         pytest.raises(RuntimeError, match=r"source 10\): ValueError: boom") as exc_info,
     ):
         await doc.reembed(image_reembedding_config)
@@ -155,7 +166,7 @@ async def test_reembed_preserves_inner_exception_as_cause() -> None:
 
 
 @pytest.mark.asyncio
-async def test_reembed_uses_grouped_crops_when_regions_present() -> None:
+async def test_reembed_uses_grouped_crops_when_bbox_detection_succeeds() -> None:
     img = Image.new("RGB", (200, 200), (255, 255, 255))
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
@@ -168,20 +179,13 @@ async def test_reembed_uses_grouped_crops_when_regions_present() -> None:
             "sequence_number": 0,
             "mime_type": "image/png",
             "binary_content": page_bytes,
-            "ocr_json": json.dumps(
-                {
-                    "text": "jp1\njp2",
-                    "regions": [
-                        {"x": 0.05, "y": 0.10, "width": 0.12, "height": 0.10, "text": "jp1"},
-                        {"x": 0.72, "y": 0.66, "width": 0.13, "height": 0.11, "text": "jp2"},
-                    ],
-                }
-            ),
+            "ocr_json": json.dumps({"text": "jp1\njp2"}),
         }
     ]
     mock_repo.load_reembedded_images.return_value = {}
 
-    doc = MangaDocument(mock_repo, 1, MagicMock())
+    ocr_config = OCRConfig(api_key="test-key", base_url="https://api.test.com/v1", model="test-model")
+    doc = MangaDocument(mock_repo, 1, ocr_config)
     await doc.set_text(["EN1\nEN2"])
 
     image_reembedding_config = MagicMock()
@@ -191,9 +195,24 @@ async def test_reembed_uses_grouped_crops_when_regions_present() -> None:
     mock_generator = MagicMock()
     mock_generator.edit_image = AsyncMock(side_effect=lambda image_bytes, *_args, **_kwargs: image_bytes)
 
-    with patch(
-        "context_aware_translation.llm.image_generator.create_image_generator",
-        return_value=mock_generator,
+    with (
+        patch(
+            "context_aware_translation.llm.image_generator.create_image_generator",
+            return_value=mock_generator,
+        ),
+        patch(
+            "context_aware_translation.llm.manga_ocr.detect_manga_text_regions",
+            new=AsyncMock(
+                return_value={
+                    "text": "jp1\njp2",
+                    "regions": [
+                        {"x": 0.05, "y": 0.10, "width": 0.12, "height": 0.10, "text": "jp1"},
+                        {"x": 0.72, "y": 0.66, "width": 0.13, "height": 0.11, "text": "jp2"},
+                    ],
+                }
+            ),
+        ),
+        patch("context_aware_translation.llm.client.OpenAI", return_value=MagicMock()),
     ):
         processed = await doc.reembed(image_reembedding_config)
 
@@ -204,3 +223,87 @@ async def test_reembed_uses_grouped_crops_when_regions_present() -> None:
     assert first_call.args[2] == [("jp1", "EN1")]
     assert second_call.args[2] == [("jp2", "EN2")]
     mock_repo.save_reembedded_image.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_reembed_uses_ocr_compressed_image_for_bbox_detection() -> None:
+    original_page_bytes = _png_bytes(1200, 1800)
+    prepared_page_bytes = _png_bytes(1000, 1000)
+
+    mock_repo = MagicMock()
+    mock_repo.get_document_sources.return_value = [
+        {
+            "source_id": 10,
+            "sequence_number": 0,
+            "mime_type": "image/png",
+            "binary_content": original_page_bytes,
+            "ocr_json": json.dumps({"text": "jp1"}),
+        }
+    ]
+    mock_repo.load_reembedded_images.return_value = {}
+
+    ocr_config = OCRConfig(api_key="test-key", base_url="https://api.test.com/v1", model="test-model")
+    ocr_config.ocr_dpi = 150
+    doc = MangaDocument(mock_repo, 1, ocr_config)
+    await doc.set_text(["EN1"])
+
+    image_reembedding_config = MagicMock()
+    image_reembedding_config.concurrency = 1
+    image_reembedding_config.kwargs = {}
+
+    mock_generator = MagicMock()
+    mock_generator.edit_image = AsyncMock(side_effect=lambda image_bytes, *_args, **_kwargs: image_bytes)
+    mock_detect = AsyncMock(
+        return_value={
+            "text": "jp1",
+            "regions": [{"x": 0.1, "y": 0.1, "width": 0.3, "height": 0.2, "text": "jp1"}],
+        }
+    )
+
+    with (
+        patch(
+            "context_aware_translation.documents.manga._prepare_manga_ocr_image",
+            return_value=(prepared_page_bytes, "image/png"),
+        ) as mock_prepare,
+        patch(
+            "context_aware_translation.llm.image_generator.create_image_generator",
+            return_value=mock_generator,
+        ),
+        patch(
+            "context_aware_translation.llm.manga_ocr.detect_manga_text_regions",
+            new=mock_detect,
+        ),
+        patch("context_aware_translation.llm.client.OpenAI", return_value=MagicMock()),
+    ):
+        processed = await doc.reembed(image_reembedding_config)
+
+    assert processed == 1
+    mock_prepare.assert_called_once_with(original_page_bytes, ocr_dpi=ocr_config.ocr_dpi)
+    detect_kwargs = mock_detect.await_args.kwargs
+    assert detect_kwargs["image_bytes"] == prepared_page_bytes
+    assert detect_kwargs["mime_type"] == "image/png"
+
+
+@pytest.mark.asyncio
+async def test_reembed_requires_ocr_config() -> None:
+    mock_repo = MagicMock()
+    mock_repo.get_document_sources.return_value = [
+        {
+            "source_id": 10,
+            "sequence_number": 0,
+            "mime_type": "image/png",
+            "binary_content": _png_bytes(200, 200),
+            "ocr_json": json.dumps({"text": "jp1"}),
+        }
+    ]
+    mock_repo.load_reembedded_images.return_value = {}
+
+    doc = MangaDocument(mock_repo, 1, None)
+    await doc.set_text(["EN1"])
+
+    image_reembedding_config = MagicMock()
+    image_reembedding_config.concurrency = 1
+    image_reembedding_config.kwargs = {}
+
+    with pytest.raises(ValueError, match="ocr_config is required for manga reembed"):
+        await doc.reembed(image_reembedding_config)

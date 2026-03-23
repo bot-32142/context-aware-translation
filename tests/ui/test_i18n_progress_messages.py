@@ -39,3 +39,34 @@ def test_translate_task_block_reason_code_mapping_without_translator():
 
 def test_translate_task_block_reason_unknown_code_humanized():
     assert i18n.translate_task_block_reason(None, "custom_error_code") == "Custom Error Code"
+
+
+def test_translate_backend_text_runtime_warning_uses_runtime_map(monkeypatch):
+    monkeypatch.setattr(i18n.QCoreApplication, "translate", lambda _ctx, text: f"T:{text}")
+    assert (
+        i18n.translate_backend_text("Image reinsertion is already running for this document.")
+        == "T:Image reinsertion is already running for this document."
+    )
+    assert (
+        i18n.translate_backend_text("Another OCR task is already running for this document.")
+        == "T:Another OCR task is already running for this document."
+    )
+    assert (
+        i18n.translate_backend_text("Another terms task is already running for this project.")
+        == "T:Another terms task is already running for this project."
+    )
+
+
+def test_translate_backend_text_runtime_task_titles_and_queued_messages(monkeypatch):
+    translations = {
+        "Build terms": "构建术语",
+        "Translate manga": "翻译漫画",
+        "Put text back into images": "将文字重新放回图片",
+        "%1 queued.": "%1 已排队",
+    }
+    monkeypatch.setattr(i18n.QCoreApplication, "translate", lambda _ctx, text: translations.get(text, text))
+
+    assert i18n.translate_backend_text("Build terms") == "构建术语"
+    assert i18n.translate_backend_text("Build terms queued.") == "构建术语 已排队"
+    assert i18n.translate_backend_text("Translate manga queued.") == "翻译漫画 已排队"
+    assert i18n.translate_backend_text("Put text back into images queued.") == "将文字重新放回图片 已排队"

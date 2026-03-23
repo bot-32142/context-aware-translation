@@ -52,6 +52,24 @@ class GeminiImageGenerator(BaseImageGenerator):
         parsed = urlparse(base_url)
         return f"{parsed.scheme}://{parsed.netloc}"
 
+    def _build_generation_config(self) -> types.GenerateContentConfig:
+        kwargs = self.config.kwargs if isinstance(self.config.kwargs, dict) else {}
+        reasoning_effort = str(kwargs.get("reasoning_effort") or "").strip().lower()
+        thinking_config: types.ThinkingConfig | None = None
+        if reasoning_effort == "none":
+            thinking_config = types.ThinkingConfig(thinking_budget=0)
+        elif reasoning_effort == "low":
+            thinking_config = types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW)
+        elif reasoning_effort == "medium":
+            thinking_config = types.ThinkingConfig(thinking_level=types.ThinkingLevel.MEDIUM)
+        elif reasoning_effort == "high":
+            thinking_config = types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH)
+
+        return types.GenerateContentConfig(
+            response_modalities=["TEXT", "IMAGE"],
+            thinking_config=thinking_config,
+        )
+
     async def edit_image(
         self,
         image_bytes: bytes,
@@ -92,7 +110,7 @@ class GeminiImageGenerator(BaseImageGenerator):
                 self.client.models.generate_content,
                 model=self.model_name,
                 contents=[image_part, text_part],  # type: ignore[arg-type]
-                config=types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"]),
+                config=self._build_generation_config(),
             )
 
             # Extract image from response parts

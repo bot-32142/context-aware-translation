@@ -5,8 +5,11 @@ import pytest
 from context_aware_translation.application.contracts.common import (
     AcceptedCommand,
     ActionState,
+    BlockerCode,
+    BlockerInfo,
     DocumentRef,
     DocumentSection,
+    ProgressInfo,
     ProjectRef,
     SurfaceStatus,
     UserMessage,
@@ -281,6 +284,51 @@ def test_document_ocr_tab_qml_save_signal_persists_manual_text_edit():
 
         save_request = next(payload for name, payload in service.calls if name == "save_ocr")
         assert save_request.extracted_text == "edited manually"
+    finally:
+        view.deleteLater()
+
+
+def test_document_ocr_tab_disables_save_after_terms_or_translation_started():
+    from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
+
+    blocker_message = "OCR is locked after terms or translation have started for this document."
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        ocr=DocumentOCRState(
+            workspace=_workspace_state(),
+            pages=[
+                OCRPageState(
+                    source_id=101,
+                    page_number=1,
+                    total_pages=1,
+                    status=SurfaceStatus.DONE,
+                    extracted_text="line one",
+                )
+            ],
+            current_page_index=0,
+            actions=DocumentOCRActions(
+                save=ActionState(
+                    enabled=False, blocker=BlockerInfo(code=BlockerCode.NOTHING_TO_DO, message=blocker_message)
+                ),
+                run_current=ActionState(
+                    enabled=False,
+                    blocker=BlockerInfo(code=BlockerCode.NOTHING_TO_DO, message=blocker_message),
+                ),
+                run_pending=ActionState(
+                    enabled=False,
+                    blocker=BlockerInfo(code=BlockerCode.NOTHING_TO_DO, message=blocker_message),
+                ),
+            ),
+        ),
+        ocr_page_images={101: _png_1x1()},
+    )
+    view = DocumentOCRTab(service, "proj-1", 4)
+    try:
+        view.refresh()
+        root = view.chrome_host.rootObject()
+        assert root is not None
+        assert view.save_button.isEnabled() is False
+        assert root.property("saveTooltipText") == blocker_message
     finally:
         view.deleteLater()
 
@@ -666,6 +714,66 @@ def test_document_ocr_tab_rerun_current_page_discards_local_draft_on_refresh():
 
         assert view.text_edit.toPlainText() == "fresh ocr"
         assert 101 not in view._page_drafts
+    finally:
+        view.deleteLater()
+
+
+def test_document_ocr_tab_clears_transient_queue_message_on_refresh():
+    from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
+
+    initial_state = DocumentOCRState(
+        workspace=_workspace_state(),
+        pages=[
+            OCRPageState(source_id=101, page_number=1, total_pages=1, status=SurfaceStatus.READY, extracted_text="")
+        ],
+        current_page_index=0,
+        actions=DocumentOCRActions(
+            save=ActionState(enabled=True),
+            run_current=ActionState(enabled=True),
+            run_pending=ActionState(enabled=True),
+        ),
+    )
+    queued_state = initial_state.model_copy(
+        update={
+            "pages": [initial_state.pages[0].model_copy(update={"status": SurfaceStatus.RUNNING})],
+            "actions": DocumentOCRActions(
+                save=ActionState(enabled=False),
+                run_current=ActionState(enabled=False),
+                run_pending=ActionState(enabled=False),
+            ),
+            "active_task_id": "ocr-task-1",
+        }
+    )
+    refreshed_state = queued_state.model_copy(update={"progress": ProgressInfo(current=1, total=3, label="ocr")})
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        ocr=initial_state,
+        ocr_page_images={101: _png_1x1()},
+    )
+
+    def _run(request):  # noqa: ANN001
+        service.calls.append(("run_ocr", request))
+        service.ocr = queued_state
+        return AcceptedCommand(
+            command_name="run_ocr", message=UserMessage(severity=UserMessageSeverity.INFO, text="Queued.")
+        )
+
+    service.run_ocr = _run
+    view = DocumentOCRTab(service, "proj-1", 4)
+    try:
+        view.refresh()
+        root = view.chrome_host.rootObject()
+
+        view.run_current_button.click()
+
+        assert root is not None
+        assert root.property("messageText") == "Queued."
+
+        service.ocr = refreshed_state
+        view.refresh()
+
+        assert root.property("messageText") == ""
+        assert root.property("progressVisible") is True
     finally:
         view.deleteLater()
 

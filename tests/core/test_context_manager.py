@@ -7,9 +7,9 @@ import pytest
 from transformers import AutoTokenizer
 
 from context_aware_translation.core.context_manager import ContextManager, TranslationContextManager
-from context_aware_translation.core.context_tree import ContextTree
 from context_aware_translation.core.models import Term
 from context_aware_translation.core.progress import WorkflowStep
+from context_aware_translation.core.term_memory import TermMemoryVersion
 from context_aware_translation.storage.repositories.term_repository import StorageManager, TermRepository
 from context_aware_translation.storage.schema.book_db import ChunkRecord, TranslationChunkRecord
 
@@ -20,6 +20,7 @@ class MockStorageManager(StorageManager):
     def __init__(self):
         self.chunks = []
         self.keyed_contexts = {}
+        self.term_memory_versions = {}
         self.next_chunk_id = 0
 
     def get_next_chunk_id(self) -> int:
@@ -44,10 +45,7 @@ class MockStorageManager(StorageManager):
     def apply_batch(self, update) -> None:
         for kc in update.keyed_context:
             key = kc.get_key()
-            if key in self.keyed_contexts:
-                self.keyed_contexts[key].merge(kc)
-            else:
-                self.keyed_contexts[key] = kc
+            self.keyed_contexts[key] = kc
         for chunk in update.chunk_records:
             found = False
             for i, c in enumerate(self.chunks):
@@ -73,6 +71,25 @@ class MockStorageManager(StorageManager):
     def close(self) -> None:
         pass
 
+    def replace_term_memory_versions(self, term: str, versions: list[TermMemoryVersion]) -> None:
+        self.term_memory_versions[term] = list(versions)
+
+    def get_latest_term_memory_before(self, term: str, query_index: int) -> TermMemoryVersion | None:
+        versions = self.term_memory_versions.get(term, [])
+        eligible = [version for version in versions if version.effective_start_chunk <= query_index]
+        if not eligible:
+            return None
+        eligible.sort(key=lambda version: version.effective_start_chunk)
+        return eligible[-1]
+
+    def list_latest_term_memory_versions(self) -> dict[str, TermMemoryVersion]:
+        latest = {}
+        for term, versions in self.term_memory_versions.items():
+            if not versions:
+                continue
+            latest[term] = sorted(versions, key=lambda version: version.effective_start_chunk)[-1]
+        return latest
+
 
 class MockContextExtractor:
     """Mock context extractor for testing."""
@@ -88,6 +105,7 @@ class MockContextExtractor:
                     occurrence={},
                     votes=1,
                     total_api_calls=1,
+                    term_type_votes={"other": 1},
                 )
             )
         if "term2" in chunk_record.text:
@@ -98,6 +116,7 @@ class MockContextExtractor:
                     occurrence={},
                     votes=1,
                     total_api_calls=1,
+                    term_type_votes={"other": 1},
                 )
             )
         return terms
@@ -121,6 +140,51 @@ class CallableSummarizer:
         return self._func(descriptions)
 
 
+class DummyContextTree:
+    def __init__(self, summarizer: CallableSummarizer | None = None) -> None:
+        self.summarizer = summarizer
+        self.added_terms: dict[str, dict[int, str]] = {}
+
+    def add_chunks(self, terms_data: dict[str, dict[int, str]], **_kwargs) -> None:
+        self.added_terms.update(terms_data)
+
+    def get_context(self, term: str, _query_index: int) -> list[str]:
+        data = self.added_terms.get(term, {})
+        if not data:
+            return []
+        ordered = [data[idx] for idx in sorted(data)]
+        if self.summarizer is None:
+            return ordered
+        return [self.summarizer._func(ordered)]
+
+    def summarize_term_fully(self, term: str, _query_index: int, **_kwargs) -> str:
+        return " ".join(self.get_context(term, _query_index))
+
+    def close(self) -> None:
+        return None
+
+
+class RecordingTermMemoryBuilder:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict[int, str]]] = []
+
+    def build_versions(self, term: str, data: dict[int, str], cancel_check=None) -> list[TermMemoryVersion]:
+        del cancel_check
+        self.calls.append((term, dict(data)))
+        latest_chunk = max(data)
+        return [
+            TermMemoryVersion(
+                term=term,
+                effective_start_chunk=latest_chunk + 1,
+                latest_evidence_chunk=latest_chunk,
+                summary_text=f"summary for {term}",
+                kind="bootstrap",
+                source_count=len(data),
+                created_at=0.0,
+            )
+        ]
+
+
 @pytest.fixture
 def mock_context_manager(tmp_path: Path):
     """Create a ContextManager with mocks."""
@@ -128,13 +192,8 @@ def mock_context_manager(tmp_path: Path):
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     context_extractor = MockContextExtractor()
 
-    sqlite_path = tmp_path / "context_tree.db"
-    context_tree = ContextTree(
-        summarizer=CallableSummarizer(simple_summarize),
-        estimate_token_size_func=simple_estimate_tokens,
-        sqlite_path=sqlite_path,
-        max_token_size=10,
-    )
+    _ = tmp_path
+    context_tree = DummyContextTree(CallableSummarizer(simple_summarize))
 
     manager = ContextManager(
         context_extractor=context_extractor,
@@ -200,6 +259,7 @@ def test_context_manager_build_context_tree(mock_context_manager):
         occurrence={},
         votes=1,
         total_api_calls=1,
+        term_type="character",
     )
     mock_context_manager.term_repo.keyed_contexts["term1"] = term1
 
@@ -234,6 +294,7 @@ def test_context_manager_build_fully_summarized_descriptions(mock_context_manage
         occurrence={},
         votes=1,
         total_api_calls=1,
+        term_type="character",
         translated_name="t1",
     )
     mock_context_manager.term_repo.keyed_contexts["term1"] = term
@@ -251,6 +312,7 @@ def test_context_manager_build_fully_summarized_descriptions_reports_progress(mo
         occurrence={},
         votes=1,
         total_api_calls=1,
+        term_type="character",
     )
     mock_context_manager.term_repo.keyed_contexts["term_progress"] = term
     updates = []
@@ -273,6 +335,7 @@ def test_get_term_description_for_query_prefers_longest_summary(mock_context_man
         occurrence={},
         votes=1,
         total_api_calls=1,
+        term_type="character",
     )
     mock_context_manager.term_repo.keyed_contexts["term_longest"] = term
 
@@ -286,18 +349,53 @@ def test_get_term_description_for_query_prefers_longest_summary(mock_context_man
     assert description == "this is the longest summary"
 
 
-def test_context_manager_build_fully_summarized_descriptions_raises_for_non_chunk_keys(mock_context_manager):
+def test_get_term_description_for_query_joins_imported_and_numeric_for_other_terms(mock_context_manager):
+    term = Term(
+        key="term_imported_plus_one",
+        descriptions={"imported": "Imported glossary description", "5": "later description"},
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        term_type="other",
+    )
+
+    description = mock_context_manager.get_term_description_for_query(term, 10)
+
+    assert description == "Imported glossary description later description"
+
+
+def test_get_term_description_for_query_excludes_future_numeric_descriptions_for_other_terms(mock_context_manager):
+    term = Term(
+        key="term_future_other",
+        descriptions={
+            "imported": "Imported glossary description",
+            "5": "earlier description",
+            "12": "future description",
+        },
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        term_type="other",
+    )
+
+    description = mock_context_manager.get_term_description_for_query(term, 10)
+
+    assert description == "Imported glossary description earlier description"
+
+
+def test_context_manager_build_fully_summarized_descriptions_ignores_non_chunk_keys(mock_context_manager):
     term = Term(
         key="term_non_chunk",
         descriptions={"legacy_key": "legacy description"},
         occurrence={},
         votes=1,
         total_api_calls=1,
+        term_type="other",
     )
     mock_context_manager.term_repo.keyed_contexts["term_non_chunk"] = term
 
-    with pytest.raises(ValueError, match="Failed to summarize glossary term 'term_non_chunk' for export"):
-        mock_context_manager.build_fully_summarized_descriptions()
+    summaries = mock_context_manager.build_fully_summarized_descriptions()
+    assert summaries["term_non_chunk"] == ""
 
 
 def test_context_manager_build_fully_summarized_descriptions_uses_context_tree_summary(mock_context_manager):
@@ -307,11 +405,114 @@ def test_context_manager_build_fully_summarized_descriptions_uses_context_tree_s
         occurrence={},
         votes=1,
         total_api_calls=1,
+        term_type="character",
     )
     mock_context_manager.term_repo.keyed_contexts["term_skip_context"] = term
 
     summaries = mock_context_manager.build_fully_summarized_descriptions()
     assert summaries["term_skip_context"] == "first | second"
+
+
+def test_build_fully_summarized_descriptions_joins_imported_and_numeric_for_other_terms(mock_context_manager):
+    term = Term(
+        key="term_imported_plus_one_export",
+        descriptions={"imported": "Imported glossary description", "5": "later description"},
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        term_type="other",
+    )
+    mock_context_manager.term_repo.keyed_contexts["term_imported_plus_one_export"] = term
+    mock_context_manager.context_tree = None
+
+    summaries = mock_context_manager.build_fully_summarized_descriptions()
+
+    assert summaries["term_imported_plus_one_export"] == "Imported glossary description later description"
+
+
+def test_build_fully_summarized_descriptions_keeps_all_available_descriptions_for_other_terms(mock_context_manager):
+    term = Term(
+        key="term_imported_plus_future_export",
+        descriptions={
+            "imported": "Imported glossary description",
+            "5": "later description",
+            "12": "latest description",
+        },
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        term_type="other",
+    )
+    mock_context_manager.term_repo.keyed_contexts["term_imported_plus_future_export"] = term
+    mock_context_manager.context_tree = None
+
+    summaries = mock_context_manager.build_fully_summarized_descriptions()
+
+    assert (
+        summaries["term_imported_plus_future_export"]
+        == "Imported glossary description later description latest description"
+    )
+
+
+def test_get_term_description_for_query_prefers_term_memory_without_context_tree(mock_context_manager):
+    term = Term(
+        key="term_memory_term",
+        descriptions={"imported": "Imported glossary description", "5": "later description"},
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        term_type="character",
+    )
+    mock_context_manager.term_repo.replace_term_memory_versions(
+        "term_memory_term",
+        [
+            TermMemoryVersion(
+                term="term_memory_term",
+                effective_start_chunk=6,
+                latest_evidence_chunk=5,
+                summary_text="term memory summary",
+                kind="bootstrap",
+                source_count=2,
+                created_at=0.0,
+            )
+        ],
+    )
+    mock_context_manager.context_tree = None
+
+    description = mock_context_manager.get_term_description_for_query(term, 10)
+
+    assert description == "term memory summary"
+
+
+def test_build_fully_summarized_descriptions_prefers_term_memory_without_context_tree(mock_context_manager):
+    term = Term(
+        key="term_memory_export",
+        descriptions={"imported": "Imported glossary description", "5": "later description"},
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        term_type="character",
+    )
+    mock_context_manager.term_repo.keyed_contexts["term_memory_export"] = term
+    mock_context_manager.term_repo.replace_term_memory_versions(
+        "term_memory_export",
+        [
+            TermMemoryVersion(
+                term="term_memory_export",
+                effective_start_chunk=6,
+                latest_evidence_chunk=5,
+                summary_text="term memory export summary",
+                kind="bootstrap",
+                source_count=2,
+                created_at=0.0,
+            )
+        ],
+    )
+    mock_context_manager.context_tree = None
+
+    summaries = mock_context_manager.build_fully_summarized_descriptions()
+
+    assert summaries["term_memory_export"] == "term memory export summary"
 
 
 def test_context_manager_build_fully_summarized_descriptions_allows_empty_description(mock_context_manager):
@@ -348,6 +549,108 @@ def test_context_manager_build_fully_summarized_descriptions_ignored_term_joins_
     assert summaries["term_ignored"] == "imported desc chunk desc"
 
 
+def test_context_manager_build_context_tree_skips_term_memory_for_other_terms(mock_context_manager):
+    builder = RecordingTermMemoryBuilder()
+    mock_context_manager.term_memory_builder = builder
+
+    character_term = Term(
+        key="hero",
+        descriptions={"1": "hero description", "2": "more hero description"},
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        term_type="character",
+    )
+    other_term = Term(
+        key="artifact",
+        descriptions={"1": "artifact description", "2": "more artifact description"},
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        term_type="other",
+    )
+    mock_context_manager.term_repo.keyed_contexts = {
+        character_term.key: character_term,
+        other_term.key: other_term,
+    }
+
+    mock_context_manager.build_context_tree()
+
+    assert [term_key for term_key, _data in builder.calls] == ["hero"]
+    assert "hero" in mock_context_manager.term_repo.term_memory_versions
+    assert mock_context_manager.term_repo.term_memory_versions["artifact"] == []
+    assert mock_context_manager.context_tree.added_terms["hero"] == {1: "hero description", 2: "more hero description"}
+    assert mock_context_manager.context_tree.added_terms["artifact"] == {
+        1: "artifact description",
+        2: "more artifact description",
+    }
+
+
+def test_get_term_description_for_query_skips_term_memory_for_other_terms(mock_context_manager):
+    term = Term(
+        key="artifact_query",
+        descriptions={"imported": "Imported glossary description", "5": "later description"},
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        term_type="other",
+    )
+    mock_context_manager.term_repo.replace_term_memory_versions(
+        "artifact_query",
+        [
+            TermMemoryVersion(
+                term="artifact_query",
+                effective_start_chunk=6,
+                latest_evidence_chunk=5,
+                summary_text="term memory summary",
+                kind="bootstrap",
+                source_count=2,
+                created_at=0.0,
+            )
+        ],
+    )
+    mock_context_manager.context_tree.get_context = lambda *_a, **_k: ["legacy summary"]  # type: ignore[method-assign]
+
+    description = mock_context_manager.get_term_description_for_query(term, 10)
+
+    assert description == "Imported glossary description later description"
+
+
+def test_build_fully_summarized_descriptions_exports_raw_description_for_other_terms(mock_context_manager):
+    term = Term(
+        key="artifact_export",
+        descriptions={"imported": "imported desc", "2": "chunk desc"},
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        term_type="other",
+    )
+    mock_context_manager.term_repo.keyed_contexts["artifact_export"] = term
+    mock_context_manager.term_repo.replace_term_memory_versions(
+        "artifact_export",
+        [
+            TermMemoryVersion(
+                term="artifact_export",
+                effective_start_chunk=3,
+                latest_evidence_chunk=2,
+                summary_text="term memory export summary",
+                kind="bootstrap",
+                source_count=2,
+                created_at=0.0,
+            )
+        ],
+    )
+
+    def _fail_summarize(*_args, **_kwargs):  # noqa: ANN002, ANN003
+        raise AssertionError("other term should not use context tree summarization")
+
+    mock_context_manager.context_tree.summarize_term_fully = _fail_summarize  # type: ignore[method-assign]
+
+    summaries = mock_context_manager.build_fully_summarized_descriptions()
+
+    assert summaries["artifact_export"] == "imported desc chunk desc"
+
+
 def test_context_manager_build_fully_summarized_descriptions_raises_when_summary_empty(mock_context_manager):
     term = Term(
         key="term_missing_summary",
@@ -359,8 +662,8 @@ def test_context_manager_build_fully_summarized_descriptions_raises_when_summary
     mock_context_manager.term_repo.keyed_contexts["term_missing_summary"] = term
     mock_context_manager.context_tree.summarize_term_fully = lambda *_a, **_k: "  "  # type: ignore[method-assign]
 
-    with pytest.raises(ValueError, match="Failed to summarize glossary term 'term_missing_summary' for export"):
-        mock_context_manager.build_fully_summarized_descriptions()
+    summaries = mock_context_manager.build_fully_summarized_descriptions()
+    assert summaries["term_missing_summary"] == "desc0"
 
 
 @pytest.mark.asyncio
@@ -484,6 +787,51 @@ def test_context_manager_state_update_merges_terms(mock_context_manager):
     assert "0" in merged_term.descriptions or "1" in merged_term.descriptions
 
 
+def test_context_manager_state_update_merges_term_type_by_per_type_vote_totals(mock_context_manager):
+    existing_term = Term(
+        key="term1",
+        descriptions={"0": "desc1"},
+        occurrence={},
+        votes=2,
+        total_api_calls=2,
+        term_type="character",
+    )
+    mock_context_manager.term_repo.keyed_contexts["term1"] = existing_term
+
+    chunk = ChunkRecord(chunk_id=1, hash="hash1", text="text1")
+    mock_context_manager.term_repo.chunks.append(chunk)
+    mock_context_manager._state_update(
+        [
+            Term(
+                key="term1",
+                descriptions={"1": "desc2"},
+                occurrence={},
+                votes=1,
+                total_api_calls=1,
+                term_type="organization",
+            )
+        ],
+        [chunk],
+    )
+    mock_context_manager._state_update(
+        [
+            Term(
+                key="term1",
+                descriptions={"2": "desc3"},
+                occurrence={},
+                votes=2,
+                total_api_calls=2,
+                term_type="organization",
+            )
+        ],
+        [],
+    )
+
+    merged_term = mock_context_manager.term_repo.keyed_contexts["term1"]
+    assert merged_term.term_type == "organization"
+    assert merged_term.term_type_votes == {"character": 2, "organization": 3}
+
+
 def test_translation_context_manager_init_bug(tmp_path: Path):
     """Test that TranslationContextManager.__init__ has a bug with self.storage_manager."""
     # BUG: TranslationContextManager.__init__ calls super().__init__ with self.storage_manager
@@ -497,8 +845,6 @@ def test_translation_context_manager_init_bug(tmp_path: Path):
 
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     sqlite_path = tmp_path / "test.db"
-    context_tree_sqlite_path = tmp_path / "context_tree.db"
-
     # Create a minimal config
     from context_aware_translation.config import (
         ExtractorConfig,
@@ -520,11 +866,7 @@ def test_translation_context_manager_init_bug(tmp_path: Path):
         review_config=ReviewConfig(**base_settings),
     )
 
-    context_tree = ContextTree(
-        summarizer=CallableSummarizer(simple_summarize),
-        estimate_token_size_func=simple_estimate_tokens,
-        sqlite_path=context_tree_sqlite_path,
-    )
+    context_tree = DummyContextTree(CallableSummarizer(simple_summarize))
 
     llm_client = LLMClient(LLMConfig(**base_settings))
     context_extractor = TermExtractor(llm_client, config.extractor_config)
@@ -601,8 +943,6 @@ def test_mark_noise_terms_zero_division_bug(tmp_path: Path):
 
     AutoTokenizer.from_pretrained("gpt2")
     tmp_path / "test.db"
-    context_tree_sqlite_path = tmp_path / "context_tree.db"
-
     base_settings = {"api_key": "test", "base_url": "https://test.com/v1", "model": "gpt-4"}
     Config(
         working_dir=tmp_path,
@@ -614,11 +954,7 @@ def test_mark_noise_terms_zero_division_bug(tmp_path: Path):
         review_config=ReviewConfig(**base_settings),
     )
 
-    context_tree = ContextTree(
-        summarizer=CallableSummarizer(simple_summarize),
-        estimate_token_size_func=simple_estimate_tokens,
-        sqlite_path=context_tree_sqlite_path,
-    )
+    context_tree = DummyContextTree(CallableSummarizer(simple_summarize))
 
     # BUG FIXED: mark_noise_terms now raises ValueError if descriptions is empty
     # instead of dividing by zero
@@ -848,13 +1184,7 @@ def test_translation_context_manager_super_init_bug(tmp_path: Path):
 
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     sqlite_path = tmp_path / "test.db"
-    context_tree_sqlite_path = tmp_path / "context_tree.db"
-
-    context_tree = ContextTree(
-        summarizer=CallableSummarizer(simple_summarize),
-        estimate_token_size_func=simple_estimate_tokens,
-        sqlite_path=context_tree_sqlite_path,
-    )
+    context_tree = DummyContextTree(CallableSummarizer(simple_summarize))
 
     # Create minimal mocks
     class MockExtractor:
@@ -1142,13 +1472,8 @@ def mock_translation_context_manager(tmp_path: Path):
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     context_extractor = MockContextExtractor()
 
-    sqlite_path = tmp_path / "context_tree.db"
-    context_tree = ContextTree(
-        summarizer=CallableSummarizer(simple_summarize),
-        estimate_token_size_func=simple_estimate_tokens,
-        sqlite_path=sqlite_path,
-        max_token_size=10,
-    )
+    _ = tmp_path
+    context_tree = DummyContextTree(CallableSummarizer(simple_summarize))
 
     source_language_detector = type("Detector", (), {"detect": AsyncMock(return_value="English")})()
     glossary_translator = type("Glossary", (), {"translate": AsyncMock(return_value={})})()

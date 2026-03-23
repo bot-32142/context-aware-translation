@@ -3,7 +3,6 @@ from __future__ import annotations
 import contextlib
 import json
 import sqlite3
-import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -11,6 +10,7 @@ from typing import Any
 from context_aware_translation.storage.models.book import Book, BookStatus
 from context_aware_translation.storage.models.config_profile import ConfigProfile
 from context_aware_translation.storage.models.endpoint_profile import EndpointProfile
+from context_aware_translation.storage.sqlite_locking import get_sqlite_file_lock
 
 CREATE_CONFIG_PROFILES_TABLE = """
 CREATE TABLE IF NOT EXISTS config_profiles (
@@ -99,7 +99,7 @@ class RegistryDB:
         # WAL mode + proper locking ensures thread safety
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
-        self._lock = threading.RLock()  # Reentrant lock for thread safety
+        self._lock = get_sqlite_file_lock(self.db_path)
         self._configure_connection()
         self._init_schema()
 

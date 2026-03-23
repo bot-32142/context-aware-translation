@@ -21,6 +21,17 @@ SQLITE_FILENAME = "terms.db"
 DEFAULT_OUTPUT_DIR = Path(".")
 DEFAULT_WORKING_SUBDIR = "data"
 CONFIG_SNAPSHOT_VERSION = 1
+_INTERNAL_ENDPOINT_PROFILE_KWARGS = frozenset({"provider", "_ui_display_name", "_wizard_template_key"})
+
+
+def _strip_internal_endpoint_profile_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
+    return {str(key): value for key, value in kwargs.items() if str(key) not in _INTERNAL_ENDPOINT_PROFILE_KWARGS}
+
+
+def _explicit_llm_fields(data: dict[str, Any], config_class: type[LLMConfig]) -> set[str]:
+    valid_field_names = {field_info.name for field_info in fields(config_class)}
+    valid_field_names.discard("_explicit_fields")
+    return {str(key) for key in data if str(key) in valid_field_names}
 
 
 @dataclass
@@ -88,6 +99,8 @@ class LLMConfig:
     endpoint_profile: str | None = None
     # Additional kwargs for LLM API calls (merged with passed kwargs, passed kwargs take precedence)
     kwargs: dict[str, Any] = field(default_factory=dict)
+    # Track which fields were explicitly present in persisted payloads.
+    _explicit_fields: set[str] = field(default_factory=set, repr=False, compare=False)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary for JSON storage."""
@@ -107,8 +120,10 @@ class LLMConfig:
     @classmethod
     def from_dict(cls: type[T], data: dict[str, Any]) -> T:
         """Create from dictionary, ignoring unknown keys for forward/backward compatibility."""
-        valid_field_names = {f.name for f in fields(cls)}
+        valid_field_names = {field_info.name for field_info in fields(cls)}
+        valid_field_names.discard("_explicit_fields")
         filtered_data = {k: v for k, v in data.items() if k in valid_field_names}
+        filtered_data["_explicit_fields"] = _explicit_llm_fields(data, cls)
         return cls(**filtered_data)
 
 
@@ -135,16 +150,17 @@ class ExtractorConfig(LLMConfig):
     def from_dict(cls, data: dict[str, Any]) -> ExtractorConfig:
         """Create from dictionary."""
         return cls(
-            api_key=data.get("api_key", ""),
-            base_url=data.get("base_url", ""),
+            api_key=data.get("api_key"),
+            base_url=data.get("base_url"),
             api_version=data.get("api_version"),
             timeout=data.get("timeout", 60),
             max_retries=data.get("max_retries", 3),
-            model=data.get("model", ""),
+            model=data.get("model"),
             temperature=data.get("temperature", 0.0),
             concurrency=data.get("concurrency", 5),
             endpoint_profile=data.get("endpoint_profile"),
             kwargs=data.get("kwargs", {}),
+            _explicit_fields=_explicit_llm_fields(data, cls),
             max_gleaning=data.get("max_gleaning", 3),
             max_term_name_length=data.get("max_term_name_length", 200),
         )
@@ -171,16 +187,17 @@ class SummarizorConfig(LLMConfig):
     def from_dict(cls, data: dict[str, Any]) -> SummarizorConfig:
         """Create from dictionary."""
         return cls(
-            api_key=data.get("api_key", ""),
-            base_url=data.get("base_url", ""),
+            api_key=data.get("api_key"),
+            base_url=data.get("base_url"),
             api_version=data.get("api_version"),
             timeout=data.get("timeout", 60),
             max_retries=data.get("max_retries", 3),
-            model=data.get("model", ""),
+            model=data.get("model"),
             temperature=data.get("temperature", 0.0),
             concurrency=data.get("concurrency", 5),
             endpoint_profile=data.get("endpoint_profile"),
             kwargs=data.get("kwargs", {}),
+            _explicit_fields=_explicit_llm_fields(data, cls),
             max_term_description_length=data.get("max_term_description_length", 1200),
         )
 
@@ -212,16 +229,17 @@ class TranslatorConfig(LLMConfig):
     def from_dict(cls, data: dict[str, Any]) -> TranslatorConfig:
         """Create from dictionary."""
         return cls(
-            api_key=data.get("api_key", ""),
-            base_url=data.get("base_url", ""),
+            api_key=data.get("api_key"),
+            base_url=data.get("base_url"),
             api_version=data.get("api_version"),
             timeout=data.get("timeout", 60),
             max_retries=data.get("max_retries", 3),
-            model=data.get("model", ""),
+            model=data.get("model"),
             temperature=data.get("temperature", 0.0),
             concurrency=data.get("concurrency", 5),
             endpoint_profile=data.get("endpoint_profile"),
             kwargs=data.get("kwargs", {}),
+            _explicit_fields=_explicit_llm_fields(data, cls),
             enable_polish=data.get("enable_polish", True),
             num_of_chunks_per_llm_call=data.get("num_of_chunks_per_llm_call", 3),
             max_tokens_per_llm_call=data.get("max_tokens_per_llm_call", 4000),
@@ -300,16 +318,17 @@ class MangaTranslatorConfig(LLMConfig):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> MangaTranslatorConfig:
         return cls(
-            api_key=data.get("api_key", ""),
-            base_url=data.get("base_url", ""),
+            api_key=data.get("api_key"),
+            base_url=data.get("base_url"),
             api_version=data.get("api_version"),
             timeout=data.get("timeout", 300),
             max_retries=data.get("max_retries", 3),
-            model=data.get("model", ""),
+            model=data.get("model"),
             temperature=data.get("temperature", 0.0),
             concurrency=data.get("concurrency", 5),
             endpoint_profile=data.get("endpoint_profile"),
             kwargs=data.get("kwargs", {}),
+            _explicit_fields=_explicit_llm_fields(data, cls),
         )
 
 
@@ -347,16 +366,17 @@ class ImageReembeddingConfig(LLMConfig):
     def from_dict(cls, data: dict[str, Any]) -> ImageReembeddingConfig:
         """Create from dictionary."""
         return cls(
-            api_key=data.get("api_key", ""),
-            base_url=data.get("base_url", ""),
+            api_key=data.get("api_key"),
+            base_url=data.get("base_url"),
             api_version=data.get("api_version"),
             timeout=data.get("timeout", 60),
             max_retries=data.get("max_retries", 3),
-            model=data.get("model", ""),
+            model=data.get("model"),
             temperature=data.get("temperature", 0.0),
             concurrency=data.get("concurrency", 5),
             endpoint_profile=data.get("endpoint_profile"),
             kwargs=data.get("kwargs", {}),
+            _explicit_fields=_explicit_llm_fields(data, cls),
             backend=data.get("backend", ImageBackend.GEMINI),
         )
 
@@ -386,16 +406,17 @@ class OCRConfig(LLMConfig):
     def from_dict(cls, data: dict[str, Any]) -> OCRConfig:
         """Create from dictionary."""
         return cls(
-            api_key=data.get("api_key", ""),
-            base_url=data.get("base_url", ""),
+            api_key=data.get("api_key"),
+            base_url=data.get("base_url"),
             api_version=data.get("api_version"),
             timeout=data.get("timeout", 60),
             max_retries=data.get("max_retries", 3),
-            model=data.get("model", ""),
+            model=data.get("model"),
             temperature=data.get("temperature", 0.0),
             concurrency=data.get("concurrency", 5),
             endpoint_profile=data.get("endpoint_profile"),
             kwargs=data.get("kwargs", {}),
+            _explicit_fields=_explicit_llm_fields(data, cls),
             strip_llm_artifacts=data.get("strip_llm_artifacts", True),
             ocr_dpi=data.get("ocr_dpi", 150),
         )
@@ -447,7 +468,6 @@ class WorkflowRuntimeConfig:
     translation_target_language: str
     llm_concurrency: int
     sqlite_path: Path
-    context_tree_sqlite_path: Path
     extractor_config: ExtractorConfig
     summarizor_config: SummarizorConfig
     translator_config: TranslatorConfig
@@ -548,18 +568,21 @@ def _resolve_with_profile(
 
     profile = profiles[config.endpoint_profile]
 
-    # Create new LLMConfig with profile as base, config values override
+    explicit_fields = config._explicit_fields if hasattr(config, "_explicit_fields") else set()
+
+    # Create new LLMConfig with profile as base, config values override.
     return LLMConfig(
         api_key=config.api_key if config.api_key is not None else profile.api_key,
         base_url=config.base_url if config.base_url is not None else profile.base_url,
         api_version=config.api_version if config.api_version is not None else profile.api_version,
-        timeout=config.timeout if config.timeout != 120.0 else profile.timeout,
-        max_retries=config.max_retries if config.max_retries != 3 else profile.max_retries,
+        timeout=config.timeout if "timeout" in explicit_fields else profile.timeout,
+        max_retries=config.max_retries if "max_retries" in explicit_fields else profile.max_retries,
         model=config.model if config.model is not None else profile.model,
-        temperature=config.temperature if config.temperature != 0.0 else profile.temperature,
-        concurrency=config.concurrency if config.concurrency != 5 else profile.concurrency,
-        kwargs={**profile.kwargs, **config.kwargs},
+        temperature=config.temperature if "temperature" in explicit_fields else profile.temperature,
+        concurrency=config.concurrency if "concurrency" in explicit_fields else profile.concurrency,
+        kwargs=_strip_internal_endpoint_profile_kwargs({**profile.kwargs, **config.kwargs}),
         endpoint_profile=config.endpoint_profile,  # Preserve for token tracking
+        _explicit_fields=set(explicit_fields),
     )
 
 
@@ -642,7 +665,6 @@ class Config:
     output_dir: Path = field(default_factory=lambda: DEFAULT_OUTPUT_DIR)
     working_dir: Path | None = None  # default to output_dir / data
     sqlite_path: Path | None = None  # default to working_dir / terms.db
-    context_tree_sqlite_path: Path | None = None  # default to working_dir / context_tree.db
     log_dir: Path | None = None  # default to working_dir / logs
     book_id: str | None = None  # If created from a book, stores the book_id
 
@@ -673,8 +695,6 @@ class Config:
             result["working_dir"] = str(self.working_dir)
         if self.sqlite_path:
             result["sqlite_path"] = str(self.sqlite_path)
-        if self.context_tree_sqlite_path:
-            result["context_tree_sqlite_path"] = str(self.context_tree_sqlite_path)
         if self.log_dir:
             result["log_dir"] = str(self.log_dir)
 
@@ -765,9 +785,6 @@ class Config:
             output_dir=Path(data["output_dir"]) if "output_dir" in data else DEFAULT_OUTPUT_DIR,
             working_dir=Path(data["working_dir"]) if data.get("working_dir") else None,
             sqlite_path=Path(data["sqlite_path"]) if data.get("sqlite_path") else None,
-            context_tree_sqlite_path=(
-                Path(data["context_tree_sqlite_path"]) if data.get("context_tree_sqlite_path") else None
-            ),
             log_dir=Path(data["log_dir"]) if data.get("log_dir") else None,
             book_id=data.get("book_id"),
             endpoint_profiles=endpoint_profiles,
@@ -821,8 +838,6 @@ class Config:
             missing.append("translation_target_language")
         if self.sqlite_path is None:
             missing.append("sqlite_path")
-        if self.context_tree_sqlite_path is None:
-            missing.append("context_tree_sqlite_path")
         if self.extractor_config is None:
             missing.append("extractor_config")
         if self.summarizor_config is None:
@@ -847,7 +862,6 @@ class Config:
             translation_target_language=self.translation_target_language,
             llm_concurrency=self.llm_concurrency,
             sqlite_path=self.sqlite_path,  # type: ignore[arg-type]
-            context_tree_sqlite_path=self.context_tree_sqlite_path,  # type: ignore[arg-type]
             extractor_config=self.extractor_config,  # type: ignore[arg-type]
             summarizor_config=self.summarizor_config,  # type: ignore[arg-type]
             translator_config=self.translator_config,  # type: ignore[arg-type]
@@ -867,8 +881,6 @@ class Config:
             self.working_dir = Path(self.working_dir)
         if self.sqlite_path is None:
             self.sqlite_path = self.working_dir / SQLITE_FILENAME
-        if self.context_tree_sqlite_path is None:
-            self.context_tree_sqlite_path = self.working_dir / "context_tree.db"
         if self.log_dir is None:
             self.log_dir = self.working_dir / "logs"
         else:
@@ -993,7 +1005,6 @@ class Config:
             output_dir=book_path,
             working_dir=book_path,
             sqlite_path=book_path / "book.db",
-            context_tree_sqlite_path=book_path / "context_tree.db",
             log_dir=book_path / "logs",
             book_id=book.book_id,
             endpoint_profiles=endpoint_profiles,

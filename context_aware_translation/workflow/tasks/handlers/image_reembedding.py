@@ -42,6 +42,17 @@ _NON_DELETABLE_STATUSES = frozenset({STATUS_RUNNING, STATUS_CANCEL_REQUESTED, ST
 _AUTORUN_STATUSES = frozenset({STATUS_QUEUED, STATUS_PAUSED})
 
 _REEMBEDDABLE_DOCUMENT_TYPES = frozenset({"pdf", "scanned_book", "manga", "epub"})
+_NO_MANGA_OCR_CONFIG_CODE = "no_manga_ocr_config"
+_MANGA_OCR_CONFIG_REQUIRED_REASON = "Manga image reembedding requires OCR config. Please configure it in Project Setup."
+
+
+def _validate_manga_ocr_config(
+    config: config_module.Config,
+    documents: list[dict[str, Any]],
+) -> Decision | None:
+    if any(doc.get("document_type") == "manga" for doc in documents) and config.ocr_config is None:
+        return Decision(allowed=False, code=_NO_MANGA_OCR_CONFIG_CODE, reason=_MANGA_OCR_CONFIG_REQUIRED_REASON)
+    return None
 
 
 class ImageReembeddingHandler:
@@ -155,6 +166,10 @@ class ImageReembeddingHandler:
             if not selected_docs:
                 return Decision(allowed=False, reason="No documents selected.")
 
+            ocr_decision = _validate_manga_ocr_config(config, selected_docs)
+            if ocr_decision is not None:
+                return ocr_decision
+
             non_reembeddable = [d for d in selected_docs if d.get("document_type") not in _REEMBEDDABLE_DOCUMENT_TYPES]
             if non_reembeddable:
                 types = {d.get("document_type") for d in non_reembeddable}
@@ -243,6 +258,10 @@ class ImageReembeddingHandler:
 
             if not selected_docs:
                 return Decision(allowed=False, reason="Book has no documents.")
+
+            ocr_decision = _validate_manga_ocr_config(config, selected_docs)
+            if ocr_decision is not None:
+                return ocr_decision
 
             non_reembeddable = [d for d in selected_docs if d.get("document_type") not in _REEMBEDDABLE_DOCUMENT_TYPES]
             if non_reembeddable:

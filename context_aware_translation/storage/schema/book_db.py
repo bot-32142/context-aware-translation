@@ -5,11 +5,20 @@ import contextlib
 import json
 import sqlite3
 import time
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from functools import wraps
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
+from context_aware_translation.core.models import (
+    has_chunk_description_evidence,
+    normalize_term_type,
+    normalize_term_type_state,
+    normalize_term_type_votes,
+)
+from context_aware_translation.core.term_memory import TermMemoryVersion
+from context_aware_translation.storage.sqlite_locking import get_sqlite_file_lock
 from context_aware_translation.utils.cjk_normalize import normalize_for_matching
 
 
@@ -20,12 +29,22 @@ class TermRecord:
     occurrence: dict
     votes: int
     total_api_calls: int
+    term_type: str = "other"
+    term_type_votes: dict[str, int] | None = None
     new_translation: str | None = None
     translated_name: str | None = None
     ignored: bool = False
     is_reviewed: bool = False
     created_at: float | None = None
     updated_at: float | None = None
+
+    def __post_init__(self) -> None:
+        self.term_type, self.term_type_votes = normalize_term_type_state(
+            self.term_type,
+            self.term_type_votes,
+            self.votes,
+            descriptions=self.descriptions,
+        )
 
 
 @dataclass(frozen=True)
@@ -76,6 +95,8 @@ CREATE TABLE IF NOT EXISTS terms (
     occurrence_json TEXT NOT NULL,
     votes INTEGER NOT NULL,
     total_api_calls INTEGER NOT NULL,
+    term_type TEXT NOT NULL DEFAULT 'other',
+    term_type_votes_json TEXT NOT NULL DEFAULT '{}',
     new_translation TEXT,
     translated_name TEXT,
     ignored INTEGER NOT NULL DEFAULT 0,
@@ -98,6 +119,19 @@ CREATE TABLE IF NOT EXISTS chunks (
     is_occurrence_mapped INTEGER NOT NULL DEFAULT 0,
     is_translated INTEGER NOT NULL DEFAULT 0,
     translation TEXT
+);
+"""
+
+CREATE_TERM_MEMORY_VERSIONS = """
+CREATE TABLE IF NOT EXISTS term_memory_versions (
+    term TEXT NOT NULL,
+    effective_start_chunk INTEGER NOT NULL,
+    latest_evidence_chunk INTEGER NOT NULL,
+    summary_text TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    source_count INTEGER NOT NULL,
+    created_at REAL NOT NULL,
+    PRIMARY KEY (term, effective_start_chunk)
 );
 """
 
@@ -127,6 +161,42 @@ CREATE TABLE IF NOT EXISTS document_sources (
 """
 
 
+_F = TypeVar("_F", bound=Callable[..., object])
+
+
+def _serialized_write(*, auto_commit_param: str | None = "auto_commit") -> Callable[[_F], _F]:
+    def decorator(func: _F) -> _F:
+        signature = __import__("inspect").signature(func)
+
+        @wraps(func)
+        def wrapper(self: SQLiteBookDB, *args: object, **kwargs: object) -> object:
+            auto_commit = True
+            if auto_commit_param is not None:
+                bound = signature.bind(self, *args, **kwargs)
+                bound.apply_defaults()
+                auto_commit = bool(bound.arguments.get(auto_commit_param, True))
+
+            acquired = self._acquire_write_lock(hold_until_transaction_end=not auto_commit)
+            try:
+                return func(self, *args, **kwargs)
+            except Exception:
+                if acquired and not auto_commit:
+                    with contextlib.suppress(Exception):
+                        if self.conn.in_transaction:
+                            self.conn.rollback()
+                    self._release_transaction_write_lock()
+                raise
+            finally:
+                if auto_commit and self._holds_write_lock and not self.conn.in_transaction:
+                    self._release_transaction_write_lock()
+                if acquired and auto_commit:
+                    self._release_temporary_write_lock()
+
+        return wrapper  # type: ignore[return-value]
+
+    return decorator
+
+
 class SQLiteBookDB:
     """
     SQLite-backed term store that owns term, chunk, and link tables.
@@ -134,9 +204,11 @@ class SQLiteBookDB:
 
     def __init__(self, sqlite_path: Path) -> None:
         self.db_path = Path(sqlite_path)
-        self.schema_version = 3
+        self.schema_version = 6
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
+        self._write_lock = get_sqlite_file_lock(self.db_path)
+        self._holds_write_lock = False
         self._configure_connection()
         self._init_schema()
 
@@ -147,6 +219,11 @@ class SQLiteBookDB:
 
     def _migrate_schema(self, from_version: int) -> None:
         cur = self.conn.cursor()
+
+        def _has_column(table: str, column: str) -> bool:
+            rows = cur.execute(f"PRAGMA table_info({table})").fetchall()
+            return any(row[1] == column for row in rows)
+
         if from_version < 2:
             cur.execute("ALTER TABLE chunks ADD COLUMN normalized_text TEXT")
 
@@ -189,6 +266,22 @@ class SQLiteBookDB:
                 )
                 """
             )
+        if from_version < 4:
+            cur.execute(CREATE_TERM_MEMORY_VERSIONS)
+        if from_version < 5 and not _has_column("terms", "term_type"):
+            cur.execute("ALTER TABLE terms ADD COLUMN term_type TEXT NOT NULL DEFAULT 'other'")
+        if from_version < 6 and not _has_column("terms", "term_type_votes_json"):
+            cur.execute("ALTER TABLE terms ADD COLUMN term_type_votes_json TEXT NOT NULL DEFAULT '{}'")
+        if from_version < 6:
+            rows = cur.execute("SELECT key, term_type, votes, term_type_votes_json FROM terms").fetchall()
+            for row in rows:
+                type_votes = normalize_term_type_votes(json.loads(row["term_type_votes_json"] or "{}"))
+                if not type_votes and row["votes"] > 0:
+                    type_votes = {normalize_term_type(row["term_type"]): row["votes"]}
+                    cur.execute(
+                        "UPDATE terms SET term_type_votes_json = ? WHERE key = ?",
+                        (json.dumps(type_votes, ensure_ascii=False), row["key"]),
+                    )
         cur.execute(
             "UPDATE meta SET schema_version = ?, updated_at = ?",
             (self.schema_version, time.time()),
@@ -200,7 +293,12 @@ class SQLiteBookDB:
         cur.execute(CREATE_META)
         cur.execute(CREATE_TERMS)
         cur.execute(CREATE_CHUNKS)
+        cur.execute(CREATE_TERM_MEMORY_VERSIONS)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON chunks(document_id);")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_term_memory_versions_term_effective "
+            "ON term_memory_versions(term, effective_start_chunk);"
+        )
         cur.execute(CREATE_DOCUMENT)
         cur.execute(CREATE_DOCUMENT_SOURCES)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_document_sources_document_id ON document_sources(document_id);")
@@ -228,6 +326,23 @@ class SQLiteBookDB:
             elif version > self.schema_version:
                 raise RuntimeError(f"Database schema version {version} is newer than supported {self.schema_version}")
 
+    def _acquire_write_lock(self, *, hold_until_transaction_end: bool) -> bool:
+        if self._holds_write_lock:
+            return False
+        self._write_lock.acquire()
+        if hold_until_transaction_end:
+            self._holds_write_lock = True
+        return True
+
+    def _release_temporary_write_lock(self) -> None:
+        self._write_lock.release()
+
+    def _release_transaction_write_lock(self) -> None:
+        if not self._holds_write_lock:
+            return
+        self._holds_write_lock = False
+        self._write_lock.release()
+
     def refresh(self) -> None:
         """End any implicit read transaction so the next query sees fresh data.
 
@@ -239,14 +354,22 @@ class SQLiteBookDB:
         self.conn.rollback()
 
     def begin(self) -> None:
+        self._acquire_write_lock(hold_until_transaction_end=True)
         self.conn.execute("BEGIN;")
 
     def commit(self) -> None:
-        self.conn.commit()
+        try:
+            self.conn.commit()
+        finally:
+            self._release_transaction_write_lock()
 
     def rollback(self) -> None:
-        self.conn.rollback()
+        try:
+            self.conn.rollback()
+        finally:
+            self._release_transaction_write_lock()
 
+    @_serialized_write()
     def upsert_terms(self, terms: Iterable[TermRecord], auto_commit: bool = True) -> None:
         now = time.time()
         cur = self.conn.cursor()
@@ -257,15 +380,17 @@ class SQLiteBookDB:
                 """
                 INSERT INTO terms(
                     key, descriptions_json, occurrence_json,
-                    votes, total_api_calls, new_translation, translated_name,
-                    ignored, is_reviewed, created_at, updated_at
+                    votes, total_api_calls, term_type, term_type_votes_json, new_translation,
+                    translated_name, ignored, is_reviewed, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(key) DO UPDATE SET
                     descriptions_json=excluded.descriptions_json,
                     occurrence_json=excluded.occurrence_json,
                     votes=excluded.votes,
                     total_api_calls=excluded.total_api_calls,
+                    term_type=excluded.term_type,
+                    term_type_votes_json=excluded.term_type_votes_json,
                     new_translation=excluded.new_translation,
                     translated_name=excluded.translated_name,
                     ignored=excluded.ignored,
@@ -278,6 +403,8 @@ class SQLiteBookDB:
                     occurrence_json,
                     term.votes,
                     term.total_api_calls,
+                    term.term_type,
+                    json.dumps(term.term_type_votes or {}, ensure_ascii=False),
                     term.new_translation,
                     term.translated_name,
                     1 if term.ignored else 0,
@@ -396,6 +523,7 @@ class SQLiteBookDB:
         rows = self.conn.execute("SELECT * FROM terms WHERE translated_name IS NULL OR translated_name = ''").fetchall()
         return [self._row_to_term(r) for r in rows]
 
+    @_serialized_write(auto_commit_param=None)
     def update_terms_bulk(
         self,
         keys: list[str],
@@ -440,6 +568,7 @@ class SQLiteBookDB:
         self.conn.commit()
         return cursor.rowcount
 
+    @_serialized_write(auto_commit_param=None)
     def update_term_rows(self, rows: Iterable[TermRowUpdate]) -> int:
         updates = list(rows)
         if not updates:
@@ -465,15 +594,17 @@ class SQLiteBookDB:
             )
         return cursor.rowcount
 
+    @_serialized_write(auto_commit_param=None)
     def delete_terms(self, keys: list[str]) -> int:
         """Delete terms by keys. Returns count of deleted terms."""
         if not keys:
             return 0
         placeholders = ",".join("?" * len(keys))
-        cursor = self.conn.execute(
-            f"DELETE FROM terms WHERE key IN ({placeholders})",
+        self.conn.execute(
+            f"DELETE FROM term_memory_versions WHERE term IN ({placeholders})",
             keys,
         )
+        cursor = self.conn.execute(f"DELETE FROM terms WHERE key IN ({placeholders})", keys)
         self.conn.commit()
         return cursor.rowcount
 
@@ -562,6 +693,104 @@ class SQLiteBookDB:
             return translated_name
         return None
 
+    @_serialized_write()
+    def replace_term_memory_versions(
+        self,
+        term: str,
+        versions: Iterable[TermMemoryVersion],
+        auto_commit: bool = True,
+    ) -> None:
+        versions_list = list(versions)
+        self.conn.execute("DELETE FROM term_memory_versions WHERE term = ?", (term,))
+        if versions_list:
+            self.conn.executemany(
+                """
+                INSERT INTO term_memory_versions(
+                    term,
+                    effective_start_chunk,
+                    latest_evidence_chunk,
+                    summary_text,
+                    kind,
+                    source_count,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        version.term,
+                        version.effective_start_chunk,
+                        version.latest_evidence_chunk,
+                        version.summary_text,
+                        version.kind,
+                        version.source_count,
+                        version.created_at,
+                    )
+                    for version in versions_list
+                ],
+            )
+        if auto_commit:
+            self.conn.commit()
+
+    def list_term_memory_versions(self, term: str) -> list[TermMemoryVersion]:
+        rows = self.conn.execute(
+            """
+            SELECT * FROM term_memory_versions
+            WHERE term = ?
+            ORDER BY effective_start_chunk ASC
+            """,
+            (term,),
+        ).fetchall()
+        return [self._row_to_term_memory_version(row) for row in rows]
+
+    def get_latest_term_memory_before(self, term: str, query_chunk: int) -> TermMemoryVersion | None:
+        row = self.conn.execute(
+            """
+            SELECT * FROM term_memory_versions
+            WHERE term = ? AND effective_start_chunk <= ?
+            ORDER BY effective_start_chunk DESC
+            LIMIT 1
+            """,
+            (term, query_chunk),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_term_memory_version(row)
+
+    def list_latest_term_memory_versions(self) -> dict[str, TermMemoryVersion]:
+        rows = self.conn.execute(
+            """
+            SELECT tmv.*
+            FROM term_memory_versions tmv
+            INNER JOIN (
+                SELECT term, MAX(effective_start_chunk) AS max_effective_start_chunk
+                FROM term_memory_versions
+                GROUP BY term
+            ) latest
+            ON latest.term = tmv.term
+            AND latest.max_effective_start_chunk = tmv.effective_start_chunk
+            ORDER BY tmv.term ASC
+            """
+        ).fetchall()
+        return {row["term"]: self._row_to_term_memory_version(row) for row in rows}
+
+    @_serialized_write()
+    def prune_term_memory_from(self, cutoff_chunk_id: int, auto_commit: bool = True) -> int:
+        cursor = self.conn.execute(
+            "DELETE FROM term_memory_versions WHERE effective_start_chunk >= ? OR latest_evidence_chunk >= ?",
+            (cutoff_chunk_id, cutoff_chunk_id),
+        )
+        if auto_commit:
+            self.conn.commit()
+        return cursor.rowcount
+
+    @_serialized_write()
+    def delete_all_term_memory(self, auto_commit: bool = True) -> None:
+        self.conn.execute("DELETE FROM term_memory_versions")
+        if auto_commit:
+            self.conn.commit()
+
+    @_serialized_write()
     def upsert_chunks(self, chunks: Iterable[ChunkRecord], auto_commit: bool = True) -> list[int]:
         """
         Insert chunk metadata; skip duplicates by hash. Returns list of chunk_ids
@@ -759,6 +988,7 @@ class SQLiteBookDB:
                 result[doc_id].append(chunk)
         return result
 
+    @_serialized_write(auto_commit_param=None)
     def set_source_language(self, source_language: str) -> None:
         """Set the source language in the meta table."""
         cur = self.conn.cursor()
@@ -782,6 +1012,7 @@ class SQLiteBookDB:
         last_noise_filtered_at: float | None = row["last_noise_filtered_at"]
         return last_noise_filtered_at
 
+    @_serialized_write(auto_commit_param=None)
     def set_last_noise_filtered_at(self, timestamp: float) -> None:
         """Set the last_noise_filtered_at checkpoint in the meta table."""
         cur = self.conn.cursor()
@@ -789,6 +1020,9 @@ class SQLiteBookDB:
         self.conn.commit()
 
     def close(self) -> None:
+        with contextlib.suppress(Exception):
+            if self.conn.in_transaction or self._holds_write_lock:
+                self.rollback()
         with contextlib.suppress(Exception):
             self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
         self.conn.close()
@@ -802,6 +1036,8 @@ class SQLiteBookDB:
             occurrence=json.loads(row["occurrence_json"]),
             votes=row["votes"],
             total_api_calls=row["total_api_calls"],
+            term_type=normalize_term_type(str(row_dict.get("term_type") or "other")),
+            term_type_votes=json.loads(row_dict.get("term_type_votes_json") or "{}"),
             new_translation=row_dict.get("new_translation"),
             translated_name=row_dict.get("translated_name"),
             ignored=bool(row["ignored"]),
@@ -824,6 +1060,18 @@ class SQLiteBookDB:
             is_translated=bool(row_dict.get("is_translated", 0)),
             translation=row_dict.get("translation"),
             normalized_text=row_dict.get("normalized_text") or "",
+        )
+
+    @staticmethod
+    def _row_to_term_memory_version(row: sqlite3.Row) -> TermMemoryVersion:
+        return TermMemoryVersion(
+            term=row["term"],
+            effective_start_chunk=row["effective_start_chunk"],
+            latest_evidence_chunk=row["latest_evidence_chunk"],
+            summary_text=row["summary_text"],
+            kind=row["kind"],
+            source_count=row["source_count"],
+            created_at=row["created_at"],
         )
 
     # Document table CRUD methods
@@ -995,6 +1243,7 @@ class SQLiteBookDB:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    @_serialized_write()
     def insert_document(self, document_type: str, auto_commit: bool = True) -> int:
         """Insert a new document. Returns document_id."""
         now = time.time()
@@ -1003,11 +1252,15 @@ class SQLiteBookDB:
             "INSERT INTO document(document_type, created_at) VALUES (?, ?)",
             (document_type, now),
         )
-        document_id: int = cur.lastrowid  # type: ignore[assignment]
+        lastrowid = cur.lastrowid
+        if lastrowid is None:
+            raise RuntimeError("Failed to insert document")
+        document_id = int(lastrowid)
         if auto_commit:
             self.conn.commit()
         return document_id
 
+    @_serialized_write()
     def insert_document_source(
         self,
         document_id: int,
@@ -1046,7 +1299,10 @@ class SQLiteBookDB:
                 1 if is_text_added else 0,
             ),
         )
-        source_id: int = cur.lastrowid  # type: ignore[assignment]
+        lastrowid = cur.lastrowid
+        if lastrowid is None:
+            raise RuntimeError("Failed to insert document source")
+        source_id = int(lastrowid)
         if auto_commit:
             self.conn.commit()
         return source_id
@@ -1143,6 +1399,7 @@ class SQLiteBookDB:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    @_serialized_write()
     def update_source_ocr(self, source_id: int, ocr_json: str, auto_commit: bool = True) -> None:
         """Update source's ocr_json field."""
         self.conn.execute(
@@ -1152,6 +1409,7 @@ class SQLiteBookDB:
         if auto_commit:
             self.conn.commit()
 
+    @_serialized_write()
     def update_source_ocr_completed(self, source_id: int, auto_commit: bool = True) -> None:
         """Mark source's is_ocr_completed=1."""
         self.conn.execute(
@@ -1161,6 +1419,7 @@ class SQLiteBookDB:
         if auto_commit:
             self.conn.commit()
 
+    @_serialized_write()
     def update_source_text_added(self, source_id: int, auto_commit: bool = True) -> None:
         """Mark source's is_text_added=1."""
         self.conn.execute(
@@ -1170,6 +1429,68 @@ class SQLiteBookDB:
         if auto_commit:
             self.conn.commit()
 
+    @staticmethod
+    def _safe_int_chunk_key(key: object) -> int | None:
+        try:
+            return int(str(key))
+        except (TypeError, ValueError):
+            return None
+
+    @classmethod
+    def _prune_term_for_remaining_chunks(
+        cls,
+        term: TermRecord,
+        *,
+        keep_chunk: Callable[[int], bool],
+    ) -> tuple[dict, dict, bool]:
+        removed_numeric_evidence = False
+        new_descriptions = {}
+        for key, value in term.descriptions.items():
+            idx = cls._safe_int_chunk_key(key)
+            if idx is None:
+                if key == "imported":
+                    new_descriptions[key] = value
+                continue
+            if keep_chunk(idx):
+                new_descriptions[key] = value
+            else:
+                removed_numeric_evidence = True
+        new_occurrence = {
+            key: value
+            for key, value in term.occurrence.items()
+            if (idx := cls._safe_int_chunk_key(key)) is not None and keep_chunk(idx)
+        }
+        return new_descriptions, new_occurrence, removed_numeric_evidence
+
+    def _persist_pruned_term(self, term: TermRecord, *, keep_chunk: Callable[[int], bool]) -> bool:
+        new_descriptions, new_occurrence, removed_numeric_evidence = self._prune_term_for_remaining_chunks(
+            term,
+            keep_chunk=keep_chunk,
+        )
+        if not new_descriptions:
+            self.conn.execute("DELETE FROM terms WHERE key = ?", (term.key,))
+            return False
+        if removed_numeric_evidence and not has_chunk_description_evidence(new_descriptions):
+            term_type = "other"
+            term_type_votes = {}
+        else:
+            term_type = term.term_type
+            term_type_votes = term.term_type_votes or {}
+        self.conn.execute(
+            "UPDATE terms SET descriptions_json = ?, occurrence_json = ?, term_type = ?, "
+            "term_type_votes_json = ?, updated_at = ? WHERE key = ?",
+            (
+                json.dumps(new_descriptions, ensure_ascii=False),
+                json.dumps(new_occurrence),
+                term_type,
+                json.dumps(term_type_votes, ensure_ascii=False),
+                time.time(),
+                term.key,
+            ),
+        )
+        return True
+
+    @_serialized_write()
     def reset_source_ocr(self, source_id: int, auto_commit: bool = True) -> None:
         """Reset OCR flags for a source so it can be re-OCR'd.
 
@@ -1198,10 +1519,26 @@ class SQLiteBookDB:
         # Delete existing chunks for the document to ensure clean rebuild
         if row is not None:
             document_id = row["document_id"]
+            min_chunk_id = self.get_min_chunk_id_for_document(document_id)
+            deleted_chunk_ids = {
+                int(chunk_id)
+                for (chunk_id,) in self.conn.execute(
+                    "SELECT chunk_id FROM chunks WHERE document_id = ?",
+                    (document_id,),
+                ).fetchall()
+            }
             self.conn.execute(
                 "DELETE FROM chunks WHERE document_id = ?",
                 (document_id,),
             )
+            if min_chunk_id is not None:
+                self.prune_term_memory_from(min_chunk_id, auto_commit=False)
+
+                def keep_remaining_chunk(idx: int) -> bool:
+                    return idx not in deleted_chunk_ids
+
+                for term in self.list_terms():
+                    self._persist_pruned_term(term, keep_chunk=keep_remaining_chunk)
             # Reset is_text_added for all sources in the document
             # since chunks are deleted, text needs to be re-added
             self.conn.execute(
@@ -1236,6 +1573,7 @@ class SQLiteBookDB:
         ).fetchall()
         return [row["document_id"] for row in rows]
 
+    @_serialized_write()
     def reset_documents_from(self, cutoff_chunk_id: int, auto_commit: bool = True) -> dict:
         """Stack-based document reset: delete all data from cutoff_chunk_id onward.
 
@@ -1262,38 +1600,18 @@ class SQLiteBookDB:
 
         # Step 3: Prune term descriptions and occurrences
         # list_terms() returns list[TermRecord] dataclass instances
-        def _safe_int_key(k: str) -> int | None:
-            try:
-                return int(k)
-            except ValueError:
-                return None
-
         pruned_count = 0
         deleted_count = 0
+        self.prune_term_memory_from(cutoff_chunk_id, auto_commit=False)
+
+        def keep_chunk(idx: int) -> bool:
+            return idx < cutoff_chunk_id
+
         for term in self.list_terms():
-            # term.descriptions and term.occurrence are already parsed dicts
-            # Keys are chunk_id strings
-            new_descriptions = {
-                k: v for k, v in term.descriptions.items() if _safe_int_key(k) is None or int(k) < cutoff_chunk_id
-            }
-            new_occurrence = {
-                k: v for k, v in term.occurrence.items() if _safe_int_key(k) is None or int(k) < cutoff_chunk_id
-            }
-            if not new_descriptions:
-                # Term has no remaining descriptions -- delete it entirely
-                self.conn.execute("DELETE FROM terms WHERE key = ?", (term.key,))
-                deleted_count += 1
-            else:
-                self.conn.execute(
-                    "UPDATE terms SET descriptions_json = ?, occurrence_json = ?, updated_at = ? WHERE key = ?",
-                    (
-                        json.dumps(new_descriptions, ensure_ascii=False),
-                        json.dumps(new_occurrence),
-                        time.time(),
-                        term.key,
-                    ),
-                )
+            if self._persist_pruned_term(term, keep_chunk=keep_chunk):
                 pruned_count += 1
+            else:
+                deleted_count += 1
 
         # Step 4: Reset source flags for affected documents
         if affected_doc_ids:
@@ -1314,6 +1632,7 @@ class SQLiteBookDB:
             "deleted_terms": deleted_count,
         }
 
+    @_serialized_write()
     def delete_documents_from(self, document_id: int, auto_commit: bool = True) -> dict:
         """Stack-based document deletion.
 
@@ -1388,6 +1707,7 @@ class SQLiteBookDB:
             "deleted_documents": deleted_documents,
         }
 
+    @_serialized_write()
     def update_all_sources_text_added(self, document_id: int, auto_commit: bool = True) -> None:
         """Mark all sources for a document as is_text_added=1."""
         self.conn.execute(
@@ -1397,6 +1717,7 @@ class SQLiteBookDB:
         if auto_commit:
             self.conn.commit()
 
+    @_serialized_write(auto_commit_param=None)
     def save_reembedded_image(self, document_id: int, element_idx: int, image_bytes: bytes, mime_type: str) -> None:
         """Persist a single reembedded image using atomic JSON update."""
         b64_data = base64.b64encode(image_bytes).decode("utf-8")

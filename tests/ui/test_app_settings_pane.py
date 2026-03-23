@@ -26,6 +26,7 @@ from context_aware_translation.application.errors import ApplicationError, Appli
 from tests.application.fakes import FakeAppSetupService
 
 try:
+    from PySide6.QtCore import QItemSelectionModel
     from PySide6.QtWidgets import QApplication, QDialog, QMessageBox, QWidget
 
     HAS_PYSIDE6 = True
@@ -69,13 +70,14 @@ def _profile(*, profile_id: str = "profile:recommended", name: str = "Recommende
     )
 
 
-def _make_state(*, needs_wizard: bool = False) -> AppSetupState:
+def _make_state(*, needs_wizard: bool = False, managed_connection: bool = False) -> AppSetupState:
     profile = _profile()
     return AppSetupState(
         connections=[
             ConnectionSummary(
                 connection_id="conn-gemini",
                 display_name="Gemini",
+                is_managed=managed_connection,
                 provider=ProviderKind.GEMINI,
                 base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
                 default_model="gemini-3-flash-preview",
@@ -86,6 +88,44 @@ def _make_state(*, needs_wizard: bool = False) -> AppSetupState:
         else [],
         shared_profiles=[profile] if not needs_wizard else [],
     )
+
+
+def _make_multi_state() -> AppSetupState:
+    return AppSetupState(
+        connections=[
+            ConnectionSummary(
+                connection_id="conn-gemini",
+                display_name="Gemini",
+                provider=ProviderKind.GEMINI,
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                default_model="gemini-3-flash-preview",
+                status=ConnectionStatus.READY,
+            ),
+            ConnectionSummary(
+                connection_id="conn-openai",
+                display_name="OpenAI",
+                provider=ProviderKind.OPENAI,
+                base_url="https://api.openai.com/v1",
+                default_model="gpt-4.1-mini",
+                status=ConnectionStatus.READY,
+            ),
+        ],
+        shared_profiles=[
+            _profile(profile_id="profile:recommended", name="Recommended"),
+            _profile(profile_id="profile:team", name="Team Default").model_copy(update={"is_default": False}),
+        ],
+    )
+
+
+def _select_rows(table, rows: list[int]) -> None:  # noqa: ANN001
+    selection_model = table.selectionModel()
+    assert selection_model is not None
+    selection_model.clearSelection()
+    for row in rows:
+        selection_model.select(
+            table.model().index(row, 0),
+            QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows,
+        )
 
 
 class _FakeConnectionDialog:
@@ -219,6 +259,84 @@ def test_app_settings_pane_opens_connection_dialog_on_double_click():
         view.connections_table.selectRow(0)
         view._on_connection_double_clicked(0, 0)
     assert opened == [True]
+
+
+def test_app_settings_pane_opens_managed_connection_edit_dialog_on_double_click():
+    from context_aware_translation.ui.features.app_settings_pane import AppSettingsPane
+
+    class _CaptureConnectionDialog:
+        kwargs: dict[str, object] | None = None
+
+        def __init__(self, *args, **kwargs):
+            type(self).kwargs = kwargs
+
+        def exec(self):
+            return QDialog.DialogCode.Rejected
+
+    service = FakeAppSetupService(state=_make_state(managed_connection=True))
+    view = AppSettingsPane(service)
+
+    with patch(
+        "context_aware_translation.ui.features.app_settings_pane.ConnectionEditorDialog",
+        _CaptureConnectionDialog,
+    ):
+        view.connections_table.selectRow(0)
+        view._on_connection_double_clicked(0, 0)
+
+    delete_action = next(button for button in view.viewmodel.action_buttons if button["action"] == "delete_connection")
+    assert delete_action["enabled"] is True
+    assert _CaptureConnectionDialog.kwargs is not None
+    assert _CaptureConnectionDialog.kwargs.get("read_only", False) is False
+    assert _CaptureConnectionDialog.kwargs["connection_id"] == "conn-gemini"
+
+
+def test_app_settings_pane_supports_multi_select_connection_delete():
+    from context_aware_translation.ui.features.app_settings_pane import AppSettingsPane
+
+    service = FakeAppSetupService(state=_make_multi_state())
+    view = AppSettingsPane(service)
+
+    _select_rows(view.connections_table, [0, 1])
+
+    duplicate_action = next(
+        button for button in view.viewmodel.action_buttons if button["action"] == "duplicate_connection"
+    )
+    delete_action = next(button for button in view.viewmodel.action_buttons if button["action"] == "delete_connection")
+    assert duplicate_action["enabled"] is False
+    assert delete_action["enabled"] is True
+
+    with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
+        view._on_delete_connection()
+
+    delete_calls = [payload for name, payload in service.calls if name == "delete_connection"]
+    assert delete_calls == ["conn-gemini", "conn-openai"]
+
+
+def test_app_settings_pane_supports_multi_select_profile_delete():
+    from context_aware_translation.ui.features.app_settings_pane import AppSettingsPane
+
+    service = FakeAppSetupService(state=_make_multi_state())
+    view = AppSettingsPane(service)
+
+    view._on_tab_requested("profiles")
+    _select_rows(view.profiles_table, [0, 1])
+
+    duplicate_action = next(
+        button for button in view.viewmodel.action_buttons if button["action"] == "duplicate_profile"
+    )
+    default_action = next(
+        button for button in view.viewmodel.action_buttons if button["action"] == "set_default_profile"
+    )
+    delete_action = next(button for button in view.viewmodel.action_buttons if button["action"] == "delete_profile")
+    assert duplicate_action["enabled"] is False
+    assert default_action["enabled"] is False
+    assert delete_action["enabled"] is True
+
+    with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
+        view._on_delete_profile()
+
+    delete_calls = [payload for name, payload in service.calls if name == "delete_workflow_profile"]
+    assert delete_calls == ["profile:recommended", "profile:team"]
 
 
 def test_app_settings_pane_refreshes_wizard_prompt_state():

@@ -36,6 +36,7 @@ class TermTableRow(ContractModel):
     term_id: int
     term_key: str
     term: str
+    term_type: str = "other"
     translation: str | None = None
     description: str | None = None
     description_tooltip: str | None = None
@@ -76,7 +77,6 @@ class UpdateTermRequest(ContractModel):
     term_id: int
     term_key: str | None = None
     translation: str | None = None
-    description: str | None = None
     ignored: bool | None = None
     reviewed: bool | None = None
 

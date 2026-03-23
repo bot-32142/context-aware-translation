@@ -101,12 +101,12 @@ def test_scope_returns_no_documents():
 # --- claims ---
 
 
-def test_claims_returns_glossary_state_write_exclusive():
+def test_claims_include_glossary_and_doc_write_exclusive():
     record = _make_record()
     claims = handler.claims(record, {})
-    expected = ResourceClaim("glossary_state", "book-1", "*", ClaimMode.WRITE_EXCLUSIVE)
-    assert expected in claims
-    assert len(claims) == 1
+    assert ResourceClaim("glossary_state", "book-1", "*", ClaimMode.WRITE_EXCLUSIVE) in claims
+    assert ResourceClaim("doc", "book-1", "*", ClaimMode.WRITE_EXCLUSIVE) in claims
+    assert len(claims) == 2
 
 
 # --- can() RUN ---

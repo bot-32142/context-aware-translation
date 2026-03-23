@@ -105,6 +105,8 @@ class ImageViewer(QGraphicsView):
         Args:
             pixmap: QPixmap to display
         """
+        self._cancel_pending_fit()
+
         # Clear bboxes before removing pixmap
         self.clear_bboxes()
 
@@ -124,11 +126,13 @@ class ImageViewer(QGraphicsView):
     def zoom_in(self) -> None:
         """Zoom in by the zoom step factor."""
         self._user_zoomed = True
+        self._cancel_pending_fit()
         self._zoom(self._zoom_step)
 
     def zoom_out(self) -> None:
         """Zoom out by the zoom step factor."""
         self._user_zoomed = True
+        self._cancel_pending_fit()
         self._zoom(1.0 / self._zoom_step)
 
     def _zoom(self, factor: float) -> None:
@@ -235,13 +239,13 @@ class ImageViewer(QGraphicsView):
 
     def clear_image(self) -> None:
         """Clear the current image and overlays."""
+        self._cancel_pending_fit()
         self.clear_bboxes()
         if self.pixmap_item is not None:
             self._scene.removeItem(self.pixmap_item)
             self.pixmap_item = None
         self._scene.setSceneRect(0, 0, 0, 0)
         self.reset_zoom()
-        self._auto_fit_pending = False
 
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)
@@ -263,9 +267,19 @@ class ImageViewer(QGraphicsView):
         self._auto_fit_pending = True
 
     def _queue_fit(self, delay_ms: int = 0) -> None:
-        if self.pixmap_item is None or self._user_zoomed or not self._auto_fit_pending:
+        if (
+            self.pixmap_item is None
+            or self._user_zoomed
+            or not self._auto_fit_pending
+            or not self.isVisible()
+            or not self.viewport().isVisible()
+        ):
             return
         self._fit_timer.start(delay_ms)
+
+    def _cancel_pending_fit(self) -> None:
+        self._fit_timer.stop()
+        self._auto_fit_pending = False
 
     def _fit_pending_image(self) -> None:
         if self.pixmap_item is None or not self._auto_fit_pending or self._user_zoomed:

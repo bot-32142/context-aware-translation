@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from PySide6.QtCore import QT_TRANSLATE_NOOP, Qt, QTimer
+from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFormLayout,
     QFrame,
     QHBoxLayout,
@@ -21,6 +24,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -32,6 +36,7 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowStepRoute,
 )
 from context_aware_translation.ui.constants import LANGUAGES
+from context_aware_translation.ui.json_utils import parse_json_object_text
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
 
@@ -120,7 +125,7 @@ _ADVANCED_TIP_FALLBACK = QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Edit adv
 @dataclass(frozen=True)
 class _SpinFieldSpec:
     attr_name: str
-    label: str
+    label: object
     key: str
     minimum: int
     maximum: int
@@ -130,9 +135,22 @@ class _SpinFieldSpec:
 @dataclass(frozen=True)
 class _CheckFieldSpec:
     attr_name: str
-    label: str
+    label: object
     key: str
     default: bool
+
+
+@dataclass(frozen=True)
+class _NumericOverrideFieldSpec:
+    label: object
+    key: str
+    checkbox_attr: str
+    input_attr: str
+    minimum: int | float
+    maximum: int | float
+    default: int | float
+    suffix: str = ""
+    is_float: bool = False
 
 
 def validate_workflow_routes(
@@ -156,11 +174,11 @@ def validate_workflow_routes(
 
 
 def workflow_step_tooltip(step_id: WorkflowStepId, *, tr: Callable[[str], str]) -> str:
-    return tr(_STEP_TOOLTIP_TEXTS.get(step_id, _STEP_TOOLTIP_FALLBACK))
+    return tr(str(_STEP_TOOLTIP_TEXTS.get(step_id, _STEP_TOOLTIP_FALLBACK)))
 
 
 def workflow_step_label(step_id: WorkflowStepId, *, tr: Callable[[str], str]) -> str:
-    return tr(_STEP_LABELS.get(step_id, step_id.value.replace("_", " ").title()))
+    return tr(str(_STEP_LABELS.get(step_id, step_id.value.replace("_", " ").title())))
 
 
 def workflow_step_label_from_text(step_label: str, *, tr: Callable[[str], str]) -> str:
@@ -226,9 +244,56 @@ class StepAdvancedConfigDialog(QDialog):
             ),
         ),
     }
+    _OVERRIDE_FIELD_SPECS: tuple[_NumericOverrideFieldSpec, ...] = (
+        _NumericOverrideFieldSpec(
+            QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Temperature"),
+            "temperature",
+            "temperature_override_checkbox",
+            "temperature_override_spin",
+            0.0,
+            2.0,
+            0.0,
+            is_float=True,
+        ),
+        _NumericOverrideFieldSpec(
+            QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Timeout"),
+            "timeout",
+            "timeout_override_checkbox",
+            "timeout_override_spin",
+            1,
+            600,
+            60,
+            suffix=" s",
+        ),
+        _NumericOverrideFieldSpec(
+            QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Max retries"),
+            "max_retries",
+            "retries_override_checkbox",
+            "retries_override_spin",
+            0,
+            10,
+            3,
+        ),
+        _NumericOverrideFieldSpec(
+            QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Concurrency"),
+            "concurrency",
+            "concurrency_override_checkbox",
+            "concurrency_override_spin",
+            1,
+            50,
+            5,
+        ),
+    )
     _BATCH_THINKING_OPTIONS = (
         (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Auto"), "auto"),
         (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Off"), "off"),
+        (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Low"), "low"),
+        (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Medium"), "medium"),
+        (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "High"), "high"),
+    )
+    _REASONING_EFFORT_OPTIONS = (
+        (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Inherit from connection"), ""),
+        (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "None"), "none"),
         (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Low"), "low"),
         (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Medium"), "medium"),
         (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "High"), "high"),
@@ -242,7 +307,7 @@ class StepAdvancedConfigDialog(QDialog):
         self._serialize: Callable[[], WorkflowStepRoute] = lambda: self._route
         self.setWindowTitle(self.tr("Step Settings"))
         self.setMinimumWidth(420)
-        self.resize(460, 360)
+        self.resize(460, 420)
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -258,14 +323,11 @@ class StepAdvancedConfigDialog(QDialog):
         self._form_layout.setHorizontalSpacing(12)
 
         config = dict(self._route.step_config)
-        if simple_specs := self._SIMPLE_STEP_SPECS.get(self._route.step_id):
-            self._serialize = self._build_simple_step(config, simple_specs)
-        elif self._route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
+        if self._route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
             self._serialize = self._build_translator_batch(config)
         else:
-            self._form_layout.addRow(
-                create_tip_label(self.tr("This step has no additional settings beyond connection and model."))
-            )
+            simple_specs = self._SIMPLE_STEP_SPECS.get(self._route.step_id, ())
+            self._serialize = self._build_standard_step(config, simple_specs)
 
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -273,23 +335,39 @@ class StepAdvancedConfigDialog(QDialog):
         scroll_area.setWidget(form_widget)
         layout.addWidget(scroll_area, 1)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        self._buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        self._buttons.accepted.connect(self._accept_if_valid)
+        self._buttons.rejected.connect(self.reject)
+        layout.addWidget(self._buttons)
         apply_hybrid_control_theme(self)
-        set_button_tone(buttons.button(QDialogButtonBox.StandardButton.Save), "primary")
-        set_button_tone(buttons.button(QDialogButtonBox.StandardButton.Cancel), "ghost")
+        set_button_tone(self._buttons.button(QDialogButtonBox.StandardButton.Save), "primary")
+        set_button_tone(self._buttons.button(QDialogButtonBox.StandardButton.Cancel), "ghost")
 
     def route(self) -> WorkflowStepRoute:
         return self._serialize()
 
+    def _accept_if_valid(self) -> None:
+        try:
+            self._serialize()
+        except ValueError as exc:
+            QMessageBox.warning(self, self.tr("Invalid Settings"), str(exc))
+            return
+        self.accept()
+
     def _tip_text(self) -> str:
-        return self.tr(_ADVANCED_TIP_TEXTS.get(self._route.step_id, _ADVANCED_TIP_FALLBACK))
+        return self.tr(str(_ADVANCED_TIP_TEXTS.get(self._route.step_id, _ADVANCED_TIP_FALLBACK)))
 
     def _spin(self, minimum: int, maximum: int, value: int) -> QSpinBox:
         spin = QSpinBox()
         spin.setRange(minimum, maximum)
+        spin.setValue(value)
+        return spin
+
+    def _double_spin(self, minimum: float, maximum: float, value: float) -> QDoubleSpinBox:
+        spin = QDoubleSpinBox()
+        spin.setRange(minimum, maximum)
+        spin.setSingleStep(0.1)
+        spin.setDecimals(2)
         spin.setValue(value)
         return spin
 
@@ -299,26 +377,132 @@ class StepAdvancedConfigDialog(QDialog):
                 combo.setCurrentIndex(index)
                 return
 
-    def _build_simple_step(
+    def _create_numeric_override_row(
+        self,
+        spec: _NumericOverrideFieldSpec,
+        value: object,
+    ) -> tuple[QWidget, QCheckBox, QSpinBox | QDoubleSpinBox]:
+        layout = QHBoxLayout()
+        checkbox = QCheckBox(self.tr("Override"))
+        if spec.is_float:
+            numeric_value = (
+                float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else float(spec.default)
+            )
+            input_widget: QSpinBox | QDoubleSpinBox = self._double_spin(
+                float(spec.minimum), float(spec.maximum), numeric_value
+            )
+            has_value = isinstance(value, (int, float)) and not isinstance(value, bool)
+        else:
+            input_widget = self._spin(
+                int(spec.minimum),
+                int(spec.maximum),
+                int(value) if isinstance(value, int) else int(spec.default),
+            )
+            if spec.suffix:
+                input_widget.setSuffix(self.tr(spec.suffix))
+            has_value = isinstance(value, int)
+        input_widget.setEnabled(has_value)
+        checkbox.setChecked(has_value)
+        checkbox.toggled.connect(input_widget.setEnabled)
+        layout.addWidget(checkbox)
+        layout.addWidget(input_widget)
+        layout.addStretch()
+        widget = QWidget()
+        widget.setLayout(layout)
+        return widget, checkbox, input_widget
+
+    def _serialize_custom_parameters(self) -> dict[str, object]:
+        custom_parameters = parse_json_object_text(self.custom_parameters_edit.toPlainText(), tr=self.tr)
+        reasoning_effort = str(self.reasoning_effort_combo.currentData() or "")
+        if reasoning_effort:
+            custom_parameters["reasoning_effort"] = reasoning_effort
+        return custom_parameters
+
+    def _build_standard_step(
         self,
         config: Mapping[str, object],
         specs: tuple[_SpinFieldSpec | _CheckFieldSpec, ...],
     ) -> Callable[[], WorkflowStepRoute]:
-        readers: dict[str, Callable[[], bool | int | float | str | None]] = {}
+        readers: dict[str, Callable[[], bool | int]] = {}
         for spec in specs:
             if isinstance(spec, _SpinFieldSpec):
                 raw_value = config.get(spec.key, spec.default)
-                widget = self._spin(
+                spin_widget = self._spin(
                     spec.minimum, spec.maximum, int(raw_value) if isinstance(raw_value, int) else spec.default
                 )
-                readers[spec.key] = lambda w=widget: int(w.value())
-            else:
-                widget = QCheckBox()
-                widget.setChecked(bool(config.get(spec.key, spec.default)))
-                readers[spec.key] = lambda w=widget: bool(w.isChecked())
-            setattr(self, spec.attr_name, widget)
-            self._form_layout.addRow(self.tr(spec.label), widget)
-        return lambda: self._route.model_copy(update={"step_config": {key: read() for key, read in readers.items()}})
+                readers[spec.key] = spin_widget.value
+                setattr(self, spec.attr_name, spin_widget)
+                self._form_layout.addRow(self.tr(str(spec.label)), spin_widget)
+                continue
+
+            check_widget = QCheckBox()
+            check_widget.setChecked(bool(config.get(spec.key, spec.default)))
+            readers[spec.key] = check_widget.isChecked
+            setattr(self, spec.attr_name, check_widget)
+            self._form_layout.addRow(self.tr(str(spec.label)), check_widget)
+
+        self._form_layout.addRow(
+            create_tip_label(
+                self.tr("Connection overrides apply only to this workflow step and override the selected connection.")
+            )
+        )
+
+        override_writers: list[Callable[[dict[str, object]], None]] = []
+
+        def _make_override_writer(
+            spec: _NumericOverrideFieldSpec,
+            checkbox: QCheckBox,
+            input_widget: QSpinBox | QDoubleSpinBox,
+        ) -> Callable[[dict[str, object]], None]:
+            def _write(payload: dict[str, object]) -> None:
+                if not checkbox.isChecked():
+                    return
+                payload[spec.key] = float(input_widget.value()) if spec.is_float else int(input_widget.value())
+
+            return _write
+
+        for override_spec in self._OVERRIDE_FIELD_SPECS:
+            row_widget, checkbox, input_widget = self._create_numeric_override_row(
+                override_spec, config.get(override_spec.key)
+            )
+            setattr(self, override_spec.checkbox_attr, checkbox)
+            setattr(self, override_spec.input_attr, input_widget)
+            self._form_layout.addRow(self.tr(str(override_spec.label)), row_widget)
+            override_writers.append(_make_override_writer(override_spec, checkbox, input_widget))
+
+        kwargs_config = config.get("kwargs") if isinstance(config.get("kwargs"), dict) else {}
+        kwargs_payload = dict(kwargs_config) if isinstance(kwargs_config, dict) else {}
+        reasoning_value = str(kwargs_payload.pop("reasoning_effort", "") or "")
+        self.reasoning_effort_combo = QComboBox()
+        for label, value in self._REASONING_EFFORT_OPTIONS:
+            self.reasoning_effort_combo.addItem(self.tr(str(label)), value)
+        self._select_combo_value(self.reasoning_effort_combo, reasoning_value)
+        self._form_layout.addRow(self.tr("Reasoning effort"), self.reasoning_effort_combo)
+
+        self.custom_parameters_edit = QTextEdit()
+        self.custom_parameters_edit.setMaximumHeight(90)
+        self.custom_parameters_edit.setPlaceholderText('{"reasoning_effort": "none"}')
+        if kwargs_payload:
+            self.custom_parameters_edit.setPlainText(json.dumps(kwargs_payload, indent=2, ensure_ascii=False))
+        self._form_layout.addRow(self.tr("Custom parameters"), self.custom_parameters_edit)
+
+        def _serialize_standard_step() -> WorkflowStepRoute:
+            preserved = {
+                str(key): value
+                for key, value in config.items()
+                if key not in readers and key not in {"temperature", "timeout", "max_retries", "concurrency", "kwargs"}
+            }
+            preserved.update({key: read() for key, read in readers.items()})
+            for write_override in override_writers:
+                write_override(preserved)
+
+            custom_parameters = self._serialize_custom_parameters()
+            if custom_parameters:
+                preserved["kwargs"] = custom_parameters
+
+            return self._route.model_copy(update={"step_config": preserved})
+
+        return _serialize_standard_step
 
     def _build_translator_batch(self, config: Mapping[str, object]) -> Callable[[], WorkflowStepRoute]:
         provider_combo = QComboBox()
@@ -331,7 +515,7 @@ class StepAdvancedConfigDialog(QDialog):
         batch_size_spin = self._spin(1, 5000, int(raw_batch_size) if isinstance(raw_batch_size, int) else 100)
         thinking_combo = QComboBox()
         for label, value in self._BATCH_THINKING_OPTIONS:
-            thinking_combo.addItem(self.tr(label), value)
+            thinking_combo.addItem(self.tr(str(label)), value)
         self._select_combo_value(thinking_combo, str(config.get("thinking_mode") or "auto"))
 
         self._form_layout.addRow(self.tr("Provider"), provider_combo)
@@ -356,16 +540,6 @@ class StepAdvancedConfigDialog(QDialog):
             )
 
         return _serialize_batch
-
-
-ADVANCED_STEP_IDS = frozenset(
-    {
-        WorkflowStepId.EXTRACTOR,
-        WorkflowStepId.TRANSLATOR,
-        WorkflowStepId.OCR,
-        WorkflowStepId.TRANSLATOR_BATCH,
-    }
-)
 
 
 class WorkflowRoutesEditor(QWidget):
@@ -415,7 +589,6 @@ class WorkflowRoutesEditor(QWidget):
         routes: list[WorkflowStepRoute],
         connection_choices: list[ConnectionChoice],
         *,
-        advanced_step_ids: frozenset[WorkflowStepId],
         hint_text: str,
         max_visible_rows: int | None = None,
         parent: QWidget | None = None,
@@ -423,7 +596,6 @@ class WorkflowRoutesEditor(QWidget):
         super().__init__(parent)
         self._connection_choices = connection_choices
         self._connection_choice_by_id = {choice.connection_id: choice for choice in connection_choices}
-        self._advanced_step_ids = advanced_step_ids
         self._max_visible_rows = max_visible_rows
         self.rows: list[RouteRow] = []
         self.table = self
@@ -469,6 +641,8 @@ class WorkflowRoutesEditor(QWidget):
     def set_routes(self, routes: list[WorkflowStepRoute]) -> None:
         while self._rows_layout.count():
             item = self._rows_layout.takeAt(0)
+            if item is None:
+                break
             widget = item.widget()
             if isinstance(widget, QWidget):
                 widget.hide()
@@ -492,7 +666,7 @@ class WorkflowRoutesEditor(QWidget):
                     str(route.step_config.get("provider") or "").strip()
                 )
                 model_edit = self._build_model_edit(route.model or "", readonly=not batch_enabled)
-                advanced_widget, advanced_item = self._build_advanced_cell(route, row_index)
+                advanced_widget = self._build_advanced_cell(row_index)
                 columns = self._build_columns(
                     row_frame,
                     [
@@ -512,15 +686,13 @@ class WorkflowRoutesEditor(QWidget):
                 )
                 self._items[(row_index, 0)] = self._step_item(step_text, tooltip=step_tooltip)
                 self._items[(row_index, 1)] = self._item(connection_label.text())
-                if advanced_item is not None:
-                    self._items[(row_index, 3)] = advanced_item
             else:
                 combo = self._build_connection_combo(route.connection_id)
                 model_edit = self._build_model_edit(route.model or "")
                 combo.currentIndexChanged.connect(
                     lambda _i, c=combo, e=model_edit: self._sync_model_from_connection(c, e)
                 )
-                advanced_widget, advanced_item = self._build_advanced_cell(route, row_index)
+                advanced_widget = self._build_advanced_cell(row_index)
                 columns = self._build_columns(
                     row_frame,
                     [
@@ -538,8 +710,6 @@ class WorkflowRoutesEditor(QWidget):
                     step_label_widget=step_label,
                 )
                 self._items[(row_index, 0)] = self._step_item(step_text, tooltip=step_tooltip)
-                if advanced_item is not None:
-                    self._items[(row_index, 3)] = advanced_item
 
             self.rows.append(route_row)
             self._row_columns.append(columns)
@@ -657,30 +827,17 @@ class WorkflowRoutesEditor(QWidget):
         item.setToolTip(tooltip)
         return item
 
-    def _build_advanced_cell(self, route: WorkflowStepRoute, row: int) -> tuple[QWidget, QTableWidgetItem | None]:
-        if route.step_id in self._advanced_step_ids:
-            button = QPushButton(self.tr("Advanced"))
-            button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-            button.setMinimumHeight(button.sizeHint().height())
-            button.clicked.connect(lambda _checked=False, r=row: self._open_step_advanced_dialog(r))
-            return self._wrap_cell_widget(button, center_in_cell=True), None
-        label = self._body_label("—", object_name="workflowRouteDash", centered=True)
-        label.setToolTip(self.tr("This step has no additional settings beyond connection and model."))
-        return (
-            self._wrap_cell_widget(label, center_in_cell=True),
-            self._item(
-                "—",
-                tooltip=self.tr("This step has no additional settings beyond connection and model."),
-                centered=True,
-            ),
-        )
+    def _build_advanced_cell(self, row: int) -> QWidget:
+        button = QPushButton(self.tr("Advanced"))
+        button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        button.setMinimumHeight(button.sizeHint().height())
+        button.clicked.connect(lambda _checked=False, r=row: self._open_step_advanced_dialog(r))
+        return self._wrap_cell_widget(button, center_in_cell=True)
 
     def _open_step_advanced_dialog(self, row: int) -> None:
         if row < 0 or row >= len(self.rows):
             return
         route_row = self.rows[row]
-        if route_row.route.step_id not in self._advanced_step_ids:
-            return
         parent = self.window()
         dialog = StepAdvancedConfigDialog(route_row.route, parent if isinstance(parent, QWidget) else self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
@@ -871,14 +1028,12 @@ class WorkflowRoutesEditor(QWidget):
     def cellWidget(self, row: int, column: int) -> QWidget | None:
         return self._cell_widgets.get((row, column))
 
-    def resizeEvent(self, event) -> None:
+    def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         self._update_layout_geometry()
 
 
 class WorkflowProfileEditorDialog(QDialog):
-    _ADVANCED_STEP_IDS = ADVANCED_STEP_IDS
-
     def __init__(
         self,
         profile: WorkflowProfileDetail,
@@ -893,6 +1048,9 @@ class WorkflowProfileEditorDialog(QDialog):
         self._original_profile = profile
         self._connection_choices = connection_choices
         self._allow_name_edit = allow_name_edit
+        self._layout_refresh_timer = QTimer(self)
+        self._layout_refresh_timer.setSingleShot(True)
+        self._layout_refresh_timer.timeout.connect(self._refresh_body_layout)
         self.setWindowTitle(self.tr("Workflow Profile"))
         self.setMinimumSize(780, 260)
         self.setSizeGripEnabled(True)
@@ -955,7 +1113,6 @@ class WorkflowProfileEditorDialog(QDialog):
         self.routes_editor = WorkflowRoutesEditor(
             self._original_profile.routes,
             self._connection_choices,
-            advanced_step_ids=self._ADVANCED_STEP_IDS,
             hint_text=self.tr("Use the Advanced column to edit step-specific settings."),
             parent=self,
         )
@@ -978,7 +1135,7 @@ class WorkflowProfileEditorDialog(QDialog):
         set_button_tone(footer.button(QDialogButtonBox.StandardButton.Cancel), "ghost")
         for section in (self.general_section, self.routes_section):
             section.toggled.connect(self._refresh_body_layout)
-        QTimer.singleShot(0, self._refresh_body_layout)
+        self._schedule_body_layout_refresh()
         self.resize(
             max(self.minimumWidth(), min(self.sizeHint().width(), 920)), min(max(self.sizeHint().height(), 420), 720)
         )
@@ -1021,6 +1178,9 @@ class WorkflowProfileEditorDialog(QDialog):
         if layout is not None:
             layout.activate()
 
+    def _schedule_body_layout_refresh(self) -> None:
+        self._layout_refresh_timer.start(0)
+
     def _sync_section_height(self, section: QCollapsible) -> None:
         content = section.content()
         if section.isExpanded():
@@ -1047,6 +1207,6 @@ class WorkflowProfileEditorDialog(QDialog):
         section.setFixedHeight(total_height)
         section.updateGeometry()
 
-    def resizeEvent(self, event) -> None:
+    def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
-        QTimer.singleShot(0, self._refresh_body_layout)
+        self._schedule_body_layout_refresh()

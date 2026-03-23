@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import sqlite3
-import threading
 import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from context_aware_translation.storage.sqlite_locking import get_sqlite_file_lock
 
 _UNSET = object()
 
@@ -90,7 +91,7 @@ class TaskStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
-        self._lock = threading.RLock()
+        self._lock = get_sqlite_file_lock(self.db_path)
         self._configure_connection()
         self._init_schema()
 
@@ -201,6 +202,10 @@ class TaskStore:
             if record is None:
                 raise KeyError(f"Task not found: {task_id}")
             return record
+
+        status = updates.get("status")
+        if status in {"queued", "running"} and "last_error" not in updates:
+            updates["last_error"] = None
 
         updates["updated_at"] = time.time()
         # SAFETY: column names are validated against _ALLOWED_UPDATE_COLUMNS above.

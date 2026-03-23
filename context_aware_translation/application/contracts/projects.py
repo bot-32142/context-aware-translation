@@ -3,6 +3,13 @@ from __future__ import annotations
 from context_aware_translation.application.contracts.common import BlockerInfo, ContractModel, ProjectRef
 
 
+class WorkflowProfileOption(ContractModel):
+    profile_id: str
+    name: str
+    target_language: str
+    is_default: bool = False
+
+
 class ProjectSummary(ContractModel):
     project: ProjectRef
     target_language: str | None = None
@@ -20,6 +27,7 @@ class ProjectsScreenState(ContractModel):
 class CreateProjectRequest(ContractModel):
     name: str
     target_language: str | None = None
+    workflow_profile_id: str | None = None
 
 
 class UpdateProjectRequest(ContractModel):

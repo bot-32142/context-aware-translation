@@ -7,25 +7,16 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from context_aware_translation.core.models import normalize_term_type, ordered_description_values
+
 if TYPE_CHECKING:
     from context_aware_translation.storage.schema.book_db import SQLiteBookDB
-    from context_aware_translation.storage.schema.context_tree_db import ContextTreeDB
 
 from context_aware_translation.storage.schema.book_db import TermRecord
 
 
-def _sort_key(key: str) -> int:
-    if key == "imported":
-        return -1
-    try:
-        return int(key)
-    except (TypeError, ValueError):
-        return 0
-
-
 def _consolidate_description(descriptions: dict[str, str]) -> str:
-    sorted_keys = sorted(descriptions.keys(), key=_sort_key)
-    return " ".join(descriptions[k] for k in sorted_keys if descriptions[k])
+    return " ".join(ordered_description_values(descriptions))
 
 
 def export_glossary(
@@ -50,6 +41,7 @@ def export_glossary(
                 "key": term.key,
                 "translated_name": term.translated_name,
                 "description": description,
+                "term_type": term.term_type,
                 "ignored": term.ignored,
                 "is_reviewed": term.is_reviewed,
             }
@@ -89,7 +81,6 @@ def _validate_glossary_json(data: object) -> None:
 
 def import_glossary(
     db: SQLiteBookDB,
-    context_tree_db: ContextTreeDB,
     input_path: Path,
     include_translations: bool = True,
 ) -> int:
@@ -103,7 +94,7 @@ def import_glossary(
     _validate_glossary_json(data)
 
     # Wipe existing data
-    context_tree_db.delete_all()
+    db.delete_all_term_memory(auto_commit=False)
     db.conn.execute("DELETE FROM terms")
 
     # Build and insert term records
@@ -117,6 +108,7 @@ def import_glossary(
             occurrence={},
             votes=1,
             total_api_calls=1,
+            term_type=normalize_term_type(entry.get("term_type")),
             new_translation=None,
             translated_name=entry.get("translated_name") if include_translations else None,
             ignored=entry.get("ignored", False),
