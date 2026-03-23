@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from PySide6.QtCore import QEvent, QPoint, Qt, Signal, Slot
@@ -22,6 +23,7 @@ from context_aware_translation.application.contracts.projects import (
     CreateProjectRequest,
     ProjectSummary,
     UpdateProjectRequest,
+    WorkflowProfileOption,
 )
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.services.projects import ProjectsService
@@ -40,11 +42,14 @@ class _ProjectDialog(QDialog):
         title: str,
         name: str = "",
         target_language: str | None = None,
+        workflow_profiles: Sequence[WorkflowProfileOption] = (),
+        workflow_profile_id: str | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setMinimumWidth(420)
+        self._workflow_profiles_by_id = {profile.profile_id: profile for profile in workflow_profiles}
 
         layout = QVBoxLayout(self)
         form = QFormLayout()
@@ -53,6 +58,24 @@ class _ProjectDialog(QDialog):
         self.name_edit = QLineEdit(name)
         self.name_edit.setPlaceholderText(self.tr("Enter project name"))
         form.addRow(self.tr("Name*:"), self.name_edit)
+
+        self.workflow_profile_combo: QComboBox | None = None
+        if workflow_profiles:
+            self.workflow_profile_combo = QComboBox(self)
+            self.workflow_profile_combo.setObjectName("projectWorkflowProfileCombo")
+            self.workflow_profile_combo.setMinimumWidth(260)
+            for profile in workflow_profiles:
+                self.workflow_profile_combo.addItem(profile.name, profile.profile_id)
+            initial_profile_id = workflow_profile_id
+            if initial_profile_id is None:
+                default_profile = next((profile for profile in workflow_profiles if profile.is_default), None)
+                if default_profile is None:
+                    default_profile = workflow_profiles[0]
+                initial_profile_id = default_profile.profile_id
+            selected_index = self.workflow_profile_combo.findData(initial_profile_id)
+            if selected_index >= 0:
+                self.workflow_profile_combo.setCurrentIndex(selected_index)
+            form.addRow(self.tr("Workflow profile"), self.workflow_profile_combo)
 
         self.target_language_combo = QComboBox(self)
         self.target_language_combo.setObjectName("projectTargetLanguageCombo")
@@ -74,6 +97,11 @@ class _ProjectDialog(QDialog):
             self.target_language_combo.setCurrentIndex(0)
         form.addRow(self.tr("Target language:"), self.target_language_combo)
 
+        if self.workflow_profile_combo is not None:
+            self.workflow_profile_combo.currentIndexChanged.connect(self._on_workflow_profile_changed)
+            if target_language is None:
+                self._on_workflow_profile_changed(self.workflow_profile_combo.currentIndex())
+
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)
@@ -87,9 +115,31 @@ class _ProjectDialog(QDialog):
         return self.name_edit.text().strip()
 
     @property
+    def workflow_profile_id(self) -> str | None:
+        if self.workflow_profile_combo is None:
+            return None
+        value = self.workflow_profile_combo.currentData()
+        return value if isinstance(value, str) and value else None
+
+    @property
     def target_language(self) -> str | None:
         value = self.target_language_combo.currentText().strip()
         return value or None
+
+    def _on_workflow_profile_changed(self, index: int) -> None:
+        if index < 0:
+            return
+        profile_id = self.workflow_profile_id
+        if profile_id is None:
+            return
+        profile = self._workflow_profiles_by_id.get(profile_id)
+        if profile is None:
+            return
+        target_index = self.target_language_combo.findText(profile.target_language, Qt.MatchFlag.MatchFixedString)
+        if target_index < 0:
+            self.target_language_combo.addItem(profile.target_language)
+            target_index = self.target_language_combo.count() - 1
+        self.target_language_combo.setCurrentIndex(target_index)
 
     def _on_accept(self) -> None:
         if not self.project_name:
@@ -215,12 +265,20 @@ class LibraryView(QWidget):
 
     @Slot()
     def _on_new_project(self) -> None:
-        dialog = _ProjectDialog(title=self.tr("New Project"), parent=self)
+        dialog = _ProjectDialog(
+            title=self.tr("New Project"),
+            workflow_profiles=self._service.list_workflow_profiles(),
+            parent=self,
+        )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         try:
             created = self._service.create_project(
-                CreateProjectRequest(name=dialog.project_name, target_language=dialog.target_language)
+                CreateProjectRequest(
+                    name=dialog.project_name,
+                    target_language=dialog.target_language,
+                    workflow_profile_id=dialog.workflow_profile_id,
+                )
             )
         except ApplicationError as exc:
             QMessageBox.warning(self, self.tr("New Project"), exc.payload.message)
@@ -250,12 +308,20 @@ class LibraryView(QWidget):
         )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
+        next_name = dialog.project_name
+        next_target_language = dialog.target_language
+        if next_name == summary.project.name:
+            next_name = None
+        if next_target_language == summary.target_language:
+            next_target_language = None
+        if next_name is None and next_target_language is None:
+            return
         try:
             self._service.update_project(
                 UpdateProjectRequest(
                     project_id=summary.project.project_id,
-                    name=dialog.project_name,
-                    target_language=dialog.target_language,
+                    name=next_name,
+                    target_language=next_target_language,
                 )
             )
         except ApplicationError as exc:

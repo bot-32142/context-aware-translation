@@ -1136,77 +1136,77 @@
 <context>
     <name>LibraryView</name>
     <message>
-        <location filename="../features/library_view.py" line="123"/>
         <location filename="../features/library_view.py" line="173"/>
-        <location filename="../features/library_view.py" line="218"/>
-        <location filename="../features/library_view.py" line="226"/>
+        <location filename="../features/library_view.py" line="223"/>
+        <location filename="../features/library_view.py" line="269"/>
+        <location filename="../features/library_view.py" line="284"/>
         <source>New Project</source>
         <translation>新建项目</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="124"/>
         <location filename="../features/library_view.py" line="174"/>
-        <location filename="../features/library_view.py" line="314"/>
+        <location filename="../features/library_view.py" line="224"/>
+        <location filename="../features/library_view.py" line="380"/>
         <source>Open</source>
         <translation>打开</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="125"/>
         <location filename="../features/library_view.py" line="175"/>
-        <location filename="../features/library_view.py" line="315"/>
+        <location filename="../features/library_view.py" line="225"/>
+        <location filename="../features/library_view.py" line="381"/>
         <source>Edit</source>
         <translation>编辑</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="126"/>
         <location filename="../features/library_view.py" line="176"/>
-        <location filename="../features/library_view.py" line="317"/>
+        <location filename="../features/library_view.py" line="226"/>
+        <location filename="../features/library_view.py" line="383"/>
         <source>Delete</source>
         <translation>删除</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="179"/>
+        <location filename="../features/library_view.py" line="229"/>
         <source>Name</source>
         <translation>名称</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="180"/>
+        <location filename="../features/library_view.py" line="230"/>
         <source>Target Language</source>
         <translation>目标语言</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="181"/>
+        <location filename="../features/library_view.py" line="231"/>
         <source>Progress</source>
         <translation>进度</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="182"/>
+        <location filename="../features/library_view.py" line="232"/>
         <source>Modified</source>
         <translation>修改时间</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="235"/>
+        <location filename="../features/library_view.py" line="293"/>
         <source>Please select a project to open.</source>
         <translation>请选择要打开的项目。</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="243"/>
+        <location filename="../features/library_view.py" line="301"/>
         <source>Please select a project to edit.</source>
         <translation>请选择要编辑的项目。</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="246"/>
-        <location filename="../features/library_view.py" line="262"/>
+        <location filename="../features/library_view.py" line="304"/>
+        <location filename="../features/library_view.py" line="328"/>
         <source>Edit Project</source>
         <translation>编辑项目</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="270"/>
+        <location filename="../features/library_view.py" line="336"/>
         <source>Please select a project to delete.</source>
         <translation>请选择要删除的项目。</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="277"/>
+        <location filename="../features/library_view.py" line="343"/>
         <source>Are you sure you want to delete project &apos;%1&apos;?
 
 This will permanently remove all project data including documents, translations, and glossary entries.</source>
@@ -1215,34 +1215,34 @@ This will permanently remove all project data including documents, translations,
 这将永久删除该项目的所有数据，包括文档、翻译和术语条目。</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="291"/>
+        <location filename="../features/library_view.py" line="357"/>
         <source>Delete Project</source>
         <translation>删除项目</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="297"/>
+        <location filename="../features/library_view.py" line="363"/>
         <source>Project &apos;%1&apos; has been deleted.</source>
         <translation>项目“%1”已删除。</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="339"/>
+        <location filename="../features/library_view.py" line="405"/>
         <source>Create a project, finish setup, then open it to work through the document pipeline.</source>
         <translation>创建项目，完成设置，然后打开它以按文档流程工作。</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="235"/>
-        <location filename="../features/library_view.py" line="243"/>
-        <location filename="../features/library_view.py" line="270"/>
+        <location filename="../features/library_view.py" line="293"/>
+        <location filename="../features/library_view.py" line="301"/>
+        <location filename="../features/library_view.py" line="336"/>
         <source>No Selection</source>
         <translation>未选择</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="274"/>
+        <location filename="../features/library_view.py" line="340"/>
         <source>Confirm Deletion</source>
         <translation>确认删除</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="296"/>
+        <location filename="../features/library_view.py" line="362"/>
         <source>Success</source>
         <translation>成功</translation>
     </message>
@@ -3590,48 +3590,48 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>WorkflowProfileEditorDialog</name>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1051"/>
+        <location filename="../features/workflow_profile_editor.py" line="1054"/>
         <source>Workflow Profile</source>
         <translation>工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1075"/>
+        <location filename="../features/workflow_profile_editor.py" line="1078"/>
         <source>A workflow profile is a user-facing wrapper over the existing step-based config. Edit connection and model choices here.</source>
         <translation>工作流配置档案是对现有分步骤配置的用户界面封装。可在此编辑连接和模型选择。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1080"/>
+        <location filename="../features/workflow_profile_editor.py" line="1083"/>
         <source>General</source>
         <translation>常规</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1102"/>
+        <location filename="../features/workflow_profile_editor.py" line="1105"/>
         <source>Profile name</source>
         <translation>配置档案名称</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1103"/>
+        <location filename="../features/workflow_profile_editor.py" line="1106"/>
         <source>Target language</source>
         <translation>目标语言</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1109"/>
+        <location filename="../features/workflow_profile_editor.py" line="1112"/>
         <source>Workflow Routing</source>
         <translation>工作流路由</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1113"/>
+        <location filename="../features/workflow_profile_editor.py" line="1116"/>
         <source>Use the Advanced column to edit step-specific settings.</source>
         <translation>使用“高级”列编辑步骤专用设置。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1153"/>
-        <location filename="../features/workflow_profile_editor.py" line="1159"/>
+        <location filename="../features/workflow_profile_editor.py" line="1156"/>
+        <location filename="../features/workflow_profile_editor.py" line="1162"/>
         <source>Missing Information</source>
         <translation>缺少信息</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1153"/>
+        <location filename="../features/workflow_profile_editor.py" line="1156"/>
         <source>Target language is required.</source>
         <translation>目标语言为必填项。</translation>
     </message>
@@ -3883,12 +3883,12 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>_ProjectDialog</name>
     <message>
-        <location filename="../features/library_view.py" line="54"/>
+        <location filename="../features/library_view.py" line="59"/>
         <source>Enter project name</source>
         <translation>输入项目名称</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="55"/>
+        <location filename="../features/library_view.py" line="60"/>
         <source>Name*:</source>
         <translation>名称*：</translation>
     </message>
@@ -3897,17 +3897,22 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation type="vanished">可选目标语言</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="75"/>
+        <location filename="../features/library_view.py" line="78"/>
+        <source>Workflow profile</source>
+        <translation>工作流配置档案</translation>
+    </message>
+    <message>
+        <location filename="../features/library_view.py" line="98"/>
         <source>Target language:</source>
         <translation>目标语言：</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="96"/>
+        <location filename="../features/library_view.py" line="146"/>
         <source>Validation Error</source>
         <translation>验证错误</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="96"/>
+        <location filename="../features/library_view.py" line="146"/>
         <source>Project name is required.</source>
         <translation>项目名称为必填项。</translation>
     </message>

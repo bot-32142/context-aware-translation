@@ -16,7 +16,7 @@ from context_aware_translation.application.contracts.app_setup import (
 )
 from context_aware_translation.application.contracts.common import ProviderKind
 from context_aware_translation.application.contracts.project_setup import SaveProjectSetupRequest
-from context_aware_translation.application.contracts.projects import CreateProjectRequest
+from context_aware_translation.application.contracts.projects import CreateProjectRequest, UpdateProjectRequest
 from context_aware_translation.application.contracts.terms import UpdateTermRequest
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.storage.repositories.document_repository import DocumentRepository
@@ -94,6 +94,79 @@ def test_projects_service_can_create_and_list_projects(tmp_path: Path) -> None:
 
         assert created.project.name == "One Piece"
         assert any(item.project.project_id == created.project.project_id for item in listed.items)
+    finally:
+        context.close()
+
+
+def test_projects_service_creates_project_with_selected_workflow_profile(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        default_profile = context.runtime.book_manager.list_profiles()[0]
+        alternate_config = dict(default_profile.config)
+        alternate_config["translation_target_language"] = "Japanese"
+        alternate_profile = context.runtime.book_manager.create_profile(
+            name="Japanese Profile",
+            config=alternate_config,
+        )
+
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Profile Pick", workflow_profile_id=alternate_profile.profile_id)
+        )
+        project_id = created.project.project_id
+        book = context.runtime.get_book(project_id)
+        project_setup = context.services.project_setup.get_state(project_id)
+
+        assert book.profile_id == alternate_profile.profile_id
+        assert created.target_language == "Japanese"
+        assert project_setup.selected_shared_profile_id == alternate_profile.profile_id
+    finally:
+        context.close()
+
+
+def test_projects_service_preserves_selected_profile_when_overriding_target_language(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        shared_profile = context.runtime.book_manager.list_profiles()[0]
+
+        created = context.services.projects.create_project(
+            CreateProjectRequest(
+                name="Profile Override",
+                workflow_profile_id=shared_profile.profile_id,
+                target_language="Chinese",
+            )
+        )
+        project_id = created.project.project_id
+        book = context.runtime.get_book(project_id)
+        config = context.runtime.get_effective_config_payload(project_id)
+        project_setup = context.services.project_setup.get_state(project_id)
+
+        assert book.profile_id is None
+        assert config["translation_target_language"] == "Chinese"
+        assert config["_ui_source_profile_id"] == shared_profile.profile_id
+        assert project_setup.selected_shared_profile_id == shared_profile.profile_id
+    finally:
+        context.close()
+
+
+def test_projects_service_preserves_source_profile_when_editing_target_language(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        shared_profile = context.runtime.book_manager.list_profiles()[0]
+        created = context.services.projects.create_project(CreateProjectRequest(name="Edit Target"))
+        project_id = created.project.project_id
+
+        context.services.projects.update_project(UpdateProjectRequest(project_id=project_id, target_language="Chinese"))
+
+        book = context.runtime.get_book(project_id)
+        config = context.runtime.get_effective_config_payload(project_id)
+        project_setup = context.services.project_setup.get_state(project_id)
+
+        assert book.profile_id is None
+        assert config["_ui_source_profile_id"] == shared_profile.profile_id
+        assert project_setup.selected_shared_profile_id == shared_profile.profile_id
     finally:
         context.close()
 
@@ -674,11 +747,13 @@ def test_terms_update_request_rejects_removed_description_field(tmp_path: Path) 
         scope = context.services.terms.get_project_terms(project_id).scope
 
         with pytest.raises(ValidationError):
-            UpdateTermRequest(
-                scope=scope,
-                term_id=1,
-                term_key="ルフィ",
-                description="Pirate captain",
+            UpdateTermRequest.model_validate(
+                {
+                    "scope": scope,
+                    "term_id": 1,
+                    "term_key": "ルフィ",
+                    "description": "Pirate captain",
+                }
             )
     finally:
         context.close()

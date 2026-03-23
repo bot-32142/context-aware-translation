@@ -38,6 +38,7 @@ from context_aware_translation.application.contracts.projects import (
     ProjectsScreenState,
     ProjectSummary,
     UpdateProjectRequest,
+    WorkflowProfileOption,
 )
 from context_aware_translation.application.contracts.queue import QueueActionRequest, QueueState
 from context_aware_translation.application.contracts.terms import (
@@ -93,6 +94,7 @@ class FakeProjectsService:
     project_summary: ProjectSummary | None = None
     create_result: ProjectSummary | None = None
     update_result: ProjectSummary | None = None
+    workflow_profiles: list[WorkflowProfileOption] = field(default_factory=list)
     calls: list[tuple[str, Any]] = field(default_factory=list)
 
     def list_projects(self) -> ProjectsScreenState:
@@ -105,6 +107,10 @@ class FakeProjectsService:
         if project is None:
             raise NotImplementedError
         return cast(ProjectSummary, project)
+
+    def list_workflow_profiles(self) -> list[WorkflowProfileOption]:
+        self.calls.append(("list_workflow_profiles", None))
+        return list(self.workflow_profiles)
 
     def create_project(self, request: CreateProjectRequest) -> ProjectSummary:
         self.calls.append(("create_project", request))
