@@ -89,6 +89,15 @@ class TaskEngine(QObject):
     def preflight_task(self, task_id: str, action: TaskAction) -> Decision:
         return self._core.preflight_task(task_id, action)
 
+    def recover_interrupted_tasks(self) -> list[str]:
+        """Normalize stale active-task rows left behind by a previous shutdown."""
+
+        book_ids = sorted(self._core.recover_interrupted_tasks())
+        for book_id in book_ids:
+            self.enqueue_task_changed.emit(book_id)
+        self._emit_running_work_changed_if_needed()
+        return book_ids
+
     # ------------------------------------------------------------------
     # Mutation APIs
     # ------------------------------------------------------------------

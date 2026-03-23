@@ -804,6 +804,20 @@ def test_main_window_queue_can_close_after_delete_empties_list():
         patch_stack.close()
 
 
+def test_main_window_close_keeps_store_open_while_task_engine_still_running():
+    window, context, patch_stack = _make_window()
+    try:
+        context.runtime.task_engine._has_running_work = True
+
+        window.close()
+
+        assert context.runtime.task_engine.close_calls == 1
+        context.runtime.task_store.close.assert_not_called()
+        context.runtime.book_manager.close.assert_not_called()
+    finally:
+        patch_stack.close()
+
+
 def test_main_window_queue_close_after_multiple_deletes_clears_project_modal_state():
     window, context, patch_stack = _make_window()
     try:

@@ -4,13 +4,25 @@ import json
 import logging
 import threading
 import time
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import ClaimArbiter, ResourceClaim
 from context_aware_translation.workflow.tasks.exceptions import CancelDispatchRaceError, RunValidationError
 from context_aware_translation.workflow.tasks.handlers.base import CancelDispatchPolicy, TaskTypeHandler
-from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, ActionSnapshot, Decision, TaskAction
+from context_aware_translation.workflow.tasks.models import (
+    STATUS_CANCEL_REQUESTED,
+    STATUS_CANCELLED,
+    STATUS_CANCELLING,
+    STATUS_FAILED,
+    STATUS_QUEUED,
+    STATUS_RUNNING,
+    TERMINAL_TASK_STATUSES,
+    ActionSnapshot,
+    Decision,
+    TaskAction,
+)
 
 if TYPE_CHECKING:
     from context_aware_translation.storage.repositories.task_store import TaskStore
@@ -18,6 +30,9 @@ if TYPE_CHECKING:
 
 # TTL in seconds for the config snapshot viability probe cache (per book)
 _PROBE_CACHE_TTL = 2.0
+_INTERRUPTED_ACTIVE_STATUSES = frozenset({STATUS_RUNNING, STATUS_CANCEL_REQUESTED, STATUS_CANCELLING})
+_INTERRUPTED_CANCEL_STATUSES = frozenset({STATUS_CANCEL_REQUESTED, STATUS_CANCELLING})
+_INTERRUPTED_TASK_ERROR = "Interrupted when the app closed before the task finished. Rerun it to continue."
 
 logger = logging.getLogger(__name__)
 
@@ -545,6 +560,85 @@ class EngineCore:
                 continue
             startable.append(record.task_id)
         return startable
+
+    def recover_interrupted_tasks(self) -> set[str]:
+        """Recover stale active-task rows left behind by a previous shutdown.
+
+        Tasks that are still autorunnable in their current status (for example,
+        resumable batch polling tasks) are left untouched. Local tasks that cannot
+        resume from `running` are moved back to `queued` when their handler supports
+        queued autorun; otherwise they are marked `failed` so the UI no longer shows
+        them as actively running.
+        """
+
+        snapshot = self._build_snapshot()
+        affected_book_ids: set[str] = set()
+        for record in self._store.list_tasks(exclude_statuses=TERMINAL_TASK_STATUSES):
+            if record.status not in _INTERRUPTED_ACTIVE_STATUSES:
+                continue
+            try:
+                handler = self._handler_or_raise(record.task_type)
+            except RuntimeError:
+                logger.warning("Leaving stale task %s untouched: no handler for %s", record.task_id, record.task_type)
+                continue
+            target_status = STATUS_CANCELLED if record.status in _INTERRUPTED_CANCEL_STATUSES else STATUS_FAILED
+
+            try:
+                payload = handler.decode_payload(record)
+            except Exception:
+                logger.warning("Failed to decode stale task %s during recovery", record.task_id, exc_info=True)
+                if target_status == STATUS_CANCELLED:
+                    self._store.update(record.task_id, status=STATUS_CANCELLED, cancel_requested=False)
+                else:
+                    self._store.update(
+                        record.task_id,
+                        status=STATUS_FAILED,
+                        cancel_requested=False,
+                        last_error=_INTERRUPTED_TASK_ERROR,
+                    )
+                affected_book_ids.add(record.book_id)
+                continue
+
+            try:
+                if handler.can_autorun(record, payload, snapshot).allowed:
+                    continue
+            except Exception:
+                logger.warning(
+                    "Failed current-status autorun check for stale task %s during recovery",
+                    record.task_id,
+                    exc_info=True,
+                )
+
+            if target_status == STATUS_CANCELLED:
+                self._store.update(record.task_id, status=STATUS_CANCELLED, cancel_requested=False)
+                affected_book_ids.add(record.book_id)
+                continue
+
+            queued_record = replace(record, status=STATUS_QUEUED, cancel_requested=False)
+            try:
+                queued_allowed = handler.can_autorun(queued_record, payload, snapshot).allowed
+            except Exception:
+                logger.warning(
+                    "Failed queued-status autorun check for stale task %s during recovery",
+                    record.task_id,
+                    exc_info=True,
+                )
+                queued_allowed = False
+
+            if queued_allowed:
+                self._store.update(record.task_id, status=STATUS_QUEUED, cancel_requested=False)
+            else:
+                if target_status == STATUS_CANCELLED:
+                    self._store.update(record.task_id, status=STATUS_CANCELLED, cancel_requested=False)
+                else:
+                    self._store.update(
+                        record.task_id,
+                        status=STATUS_FAILED,
+                        cancel_requested=False,
+                        last_error=_INTERRUPTED_TASK_ERROR,
+                    )
+            affected_book_ids.add(record.book_id)
+        return affected_book_ids
 
     # ------------------------------------------------------------------
     # Worker tracking

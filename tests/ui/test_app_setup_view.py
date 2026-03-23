@@ -438,7 +438,7 @@ def test_connection_draft_form_round_trips_advanced_fields():
             description="Image-heavy manga setup",
             api_key="secret",
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            default_model="gemini-3.1-flash-image-preview",
+            default_model="gemini-3-pro-image-preview",
             temperature=0.2,
             timeout=180,
             max_retries=5,

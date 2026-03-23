@@ -425,7 +425,7 @@ def test_workflow_profile_editor_shows_advanced_button_for_each_step():
                 step_label="Image reembedding",
                 connection_id="conn-gemini",
                 connection_label="Gemini",
-                model="gemini-3.1-flash-image-preview",
+                model="gemini-3-pro-image-preview",
             ),
         ],
     )
@@ -440,7 +440,7 @@ def test_workflow_profile_editor_shows_advanced_button_for_each_step():
             ConnectionChoice(
                 connection_id="conn-gemini",
                 label="Gemini",
-                default_model="gemini-3.1-flash-image-preview",
+                default_model="gemini-3-pro-image-preview",
             ),
         ],
         allow_name_edit=True,

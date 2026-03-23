@@ -84,7 +84,6 @@ _WIZARD_REASONING_EFFORT_BY_STEP: dict[WorkflowStepId, str] = {
     WorkflowStepId.GLOSSARY_TRANSLATOR: "low",
     WorkflowStepId.TRANSLATOR: "low",
     WorkflowStepId.OCR: "none",
-    WorkflowStepId.IMAGE_REEMBEDDING: "none",
     WorkflowStepId.MANGA_TRANSLATOR: "low",
 }
 
@@ -170,8 +169,8 @@ _WIZARD_MODEL_CATALOG: dict[ProviderKind, tuple[WizardModelTemplate, ...]] = {
         ),
         WizardModelTemplate(
             ProviderKind.GEMINI,
-            "Gemini 3.1 Flash Image Preview",
-            "gemini-3.1-flash-image-preview",
+            "Gemini 3 Pro Image Preview",
+            "gemini-3-pro-image-preview",
             "https://generativelanguage.googleapis.com/v1beta/openai/",
             timeout=300,
             concurrency=2,
@@ -245,7 +244,7 @@ _STEP_RECOMMENDATION_ORDER: dict[WorkflowStepId, tuple[StepModelPreference, ...]
         StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
     ),
     WorkflowStepId.IMAGE_REEMBEDDING: (
-        StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-flash-image-preview"),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-3-pro-image-preview"),
         StepModelPreference(ProviderKind.OPENAI, "gpt-image-1"),
     ),
     WorkflowStepId.MANGA_TRANSLATOR: (

@@ -498,8 +498,9 @@ class MainWindow(QMainWindow):
         self._queue_controller.cleanup()
         self._app_events.close()
         self._task_engine.close()
-        self._task_store.close()
-        self.book_manager.close()
+        if not self._task_engine.has_running_work():
+            self._task_store.close()
+            self.book_manager.close()
         self._set_sleep_inhibitor_active(False)
         self._save_geometry()
         super().closeEvent(event)
