@@ -25,6 +25,7 @@ from context_aware_translation.application.events import (
     QueueChangedEvent,
     SetupInvalidatedEvent,
 )
+from context_aware_translation.ui.startup import preferred_startup_window_size
 from tests.application.fakes import (
     FakeAppSetupService,
     FakeDocumentService,
@@ -252,6 +253,20 @@ class _FakeAppShellHost(QWidget):
 
     def dismiss_modal(self) -> None:
         self.modal_route = ""
+
+
+class _FakeSettings:
+    def __init__(self, initial: dict[str, object] | None = None) -> None:
+        self._values = dict(initial or {})
+
+    def value(self, key: str):  # noqa: ANN201
+        return self._values.get(key)
+
+    def setValue(self, key: str, value: object) -> None:
+        self._values[key] = value
+
+    def remove(self, key: str) -> None:
+        self._values.pop(key, None)
 
 
 class _FakeWorkView(QWidget):
@@ -573,6 +588,51 @@ def test_main_window_routes_projects_into_project_shell():
     finally:
         window.close()
         patch_stack.close()
+
+
+def test_main_window_uses_centered_compact_default_size():
+    settings = _FakeSettings()
+    settings_patch = patch("context_aware_translation.ui.main_window.QSettings", return_value=settings)
+    settings_patch.start()
+    window, _context, patch_stack = _make_window()
+    try:
+        available = QApplication.primaryScreen().availableGeometry()
+        expected_width, expected_height = preferred_startup_window_size(available.width(), available.height())
+
+        assert (window.width(), window.height()) == (expected_width, expected_height)
+        assert not window.isMaximized()
+        assert not window.isFullScreen()
+    finally:
+        window.close()
+        patch_stack.close()
+        settings_patch.stop()
+
+
+def test_main_window_ignores_legacy_maximized_geometry_on_startup():
+    legacy_window = QWidget()
+    legacy_window.showMaximized()
+    QApplication.processEvents()
+    legacy_geometry = legacy_window.saveGeometry()
+    legacy_window.close()
+
+    settings = _FakeSettings({"geometry": legacy_geometry})
+    settings_patch = patch("context_aware_translation.ui.main_window.QSettings", return_value=settings)
+    settings_patch.start()
+    window, _context, patch_stack = _make_window()
+    try:
+        available = QApplication.primaryScreen().availableGeometry()
+        expected_width, expected_height = preferred_startup_window_size(available.width(), available.height())
+
+        assert (window.width(), window.height()) == (expected_width, expected_height)
+        assert not window.isMaximized()
+        assert not window.isFullScreen()
+    finally:
+        window.close()
+        patch_stack.close()
+        settings_patch.stop()
+
+    assert "geometry" not in settings._values
+    assert "window_bounds_v2" in settings._values
 
 
 def test_main_window_open_project_lazy_loads_hidden_terms_and_project_settings():

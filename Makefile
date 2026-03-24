@@ -1,4 +1,4 @@
-.PHONY: install install-dev test lint format typecheck check clean help eval eval-clean build-ui clean-ui lupdate release
+.PHONY: install install-dev test lint format typecheck check clean help eval eval-clean build-ui build-macos-app clean-ui lupdate release
 
 PYTHON := uv run python
 PYTEST := uv run pytest
@@ -64,6 +64,16 @@ clean:
 build-ui:
 	$(PYTHON) scripts/build_ui.py --clean
 
+build-macos-app:
+	@if [ "$$(uname -s)" != "Darwin" ]; then \
+		echo "Error: make build-macos-app is only supported on macOS"; \
+		exit 1; \
+	fi
+	$(PYTHON) scripts/build_ui.py --clean
+	@echo ""
+	@echo "Local macOS app bundle ready: dist/CAT-UI.app"
+	@echo "Open it with: open dist/CAT-UI.app"
+
 clean-ui:
 	$(PYTHON) scripts/build_ui.py --no-build --clean
 
@@ -90,7 +100,7 @@ release:
 	echo "  1. Ensure all changes are committed"; \
 	echo "  2. Run: git tag v$$VERSION"; \
 	echo "  3. Run: git push origin v$$VERSION"; \
-	echo "  GitHub Actions will build macOS and Windows installers and create a draft release."
+	echo "  GitHub Actions will build a macOS DMG and Windows zip and create a draft release."
 
 help:
 	@echo "Available commands:"
@@ -110,5 +120,6 @@ help:
 	@echo "  make eval         - Run evaluation on sample documents"
 	@echo "  make eval-clean   - Clean evaluation output folder"
 	@echo "  make build-ui     - Build standalone UI application"
+	@echo "  make build-macos-app - Build local macOS .app bundle"
 	@echo "  make clean-ui     - Clean UI build artifacts"
 	@echo "  make release      - Show instructions to create a release"

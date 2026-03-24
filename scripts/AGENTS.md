@@ -16,7 +16,7 @@ Build and packaging scripts for creating distributable versions of the applicati
 ### Working In This Directory
 
 #### build_ui.py
-- **Entry point**: `python scripts/build_ui.py` or `make build-ui`
+- **Entry point**: `python scripts/build_ui.py`, `make build-ui`, or `make build-macos-app` on macOS
 - **Dependencies**: Requires `PyInstaller` installed
 - **Behavior**:
   - Locates project root relative to script location
@@ -34,5 +34,6 @@ Build and packaging scripts for creating distributable versions of the applicati
 ### Common Workflows
 - **Clean rebuild**: `python scripts/build_ui.py --clean`
 - **Debug build**: `python scripts/build_ui.py --debug`
+- **Local macOS app bundle**: `make build-macos-app`
 
 <!-- MANUAL: -->

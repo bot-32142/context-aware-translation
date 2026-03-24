@@ -60,8 +60,8 @@ LANGUAGES: Final[list[tuple[str, str]]] = [
 ]
 
 # Default window dimensions
-DEFAULT_WINDOW_WIDTH: Final[int] = 1200
-DEFAULT_WINDOW_HEIGHT: Final[int] = 800
+DEFAULT_WINDOW_WIDTH: Final[int] = 1120
+DEFAULT_WINDOW_HEIGHT: Final[int] = 760
 MIN_WINDOW_WIDTH: Final[int] = 800
 MIN_WINDOW_HEIGHT: Final[int] = 600
 

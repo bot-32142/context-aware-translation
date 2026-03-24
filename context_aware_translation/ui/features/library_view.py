@@ -393,13 +393,7 @@ class LibraryView(QWidget):
     def _format_timestamp(timestamp: float | None) -> str:
         if timestamp is None:
             return ""
-        dt = datetime.fromtimestamp(timestamp, tz=UTC)
-        now = datetime.now(tz=UTC)
-        if dt.date() == now.date():
-            return dt.strftime("%H:%M")
-        if dt.year == now.year:
-            return dt.strftime("%m-%d")
-        return dt.strftime("%Y-%m-%d")
+        return datetime.fromtimestamp(timestamp, tz=UTC).astimezone().strftime("%Y-%m-%d %H:%M")
 
     def _tip_text(self) -> str:
         return self.tr("Create a project, finish setup, then open it to work through the document pipeline.")

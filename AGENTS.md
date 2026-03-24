@@ -21,7 +21,7 @@ A Python 3.12+ document translation system that uses LLMs with context-aware glo
 | `context_aware_translation/` | Main package: core logic, LLM, documents, storage, UI (see `context_aware_translation/AGENTS.md`) |
 | `tests/` | Test suites mirroring main package structure (see `tests/AGENTS.md`) |
 | `scripts/` | Build and evaluation scripts (see `scripts/AGENTS.md`) |
-| `installer/` | Platform-specific installer configs (see `installer/AGENTS.md`) |
+| `installer/` | Platform-specific packaging configs (see `installer/AGENTS.md`) |
 
 ## For AI Agents
 

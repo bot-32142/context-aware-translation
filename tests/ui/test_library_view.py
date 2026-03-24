@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
@@ -69,6 +70,9 @@ def test_library_view_renders_projects_from_service() -> None:
         assert service.calls[0][0] == "list_projects"
         assert view.model.rowCount() == 1
         assert view.model.item(0, 0).text() == "One Piece"
+        assert view.model.item(0, 3).text() == (
+            datetime.fromtimestamp(1_700_000_000.0, tz=UTC).astimezone().strftime("%Y-%m-%d %H:%M")
+        )
         assert not view.open_button.isEnabled()
         view.table_view.selectRow(0)
         QApplication.processEvents()
