@@ -1,6 +1,6 @@
 """Main application window with QML app and project shell chrome."""
 
-from PySide6.QtCore import QEvent, QSettings, QTimer, QUrl
+from PySide6.QtCore import QEvent, QRect, QSettings, QTimer, QUrl, Qt
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
@@ -32,6 +32,7 @@ from context_aware_translation.ui.features.queue_drawer_view import QueueDrawerV
 from context_aware_translation.ui.features.terms_view import TermsView
 from context_aware_translation.ui.features.work_view import WorkView
 from context_aware_translation.ui.i18n import qarg
+from context_aware_translation.ui.startup import bounds_fit_available_geometries, preferred_startup_window_size
 from context_aware_translation.ui.shell_hosts.app_settings_dialog_host import AppSettingsDialogHost
 from context_aware_translation.ui.shell_hosts.app_shell_host import AppShellHost
 from context_aware_translation.ui.shell_hosts.project_settings_dialog_host import ProjectSettingsDialogHost
@@ -193,16 +194,65 @@ class MainWindow(QMainWindow):
     def _restore_geometry(self) -> None:
         """Restore window geometry from settings."""
         settings = QSettings("CAT", "Context-Aware Translation")
+        bounds = settings.value("window_bounds_v2")
+        if isinstance(bounds, QRect) and bounds.isValid() and self._bounds_fit_available_geometry(bounds):
+            self.setGeometry(bounds)
+            return
+
         geometry = settings.value("geometry")
-        if geometry:
-            self.restoreGeometry(geometry)
-        else:
-            self.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
+        if geometry and self.restoreGeometry(geometry):
+            if (
+                not self.isFullScreen()
+                and not self.isMaximized()
+                and self._bounds_fit_available_geometry(self.geometry())
+            ):
+                return
+            self.setWindowState(Qt.WindowState.WindowNoState)
+
+        self._apply_default_window_geometry()
 
     def _save_geometry(self) -> None:
         """Save window geometry to settings."""
         settings = QSettings("CAT", "Context-Aware Translation")
-        settings.setValue("geometry", self.saveGeometry())
+        bounds = self.normalGeometry() if self.isFullScreen() or self.isMaximized() else self.geometry()
+        if bounds.isValid():
+            settings.setValue("window_bounds_v2", bounds)
+        settings.remove("geometry")
+
+    def _available_geometry(self) -> QRect | None:
+        screen = self.screen()
+        if screen is None:
+            app = QApplication.instance()
+            if isinstance(app, QApplication):
+                screen = app.primaryScreen()
+        return screen.availableGeometry() if screen is not None else None
+
+    def _available_geometries(self) -> list[QRect]:
+        app = QApplication.instance()
+        if not isinstance(app, QApplication):
+            return []
+        return [screen.availableGeometry() for screen in app.screens()]
+
+    def _bounds_fit_available_geometry(self, bounds: QRect) -> bool:
+        available_geometries = self._available_geometries()
+        return bounds_fit_available_geometries(
+            (bounds.x(), bounds.y(), bounds.width(), bounds.height()),
+            [
+                (available.x(), available.y(), available.width(), available.height())
+                for available in available_geometries
+            ],
+        )
+
+    def _apply_default_window_geometry(self) -> None:
+        available = self._available_geometry()
+        if available is None:
+            self.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
+            return
+
+        width, height = preferred_startup_window_size(available.width(), available.height())
+        x = available.x() + max(0, (available.width() - width) // 2)
+        y = available.y() + max(0, (available.height() - height) // 2)
+        self.setGeometry(x, y, width, height)
 
     def _on_engine_running_work_changed(self, is_running: bool) -> None:
         """React to TaskEngine running-work state changes."""

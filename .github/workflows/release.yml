@@ -48,7 +48,6 @@ jobs:
             VERSION="v0.0.0-dev"
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "version_number=${VERSION#v}" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         run: uv sync --group dev
@@ -245,7 +244,7 @@ jobs:
         run: security delete-keychain "$KEYCHAIN_PATH"
 
       # ============================================================
-      # Windows: Sign exe, create installer, sign installer
+      # Windows: Sign executable, package portable zip
       # ============================================================
       - name: Sign executable (Windows)
         if: runner.os == 'Windows'
@@ -279,49 +278,89 @@ jobs:
           Remove-Item $certPath -Force
           Write-Host 'Code signing complete'
 
-      - name: Install NSIS (Windows)
+      - name: Create portable zip (Windows)
         if: runner.os == 'Windows'
-        shell: cmd
-        run: choco install nsis -y
-
-      - name: Create installer (Windows)
-        if: runner.os == 'Windows'
-        shell: cmd
+        shell: bash
         run: |
-          if not exist release mkdir release
-          "C:\Program Files (x86)\NSIS\makensis.exe" ^
-            /DAPP_VERSION=${{ steps.version.outputs.version_number }} ^
-            /DSOURCE_DIR=%CD%\dist\${{ env.APP_NAME }} ^
-            /DOUTPUT_FILE=%CD%\release\${{ env.APP_NAME }}-${{ steps.version.outputs.version }}-${{ matrix.platform_name }}-setup.exe ^
-            installer\windows\cat-ui.nsi
+          mkdir -p release
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
 
-      - name: Sign installer (Windows)
+          source_dir = Path("dist/${{ env.APP_NAME }}")
+          archive_path = Path("release/${{ env.APP_NAME }}-${{ steps.version.outputs.version }}-${{ matrix.platform_name }}.zip")
+
+          if not source_dir.is_dir():
+              raise SystemExit(f"Missing source directory: {source_dir}")
+
+          if archive_path.exists():
+              archive_path.unlink()
+
+          with zipfile.ZipFile(
+              archive_path,
+              mode="w",
+              compression=zipfile.ZIP_DEFLATED,
+              compresslevel=6,
+              allowZip64=True,
+          ) as archive:
+              for path in sorted(source_dir.rglob("*")):
+                  if path.is_file():
+                      archive.write(path, arcname=path.relative_to(source_dir.parent))
+
+          print(f"Portable archive created: {archive_path}")
+          PY
+
+      - name: Smoke test portable zip (Windows)
         if: runner.os == 'Windows'
         env:
-          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          CAT_SMOKE_TEST_STARTUP: '1'
         shell: powershell
         run: |
-          if (-not $env:WINDOWS_CERTIFICATE_BASE64) {
-            Write-Host '::notice::No Windows certificate configured - skipping installer signing'
-            exit 0
+          $archivePath = Resolve-Path "release\${{ env.APP_NAME }}-${{ steps.version.outputs.version }}-${{ matrix.platform_name }}.zip"
+          $extractRoot = Join-Path $env:RUNNER_TEMP 'portable-smoke'
+          $appRoot = Join-Path $extractRoot '${{ env.APP_NAME }}'
+          $exePath = Join-Path $appRoot '${{ env.APP_NAME }}.exe'
+          $openccCandidates = @(
+            (Join-Path $appRoot '_internal\opencc\config\jp2s.json'),
+            (Join-Path $appRoot 'opencc\config\jp2s.json')
+          )
+
+          if (Test-Path $extractRoot) {
+            Remove-Item $extractRoot -Recurse -Force
           }
 
-          $certPath = Join-Path $env:RUNNER_TEMP 'certificate.pfx'
-          [IO.File]::WriteAllBytes($certPath,
-            [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
+          Expand-Archive -Path $archivePath -DestinationPath $extractRoot -Force
 
-          $signtool = (Resolve-Path 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' |
-            Sort-Object -Descending | Select-Object -First 1).Path
+          $topLevelEntries = @(Get-ChildItem -LiteralPath $extractRoot)
+          if ($topLevelEntries.Count -ne 1 -or -not $topLevelEntries[0].PSIsContainer -or $topLevelEntries[0].Name -ne '${{ env.APP_NAME }}') {
+            throw "Unexpected archive layout after extraction: $($topLevelEntries.Name -join ', ')"
+          }
 
-          $signArgs = @('sign', '/f', $certPath, '/p', $env:WINDOWS_CERTIFICATE_PASSWORD,
-            '/tr', 'http://timestamp.digicert.com', '/td', 'sha256', '/fd', 'sha256')
+          if (-not (Test-Path -LiteralPath $exePath -PathType Leaf)) {
+            throw "Extracted executable not found: $exePath"
+          }
 
-          $installer = (Get-ChildItem release\*-setup.exe).FullName
-          & $signtool @signArgs $installer
+          if (-not ($openccCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })) {
+            throw 'Extracted portable zip is missing expected OpenCC assets'
+          }
 
-          Remove-Item $certPath -Force
-          Write-Host 'Installer signing complete'
+          $process = Start-Process -FilePath $exePath -WorkingDirectory $appRoot -PassThru
+          try {
+            if (-not $process.WaitForExit(30000)) {
+              Stop-Process -Id $process.Id -Force
+              throw 'Portable app smoke test timed out after 30 seconds'
+            }
+            if ($process.ExitCode -ne 0) {
+              throw "Portable app smoke test exited with code $($process.ExitCode)"
+            }
+          }
+          finally {
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+            }
+          }
+
+          Write-Host "Portable zip smoke test passed: $archivePath"
 
       # ============================================================
       # Upload
