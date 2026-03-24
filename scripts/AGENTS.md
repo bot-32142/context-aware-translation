@@ -10,6 +10,7 @@ Build and packaging scripts for creating distributable versions of the applicati
 | File | Description |
 |------|-------------|
 | `build_ui.py` | PyInstaller build script for standalone UI executable artifacts |
+| `generate_readme_screenshots.py` | Generates README setup screenshots from the Qt setup wizard using demo data |
 
 ## For AI Agents
 
@@ -35,5 +36,6 @@ Build and packaging scripts for creating distributable versions of the applicati
 - **Clean rebuild**: `python scripts/build_ui.py --clean`
 - **Debug build**: `python scripts/build_ui.py --debug`
 - **Local macOS app bundle**: `make build-macos-app`
+- **Refresh README screenshots**: `uv run python scripts/generate_readme_screenshots.py`
 
 <!-- MANUAL: -->
