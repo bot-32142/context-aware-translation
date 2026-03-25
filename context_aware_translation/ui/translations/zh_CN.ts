@@ -231,114 +231,114 @@
 <context>
     <name>ConnectionDraftForm</name>
     <message>
-        <location filename="../features/app_setup_view.py" line="130"/>
+        <location filename="../features/app_setup_view.py" line="119"/>
         <source>Timeout</source>
         <translation>超时</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="131"/>
+        <location filename="../features/app_setup_view.py" line="120"/>
         <source>Max retries</source>
         <translation>最大重试次数</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="132"/>
+        <location filename="../features/app_setup_view.py" line="121"/>
         <source>Concurrency</source>
         <translation>并发数</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="137"/>
+        <location filename="../features/app_setup_view.py" line="126"/>
         <source>Total token limit</source>
         <translation>总令牌上限</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="142"/>
+        <location filename="../features/app_setup_view.py" line="131"/>
         <source>Input token limit</source>
         <translation>输入令牌上限</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="147"/>
+        <location filename="../features/app_setup_view.py" line="136"/>
         <source>Output token limit</source>
         <translation>输出令牌上限</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="162"/>
+        <location filename="../features/app_setup_view.py" line="151"/>
         <source>Enable</source>
         <translation>启用</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="192"/>
+        <location filename="../features/app_setup_view.py" line="181"/>
         <source>Paste API key</source>
         <translation>粘贴 API 密钥</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="194"/>
+        <location filename="../features/app_setup_view.py" line="183"/>
         <source>Connection name</source>
         <translation>连接名称</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="195"/>
+        <location filename="../features/app_setup_view.py" line="184"/>
         <source>Provider</source>
         <translation>提供商</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="196"/>
+        <location filename="../features/app_setup_view.py" line="185"/>
         <source>API key</source>
         <translation>API 密钥</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="199"/>
+        <location filename="../features/app_setup_view.py" line="188"/>
         <source>Advanced</source>
         <translation>高级</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="206"/>
-        <location filename="../features/app_setup_view.py" line="225"/>
+        <location filename="../features/app_setup_view.py" line="195"/>
+        <location filename="../features/app_setup_view.py" line="214"/>
         <source>Base URL</source>
         <translation>基础 URL</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="209"/>
-        <location filename="../features/app_setup_view.py" line="226"/>
+        <location filename="../features/app_setup_view.py" line="198"/>
+        <location filename="../features/app_setup_view.py" line="215"/>
         <source>Default model</source>
         <translation>默认模型</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="221"/>
+        <location filename="../features/app_setup_view.py" line="210"/>
         <source>Advanced matches the old endpoint-profile model: timeout, retries, concurrency, token limits, and custom JSON parameters.</source>
         <translation>高级设置沿用旧端点配置档案模型：超时、重试、并发、令牌限制以及自定义 JSON 参数。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="224"/>
+        <location filename="../features/app_setup_view.py" line="213"/>
         <source>Description</source>
         <translation>描述</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="227"/>
+        <location filename="../features/app_setup_view.py" line="216"/>
         <source>Temperature</source>
         <translation>温度</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="228"/>
+        <location filename="../features/app_setup_view.py" line="217"/>
         <source>Custom parameters</source>
         <translation>自定义参数</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="235"/>
+        <location filename="../features/app_setup_view.py" line="224"/>
         <source>Connection</source>
         <translation>连接</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="242"/>
+        <location filename="../features/app_setup_view.py" line="231"/>
         <source>Token limits and usage tracking apply to this connection profile only.</source>
         <translation>令牌限制和用量跟踪仅适用于此连接配置档案。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="247"/>
+        <location filename="../features/app_setup_view.py" line="236"/>
         <source>Token Meter</source>
         <translation>令牌计量</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="280"/>
+        <location filename="../features/app_setup_view.py" line="269"/>
         <source>Stored API key is hidden. Leave blank to keep it or paste a new key.</source>
         <translation>已保存的 API 密钥已隐藏。留空以保留现有密钥，或粘贴新的密钥。</translation>
     </message>
@@ -347,12 +347,12 @@
         <translation type="vanished">留空以保留当前密钥</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="336"/>
+        <location filename="../features/app_setup_view.py" line="325"/>
         <source>Connection name is required.</source>
         <translation>连接名称为必填项。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="338"/>
+        <location filename="../features/app_setup_view.py" line="327"/>
         <source>API key is required.</source>
         <translation>API 密钥为必填项。</translation>
     </message>
@@ -365,7 +365,7 @@
         <translation type="vanished">自定义参数必须是 JSON 对象。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="345"/>
+        <location filename="../features/app_setup_view.py" line="334"/>
         <source>Custom connections require base URL and default model.</source>
         <translation>自定义连接必须填写基础 URL 和默认模型。</translation>
     </message>
@@ -373,64 +373,64 @@
 <context>
     <name>ConnectionEditorDialog</name>
     <message>
-        <location filename="../features/app_setup_view.py" line="385"/>
+        <location filename="../features/app_setup_view.py" line="374"/>
         <source>Connection</source>
         <translation>连接</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="402"/>
+        <location filename="../features/app_setup_view.py" line="391"/>
         <source>Token usage</source>
         <translation>令牌用量</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="409"/>
+        <location filename="../features/app_setup_view.py" line="398"/>
         <source>Total</source>
         <translation>总计</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="410"/>
+        <location filename="../features/app_setup_view.py" line="399"/>
         <source>Input</source>
         <translation>输入</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="411"/>
+        <location filename="../features/app_setup_view.py" line="400"/>
         <source>  Cached input</source>
         <translation>  缓存输入</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="412"/>
+        <location filename="../features/app_setup_view.py" line="401"/>
         <source>  Uncached input</source>
         <translation>  未缓存输入</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="413"/>
+        <location filename="../features/app_setup_view.py" line="402"/>
         <source>Output</source>
         <translation>输出</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="414"/>
+        <location filename="../features/app_setup_view.py" line="403"/>
         <source>Reset Usage</source>
         <translation>重置用量</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="422"/>
+        <location filename="../features/app_setup_view.py" line="411"/>
         <source>Test</source>
         <translation>测试</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="441"/>
-        <location filename="../features/app_setup_view.py" line="450"/>
+        <location filename="../features/app_setup_view.py" line="430"/>
+        <location filename="../features/app_setup_view.py" line="439"/>
         <source>Missing Information</source>
         <translation>缺少信息</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="441"/>
-        <location filename="../features/app_setup_view.py" line="450"/>
+        <location filename="../features/app_setup_view.py" line="430"/>
+        <location filename="../features/app_setup_view.py" line="439"/>
         <source>Please complete the form.</source>
         <translation>请填写完整表单。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="507"/>
+        <location filename="../features/app_setup_view.py" line="496"/>
         <source>Connection Test</source>
         <translation>连接测试</translation>
     </message>
@@ -1225,7 +1225,7 @@ This will permanently remove all project data including documents, translations,
         <translation>项目“%1”已删除。</translation>
     </message>
     <message>
-        <location filename="../features/library_view.py" line="405"/>
+        <location filename="../features/library_view.py" line="399"/>
         <source>Create a project, finish setup, then open it to work through the document pipeline.</source>
         <translation>创建项目，完成设置，然后打开它以按文档流程工作。</translation>
     </message>
@@ -1250,8 +1250,8 @@ This will permanently remove all project data including documents, translations,
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../main_window.py" line="58"/>
-        <location filename="../main_window.py" line="473"/>
+        <location filename="../main_window.py" line="59"/>
+        <location filename="../main_window.py" line="523"/>
         <location filename="../viewmodels/app_shell.py" line="32"/>
         <source>Context-Aware Translation</source>
         <translation>上下文感知翻译</translation>
@@ -1274,55 +1274,55 @@ This will permanently remove all project data including documents, translations,
         <translation>项目设置</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="142"/>
+        <location filename="../main_window.py" line="143"/>
         <location filename="../viewmodels/app_shell.py" line="40"/>
         <source>Queue</source>
         <translation>队列</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="156"/>
-        <location filename="../main_window.py" line="480"/>
+        <location filename="../main_window.py" line="157"/>
+        <location filename="../main_window.py" line="530"/>
         <source>&amp;File</source>
         <translation>文件(&amp;F)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="158"/>
-        <location filename="../main_window.py" line="484"/>
+        <location filename="../main_window.py" line="159"/>
+        <location filename="../main_window.py" line="534"/>
         <source>Open &amp;Data Folder</source>
         <translation>打开数据文件夹(&amp;D)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="162"/>
-        <location filename="../main_window.py" line="485"/>
+        <location filename="../main_window.py" line="163"/>
+        <location filename="../main_window.py" line="535"/>
         <source>App &amp;Settings</source>
         <translation>应用设置(&amp;S)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="166"/>
-        <location filename="../main_window.py" line="481"/>
+        <location filename="../main_window.py" line="167"/>
+        <location filename="../main_window.py" line="531"/>
         <source>&amp;Language</source>
         <translation>语言(&amp;L)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="181"/>
-        <location filename="../main_window.py" line="482"/>
+        <location filename="../main_window.py" line="182"/>
+        <location filename="../main_window.py" line="532"/>
         <source>&amp;Help</source>
         <translation>帮助(&amp;H)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="183"/>
-        <location filename="../main_window.py" line="486"/>
+        <location filename="../main_window.py" line="184"/>
+        <location filename="../main_window.py" line="536"/>
         <source>&amp;About</source>
         <translation>关于(&amp;A)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="191"/>
-        <location filename="../main_window.py" line="490"/>
+        <location filename="../main_window.py" line="192"/>
+        <location filename="../main_window.py" line="540"/>
         <source>Ready</source>
         <translation>就绪</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="275"/>
+        <location filename="../main_window.py" line="325"/>
         <source>The following operations are currently running: %1.
 
 Leaving the project may stop local non-task processing.
@@ -1339,37 +1339,37 @@ All completed results are already saved and won&apos;t be lost.</source>
 所有已完成的结果都已保存，不会丢失。</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="337"/>
+        <location filename="../main_window.py" line="387"/>
         <source>Opened project: %1</source>
         <translation>已打开项目：%1</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="350"/>
+        <location filename="../main_window.py" line="400"/>
         <source>Closed project: %1</source>
         <translation>已关闭项目：%1</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="375"/>
+        <location filename="../main_window.py" line="425"/>
         <source>Project setup saved.</source>
         <translation>项目设置已保存。</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="272"/>
+        <location filename="../main_window.py" line="322"/>
         <source>Operation in Progress</source>
         <translation>操作进行中</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="295"/>
+        <location filename="../main_window.py" line="345"/>
         <source>About Context-Aware Translation</source>
         <translation>关于上下文感知翻译</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="298"/>
+        <location filename="../main_window.py" line="348"/>
         <source>&lt;h3&gt;Context-Aware Translation&lt;/h3&gt;&lt;p&gt;Version %1&lt;/p&gt;&lt;p&gt;A desktop application for context-aware document translation with glossary management and OCR support.&lt;/p&gt;&lt;p&gt;Built with PySide6 (Qt for Python)&lt;/p&gt;</source>
         <translation>&lt;h3&gt;上下文感知翻译&lt;/h3&gt;&lt;p&gt;版本 %1&lt;/p&gt;&lt;p&gt;一款支持术语表管理和OCR的上下文感知文档翻译桌面应用。&lt;/p&gt;&lt;p&gt;基于 PySide6（Qt for Python）构建&lt;/p&gt;</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="328"/>
+        <location filename="../main_window.py" line="378"/>
         <source>View &apos;%1&apos; not found</source>
         <translation>未找到视图“%1”</translation>
     </message>
@@ -2074,159 +2074,162 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>SetupWizardDialog</name>
     <message>
-        <location filename="../features/app_setup_view.py" line="537"/>
+        <location filename="../features/app_setup_view.py" line="526"/>
         <source>Setup Wizard</source>
         <translation>设置向导</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="552"/>
+        <location filename="../features/app_setup_view.py" line="541"/>
         <source>Choose providers and paste API keys. The wizard will test capabilities and create a concrete shared workflow profile. Use Connections for custom providers and advanced connection settings.</source>
         <translation>选择提供商并粘贴 API 密钥。向导会测试能力并创建一个具体的共享工作流配置档案。自定义提供商和高级连接设置请在“连接”中完成。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="569"/>
+        <location filename="../features/app_setup_view.py" line="558"/>
         <source>Back</source>
         <translation>返回</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="570"/>
+        <location filename="../features/app_setup_view.py" line="559"/>
         <source>Next</source>
         <translation>下一个</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="571"/>
+        <location filename="../features/app_setup_view.py" line="560"/>
         <source>Save Setup</source>
         <translation>保存设置</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="594"/>
+        <location filename="../features/app_setup_view.py" line="583"/>
         <source>Good for image text reading and image editing.</source>
         <translation>适合图片文字识别和图片编辑。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="596"/>
+        <location filename="../features/app_setup_view.py" line="585"/>
         <source>General-purpose text and image-capable provider.</source>
         <translation>通用型提供商，支持文本处理和图像能力。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="599"/>
+        <location filename="../features/app_setup_view.py" line="588"/>
         <source>Low-cost text translation and context building.</source>
         <translation>适合低成本文本翻译和上下文构建。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="601"/>
+        <location filename="../features/app_setup_view.py" line="590"/>
         <source>Text translation and image understanding.</source>
         <translation>适合文本翻译和图像理解。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="611"/>
+        <location filename="../features/app_setup_view.py" line="600"/>
         <source>Choose providers</source>
         <translation>选择提供商</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="620"/>
+        <location filename="../features/app_setup_view.py" line="609"/>
         <source>Use this provider</source>
         <translation>使用此提供商</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="626"/>
+        <location filename="../features/app_setup_view.py" line="615"/>
         <source>Paste API key</source>
         <translation>粘贴 API 密钥</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="633"/>
+        <location filename="../features/app_setup_view.py" line="622"/>
         <source>API key</source>
         <translation>API 密钥</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="640"/>
+        <location filename="../features/app_setup_view.py" line="629"/>
         <source>Review workflow profile</source>
         <translation>检查工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="644"/>
+        <location filename="../features/app_setup_view.py" line="633"/>
         <source>Workflow profile</source>
         <translation>工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="668"/>
+        <location filename="../features/app_setup_view.py" line="657"/>
         <source>Profile name</source>
         <translation>配置档案名称</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="669"/>
+        <location filename="../features/app_setup_view.py" line="658"/>
         <source>Target language</source>
         <translation>目标语言</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="679"/>
         <source>No supported workflow capabilities detected.</source>
-        <translation>未检测到受支持的工作流能力。</translation>
+        <translation type="vanished">未检测到受支持的工作流能力。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="682"/>
+        <location filename="../features/app_setup_view.py" line="660"/>
         <source>Recommended workflow profile</source>
         <translation>推荐工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="688"/>
+        <location filename="../features/app_setup_view.py" line="666"/>
         <source>This will be saved as a shared workflow profile and can be reused across projects.</source>
         <translation>这将保存为共享工作流配置档案，可在多个项目中复用。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="784"/>
+        <location filename="../features/app_setup_view.py" line="768"/>
         <source>API key is required for every selected provider.</source>
         <translation>每个已选提供商都必须填写 API 密钥。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="797"/>
+        <location filename="../features/app_setup_view.py" line="781"/>
         <source>Review the recommended workflow profile before saving setup.</source>
         <translation>请先检查推荐的工作流配置档案再保存设置。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="804"/>
+        <location filename="../features/app_setup_view.py" line="788"/>
         <source>Workflow profile name is required.</source>
         <translation>工作流配置档案名称为必填项。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="811"/>
+        <location filename="../features/app_setup_view.py" line="795"/>
         <source>Target language is required.</source>
         <translation>目标语言为必填项。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="692"/>
+        <location filename="../features/app_setup_view.py" line="670"/>
         <source>Connection</source>
         <translation>连接</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="692"/>
+        <source>Translation</source>
+        <translation type="obsolete">翻译</translation>
+    </message>
+    <message>
+        <location filename="../features/app_setup_view.py" line="670"/>
         <source>Step</source>
         <translation>步骤</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="692"/>
+        <location filename="../features/app_setup_view.py" line="670"/>
         <source>Model</source>
         <translation>模型</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="774"/>
+        <location filename="../features/app_setup_view.py" line="758"/>
         <source>No Providers Selected</source>
         <translation>未选择提供商</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="774"/>
+        <location filename="../features/app_setup_view.py" line="758"/>
         <source>Select at least one provider to continue.</source>
         <translation>请至少选择一个提供商后再继续。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="783"/>
-        <location filename="../features/app_setup_view.py" line="803"/>
-        <location filename="../features/app_setup_view.py" line="810"/>
+        <location filename="../features/app_setup_view.py" line="767"/>
+        <location filename="../features/app_setup_view.py" line="787"/>
+        <location filename="../features/app_setup_view.py" line="794"/>
         <source>Missing Information</source>
         <translation>缺少信息</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="796"/>
+        <location filename="../features/app_setup_view.py" line="780"/>
         <source>Wizard Incomplete</source>
         <translation>向导未完成</translation>
     </message>

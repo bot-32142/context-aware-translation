@@ -51,18 +51,22 @@ For most users, the default setup wizard profile should just work.
 
 ## Setup Screenshots
 
-### 1. Example setup: choose providers and paste API keys
+### 1. Open App Settings and start setup
 
-![Setup Wizard provider step](docs/screenshots/setup-wizard-providers.png)
+![Initial setup screen](docs/screenshots/EN/Initial Setup.png)
 
-### 2. Example review step: choose the target language and review the generated workflow profile
+### 2. Choose providers and paste API keys
 
-![Setup Wizard review step](docs/screenshots/setup-wizard-review.png)
+![API setup screen](docs/screenshots/EN/API Setup.png)
+
+### 3. Finish the wizard and save the recommended profile
+
+![Setup wizard screen](docs/screenshots/EN/Wizard.png)
 
 ## What To Know Before Using CAT
 
 - The setup wizard is currently tested mainly with `DeepSeek` + `Gemini`.
-- Custom providers and advanced connection settings exist, but they are less tested.
+- Other providers and models may work, but I do not have access to most of them, so they are not tested here. Expect to configure connections manually and tune settings yourself.
 - Image reembedding / image editing can get expensive quickly.
 - Manga export only writes translated text back into page images after image reembedding.
 - OCR is best-effort, especially on dense or messy layouts. Review before export.

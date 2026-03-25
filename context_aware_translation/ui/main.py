@@ -120,12 +120,7 @@ def main() -> None:
         if stylesheet:
             app.setStyleSheet(stylesheet)
 
-        saved_lang = i18n.get_saved_language()
-        if saved_lang:
-            i18n.load_translation(app, saved_lang)
-        else:
-            system_lang = i18n.get_system_language()
-            i18n.load_translation(app, system_lang)
+        i18n.load_translation(app, i18n.resolve_startup_language())
 
         window = MainWindow()
         window.show()

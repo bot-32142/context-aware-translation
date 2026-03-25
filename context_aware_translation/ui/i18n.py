@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from typing import cast
 
+from platformdirs import user_data_dir
 from PySide6.QtCore import (
     QT_TRANSLATE_NOOP as _QT_TRANSLATE_NOOP,
 )
@@ -94,6 +95,32 @@ def get_saved_language() -> str:
     # QSettings.value can return object type, ensure it's a string
     saved_str = str(saved) if saved else ""
     return saved_str if saved_str in SUPPORTED_LANGUAGES else ""
+
+
+def get_default_registry_db_path() -> Path:
+    """Return the default registry database path used for first-run detection."""
+    return Path(user_data_dir("ContextAwareTranslation", appauthor=False)) / "registry.db"
+
+
+def resolve_startup_language() -> str:
+    """Return the UI language to use at startup.
+
+    If the user has already saved a preference, use it.
+    Otherwise, only auto-select the system language before the app has created its
+    first registry database. Once the registry exists, fall back to English until
+    the user explicitly chooses another language.
+    """
+    saved_language = get_saved_language()
+    if saved_language:
+        return saved_language
+
+    registry_exists = get_default_registry_db_path().exists()
+    if registry_exists:
+        return "en"
+
+    initial_language = get_system_language()
+    save_language(initial_language)
+    return initial_language
 
 
 def save_language(locale_code: str) -> None:

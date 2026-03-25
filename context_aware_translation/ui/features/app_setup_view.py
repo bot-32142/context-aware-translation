@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from PySide6.QtCore import QT_TRANSLATE_NOOP, Qt, QTimer
+from PySide6.QtCore import QCoreApplication, QT_TRANSLATE_NOOP, Qt, QTimer
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -40,11 +40,7 @@ from context_aware_translation.application.contracts.app_setup import (
     SetupWizardState,
     WorkflowStepId,
 )
-from context_aware_translation.application.contracts.common import (
-    CapabilityCode,
-    ProviderKind,
-    UserMessageSeverity,
-)
+from context_aware_translation.application.contracts.common import CapabilityCode, ProviderKind, UserMessageSeverity
 from context_aware_translation.application.services.app_setup import AppSetupService
 from context_aware_translation.ui.constants import LANGUAGES
 from context_aware_translation.ui.features.workflow_profile_editor import workflow_step_label_from_text
@@ -99,8 +95,8 @@ def _provider_label(provider: ProviderKind) -> str:
     return _PROVIDER_LABELS.get(provider, provider.value)
 
 
-def _capability_label(capability: CapabilityCode) -> str:
-    return _CAPABILITY_LABELS.get(capability, capability.value.replace("_", " ").title())
+def _translate_workflow_route_label(text: str) -> str:
+    return QCoreApplication.translate("WorkflowRoutesEditor", text)
 
 
 def _provider_defaults(provider: ProviderKind) -> tuple[str, str | None, str | None]:
@@ -668,17 +664,6 @@ class SetupWizardDialog(QDialog):
             profile_name_layout.addRow(self.tr("Profile name"), self._profile_name_edit)
             profile_name_layout.addRow(self.tr("Target language"), self._target_language_combo)
             self.page_layout.addWidget(profile_name_group)
-            for result in preview.test_results:
-                result_group = QGroupBox(result.connection_label)
-                result_layout = QVBoxLayout(result_group)
-                if result.message is not None:
-                    result_layout.addWidget(create_tip_label(result.message.text))
-                supported = ", ".join(
-                    self.tr(_capability_label(capability)) for capability in result.supported_capabilities
-                )
-                result_layout.addWidget(QLabel(supported or self.tr("No supported workflow capabilities detected.")))
-                self.page_layout.addWidget(result_group)
-
             profile_group = QGroupBox(self.tr("Recommended workflow profile"))
             profile_layout = QVBoxLayout(profile_group)
             recommendation = preview.recommendation
@@ -694,7 +679,13 @@ class SetupWizardDialog(QDialog):
                 for route in recommendation.routes:
                     row = table.rowCount()
                     table.insertRow(row)
-                    table.setItem(row, 0, QTableWidgetItem(workflow_step_label_from_text(route.step_label, tr=self.tr)))
+                    table.setItem(
+                        row,
+                        0,
+                        QTableWidgetItem(
+                            workflow_step_label_from_text(route.step_label, tr=_translate_workflow_route_label)
+                        ),
+                    )
                     table.setItem(row, 1, QTableWidgetItem(route.connection_label or ""))
                     table.setItem(row, 2, QTableWidgetItem(route.model or ""))
                 table.resizeColumnsToContents()
