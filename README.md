@@ -53,15 +53,15 @@ For most users, the default setup wizard profile should just work.
 
 ### 1. Create a new project
 
-![New project screen](docs/screenshots/EN/New Project.png)
+![New project screen](docs/screenshots/EN/NewProject.png)
 
 ### 2. Open App Settings and start setup
 
-![Initial setup screen](docs/screenshots/EN/Initial Setup.png)
+![Initial setup screen](docs/screenshots/EN/InitialSetup.png)
 
 ### 3. Choose providers and paste API keys
 
-![API setup screen](docs/screenshots/EN/API Setup.png)
+![API setup screen](docs/screenshots/EN/APISetup.png)
 
 ### 4. Choose the target language and review the suggested workflow
 
