@@ -49,19 +49,43 @@ CAT is a desktop app for translating long novels, books, PDFs, scanned documents
 
 For most users, the default setup wizard profile should just work.
 
-## Setup Screenshots
+## Quick Walkthrough
 
-### 1. Open App Settings and start setup
+### 1. Create a new project
+
+![New project screen](docs/screenshots/EN/New Project.png)
+
+### 2. Open App Settings and start setup
 
 ![Initial setup screen](docs/screenshots/EN/Initial Setup.png)
 
-### 2. Choose providers and paste API keys
+### 3. Choose providers and paste API keys
 
 ![API setup screen](docs/screenshots/EN/API Setup.png)
 
-### 3. Finish the wizard and save the recommended profile
+### 4. Choose the target language and review the suggested workflow
+
+![Language selection screen](docs/screenshots/EN/Language.png)
+
+### 5. Finish the wizard and save the setup
 
 ![Setup wizard screen](docs/screenshots/EN/Wizard.png)
+
+### 6. Import files in reading order
+
+![Import screen](docs/screenshots/EN/Import.png)
+
+### 7. Build or review terms before translation if needed
+
+![Terms screen](docs/screenshots/EN/Terms.png)
+
+### 8. Run translation
+
+![Translate screen](docs/screenshots/EN/Translate.png)
+
+### 9. Export the result
+
+![Export screen](docs/screenshots/EN/Export.png)
 
 ## What To Know Before Using CAT
 
