@@ -51,25 +51,25 @@ For most users, the default setup wizard profile should just work.
 
 ## Quick Walkthrough
 
-### 1. Create a new project
-
-![New project screen](docs/screenshots/EN/NewProject.png)
-
-### 2. Open App Settings and start setup
+### 1. Open App Settings and start setup
 
 ![Initial setup screen](docs/screenshots/EN/InitialSetup.png)
 
-### 3. Choose providers and paste API keys
+### 2. Run setup wizard
+
+![Setup wizard screen](docs/screenshots/EN/Wizard.png)
+
+### 3. Choose providers and paste API keys. Gemini and DeepSeek are recommended and the only well-tested combination so far.
 
 ![API setup screen](docs/screenshots/EN/APISetup.png)
 
-### 4. Choose the target language and review the suggested workflow
+### 4. Choose the target language
 
 ![Language selection screen](docs/screenshots/EN/Language.png)
 
-### 5. Finish the wizard and save the setup
+### 5. Create a new project
 
-![Setup wizard screen](docs/screenshots/EN/Wizard.png)
+![New project screen](docs/screenshots/EN/NewProject.png)
 
 ### 6. Import files in reading order
 
