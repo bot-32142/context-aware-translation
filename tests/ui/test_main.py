@@ -89,9 +89,9 @@ def test_main_schedules_quick_exit_in_startup_smoke_test(monkeypatch: pytest.Mon
         patch.object(ui_main.QTimer, "singleShot") as mock_single_shot,
         patch.object(ui_main.QGuiApplication, "setHighDpiScaleFactorRoundingPolicy"),
         patch.object(ui_main.sys, "exit", side_effect=_raise_system_exit) as mock_exit,
+        pytest.raises(SystemExit, match="0"),
     ):
-        with pytest.raises(SystemExit, match="0"):
-            ui_main.main()
+        ui_main.main()
 
     mock_single_shot.assert_called_once_with(1000, app.quit)
     window.show.assert_called_once_with()
@@ -112,9 +112,9 @@ def test_main_skips_startup_dialog_in_startup_smoke_test(monkeypatch: pytest.Mon
         patch.object(ui_main.QGuiApplication, "setHighDpiScaleFactorRoundingPolicy"),
         patch.object(ui_main, "_show_startup_error") as mock_show_startup_error,
         patch.object(ui_main.sys, "exit", side_effect=_raise_system_exit) as mock_exit,
+        pytest.raises(SystemExit, match="1"),
     ):
-        with pytest.raises(SystemExit, match="1"):
-            ui_main.main()
+        ui_main.main()
 
     mock_show_startup_error.assert_not_called()
     mock_exit.assert_called_once_with(1)
