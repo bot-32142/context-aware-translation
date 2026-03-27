@@ -32,24 +32,7 @@ CAT is a desktop app for translating long novels, books, PDFs, scanned documents
 - Unzip it anywhere
 - Run `CAT-UI.exe`
 
-### Build Locally (Optional)
-
-- macOS: `make build-macos-app`
-- Other platforms: `make build-ui`
-
 ## Quick Start
-
-1. Open CAT, go to App Settings, and run the Setup Wizard.
-2. Choose `Gemini` and `DeepSeek`, paste your API keys, choose the target language, and save the recommended profile.
-3. Import files in reading order.
-4. Run OCR first for PDFs, image folders, and manga.
-5. Translate.
-6. If you want translated text written back into manga or images, run image reembedding before export.
-7. Export.
-
-For most users, the default setup wizard profile should just work.
-
-## Quick Walkthrough
 
 ### 1. Open App Settings and start setup
 
@@ -75,7 +58,7 @@ For most users, the default setup wizard profile should just work.
 
 ![Import screen](docs/screenshots/EN/Import.png)
 
-### 7. Build or review terms before translation if needed
+### 7. Build, filter, review, and translate terms before translation if needed
 
 ![Terms screen](docs/screenshots/EN/Terms.png)
 
