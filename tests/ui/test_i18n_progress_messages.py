@@ -5,6 +5,14 @@ from __future__ import annotations
 import context_aware_translation.ui.i18n as i18n
 
 
+class _FakeRegistryPath:
+    def __init__(self, exists: bool) -> None:
+        self._exists = exists
+
+    def exists(self) -> bool:
+        return self._exists
+
+
 def test_translate_progress_message_static_uses_progress_context(monkeypatch):
     monkeypatch.setattr(i18n, "_translate_with_context", lambda text: f"T:{text}")
     assert i18n.translate_progress_message("Starting OCR...") == "T:Starting OCR..."
@@ -70,3 +78,32 @@ def test_translate_backend_text_runtime_task_titles_and_queued_messages(monkeypa
     assert i18n.translate_backend_text("Build terms queued.") == "构建术语 已排队"
     assert i18n.translate_backend_text("Translate manga queued.") == "翻译漫画 已排队"
     assert i18n.translate_backend_text("Put text back into images queued.") == "将文字重新放回图片 已排队"
+
+
+def test_resolve_startup_language_prefers_saved_language(monkeypatch):
+    monkeypatch.setattr(i18n, "get_saved_language", lambda: "zh_CN")
+    monkeypatch.setattr(i18n, "get_default_registry_db_path", lambda: _FakeRegistryPath(True))
+    monkeypatch.setattr(i18n, "save_language", lambda _locale_code: (_ for _ in ()).throw(AssertionError))
+
+    assert i18n.resolve_startup_language() == "zh_CN"
+
+
+def test_resolve_startup_language_uses_system_language_on_first_run(monkeypatch):
+    saved_languages: list[str] = []
+
+    monkeypatch.setattr(i18n, "get_saved_language", lambda: "")
+    monkeypatch.setattr(i18n, "get_default_registry_db_path", lambda: _FakeRegistryPath(False))
+    monkeypatch.setattr(i18n, "get_system_language", lambda: "zh_CN")
+    monkeypatch.setattr(i18n, "save_language", saved_languages.append)
+
+    assert i18n.resolve_startup_language() == "zh_CN"
+    assert saved_languages == ["zh_CN"]
+
+
+def test_resolve_startup_language_falls_back_to_english_after_first_run(monkeypatch):
+    monkeypatch.setattr(i18n, "get_saved_language", lambda: "")
+    monkeypatch.setattr(i18n, "get_default_registry_db_path", lambda: _FakeRegistryPath(True))
+    monkeypatch.setattr(i18n, "get_system_language", lambda: "zh_CN")
+    monkeypatch.setattr(i18n, "save_language", lambda _locale_code: (_ for _ in ()).throw(AssertionError))
+
+    assert i18n.resolve_startup_language() == "en"

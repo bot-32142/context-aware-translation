@@ -1,6 +1,6 @@
 """Main application window with QML app and project shell chrome."""
 
-from PySide6.QtCore import QEvent, QRect, QSettings, QTimer, QUrl, Qt
+from PySide6.QtCore import QEvent, QRect, QSettings, Qt, QTimer, QUrl
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
@@ -32,13 +32,13 @@ from context_aware_translation.ui.features.queue_drawer_view import QueueDrawerV
 from context_aware_translation.ui.features.terms_view import TermsView
 from context_aware_translation.ui.features.work_view import WorkView
 from context_aware_translation.ui.i18n import qarg
-from context_aware_translation.ui.startup import bounds_fit_available_geometries, preferred_startup_window_size
 from context_aware_translation.ui.shell_hosts.app_settings_dialog_host import AppSettingsDialogHost
 from context_aware_translation.ui.shell_hosts.app_shell_host import AppShellHost
 from context_aware_translation.ui.shell_hosts.project_settings_dialog_host import ProjectSettingsDialogHost
 from context_aware_translation.ui.shell_hosts.project_shell_host import ProjectShellHost
 from context_aware_translation.ui.shell_hosts.queue_shell_host import QueueShellHost
 from context_aware_translation.ui.sleep_inhibitor import SleepInhibitor
+from context_aware_translation.ui.startup import bounds_fit_available_geometries, preferred_startup_window_size
 from context_aware_translation.ui.viewmodels.router import ModalRoute, PrimaryRoute, route_state_from_navigation_target
 from context_aware_translation.ui.window_controllers import (
     ProjectSessionManager,
