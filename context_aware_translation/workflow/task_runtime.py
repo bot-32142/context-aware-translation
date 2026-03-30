@@ -5,16 +5,6 @@ from typing import TYPE_CHECKING, Any
 
 from context_aware_translation.adapters.qt.task_engine import TaskEngine
 from context_aware_translation.workflow.session import WorkflowSession
-from context_aware_translation.workflow.tasks.handlers.batch_translation import BatchTranslationHandler
-from context_aware_translation.workflow.tasks.handlers.chunk_retranslation import ChunkRetranslationHandler
-from context_aware_translation.workflow.tasks.handlers.glossary_export import GlossaryExportHandler
-from context_aware_translation.workflow.tasks.handlers.glossary_extraction import GlossaryExtractionHandler
-from context_aware_translation.workflow.tasks.handlers.glossary_review import GlossaryReviewHandler
-from context_aware_translation.workflow.tasks.handlers.glossary_translation import GlossaryTranslationHandler
-from context_aware_translation.workflow.tasks.handlers.image_reembedding import ImageReembeddingHandler
-from context_aware_translation.workflow.tasks.handlers.ocr import OCRHandler
-from context_aware_translation.workflow.tasks.handlers.translation_manga import TranslationMangaHandler
-from context_aware_translation.workflow.tasks.handlers.translation_text import TranslationTextHandler
 from context_aware_translation.workflow.tasks.worker_deps import WorkerDeps
 
 if TYPE_CHECKING:
@@ -22,18 +12,30 @@ if TYPE_CHECKING:
     from context_aware_translation.storage.repositories.task_store import TaskStore
 
 
-_DEFAULT_HANDLER_TYPES: tuple[type[Any], ...] = (
-    BatchTranslationHandler,
-    GlossaryExtractionHandler,
-    GlossaryReviewHandler,
-    GlossaryTranslationHandler,
-    ChunkRetranslationHandler,
-    GlossaryExportHandler,
-    TranslationTextHandler,
-    TranslationMangaHandler,
-    OCRHandler,
-    ImageReembeddingHandler,
-)
+def _default_handler_types() -> tuple[type[Any], ...]:
+    from context_aware_translation.workflow.tasks.handlers.batch_translation import BatchTranslationHandler
+    from context_aware_translation.workflow.tasks.handlers.chunk_retranslation import ChunkRetranslationHandler
+    from context_aware_translation.workflow.tasks.handlers.glossary_export import GlossaryExportHandler
+    from context_aware_translation.workflow.tasks.handlers.glossary_extraction import GlossaryExtractionHandler
+    from context_aware_translation.workflow.tasks.handlers.glossary_review import GlossaryReviewHandler
+    from context_aware_translation.workflow.tasks.handlers.glossary_translation import GlossaryTranslationHandler
+    from context_aware_translation.workflow.tasks.handlers.image_reembedding import ImageReembeddingHandler
+    from context_aware_translation.workflow.tasks.handlers.ocr import OCRHandler
+    from context_aware_translation.workflow.tasks.handlers.translation_manga import TranslationMangaHandler
+    from context_aware_translation.workflow.tasks.handlers.translation_text import TranslationTextHandler
+
+    return (
+        BatchTranslationHandler,
+        GlossaryExtractionHandler,
+        GlossaryReviewHandler,
+        GlossaryTranslationHandler,
+        ChunkRetranslationHandler,
+        GlossaryExportHandler,
+        TranslationTextHandler,
+        TranslationMangaHandler,
+        OCRHandler,
+        ImageReembeddingHandler,
+    )
 
 
 def build_task_engine(
@@ -77,7 +79,7 @@ def build_task_engine(
     )
     task_engine._core._deps = worker_deps
 
-    for handler_type in _DEFAULT_HANDLER_TYPES:
+    for handler_type in _default_handler_types():
         task_engine.register_handler(handler_type())
 
     task_engine.recover_interrupted_tasks()

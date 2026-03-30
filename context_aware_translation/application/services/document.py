@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import replace
-from typing import Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from context_aware_translation.application.contracts.common import (
     AcceptedCommand,
@@ -58,22 +58,14 @@ from context_aware_translation.application.runtime import (
     progress_from_task,
     raise_application_error,
 )
-from context_aware_translation.application.services._export_support import prepare_export, run_export
-from context_aware_translation.application.services.terms import DefaultTermsService
 from context_aware_translation.documents.base import Document
-from context_aware_translation.documents.content.ocr_content import SinglePageOCRContent
-from context_aware_translation.documents.content.ocr_items import ImageItem
-from context_aware_translation.documents.epub import EPUBDocument
-from context_aware_translation.documents.manga import MangaDocument
-from context_aware_translation.documents.manga_alignment import (
-    align_sources_to_chunks,
-    extract_ocr_text,
-    get_sources_with_nonempty_ocr_text,
-)
 from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES, TaskAction
+
+if TYPE_CHECKING:
+    from context_aware_translation.documents.content.ocr_content import SinglePageOCRContent
 
 _IMAGE_REEMBEDDABLE_DOCUMENT_TYPES = frozenset({"pdf", "scanned_book", "manga", "epub"})
 
@@ -301,6 +293,8 @@ class DefaultDocumentService:
         )
 
     def get_terms(self, project_id: str, document_id: int) -> TermsTableState:
+        from context_aware_translation.application.services.terms import DefaultTermsService
+
         return DefaultTermsService(self._runtime).get_document_terms(project_id, document_id)
 
     def get_translation(
@@ -582,6 +576,8 @@ class DefaultDocumentService:
         )
 
     def get_export(self, project_id: str, document_id: int) -> DocumentExportState:
+        from context_aware_translation.application.services._export_support import prepare_export
+
         workspace = self.get_workspace(project_id, document_id).model_copy(
             update={"active_tab": DocumentSection.EXPORT}
         )
@@ -596,6 +592,8 @@ class DefaultDocumentService:
         )
 
     def export_document(self, request: RunDocumentExportRequest) -> DocumentExportResult:
+        from context_aware_translation.application.services._export_support import run_export
+
         result = run_export(
             self._runtime,
             project_id=request.project_id,
@@ -796,6 +794,8 @@ class DefaultDocumentService:
         return None
 
     def _serialize_ocr_save(self, existing_ocr_json: str | None, request: SaveOCRPageRequest) -> str:
+        from context_aware_translation.documents.content.ocr_content import SinglePageOCRContent
+
         payload: Any = None
         if existing_ocr_json:
             try:
@@ -854,6 +854,8 @@ class DefaultDocumentService:
         document_repo: Any,
         running: bool,
     ) -> OCRPageState:
+        from context_aware_translation.documents.content.ocr_content import SinglePageOCRContent
+
         ocr_json = document_repo.get_source_ocr_json(int(source["source_id"]))
         extracted_text = None
         elements: list[OCRTextElement] = []
@@ -1037,6 +1039,9 @@ class DefaultDocumentService:
         *,
         active_task: TaskRecord | None,
     ) -> list[ImageAssetState]:
+        from context_aware_translation.documents.manga import MangaDocument
+        from context_aware_translation.documents.manga_alignment import get_sources_with_nonempty_ocr_text
+
         if not isinstance(document, MangaDocument):
             return []
         persisted = document_repo.load_reembedded_images(document.document_id)
@@ -1080,6 +1085,8 @@ class DefaultDocumentService:
         *,
         active_task: TaskRecord | None,
     ) -> list[ImageAssetState]:
+        from context_aware_translation.documents.epub import EPUBDocument
+
         if not isinstance(document, EPUBDocument):
             return []
         persisted = document_repo.load_reembedded_images(document.document_id)
@@ -1126,6 +1133,8 @@ class DefaultDocumentService:
         *,
         active_task: TaskRecord | None,
     ) -> list[ImageAssetState]:
+        from context_aware_translation.documents.content.ocr_items import ImageItem
+
         merged = getattr(document, "_merged_content", None)
         if merged is None:
             return []
@@ -1422,6 +1431,8 @@ class DefaultDocumentService:
         document_id: int,
         dbx: Any,
     ) -> list[TranslationUnitState]:
+        from context_aware_translation.documents.manga_alignment import align_sources_to_chunks, extract_ocr_text
+
         save_blocker = self._translation_save_blocker(project_id, document_id)
         sources = [
             {
@@ -1691,6 +1702,8 @@ class DefaultDocumentService:
         return (status_priority, float(record.updated_at))
 
     def _resolve_manga_chunk_for_source(self, *, dbx: Any, document_id: int, source_id: int) -> Any:
+        from context_aware_translation.documents.manga_alignment import align_sources_to_chunks
+
         sources = [
             {
                 **source,

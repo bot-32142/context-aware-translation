@@ -28,7 +28,7 @@ from context_aware_translation.application.contracts.projects import (
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.services.projects import ProjectsService
 from context_aware_translation.ui.constants import LANGUAGES
-from context_aware_translation.ui.i18n import qarg
+from context_aware_translation.ui.i18n import qarg, translate_backend_text
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
 
@@ -281,7 +281,7 @@ class LibraryView(QWidget):
                 )
             )
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("New Project"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("New Project"), translate_backend_text(exc.payload.message))
             return
         self.refresh()
         self.book_opened.emit(created.project.project_id, created.project.name)
@@ -325,7 +325,7 @@ class LibraryView(QWidget):
                 )
             )
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Edit Project"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("Edit Project"), translate_backend_text(exc.payload.message))
             return
         self.refresh()
 
@@ -354,7 +354,7 @@ class LibraryView(QWidget):
         try:
             self._service.delete_project(summary.project.project_id, permanent=True)
         except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("Delete Project"), exc.payload.message)
+            QMessageBox.warning(self, self.tr("Delete Project"), translate_backend_text(exc.payload.message))
             return
         self.refresh()
         QMessageBox.information(

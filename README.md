@@ -20,17 +20,22 @@ CAT is a desktop app for translating long novels, books, PDFs, scanned documents
 
 ## Install
 
+Current desktop builds are unsigned, so the first launch may show an OS security warning.
+
 ### macOS
 
 - Download the latest `.dmg`
 - Open it and drag `CAT-UI.app` into `Applications`
 - Launch `CAT-UI.app` from `Applications`
+- If macOS blocks it because the developer cannot be verified, go to `System Settings` -> `Privacy & Security`
+- In the `Security` section, click `Open Anyway` for `CAT-UI.app`, then confirm `Open`
 
 ### Windows
 
 - Download the latest `.zip`
 - Unzip it anywhere
 - Run `CAT-UI.exe`
+- If Windows SmartScreen warns that the app is unrecognized, click `More info` -> `Run anyway`
 
 ## Quick Start
 
@@ -74,8 +79,7 @@ CAT is a desktop app for translating long novels, books, PDFs, scanned documents
 
 - The setup wizard is currently tested mainly with `DeepSeek` + `Gemini`.
 - Other providers and models may work, but I do not have access to most of them, so they are not tested here. Expect to configure connections manually and tune settings yourself.
-- Image reembedding / image editing can get expensive quickly.
-- Manga export only writes translated text back into page images after image reembedding.
+- Image editing is very expensive.
 - OCR is best-effort, especially on dense or messy layouts. Review before export.
 - Import in reading order if you want the glossary and context to build correctly.
 - CAT is still under active development, so expect rough edges.

@@ -391,6 +391,9 @@ _RUNTIME_STATIC: dict[str, object] = {
     "Needs setup": QT_TRANSLATE_NOOP("RuntimeMessages", "Needs setup"),
     "No document state changed.": QT_TRANSLATE_NOOP("RuntimeMessages", "No document state changed."),
     "No documents were deleted.": QT_TRANSLATE_NOOP("RuntimeMessages", "No documents were deleted."),
+    "Open App Setup and create a workflow profile before importing books": QT_TRANSLATE_NOOP(
+        "RuntimeMessages", "Open App Setup and create a workflow profile before importing books"
+    ),
     "No image pages are available for OCR in this document.": QT_TRANSLATE_NOOP(
         "RuntimeMessages", "No image pages are available for OCR in this document."
     ),

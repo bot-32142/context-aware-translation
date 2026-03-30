@@ -3,7 +3,6 @@ from types import TracebackType
 from typing import TYPE_CHECKING
 
 from context_aware_translation.config import CONFIG_SNAPSHOT_VERSION, Config, WorkflowRuntimeConfig
-from context_aware_translation.workflow.bootstrap import build_workflow_runtime
 from context_aware_translation.workflow.runtime import WorkflowContext
 
 if TYPE_CHECKING:
@@ -50,6 +49,8 @@ class WorkflowSession:
         return session
 
     def _build_runtime(self, runtime_config: WorkflowRuntimeConfig) -> WorkflowContext:
+        from context_aware_translation.workflow.bootstrap import build_workflow_runtime
+
         return build_workflow_runtime(self.config, runtime_config, book_id=self._book_id)
 
     def __enter__(self) -> WorkflowContext:

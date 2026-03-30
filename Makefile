@@ -3,9 +3,11 @@
 PYTHON := uv run python
 PYTEST := uv run pytest
 RUFF := uv run ruff
-MYPY := uv run mypy
-LUPDATE := uv run pyside6-lupdate
-LRELEASE := uv run pyside6-lrelease
+# Invoke tools through Python so they still work if the project directory moves
+# and the generated .venv wrapper shebangs become stale.
+MYPY := $(PYTHON) -m mypy
+LUPDATE := $(PYTHON) -c "import sys; from PySide6.scripts.pyside_tool import lupdate; sys.argv = ['pyside6-lupdate', *sys.argv[1:]]; raise SystemExit(lupdate())"
+LRELEASE := $(PYTHON) -c "import sys; from PySide6.scripts.pyside_tool import lrelease; sys.argv = ['pyside6-lrelease', *sys.argv[1:]]; raise SystemExit(lrelease())"
 
 all: check test-cov
 

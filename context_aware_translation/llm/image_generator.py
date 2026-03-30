@@ -10,7 +10,6 @@ from enum import Enum
 from typing import TYPE_CHECKING, Protocol
 
 from context_aware_translation.llm.image_backend_base import BaseImageGenerator, TextReplacement
-from context_aware_translation.llm.image_backends import gemini_backend, openai_backend, qwen_backend
 
 if TYPE_CHECKING:
     from context_aware_translation.config import ImageReembeddingConfig
@@ -87,10 +86,16 @@ def create_image_generator(config: ImageReembeddingConfig) -> ImageGenerator:
     backend = ImageBackend(config.backend)
 
     if backend == ImageBackend.OPENAI:
+        from context_aware_translation.llm.image_backends import openai_backend
+
         return openai_backend.OpenAIImageGenerator(config)
     if backend == ImageBackend.GEMINI:
+        from context_aware_translation.llm.image_backends import gemini_backend
+
         return gemini_backend.GeminiImageGenerator(config)
     if backend == ImageBackend.QWEN:
+        from context_aware_translation.llm.image_backends import qwen_backend
+
         return qwen_backend.QwenImageGenerator(config)
     raise ValueError(f"Unknown image backend: {config.backend}")
 
