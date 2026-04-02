@@ -287,7 +287,7 @@ class DefaultTermsService:
             filtered_records = []
             for record in dbx.term_repo.list_term_records():
                 if chunk_ids is not None:
-                    occurrence_chunk_ids = {int(key) for key in (record.occurrence or {}) if str(key).isdigit()}
+                    occurrence_chunk_ids = self._occurrence_chunk_ids(record)
                     if not occurrence_chunk_ids.intersection(chunk_ids):
                         continue
                 filtered_records.append(record)
@@ -303,7 +303,7 @@ class DefaultTermsService:
             description=self._primary_description(record),
             description_tooltip=self._description_tooltip(record),
             description_sort_key=self._max_chunk_id(record),
-            occurrences=len(record.occurrence),
+            occurrences=self._occurrence_chunk_count(record),
             votes=self._recognized_chunk_count(record),
             ignored=record.ignored,
             reviewed=record.is_reviewed,
@@ -318,6 +318,14 @@ class DefaultTermsService:
                 else TermStatus.READY
             ),
         )
+
+    @staticmethod
+    def _occurrence_chunk_ids(record: TermRecord) -> set[int]:
+        return {int(key) for key in (record.occurrence or {}) if str(key).lstrip("-").isdigit()}
+
+    @classmethod
+    def _occurrence_chunk_count(cls, record: TermRecord) -> int:
+        return len(cls._occurrence_chunk_ids(record))
 
     @staticmethod
     def _recognized_chunk_count(record: TermRecord) -> int:
@@ -498,17 +506,17 @@ class DefaultTermsService:
             if record.ignored or record.is_reviewed:
                 continue
             if chunk_ids is not None:
-                occurrence_chunk_ids = {int(key) for key in (record.occurrence or {}) if str(key).isdigit()}
+                occurrence_chunk_ids = self._occurrence_chunk_ids(record)
                 if not occurrence_chunk_ids.intersection(chunk_ids):
                     continue
             if self._is_structurally_rare(record):
                 rare_keys.append(record.key)
         return rare_keys
 
-    @staticmethod
-    def _is_structurally_rare(record: TermRecord) -> bool:
-        total_occurrences = sum((record.occurrence or {}).values())
-        if total_occurrences <= 1:
+    @classmethod
+    def _is_structurally_rare(cls, record: TermRecord) -> bool:
+        occurrence_chunk_count = cls._occurrence_chunk_count(record)
+        if occurrence_chunk_count <= 1:
             return True
         chunk_desc_count = sum(1 for key in (record.descriptions or {}) if str(key).lstrip("-").isdigit())
         return chunk_desc_count <= 1
