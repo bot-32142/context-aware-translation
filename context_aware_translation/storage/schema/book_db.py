@@ -1315,6 +1315,20 @@ class SQLiteBookDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_document_sources_without_binary(self, document_id: int) -> list[dict]:
+        """Get source rows needed for text workflows without loading binary blobs."""
+        rows = self.conn.execute(
+            """
+            SELECT source_id, document_id, sequence_number, relative_path, source_type,
+                   text_content, mime_type, ocr_json, is_ocr_completed, is_text_added
+            FROM document_sources
+            WHERE document_id = ?
+            ORDER BY sequence_number
+            """,
+            (document_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_document_sources_metadata(self, document_id: int) -> list[dict]:
         """Get lightweight source metadata fully covered by idx_document_sources_metadata.
 

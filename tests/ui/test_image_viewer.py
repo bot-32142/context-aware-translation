@@ -18,6 +18,10 @@ _VALID_PNG = (
     b"?\x00\x05\xfe\x02\xfe\r\xefF\xb8\x00\x00\x00\x00IEND\xaeB`\x82"
 )
 
+_VALID_SVG = b"""<svg xmlns="http://www.w3.org/2000/svg" width="8" height="4" viewBox="0 0 8 4">
+<rect width="8" height="4" fill="#3366ff"/>
+</svg>"""
+
 
 @pytest.fixture(autouse=True, scope="module")
 def _qapp():
@@ -57,6 +61,19 @@ def test_set_image_invalid_data_clears_previous_pixmap():
         viewer.set_image(b"not-an-image")
         assert viewer.pixmap_item is None
         assert viewer._fit_timer.isActive() is False
+    finally:
+        viewer.close()
+        viewer.deleteLater()
+
+
+def test_set_image_supports_svg_payloads():
+    from context_aware_translation.ui.widgets.image_viewer import ImageViewer
+
+    viewer = ImageViewer()
+    try:
+        viewer.set_image(_VALID_SVG)
+        assert viewer.pixmap_item is not None
+        assert viewer.pixmap_item.pixmap().isNull() is False
     finally:
         viewer.close()
         viewer.deleteLater()

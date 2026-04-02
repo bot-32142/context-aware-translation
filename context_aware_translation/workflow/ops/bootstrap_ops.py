@@ -45,8 +45,17 @@ def check_cancel(cancel_check: Callable[[], bool] | None) -> None:
 def load_documents(workflow: WorkflowContext, document_ids: list[int] | None = None) -> list[Document]:
     """Load documents by IDs, or all documents if None."""
     if document_ids is None:
-        return Document.load_all(workflow.document_repo, workflow.config.ocr_config)
-    return Document.load_by_ids(workflow.document_repo, document_ids, workflow.config.ocr_config)
+        return Document.load_all(
+            workflow.document_repo,
+            workflow.config.ocr_config,
+            workflow.config.translator_config,
+        )
+    return Document.load_by_ids(
+        workflow.document_repo,
+        document_ids,
+        workflow.config.ocr_config,
+        workflow.config.translator_config,
+    )
 
 
 async def ensure_source_language(

@@ -50,6 +50,7 @@ async def materialize_document_translation_state(
     document: Document,
     *,
     allow_original_fallback: bool = False,
+    epub_force_horizontal_ltr: bool = False,
     cancel_check: Callable[[], bool] | None = None,
     progress_callback: ProgressCallback | None = None,
 ) -> None:
@@ -61,6 +62,7 @@ async def materialize_document_translation_state(
     )
     if document.document_type == "epub" and isinstance(document, EPUBDocument):
         document.set_translation_target_language(workflow.config.translation_target_language)
+        document.set_export_layout_preferences(force_horizontal_ltr=epub_force_horizontal_ltr)
 
     await document.set_text(
         all_lines,
@@ -75,6 +77,7 @@ async def apply_export_text(
     document: Document,
     *,
     allow_original_fallback: bool,
+    epub_force_horizontal_ltr: bool,
     cancel_check: Callable[[], bool] | None,
     progress_callback: ProgressCallback | None,
 ) -> None:
@@ -83,6 +86,7 @@ async def apply_export_text(
         workflow,
         document,
         allow_original_fallback=allow_original_fallback,
+        epub_force_horizontal_ltr=epub_force_horizontal_ltr,
         cancel_check=cancel_check,
         progress_callback=progress_callback,
     )
@@ -95,6 +99,7 @@ async def export(
     export_format: str | None = None,
     document_ids: list[int] | None = None,
     allow_original_fallback: bool = False,
+    epub_force_horizontal_ltr: bool = False,
     progress_callback: ProgressCallback | None = None,
     cancel_check: Callable[[], bool] | None = None,
 ) -> None:
@@ -132,6 +137,7 @@ async def export(
             workflow,
             doc,
             allow_original_fallback=allow_original_fallback,
+            epub_force_horizontal_ltr=epub_force_horizontal_ltr,
             cancel_check=cancel_check,
             progress_callback=progress_callback,
         )
@@ -166,6 +172,7 @@ async def export_preserve_structure(
             workflow,
             document,
             allow_original_fallback=allow_original_fallback,
+            epub_force_horizontal_ltr=False,
             cancel_check=cancel_check,
             progress_callback=progress_callback,
         )

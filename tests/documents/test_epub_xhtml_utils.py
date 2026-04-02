@@ -458,6 +458,23 @@ class TestRubyHandling:
         re_extracted = extract_text_from_xhtml(result)
         assert re_extracted == ["泥掘"]
 
+    def test_extract_ruby_can_strip_annotations_from_translation_slots(self):
+        xhtml = "<html><body><p>Before <ruby>漢字<rt>かんじ</rt></ruby> after</p></body></html>"
+        result = extract_text_from_xhtml(xhtml, strip_ruby_annotations=True)
+        assert result == ["Before ⟪RUBY:0⟫漢字⟪/RUBY:0⟫ after"]
+
+    def test_inject_strip_ruby_annotations_ignores_translated_rt_text(self):
+        xhtml = "<html><body><p><ruby>女主角<rt>ヒロイン</rt></ruby></p></body></html>"
+        result, consumed = inject_translations_into_xhtml(
+            xhtml,
+            ["女主角(臭婊子)"],
+            strip_ruby_annotations=True,
+        )
+        assert consumed == 1
+        assert "臭婊子" not in result
+        assert "ヒロイン" not in result
+        assert extract_text_from_xhtml(result, strip_ruby_annotations=True) == ["女主角"]
+
     def test_inject_ruby_no_parens_clears_rp_fallback_text(self):
         xhtml = (
             "<html><body><p>"

@@ -5,7 +5,7 @@ import pytest
 from context_aware_translation.ui.viewmodels.queue_shell import QueueShellViewModel
 
 try:
-    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtWidgets import QApplication
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -16,9 +16,9 @@ pytestmark = pytest.mark.skipif(not HAS_PYSIDE6, reason="PySide6 not available")
 
 @pytest.fixture(autouse=True, scope="module")
 def _qapp():
-    app = QCoreApplication.instance()
+    app = QApplication.instance()
     if app is None:
-        app = QCoreApplication([])
+        app = QApplication([])
     yield app
 
 

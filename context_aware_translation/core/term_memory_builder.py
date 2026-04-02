@@ -114,7 +114,41 @@ class TermMemoryBuilder:
                 versions.append(update)
             cursor = end
 
+        self._append_coverage_checkpoint(
+            term=term,
+            batches=batches,
+            current_summary=current_summary,
+            versions=versions,
+        )
         return versions
+
+    @staticmethod
+    def _append_coverage_checkpoint(
+        *,
+        term: str,
+        batches: list[_EvidenceBatch],
+        current_summary: str,
+        versions: list[TermMemoryVersion],
+    ) -> None:
+        if not versions or not batches:
+            return
+
+        latest_version = versions[-1]
+        final_batch = batches[-1]
+        if latest_version.latest_evidence_chunk >= final_batch.chunk_index:
+            return
+
+        versions.append(
+            TermMemoryVersion(
+                term=term,
+                effective_start_chunk=TermMemoryBuilder._effective_start_after(final_batch),
+                latest_evidence_chunk=final_batch.chunk_index,
+                summary_text=current_summary.strip(),
+                kind="checkpoint",
+                source_count=len(batches),
+                created_at=time.time(),
+            )
+        )
 
     def _evaluate_window(
         self,

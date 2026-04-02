@@ -588,6 +588,7 @@ class DefaultDocumentService:
             available_formats=prepared.available_formats,
             default_output_path=prepared.default_output_path,
             supports_preserve_structure=prepared.supports_preserve_structure,
+            supports_epub_layout_conversion=prepared.supports_epub_layout_conversion,
             incomplete_translation_message=prepared.incomplete_translation_message,
         )
 
@@ -994,15 +995,25 @@ class DefaultDocumentService:
         document_type: str,
         active_task: TaskRecord | None,
     ) -> list[ImageAssetState]:
+        from context_aware_translation.documents.epub import EPUBDocument
+
         config = self._runtime.get_effective_config(project_id)
-        document = Document.load_by_id(document_repo, document_id, config.ocr_config)
+        document = Document.load_by_id(
+            document_repo,
+            document_id,
+            config.ocr_config,
+            config.translator_config,
+        )
         if document is None:
             return []
         translated_lines = self._get_translated_lines_with_fallback(project_id, document_id, document_type)
         if not translated_lines:
             return []
         try:
-            asyncio.run(document.set_text(translated_lines))
+            if document_type == "epub" and isinstance(document, EPUBDocument):
+                document.set_image_texts_only(translated_lines)
+            else:
+                asyncio.run(document.set_text(translated_lines))
         except Exception:
             return []
 
@@ -1093,15 +1104,18 @@ class DefaultDocumentService:
         active_source_ids = self._task_source_ids(active_task) if active_task is not None else None
         items: list[ImageAssetState] = []
         sources = sorted(
-            document_repo.get_document_sources(document.document_id),
+            document_repo.get_document_sources_metadata(document.document_id),
             key=lambda source: int(source.get("sequence_number", 0) or 0),
         )
         for source in sources:
-            if source.get("source_type") != "image" or not source.get("binary_content"):
+            if source.get("source_type") != "image":
                 continue
             source_id = int(source["source_id"])
             translated = document._translated_image_texts.get(source_id, "")
             if not translated.strip():
+                continue
+            original_image_bytes = document_repo.get_source_binary_content(source_id)
+            if not original_image_bytes:
                 continue
             is_running = active_task is not None and (active_source_ids is None or source_id in active_source_ids)
             is_done = source_id in persisted
@@ -1116,7 +1130,7 @@ class DefaultDocumentService:
                     else SurfaceStatus.READY,
                     source_id=source_id,
                     translated_text=translated,
-                    original_image_bytes=source.get("binary_content"),
+                    original_image_bytes=original_image_bytes,
                     reembedded_image_bytes=persisted.get(source_id, (None, ""))[0] if is_done else None,
                     can_run=active_task is None,
                     run_blocker=None
@@ -1267,6 +1281,18 @@ class DefaultDocumentService:
     ) -> list[ImageAssetState]:
         if document_type not in {"manga", "epub"}:
             return assets
+        if not assets:
+            return assets
+        shared_action_state: tuple[bool, BlockerInfo | None] | None = None
+        if active_task is None:
+            shared_action_state = self._run_image_action_state(
+                project_id,
+                document_id=document_id,
+                source_id=None,
+                force_all=True,
+                empty_blocker=None,
+                has_work=True,
+            )
         updated: list[ImageAssetState] = []
         for asset in assets:
             if asset.source_id is None:
@@ -1282,14 +1308,8 @@ class DefaultDocumentService:
                     )
                 )
                 continue
-            allowed, blocker = self._run_image_action_state(
-                project_id,
-                document_id=document_id,
-                source_id=asset.source_id,
-                force_all=True,
-                empty_blocker=None,
-                has_work=True,
-            )
+            assert shared_action_state is not None
+            allowed, blocker = shared_action_state
             updated.append(asset.model_copy(update={"can_run": allowed, "run_blocker": blocker}))
         return updated
 

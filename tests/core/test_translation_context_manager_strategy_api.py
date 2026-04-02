@@ -573,6 +573,52 @@ async def test_translate_chunks_other_terms_ignore_context_tree_summary():
 
 
 @pytest.mark.asyncio
+async def test_translate_chunks_limits_other_term_description_history():
+    tokenizer = DummyTokenizer()
+    context_tree = DummyContextTree()
+    term = Term(
+        key="term1",
+        descriptions={
+            "1": "alpha",
+            "2": "bravo",
+            "3": "charlie",
+            "4": "delta",
+        },
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        term_type="other",
+        translated_name="term1-translation",
+    )
+    chunk = TranslationChunkRecord(
+        chunk_id=6,
+        hash="hash0",
+        text="term1 appears here",
+        normalized_text="term1 appears here",
+    )
+    term_repo = DummyTermRepo(source_language="English", terms=[term], chunks=[chunk])
+    chunk_strategy = CapturingChunkTranslatorStrategy()
+
+    manager = TranslationContextManager(
+        term_repo=term_repo,
+        context_tree=context_tree,
+        context_extractor=DummyContextExtractor(),
+        tokenizer=tokenizer,
+        source_language_detector=DetectLanguageStrategy("English"),
+        glossary_translator=GlossaryTranslatorStrategy(),
+        chunk_translator=chunk_strategy,
+        term_reviewer=None,
+        max_term_description_length=18,
+    )
+
+    await manager.translate_chunks(concurrency=1, batch_size=1)
+
+    assert chunk_strategy.translate.await_count == 1
+    sent_terms = chunk_strategy.calls[0]["terms"]
+    assert sent_terms == [("term1", "term1-translation", "charlie delta")]
+
+
+@pytest.mark.asyncio
 async def test_translate_chunks_prefers_late_context_summary_over_imported_description():
     tokenizer = DummyTokenizer()
     context_tree = DummyContextTree({"term1": ["late context summary"]})

@@ -66,6 +66,7 @@ class _ExportControls(QWidget):
     def __init__(self, *, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._default_output_path = ""
+        self._supports_epub_layout_conversion = False
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -105,11 +106,22 @@ class _ExportControls(QWidget):
         )
         self.allow_original_fallback_cb.toggled.connect(self._on_options_changed)
         layout.addWidget(self.allow_original_fallback_cb)
+
+        self.epub_force_horizontal_ltr_cb = QCheckBox(
+            self.tr("Convert vertical Japanese EPUB to horizontal left-to-right")
+        )
+        self.epub_force_horizontal_ltr_cb.setVisible(False)
+        self.epub_force_horizontal_ltr_cb.setToolTip(
+            self.tr("EPUB only. Forces horizontal left-to-right layout and scrollbar direction in the exported file.")
+        )
+        self.epub_force_horizontal_ltr_cb.toggled.connect(self._on_options_changed)
+        layout.addWidget(self.epub_force_horizontal_ltr_cb)
         apply_hybrid_control_theme(self)
         set_button_tone(self.browse_button)
 
     def apply_state(self, state: ExportDialogState | DocumentExportState) -> None:
         self._default_output_path = state.default_output_path or ""
+        self._supports_epub_layout_conversion = state.supports_epub_layout_conversion
         self.blocker_label.setVisible(state.blocker is not None)
         self.blocker_label.setText(translate_backend_text(state.blocker.message if state.blocker is not None else ""))
         self.warning_label.setVisible(bool(state.incomplete_translation_message))
@@ -144,12 +156,15 @@ class _ExportControls(QWidget):
             )
         else:
             self.allow_original_fallback_cb.setToolTip(translate_backend_text(state.incomplete_translation_message))
+        if not self._supports_epub_layout_conversion:
+            self.epub_force_horizontal_ltr_cb.setChecked(False)
 
         if not self.output_path_edit.text().strip():
             self.output_path_edit.setText(self._default_output_path)
         else:
             self._sync_output_path()
         self._sync_output_tooltip()
+        self._sync_epub_layout_controls()
         self.changed.emit()
 
     def can_submit(self, state: ExportDialogState | DocumentExportState) -> bool:
@@ -169,6 +184,7 @@ class _ExportControls(QWidget):
         return {
             "preserve_structure": self.preserve_structure_cb.isChecked(),
             "allow_original_fallback": self.allow_original_fallback_cb.isChecked(),
+            "epub_force_horizontal_ltr": self._epub_layout_conversion_enabled(),
         }
 
     def submission(self, parent: QWidget) -> _ExportSubmission | None:
@@ -188,11 +204,13 @@ class _ExportControls(QWidget):
 
     def _on_options_changed(self) -> None:
         self._sync_output_path()
+        self._sync_epub_layout_controls()
         self.changed.emit()
 
     def _sync_output_path(self) -> None:
         if not self._default_output_path:
             return
+        self._sync_epub_layout_controls()
         if self.preserve_structure_cb.isChecked():
             self.output_path_edit.setText(str(Path(self._default_output_path).parent))
             return
@@ -212,6 +230,23 @@ class _ExportControls(QWidget):
         self.output_path_edit.setToolTip(text)
         if text:
             self.output_path_edit.setCursorPosition(0)
+
+    def _epub_layout_conversion_enabled(self) -> bool:
+        return (
+            self._supports_epub_layout_conversion
+            and not self.preserve_structure_cb.isChecked()
+            and self.format_id() == "epub"
+            and self.epub_force_horizontal_ltr_cb.isChecked()
+        )
+
+    def _sync_epub_layout_controls(self) -> None:
+        visible = (
+            self._supports_epub_layout_conversion
+            and not self.preserve_structure_cb.isChecked()
+            and self.format_id() == "epub"
+        )
+        self.epub_force_horizontal_ltr_cb.setVisible(visible)
+        self.epub_force_horizontal_ltr_cb.setEnabled(visible)
 
     def _browse_output(self) -> None:
         if self.preserve_structure_cb.isChecked():

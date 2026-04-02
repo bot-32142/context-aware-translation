@@ -210,6 +210,12 @@ class StepAdvancedConfigDialog(QDialog):
             ),
         ),
         WorkflowStepId.TRANSLATOR: (
+            _CheckFieldSpec(
+                "strip_epub_ruby_check",
+                QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Strip EPUB ruby annotations"),
+                "strip_epub_ruby",
+                True,
+            ),
             _SpinFieldSpec(
                 "max_tokens_spin",
                 QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Max tokens per call"),

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from context_aware_translation.config import ImageReembeddingConfig, OCRConfig
+    from context_aware_translation.config import ImageReembeddingConfig, OCRConfig, TranslatorConfig
     from context_aware_translation.core.progress import ProgressCallback
     from context_aware_translation.llm.client import LLMClient
     from context_aware_translation.storage.repositories.document_repository import DocumentRepository
@@ -18,6 +18,7 @@ class Document(ABC):
     document_type: str  # Must be defined by subclasses
     supported_export_formats: tuple[str, ...]  # Must be defined by subclasses
     requires_ocr_config: bool = False  # Override in subclasses that need OCR config
+    uses_translator_config: bool = False  # Override in subclasses that need translation-time document behavior
     ocr_required_for_translation: bool = True  # If False, translation proceeds without OCR
     supports_preserve_structure: bool = False  # Override in subclasses that support it
     supports_multi_export: bool = True  # Override to False for types that cannot merge
@@ -49,6 +50,7 @@ class Document(ABC):
         row: dict,
         repo: DocumentRepository,
         ocr_config: OCRConfig | None = None,
+        translator_config: TranslatorConfig | None = None,
     ) -> Document:
         """Create appropriate Document subclass from database row."""
         document_type = row["document_type"]
@@ -59,22 +61,31 @@ class Document(ABC):
             if doc_cls.document_type == document_type:
                 # Check if class accepts ocr_config parameter
                 # Type ignore needed because subclass constructors have different signatures
+                if doc_cls.requires_ocr_config and doc_cls.uses_translator_config:
+                    return doc_cls(repo, document_id, ocr_config, translator_config)  # type: ignore[call-arg]
                 if doc_cls.requires_ocr_config:
                     return doc_cls(repo, document_id, ocr_config)  # type: ignore[call-arg]
+                if doc_cls.uses_translator_config:
+                    return doc_cls(repo, document_id, translator_config)  # type: ignore[call-arg]
                 else:
                     return doc_cls(repo, document_id)
 
         raise ValueError(f"Unknown document type: {document_type}")
 
     @classmethod
-    def load(cls, repo: DocumentRepository, ocr_config: OCRConfig | None = None) -> Document | None:
+    def load(
+        cls,
+        repo: DocumentRepository,
+        ocr_config: OCRConfig | None = None,
+        translator_config: TranslatorConfig | None = None,
+    ) -> Document | None:
         """Factory: Load THE document from DB. Returns None if no document exists.
         Dispatches to correct subclass based on document_type."""
         row = repo.get_document_row()
         if row is None:
             return None
 
-        return cls._create_document_from_row(row, repo, ocr_config)
+        return cls._create_document_from_row(row, repo, ocr_config, translator_config)
 
     @classmethod
     def load_by_id(
@@ -82,22 +93,24 @@ class Document(ABC):
         repo: DocumentRepository,
         document_id: int,
         ocr_config: OCRConfig | None = None,
+        translator_config: TranslatorConfig | None = None,
     ) -> Document | None:
         """Load a specific document by ID."""
         row = repo.get_document_by_id(document_id)
         if not row:
             return None
-        return cls._create_document_from_row(row, repo, ocr_config)
+        return cls._create_document_from_row(row, repo, ocr_config, translator_config)
 
     @classmethod
     def load_all(
         cls,
         repo: DocumentRepository,
         ocr_config: OCRConfig | None = None,
+        translator_config: TranslatorConfig | None = None,
     ) -> list[Document]:
         """Load all documents from database."""
         rows = repo.list_documents()
-        return [cls._create_document_from_row(row, repo, ocr_config) for row in rows]
+        return [cls._create_document_from_row(row, repo, ocr_config, translator_config) for row in rows]
 
     @classmethod
     def load_by_ids(
@@ -105,11 +118,12 @@ class Document(ABC):
         repo: DocumentRepository,
         document_ids: list[int],
         ocr_config: OCRConfig | None = None,
+        translator_config: TranslatorConfig | None = None,
     ) -> list[Document]:
         """Load specific documents by their IDs."""
         documents = []
         for doc_id in document_ids:
-            doc = cls.load_by_id(repo, doc_id, ocr_config)
+            doc = cls.load_by_id(repo, doc_id, ocr_config, translator_config)
             if doc:
                 documents.append(doc)
         return documents

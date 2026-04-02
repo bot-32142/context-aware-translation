@@ -477,3 +477,35 @@ def test_work_export_dialog_runs_service_with_selected_options():
         mock_information.assert_called_once()
     finally:
         dialog.close()
+
+
+def test_work_export_dialog_exposes_epub_layout_toggle_for_epub_exports():
+    from PySide6.QtWidgets import QMessageBox
+
+    from context_aware_translation.ui.features.document_workspace_view import WorkExportDialog
+
+    work_service = FakeWorkService(state_by_project={})
+    work_service.export_result = ExportResult(
+        output_path="/tmp/out.epub",
+        message=UserMessage(severity=UserMessageSeverity.SUCCESS, text="Export complete."),
+    )
+    state = ExportDialogState(
+        project_id="proj-1",
+        document_ids=[4],
+        document_labels=["book.epub"],
+        available_formats=[ExportOption(format_id="epub", label="EPUB", is_default=True)],
+        default_output_path="/tmp/out.epub",
+        supports_epub_layout_conversion=True,
+    )
+    dialog = WorkExportDialog(work_service, state)
+    try:
+        assert dialog.controls.epub_force_horizontal_ltr_cb.isHidden() is False
+        dialog.controls.epub_force_horizontal_ltr_cb.setChecked(True)
+        with patch.object(QMessageBox, "information") as mock_information:
+            dialog.export_button.click()
+
+        request = work_service.calls[-1][1]
+        assert request.options["epub_force_horizontal_ltr"] is True
+        mock_information.assert_called_once()
+    finally:
+        dialog.close()

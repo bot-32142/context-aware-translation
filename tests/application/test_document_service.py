@@ -10,8 +10,13 @@ from PySide6.QtWidgets import QApplication
 
 from context_aware_translation.application.composition import build_application_context
 from context_aware_translation.application.contracts.app_setup import ConnectionDraft, SetupWizardRequest
-from context_aware_translation.application.contracts.common import ProviderKind
-from context_aware_translation.application.contracts.document import OCRTextElement, RunOCRRequest, SaveOCRPageRequest
+from context_aware_translation.application.contracts.common import ProviderKind, SurfaceStatus
+from context_aware_translation.application.contracts.document import (
+    ImageAssetState,
+    OCRTextElement,
+    RunOCRRequest,
+    SaveOCRPageRequest,
+)
 from context_aware_translation.application.contracts.projects import CreateProjectRequest
 from context_aware_translation.application.errors import ApplicationError, ApplicationErrorCode
 from context_aware_translation.application.events import DocumentInvalidatedEvent
@@ -493,6 +498,234 @@ def test_document_service_get_images_prefers_translation_running_message_on_clai
         assert state.assets
         assert state.assets[0].run_blocker is not None
         assert state.assets[0].run_blocker.message == "Translation is already running for this document."
+    finally:
+        context.close()
+
+
+def test_document_service_get_images_epub_skips_full_text_reinjection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        project = context.services.projects.create_project(
+            CreateProjectRequest(name="EPUB Images Fast Path", target_language="English")
+        )
+        project_id = project.project.project_id
+        _configure_project_for_ocr(context, project_id)
+
+        db, repo = _open_repo(context, project_id)
+        try:
+            document_id = repo.insert_document("epub")
+            repo.insert_document_source(
+                document_id,
+                0,
+                "text",
+                relative_path="chapter.xhtml",
+                text_content="<html><body><p>Before <ruby>漢字<rt>かんじ</rt></ruby> after</p></body></html>",
+                mime_type="application/xhtml+xml",
+                is_text_added=True,
+                is_ocr_completed=True,
+            )
+            repo.insert_document_source(
+                document_id,
+                1,
+                "image",
+                relative_path="image.png",
+                binary_content=_tiny_png_bytes(),
+                mime_type="image/png",
+                ocr_json=json.dumps({"embedded_text": "img jp"}, ensure_ascii=False),
+                is_ocr_completed=True,
+            )
+            db.upsert_chunks(
+                [
+                    TranslationChunkRecord(
+                        chunk_id=1,
+                        hash="chunk-1",
+                        text="Before ⟪RUBY:0⟫漢字⟪/RUBY:0⟫ after\nimg jp",
+                        translation="Before ⟪RUBY:0⟫漢字⟪/RUBY:0⟫ after\nimg en",
+                        document_id=document_id,
+                        is_extracted=True,
+                        is_summarized=True,
+                        is_translated=True,
+                    )
+                ]
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        async def _unexpected_set_text(self, lines, cancel_check=None, progress_callback=None):  # noqa: ANN001, ARG001
+            raise AssertionError("EPUB image loading should not rebuild full chapter translations.")
+
+        monkeypatch.setattr(
+            "context_aware_translation.documents.epub.EPUBDocument.set_text",
+            _unexpected_set_text,
+        )
+
+        state = context.services.document.get_images(project_id, document_id)
+
+        assert len(state.assets) == 1
+        assert state.assets[0].translated_text == "img en"
+    finally:
+        context.close()
+
+
+def test_document_service_get_images_reuses_shared_preflight_for_asset_actions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        project = context.services.projects.create_project(
+            CreateProjectRequest(name="EPUB Images Shared Preflight", target_language="English")
+        )
+        project_id = project.project.project_id
+        _configure_project_for_ocr(context, project_id)
+
+        db, repo = _open_repo(context, project_id)
+        try:
+            document_id = repo.insert_document("epub")
+            db.commit()
+        finally:
+            db.close()
+
+        monkeypatch.setattr(
+            context.services.document,
+            "_build_image_assets",
+            lambda *_args, **_kwargs: [
+                ImageAssetState(
+                    asset_id="1",
+                    label="Image 1",
+                    status=SurfaceStatus.READY,
+                    source_id=101,
+                    translated_text="one",
+                    original_image_bytes=b"one",
+                    reembedded_image_bytes=None,
+                    can_run=False,
+                    run_blocker=None,
+                ),
+                ImageAssetState(
+                    asset_id="2",
+                    label="Image 2",
+                    status=SurfaceStatus.READY,
+                    source_id=102,
+                    translated_text="two",
+                    original_image_bytes=b"two",
+                    reembedded_image_bytes=None,
+                    can_run=False,
+                    run_blocker=None,
+                ),
+                ImageAssetState(
+                    asset_id="3",
+                    label="Image 3",
+                    status=SurfaceStatus.DONE,
+                    source_id=103,
+                    translated_text="three",
+                    original_image_bytes=b"three",
+                    reembedded_image_bytes=b"done",
+                    can_run=False,
+                    run_blocker=None,
+                ),
+            ],
+            raising=True,
+        )
+
+        original_preflight = context.runtime.task_engine.preflight
+        calls: list[dict[str, object]] = []
+
+        def _preflight(task_type, book_id, params, action):  # noqa: ANN001
+            if task_type == "image_reembedding":
+                from context_aware_translation.workflow.tasks.models import Decision
+
+                calls.append(dict(params))
+                return Decision(allowed=True)
+            return original_preflight(task_type, book_id, params, action)
+
+        monkeypatch.setattr(context.runtime.task_engine, "preflight", _preflight, raising=True)
+
+        state = context.services.document.get_images(project_id, document_id)
+
+        assert len(calls) == 3
+        assert calls == [
+            {"document_ids": [document_id], "force": True},
+            {"document_ids": [document_id], "force": False},
+            {"document_ids": [document_id], "force": True},
+        ]
+        assert all(asset.can_run for asset in state.assets)
+        assert all(asset.run_blocker is None for asset in state.assets)
+        assert state.toolbar.can_run_pending
+        assert state.toolbar.can_force_all
+    finally:
+        context.close()
+
+
+def test_document_service_get_images_epub_avoids_full_source_blob_fetch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        project = context.services.projects.create_project(
+            CreateProjectRequest(name="EPUB Images Light Source Fetch", target_language="English")
+        )
+        project_id = project.project.project_id
+        _configure_project_for_ocr(context, project_id)
+
+        db, repo = _open_repo(context, project_id)
+        try:
+            document_id = repo.insert_document("epub")
+            repo.insert_document_source(
+                document_id,
+                0,
+                "text",
+                relative_path="chapter.xhtml",
+                text_content="<html><body><p>chapter</p></body></html>",
+                mime_type="application/xhtml+xml",
+                is_text_added=True,
+                is_ocr_completed=True,
+            )
+            repo.insert_document_source(
+                document_id,
+                1,
+                "image",
+                relative_path="image.png",
+                binary_content=_tiny_png_bytes(),
+                mime_type="image/png",
+                ocr_json=json.dumps({"embedded_text": "img jp"}, ensure_ascii=False),
+                is_ocr_completed=True,
+            )
+            db.upsert_chunks(
+                [
+                    TranslationChunkRecord(
+                        chunk_id=1,
+                        hash="chunk-1",
+                        text="chapter\nimg jp",
+                        translation="chapter\nimg en",
+                        document_id=document_id,
+                        is_extracted=True,
+                        is_summarized=True,
+                        is_translated=True,
+                    )
+                ]
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        def _unexpected_get_document_sources(self, document_id_arg):  # noqa: ANN001, ARG001
+            raise AssertionError("EPUB image loading should avoid fetching full source rows with binary blobs.")
+
+        monkeypatch.setattr(
+            DocumentRepository,
+            "get_document_sources",
+            _unexpected_get_document_sources,
+        )
+
+        state = context.services.document.get_images(project_id, document_id)
+
+        assert len(state.assets) == 1
+        assert state.assets[0].translated_text == "img en"
     finally:
         context.close()
 

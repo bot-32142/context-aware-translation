@@ -13,7 +13,13 @@ from transformers import PreTrainedTokenizer
 
 from context_aware_translation.core.cancellation import raise_if_cancelled
 from context_aware_translation.core.context_extractor import ContextExtractor
-from context_aware_translation.core.models import KeyedContext, Term, description_index, ordered_description_values
+from context_aware_translation.core.models import (
+    KeyedContext,
+    Term,
+    description_index,
+    ordered_description_entries,
+    ordered_description_values,
+)
 from context_aware_translation.core.progress import ProgressCallback, ProgressUpdate, WorkflowStep
 from context_aware_translation.core.term_memory_builder import TermMemoryBuilder
 from context_aware_translation.core.translation_strategies import (
@@ -118,6 +124,7 @@ class ContextManager:
         *,
         context_tree: Any | None = None,
         term_memory_builder: TermMemoryBuilder | None = None,
+        max_term_description_length: int = 1200,
         owns_context_tree: bool = True,
     ) -> None:
         # Initialize storage manager
@@ -128,6 +135,7 @@ class ContextManager:
         self._merge_lock = threading.Lock()
         self.context_tree = context_tree
         self.term_memory_builder = term_memory_builder
+        self.max_term_description_length = max(0, int(max_term_description_length))
         self._owns_context_tree = owns_context_tree
 
     @property
@@ -199,11 +207,66 @@ class ContextManager:
         return ordered_description_values(descriptions, query_index=query_index)
 
     @classmethod
+    def _ordered_description_entries(
+        cls,
+        descriptions: dict[str, str],
+        *,
+        query_index: int | None = None,
+    ) -> list[tuple[str, str]]:
+        return ordered_description_entries(descriptions, query_index=query_index)
+
+    @classmethod
     def _raw_description_fallback(cls, descriptions: dict[str, str], query_index: int | None = None) -> str:
         values = cls._ordered_description_values(descriptions, query_index=query_index)
         if values:
             return " ".join(values).strip()
         return ""
+
+    @staticmethod
+    def _truncate_description(text: str, max_length: int) -> str:
+        if max_length <= 0:
+            return text.strip()
+        if len(text) <= max_length:
+            return text.strip()
+        return text[:max_length].strip()
+
+    def _compact_raw_description(self, descriptions: dict[str, str], *, query_index: int) -> str:
+        entries = self._ordered_description_entries(descriptions, query_index=query_index)
+        if not entries:
+            return ""
+
+        full_text = " ".join(value for _key, value in entries).strip()
+        max_length = self.max_term_description_length
+        if max_length <= 0 or len(full_text) <= max_length:
+            return full_text
+
+        numeric_indexes = [
+            index
+            for index, (key, _value) in enumerate(entries)
+            if (idx := description_index(key)) is not None and idx >= 0
+        ]
+        seed_index = numeric_indexes[-1] if numeric_indexes else len(entries) - 1
+        seed_text = entries[seed_index][1].strip()
+        if len(seed_text) >= max_length:
+            return self._truncate_description(seed_text, max_length)
+
+        selected_indexes = {seed_index}
+        current_length = len(seed_text)
+        preferred_indexes = list(reversed(numeric_indexes[:-1])) + [
+            index for index in range(len(entries)) if index not in numeric_indexes and index != seed_index
+        ]
+
+        for index in preferred_indexes:
+            value = entries[index][1].strip()
+            if not value:
+                continue
+            candidate_length = current_length + 1 + len(value)
+            if candidate_length > max_length:
+                continue
+            selected_indexes.add(index)
+            current_length = candidate_length
+
+        return " ".join(value for index, (_key, value) in enumerate(entries) if index in selected_indexes).strip()
 
     @staticmethod
     def _term_requires_term_memory(term: Term) -> bool:
@@ -225,6 +288,13 @@ class ContextManager:
             return legacy
 
         return self._raw_description_fallback(term.descriptions, query_index)
+
+    @staticmethod
+    def _term_memory_is_current(term_data: dict[int, str], latest_memory: Any | None) -> bool:
+        if latest_memory is None or len(term_data) < 2:
+            return False
+        latest_evidence_chunk = int(getattr(latest_memory, "latest_evidence_chunk", -2))
+        return latest_evidence_chunk >= max(term_data)
 
     def add_text(
         self,
@@ -280,9 +350,12 @@ class ContextManager:
         }
         terms_data = {k: v for k, v in terms_data.items() if v}
         if terms_data and self.term_memory_builder is not None:
+            latest_term_memory = self.term_repo.list_latest_term_memory_versions()
             for term in summary_terms:
                 data = terms_data.get(term.key)
                 if not data:
+                    continue
+                if self._term_memory_is_current(data, latest_term_memory.get(term.key)):
                     continue
                 versions = self.term_memory_builder.build_versions(
                     term.key,
@@ -324,7 +397,10 @@ class ContextManager:
         if term.ignored:
             return " ".join(description_values).strip()
         if not self._term_requires_term_memory(term):
-            return " ".join(description_values).strip()
+            return self._compact_raw_description(
+                term.descriptions,
+                query_index=self._description_query_index(term.descriptions),
+            )
 
         query_index = self._description_query_index(term.descriptions)
         summary = self._best_available_summary(
@@ -393,12 +469,13 @@ class ContextManager:
     def get_term_description_for_query(self, term: Term, query_index: int) -> str:
         """Return the term description text used for chunk translation prompts."""
         if not self._term_requires_term_memory(term):
-            return self._raw_description_fallback(term.descriptions, query_index)
-        return self._best_available_summary(
+            return self._compact_raw_description(term.descriptions, query_index=query_index)
+        description = self._best_available_summary(
             term,
             query_index,
             legacy_summary=lambda: self._get_query_summary_from_legacy_context_tree(term.key, query_index),
         )
+        return self._truncate_description(description, self.max_term_description_length)
 
     async def extract_keyed_context(
         self,
@@ -520,6 +597,7 @@ class TranslationContextManager(ContextManager):
         term_reviewer: TermReviewer | None = None,
         owns_context_tree: bool = True,
         term_memory_updater: TermMemoryUpdater | None = None,
+        max_term_description_length: int = 1200,
     ) -> None:
         """
         Initialize the TranslationContextManager.
@@ -541,6 +619,7 @@ class TranslationContextManager(ContextManager):
             tokenizer,
             context_tree=context_tree,
             term_memory_builder=term_memory_builder,
+            max_term_description_length=max_term_description_length,
             owns_context_tree=owns_context_tree,
         )
 

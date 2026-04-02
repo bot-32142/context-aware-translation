@@ -383,6 +383,52 @@ def test_get_term_description_for_query_excludes_future_numeric_descriptions_for
     assert description == "Imported glossary description earlier description"
 
 
+def test_get_term_description_for_query_limits_other_term_history_to_recent_context(mock_context_manager):
+    mock_context_manager.max_term_description_length = 18
+    term = Term(
+        key="term_long_other",
+        descriptions={
+            "1": "alpha",
+            "2": "bravo",
+            "3": "charlie",
+            "4": "delta",
+        },
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        term_type="other",
+    )
+
+    description = mock_context_manager.get_term_description_for_query(term, 10)
+
+    assert description == "charlie delta"
+    assert len(description) <= 18
+
+
+def test_build_fully_summarized_descriptions_limits_other_term_history(mock_context_manager):
+    mock_context_manager.max_term_description_length = 18
+    term = Term(
+        key="term_export_other",
+        descriptions={
+            "1": "alpha",
+            "2": "bravo",
+            "3": "charlie",
+            "4": "delta",
+        },
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        term_type="other",
+    )
+    mock_context_manager.term_repo.keyed_contexts["term_export_other"] = term
+    mock_context_manager.context_tree = None
+
+    summaries = mock_context_manager.build_fully_summarized_descriptions()
+
+    assert summaries["term_export_other"] == "charlie delta"
+    assert len(summaries["term_export_other"]) <= 18
+
+
 def test_context_manager_build_fully_summarized_descriptions_ignores_non_chunk_keys(mock_context_manager):
     term = Term(
         key="term_non_chunk",
@@ -584,6 +630,77 @@ def test_context_manager_build_context_tree_skips_term_memory_for_other_terms(mo
         1: "artifact description",
         2: "more artifact description",
     }
+
+
+def test_context_manager_build_context_tree_reuses_persisted_term_memory(mock_context_manager):
+    builder = RecordingTermMemoryBuilder()
+    mock_context_manager.term_memory_builder = builder
+
+    character_term = Term(
+        key="hero",
+        descriptions={"1": "hero description", "2": "more hero description"},
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        term_type="character",
+    )
+    mock_context_manager.term_repo.keyed_contexts = {character_term.key: character_term}
+    mock_context_manager.term_repo.replace_term_memory_versions(
+        "hero",
+        [
+            TermMemoryVersion(
+                term="hero",
+                effective_start_chunk=3,
+                latest_evidence_chunk=2,
+                summary_text="cached hero summary",
+                kind="checkpoint",
+                source_count=2,
+                created_at=0.0,
+            )
+        ],
+    )
+
+    mock_context_manager.build_context_tree()
+
+    assert builder.calls == []
+    assert mock_context_manager.term_repo.term_memory_versions["hero"][0].summary_text == "cached hero summary"
+    assert mock_context_manager.context_tree.added_terms["hero"] == {1: "hero description", 2: "more hero description"}
+
+
+def test_context_manager_build_context_tree_rebuilds_when_term_memory_is_stale(mock_context_manager):
+    builder = RecordingTermMemoryBuilder()
+    mock_context_manager.term_memory_builder = builder
+
+    character_term = Term(
+        key="hero",
+        descriptions={"1": "hero description", "2": "more hero description", "5": "latest hero description"},
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        term_type="character",
+    )
+    mock_context_manager.term_repo.keyed_contexts = {character_term.key: character_term}
+    mock_context_manager.term_repo.replace_term_memory_versions(
+        "hero",
+        [
+            TermMemoryVersion(
+                term="hero",
+                effective_start_chunk=3,
+                latest_evidence_chunk=2,
+                summary_text="stale hero summary",
+                kind="bootstrap",
+                source_count=2,
+                created_at=0.0,
+            )
+        ],
+    )
+
+    mock_context_manager.build_context_tree()
+
+    assert builder.calls == [
+        ("hero", {1: "hero description", 2: "more hero description", 5: "latest hero description"})
+    ]
+    assert mock_context_manager.term_repo.term_memory_versions["hero"][0].latest_evidence_chunk == 5
 
 
 def test_get_term_description_for_query_skips_term_memory_for_other_terms(mock_context_manager):
