@@ -58,6 +58,7 @@ from context_aware_translation.documents.epub_xhtml_utils import (
 )
 from context_aware_translation.llm.epub_ocr import ocr_epub_images
 from context_aware_translation.llm.image_generator import build_text_replacements, create_image_generator
+from context_aware_translation.ui.constants import LANGUAGES as UI_LANGUAGE_PRESETS
 from context_aware_translation.utils.compression_marker import decode_compressed_lines
 from context_aware_translation.utils.image_utils import (
     compress_image_for_ocr,
@@ -67,7 +68,7 @@ from context_aware_translation.utils.image_utils import (
 from context_aware_translation.utils.pandoc_export import export_pandoc_file
 
 if TYPE_CHECKING:
-    from context_aware_translation.config import ImageReembeddingConfig, OCRConfig
+    from context_aware_translation.config import ImageReembeddingConfig, OCRConfig, TranslatorConfig
     from context_aware_translation.llm.client import LLMClient
     from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 
@@ -101,9 +102,133 @@ XHTML_NS = "http://www.w3.org/1999/xhtml"
 EPUB_NS = "http://www.idpf.org/2007/ops"
 NCX_NS = "http://www.daisy.org/z3986/2005/ncx/"
 XML_DECL_ENCODING_RE = re.compile(rb"^\s*<\?xml[^>]*encoding\s*=\s*['\"]([^'\"]+)['\"]", flags=re.IGNORECASE)
+XML_DECLARATION_RE = re.compile(r"^\s*<\?xml[^>]*\?>\s*", flags=re.IGNORECASE)
 CSS_CHARSET_RE = re.compile(r"^(\ufeff?\s*@charset\s+)(['\"])[^'\"]*\2(\s*;)", flags=re.IGNORECASE)
 CSS_CHARSET_CAPTURE_RE = re.compile(r"^\ufeff?\s*@charset\s+(['\"])([^'\"]+)\1\s*;", flags=re.IGNORECASE)
 BCP47_CODE_RE = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$")
+HORIZONTAL_LTR_EXPORT_STYLE_ID = "cat-horizontal-ltr-export"
+HORIZONTAL_LTR_EXPORT_TOC_ATTRIBUTE = "data-cat-horizontal-ltr-toc"
+HORIZONTAL_LTR_EXPORT_STYLESHEET = (
+    f"/* {HORIZONTAL_LTR_EXPORT_STYLE_ID} */\n"
+    "html, body {\n"
+    "  direction: ltr !important;\n"
+    "  writing-mode: horizontal-tb !important;\n"
+    "  -epub-writing-mode: horizontal-tb !important;\n"
+    "  -webkit-writing-mode: horizontal-tb !important;\n"
+    "  text-orientation: mixed !important;\n"
+    "  -epub-text-orientation: mixed !important;\n"
+    "  -webkit-text-orientation: mixed !important;\n"
+    "}\n"
+    "body, body * {\n"
+    "  direction: inherit !important;\n"
+    "  writing-mode: inherit !important;\n"
+    "  -epub-writing-mode: inherit !important;\n"
+    "  -webkit-writing-mode: inherit !important;\n"
+    "  text-orientation: mixed !important;\n"
+    "  -epub-text-orientation: mixed !important;\n"
+    "  -webkit-text-orientation: mixed !important;\n"
+    "}\n"
+    "nav ol, nav ul {\n"
+    "  margin: 0 !important;\n"
+    "  padding: 0 0 0 1.25em !important;\n"
+    "}\n"
+    "nav li {\n"
+    "  display: block !important;\n"
+    "  list-style: none !important;\n"
+    "  margin: 0 0 0.75em !important;\n"
+    "  padding: 0 !important;\n"
+    "}\n"
+    "nav a, nav span {\n"
+    "  display: block !important;\n"
+    "  margin: 0 !important;\n"
+    "  padding: 0 !important;\n"
+    "}\n"
+    "h1, h2, h3, h4, h5, h6,\n"
+    "nav, nav * {\n"
+    "  width: auto !important;\n"
+    "  height: auto !important;\n"
+    "  inline-size: auto !important;\n"
+    "  block-size: auto !important;\n"
+    "  max-width: none !important;\n"
+    "  max-height: none !important;\n"
+    "  min-width: 0 !important;\n"
+    "  min-height: 0 !important;\n"
+    "  overflow: visible !important;\n"
+    "  position: static !important;\n"
+    "  inset: auto !important;\n"
+    "  left: auto !important;\n"
+    "  right: auto !important;\n"
+    "  top: auto !important;\n"
+    "  bottom: auto !important;\n"
+    "  float: none !important;\n"
+    "  clear: none !important;\n"
+    "  transform: none !important;\n"
+    "  clip: auto !important;\n"
+    "  clip-path: none !important;\n"
+    "  text-indent: 0 !important;\n"
+    "  white-space: normal !important;\n"
+    "  line-height: 1.4 !important;\n"
+    "}\n"
+    f'body[{HORIZONTAL_LTR_EXPORT_TOC_ATTRIBUTE}="1"] div,\n'
+    f'body[{HORIZONTAL_LTR_EXPORT_TOC_ATTRIBUTE}="1"] p,\n'
+    f'body[{HORIZONTAL_LTR_EXPORT_TOC_ATTRIBUTE}="1"] a,\n'
+    f'body[{HORIZONTAL_LTR_EXPORT_TOC_ATTRIBUTE}="1"] span {{\n'
+    "  width: auto !important;\n"
+    "  height: auto !important;\n"
+    "  inline-size: auto !important;\n"
+    "  block-size: auto !important;\n"
+    "  max-width: none !important;\n"
+    "  max-height: none !important;\n"
+    "  min-width: 0 !important;\n"
+    "  min-height: 0 !important;\n"
+    "  overflow: visible !important;\n"
+    "  position: static !important;\n"
+    "  inset: auto !important;\n"
+    "  left: auto !important;\n"
+    "  right: auto !important;\n"
+    "  top: auto !important;\n"
+    "  bottom: auto !important;\n"
+    "  float: none !important;\n"
+    "  clear: none !important;\n"
+    "  transform: none !important;\n"
+    "  clip: auto !important;\n"
+    "  clip-path: none !important;\n"
+    "  margin-left: 0 !important;\n"
+    "  margin-right: 0 !important;\n"
+    "  padding-left: 0 !important;\n"
+    "  padding-right: 0 !important;\n"
+    "  text-indent: 0 !important;\n"
+    "  white-space: normal !important;\n"
+    "}\n"
+    f'body[{HORIZONTAL_LTR_EXPORT_TOC_ATTRIBUTE}="1"] div,\n'
+    f'body[{HORIZONTAL_LTR_EXPORT_TOC_ATTRIBUTE}="1"] p,\n'
+    f'body[{HORIZONTAL_LTR_EXPORT_TOC_ATTRIBUTE}="1"] a {{\n'
+    "  padding-top: 0 !important;\n"
+    "  padding-bottom: 0 !important;\n"
+    "}\n"
+    f'body[{HORIZONTAL_LTR_EXPORT_TOC_ATTRIBUTE}="1"] div {{\n'
+    "  margin-top: 1.25em !important;\n"
+    "  margin-bottom: 0 !important;\n"
+    "}\n"
+    f'body[{HORIZONTAL_LTR_EXPORT_TOC_ATTRIBUTE}="1"] p {{\n'
+    "  margin-bottom: 0.75em !important;\n"
+    "}\n"
+    f'body[{HORIZONTAL_LTR_EXPORT_TOC_ATTRIBUTE}="1"] a {{\n'
+    "  display: block !important;\n"
+    "}\n"
+)
+HORIZONTAL_LTR_EXPORT_SVG_STYLESHEET = (
+    f"/* {HORIZONTAL_LTR_EXPORT_STYLE_ID} */\n"
+    "svg, svg * {\n"
+    "  direction: ltr !important;\n"
+    "  writing-mode: horizontal-tb !important;\n"
+    "  -epub-writing-mode: horizontal-tb !important;\n"
+    "  -webkit-writing-mode: horizontal-tb !important;\n"
+    "  text-orientation: mixed !important;\n"
+    "  -epub-text-orientation: mixed !important;\n"
+    "  -webkit-text-orientation: mixed !important;\n"
+    "}\n"
+)
 TARGET_LANGUAGE_TO_BCP47 = {
     "简体中文": "zh-Hans",
     "繁体中文": "zh-Hant",
@@ -157,6 +282,18 @@ TARGET_LANGUAGE_TO_BCP47 = {
 }
 
 
+def _canonicalize_language_label(label: str) -> str:
+    return re.sub(r"\s+", " ", label.strip().replace("（", "(").replace("）", ")")).casefold()
+
+
+TARGET_LANGUAGE_LABEL_ALIASES = {
+    _canonicalize_language_label(internal_name): internal_name for internal_name in TARGET_LANGUAGE_TO_BCP47
+}
+TARGET_LANGUAGE_LABEL_ALIASES.update(
+    {_canonicalize_language_label(display_name): internal_name for display_name, internal_name in UI_LANGUAGE_PRESETS}
+)
+
+
 class EPUBDocument(Document):
     """Document for EPUB files.
 
@@ -167,6 +304,7 @@ class EPUBDocument(Document):
     document_type = "epub"
     supported_export_formats: tuple[str, ...] = ("epub", "md", "docx", "html")
     requires_ocr_config = True
+    uses_translator_config = True
     ocr_required_for_translation = False  # EPUB text content is available without OCR
     supports_preserve_structure = False
     supports_multi_export = False
@@ -176,9 +314,11 @@ class EPUBDocument(Document):
         repo: DocumentRepository,
         document_id: int,
         ocr_config: OCRConfig | None = None,
+        translator_config: TranslatorConfig | None = None,
     ) -> None:
         super().__init__(repo, document_id)
         self._ocr_config = ocr_config
+        self._translator_config = translator_config
         self._translated_chapters: dict[int, str] = {}  # source_id -> translated XHTML
         self._translated_image_texts: dict[int, str] = {}
         self._translated_resource_images: dict[int, tuple[bytes, str]] = {}
@@ -186,6 +326,7 @@ class EPUBDocument(Document):
         self._translated_nav_label_specs: list[dict[str, Any]] | None = None
         self._translated_metadata_title: str | None = None
         self._translation_target_language: str | None = None
+        self._force_horizontal_ltr_export = False
 
     def set_translation_target_language(self, target_language: str | None) -> None:
         """Set target language hint used to update exported OPF dc:language."""
@@ -194,6 +335,16 @@ class EPUBDocument(Document):
             self._translation_target_language = cleaned or None
             return
         self._translation_target_language = None
+
+    def set_export_layout_preferences(self, *, force_horizontal_ltr: bool = False) -> None:
+        """Set EPUB-specific export layout overrides."""
+        self._force_horizontal_ltr_export = bool(force_horizontal_ltr)
+
+    def _should_strip_epub_ruby(self) -> bool:
+        """Whether EPUB ruby annotations should be omitted from translation/export text."""
+        if self._translator_config is None:
+            return True
+        return bool(getattr(self._translator_config, "strip_epub_ruby", True))
 
     # =========================================================================
     # Source classification helpers
@@ -404,13 +555,171 @@ class EPUBDocument(Document):
         return payload.decode("utf-8", errors="replace")
 
     @classmethod
-    def _normalize_text_source_for_export(cls, source: dict[str, Any], text: str) -> str:
+    def _local_tag(cls, tag: str) -> str:
+        if "}" in tag:
+            return tag.split("}", 1)[1]
+        return tag
+
+    @staticmethod
+    def _tag_namespace(tag: str) -> str | None:
+        if tag.startswith("{") and "}" in tag:
+            return tag[1:].split("}", 1)[0]
+        return None
+
+    @classmethod
+    def _replace_css_property_values(cls, text: str, properties: tuple[str, ...], value: str) -> str:
+        updated = text
+        for property_name in properties:
+            updated = re.sub(
+                rf"(?i)({re.escape(property_name)}\s*:\s*)([^;{{}}]+)",
+                rf"\1{value}",
+                updated,
+            )
+        return updated
+
+    @classmethod
+    def _normalize_layout_css(cls, text: str) -> str:
+        updated = cls._replace_css_property_values(
+            text,
+            ("writing-mode", "-epub-writing-mode", "-webkit-writing-mode"),
+            "horizontal-tb",
+        )
+        updated = cls._replace_css_property_values(updated, ("direction",), "ltr")
+        updated = cls._replace_css_property_values(
+            updated,
+            ("text-orientation", "-epub-text-orientation", "-webkit-text-orientation"),
+            "mixed",
+        )
+        return updated
+
+    @classmethod
+    def _ensure_inline_style_property(cls, style: str, property_name: str, value: str) -> str:
+        pattern = re.compile(rf"(?i)(^|;)(\s*){re.escape(property_name)}\s*:\s*[^;]+")
+
+        def _repl(match: re.Match[str]) -> str:
+            return f"{match.group(1)}{match.group(2)}{property_name}: {value}"
+
+        if pattern.search(style):
+            return pattern.sub(_repl, style)
+
+        separator = "" if not style.strip() else ("" if style.rstrip().endswith(";") else ";")
+        return f"{style.rstrip()}{separator} {property_name}: {value}".strip()
+
+    @classmethod
+    def _normalize_inline_style_for_horizontal_ltr(cls, style: str | None) -> str:
+        normalized = cls._normalize_layout_css(style or "")
+        for property_name, value in (
+            ("direction", "ltr"),
+            ("writing-mode", "horizontal-tb"),
+            ("-epub-writing-mode", "horizontal-tb"),
+            ("-webkit-writing-mode", "horizontal-tb"),
+            ("text-orientation", "mixed"),
+            ("-epub-text-orientation", "mixed"),
+            ("-webkit-text-orientation", "mixed"),
+        ):
+            normalized = cls._ensure_inline_style_property(normalized, property_name, value)
+        return normalized
+
+    @staticmethod
+    def _prepend_xml_declaration_if_needed(original_text: str, serialized_text: str) -> str:
+        if not XML_DECLARATION_RE.match(original_text):
+            return serialized_text
+        return f'<?xml version="1.0" encoding="utf-8"?>\n{serialized_text}'
+
+    @classmethod
+    def _find_child_by_local_name(cls, parent: _ET.Element, local_name: str) -> _ET.Element | None:
+        for child in list(parent):
+            if cls._local_tag(child.tag) == local_name:
+                return child
+        return None
+
+    @classmethod
+    def _force_horizontal_ltr_css(cls, text: str) -> str:
+        normalized = cls._normalize_layout_css(text)
+        if HORIZONTAL_LTR_EXPORT_STYLE_ID in normalized:
+            return normalized
+        suffix = "\n" if normalized and not normalized.endswith("\n") else ""
+        return f"{normalized}{suffix}\n{HORIZONTAL_LTR_EXPORT_STYLESHEET}"
+
+    @classmethod
+    def _force_horizontal_ltr_xml_text(cls, text: str, *, toc_document: bool = False) -> str:
+        normalized_input = cls._normalize_xml_header_for_utf8(text)
+        root = DefusedET.fromstring(normalized_input.encode("utf-8"))
+        root_local_tag = cls._local_tag(root.tag)
+        namespace = cls._tag_namespace(root.tag)
+
+        for element in root.iter():
+            style = element.get("style")
+            if style is not None:
+                element.set("style", cls._normalize_inline_style_for_horizontal_ltr(style))
+            if element.get("dir") is not None:
+                element.set("dir", "ltr")
+            if cls._local_tag(element.tag) == "style" and element.text:
+                element.text = cls._force_horizontal_ltr_css(element.text)
+
+        if root_local_tag == "html":
+            root.set("dir", "ltr")
+            root.set("style", cls._normalize_inline_style_for_horizontal_ltr(root.get("style")))
+            body = cls._find_child_by_local_name(root, "body")
+            if body is not None:
+                body.set("dir", "ltr")
+                body.set("style", cls._normalize_inline_style_for_horizontal_ltr(body.get("style")))
+                if toc_document:
+                    body.set(HORIZONTAL_LTR_EXPORT_TOC_ATTRIBUTE, "1")
+            head = cls._find_child_by_local_name(root, "head")
+            if head is None:
+                head_tag = f"{{{namespace}}}head" if namespace else "head"
+                head = _ET.Element(head_tag)
+                body = cls._find_child_by_local_name(root, "body")
+                insert_at = list(root).index(body) if body is not None else 0
+                root.insert(insert_at, head)
+            style_tag = f"{{{namespace}}}style" if namespace else "style"
+            override = next(
+                (
+                    child
+                    for child in list(head)
+                    if cls._local_tag(child.tag) == "style" and child.get("id") == HORIZONTAL_LTR_EXPORT_STYLE_ID
+                ),
+                None,
+            )
+            if override is None:
+                override = _ET.SubElement(head, style_tag)
+            override.set("id", HORIZONTAL_LTR_EXPORT_STYLE_ID)
+            override.set("type", "text/css")
+            override.text = HORIZONTAL_LTR_EXPORT_STYLESHEET
+        elif root_local_tag == "svg":
+            root.set("style", cls._normalize_inline_style_for_horizontal_ltr(root.get("style")))
+            style_tag = f"{{{namespace}}}style" if namespace else "style"
+            override = next(
+                (
+                    child
+                    for child in list(root)
+                    if cls._local_tag(child.tag) == "style" and child.get("id") == HORIZONTAL_LTR_EXPORT_STYLE_ID
+                ),
+                None,
+            )
+            if override is None:
+                override = _ET.Element(style_tag)
+                root.insert(0, override)
+            override.set("id", HORIZONTAL_LTR_EXPORT_STYLE_ID)
+            override.set("type", "text/css")
+            override.text = HORIZONTAL_LTR_EXPORT_SVG_STYLESHEET
+
+        serialized = _ET.tostring(root, encoding="unicode")
+        return cls._prepend_xml_declaration_if_needed(normalized_input, serialized)
+
+    @classmethod
+    def _normalize_text_source_for_export(
+        cls,
+        source: dict[str, Any],
+        text: str,
+        *,
+        force_horizontal_ltr: bool = False,
+        toc_document: bool = False,
+    ) -> str:
         mime_type = str(source.get("mime_type", "") or "").strip().lower()
         relative_path = str(source.get("relative_path", "") or "").strip().lower()
         css_like_path = relative_path.endswith(".css")
-        if mime_type == "text/css" or css_like_path:
-            return cls._normalize_css_charset_for_utf8(text)
-
         xml_like_path = relative_path.endswith((".xhtml", ".html", ".htm", ".svg", ".xml", ".ncx", ".opf"))
         xml_like_mime = mime_type in {
             *CHAPTER_MIME_TYPES,
@@ -420,9 +729,67 @@ class EPUBDocument(Document):
             "application/xml",
             "text/xml",
         }
+
+        if force_horizontal_ltr:
+            if mime_type == "text/css" or css_like_path:
+                text = cls._force_horizontal_ltr_css(text)
+            elif xml_like_path or xml_like_mime or text.lstrip().startswith("<?xml"):
+                text = cls._force_horizontal_ltr_xml_text(text, toc_document=toc_document)
+
+        if mime_type == "text/css" or css_like_path:
+            return cls._normalize_css_charset_for_utf8(text)
         if xml_like_path or xml_like_mime or text.lstrip().startswith("<?xml"):
             return cls._normalize_xml_header_for_utf8(text)
         return text
+
+    @classmethod
+    def _is_textual_asset_source(cls, source: dict[str, Any]) -> bool:
+        mime_type = str(source.get("mime_type", "") or "").strip().lower()
+        relative_path = str(source.get("relative_path", "") or "").strip().lower()
+        if mime_type == "text/css" or relative_path.endswith(".css"):
+            return True
+        if relative_path.endswith((".xhtml", ".html", ".htm", ".svg", ".xml", ".ncx", ".opf")):
+            return True
+        return mime_type in {
+            *CHAPTER_MIME_TYPES,
+            "image/svg+xml",
+            "application/x-dtbncx+xml",
+            "application/oebps-package+xml",
+            "application/xml",
+            "text/xml",
+        }
+
+    @classmethod
+    def _normalize_asset_payload_for_export(
+        cls,
+        source: dict[str, Any],
+        *,
+        force_horizontal_ltr: bool,
+        toc_document: bool = False,
+    ) -> bytes | None:
+        if source["source_type"] != "asset" or not source.get("binary_content"):
+            return None
+        if not cls._is_textual_asset_source(source):
+            return None
+
+        payload = bytes(source["binary_content"])
+        mime_type = str(source.get("mime_type", "") or "").strip().lower()
+        relative_path = str(source.get("relative_path", "") or "").strip().lower()
+        if mime_type == "text/css" or relative_path.endswith(".css"):
+            decoded = cls._decode_css_payload(payload, resource_path=str(source.get("relative_path", "")))
+        else:
+            decoded = cls._decode_xml_payload(
+                payload,
+                resource_path=str(source.get("relative_path", "")),
+                resource_kind="Asset resource",
+            )
+        normalized = cls._normalize_text_source_for_export(
+            source,
+            decoded,
+            force_horizontal_ltr=force_horizontal_ltr,
+            toc_document=toc_document,
+        )
+        return normalized.encode("utf-8")
 
     @staticmethod
     def _serialize_toc(entries: list[TocEntry]) -> list[dict[str, Any]]:
@@ -486,6 +853,10 @@ class EPUBDocument(Document):
         if not cleaned:
             return None
 
+        alias = TARGET_LANGUAGE_LABEL_ALIASES.get(_canonicalize_language_label(cleaned))
+        if alias is not None:
+            return TARGET_LANGUAGE_TO_BCP47[alias]
+
         mapped = TARGET_LANGUAGE_TO_BCP47.get(cleaned)
         if mapped:
             return mapped
@@ -522,8 +893,9 @@ class EPUBDocument(Document):
         *,
         translated_title: str | None,
         translated_language_tag: str | None,
+        force_horizontal_ltr: bool = False,
     ) -> bytes | None:
-        if translated_title is None and translated_language_tag is None:
+        if translated_title is None and translated_language_tag is None and not force_horizontal_ltr:
             return None
 
         try:
@@ -550,6 +922,12 @@ class EPUBDocument(Document):
                 lang_el = _ET.SubElement(metadata_el, f"{{{DC_NS}}}language")
             if (lang_el.text or "").strip() != translated_language_tag:
                 lang_el.text = translated_language_tag
+                changed = True
+
+        if force_horizontal_ltr:
+            spine_el = root.find(f"{{{OPF_NS}}}spine")
+            if spine_el is not None and (spine_el.get("page-progression-direction", "").strip().lower() != "ltr"):
+                spine_el.set("page-progression-direction", "ltr")
                 changed = True
 
         if not changed:
@@ -621,6 +999,83 @@ class EPUBDocument(Document):
         opf_dir = posixpath.dirname(package_path)
         resolved = posixpath.normpath(posixpath.join(opf_dir, path)) if opf_dir else posixpath.normpath(path)
         return resolved.lstrip("/")
+
+    @classmethod
+    def _extract_visible_toc_document_paths(cls, metadata_json: dict[str, Any]) -> set[str]:
+        package_path = str(metadata_json.get("package_path", "") or "").strip().lstrip("/")
+        guide_xml = str(metadata_json.get("guide_xml", "") or "").strip()
+        if not package_path or not guide_xml:
+            return set()
+
+        try:
+            guide_root = DefusedET.fromstring(guide_xml.encode("utf-8"))
+        except Exception:
+            return set()
+
+        toc_paths: set[str] = set()
+        for reference in guide_root.iter():
+            if cls._local_tag(reference.tag) != "reference":
+                continue
+            if str(reference.get("type", "") or "").strip().lower() != "toc":
+                continue
+            href = str(reference.get("href", "") or "").strip()
+            if not href:
+                continue
+            resolved = cls._resolve_toc_href_to_source_path(href, package_path)
+            if resolved:
+                toc_paths.add(resolved)
+        return toc_paths
+
+    @classmethod
+    def _looks_like_visible_toc_document(cls, text: str) -> bool:
+        try:
+            normalized_input = cls._normalize_xml_header_for_utf8(text)
+            root = DefusedET.fromstring(normalized_input.encode("utf-8"))
+        except Exception:
+            return False
+
+        if cls._local_tag(root.tag) != "html":
+            return False
+
+        body = cls._find_child_by_local_name(root, "body")
+        if body is None:
+            return False
+
+        anchor_count = 0
+        anchor_text_length = 0
+        for element in body.iter():
+            if cls._local_tag(element.tag) != "a":
+                continue
+            href = str(element.get("href", "") or "").strip()
+            if not href or href.startswith(("http://", "https://", "mailto:", "javascript:", "#")):
+                continue
+            anchor_count += 1
+            anchor_text_length += len(cls._normalize_whitespace("".join(element.itertext())))
+
+        if anchor_count < 3:
+            return False
+
+        total_text_length = len(cls._normalize_whitespace(" ".join(body.itertext())))
+        if total_text_length == 0:
+            return False
+
+        return anchor_text_length / total_text_length >= 0.6
+
+    @classmethod
+    def _infer_visible_toc_document_paths(cls, sources_sorted: list[dict[str, Any]]) -> set[str]:
+        inferred_paths: set[str] = set()
+        for source in sources_sorted:
+            if not cls._is_chapter_source(source):
+                continue
+            relative_path = str(source.get("relative_path", "") or "").strip().lstrip("/")
+            if not relative_path:
+                continue
+            text_content = source.get("text_content")
+            if not isinstance(text_content, str) or not text_content.strip():
+                continue
+            if cls._looks_like_visible_toc_document(text_content):
+                inferred_paths.add(relative_path)
+        return inferred_paths
 
     @classmethod
     def _build_heading_translation_map(
@@ -700,7 +1155,10 @@ class EPUBDocument(Document):
         source_path = source.get("relative_path", "unknown")
         source_kind = "XHTML chapter" if self._is_chapter_source(source) else "SVG text source"
         try:
-            return extract_text_from_xhtml(source["text_content"])
+            return extract_text_from_xhtml(
+                source["text_content"],
+                strip_ruby_annotations=self._should_strip_epub_ruby(),
+            )
         except Exception as e:
             raise ValueError(f"Invalid {source_kind} '{source_path}': {e}") from e
 
@@ -1138,6 +1596,77 @@ class EPUBDocument(Document):
         """Mark ALL sources as text added."""
         self.repo.update_all_sources_text_added(self.document_id)
 
+    def _count_total_expected_blocks(
+        self,
+        sources_sorted: list[dict[str, Any]],
+        *,
+        metadata_source: dict[str, Any] | None,
+    ) -> tuple[int, list[TocEntry], list[dict[str, Any]]]:
+        """Count text lines expected from get_text()/set_text() ordering."""
+        total_expected_blocks = 0
+        for source in sources_sorted:
+            if self._is_slot_translatable_source(source):
+                slot_texts = self._extract_source_slots(source)
+                total_expected_blocks += len(self._flatten_slot_texts_to_lines(slot_texts))
+            elif source["source_type"] == "image" and source.get("ocr_json"):
+                total_expected_blocks += len(self._extract_image_embedded_lines(source))
+
+        toc_entries: list[TocEntry] = []
+        nav_label_specs: list[dict[str, Any]] = []
+        if metadata_source is not None:
+            try:
+                metadata_json = json.loads(metadata_source["text_content"])
+            except Exception:
+                metadata_json = {}
+            total_expected_blocks += len(self._metadata_title_lines(metadata_json))
+            toc_entries_json = metadata_json.get("toc", [])
+            if isinstance(toc_entries_json, list):
+                toc_entries = self._deserialize_toc(toc_entries_json)
+                total_expected_blocks += len(self._flatten_toc_title_lines(toc_entries))
+            nav_label_specs = self._deserialize_nav_label_specs(metadata_json.get(NAV_LABEL_SPECS_KEY, []))
+            total_expected_blocks += sum(len(self._split_text_to_lines(spec["text"])) for spec in nav_label_specs)
+
+        return total_expected_blocks, toc_entries, nav_label_specs
+
+    def set_image_texts_only(self, lines: list[str]) -> int:
+        """Populate translated EPUB image OCR text without rebuilding chapter XHTML."""
+        sources = self.repo.get_document_sources_without_binary(self.document_id)
+        sources_sorted = sorted(sources, key=lambda s: s["sequence_number"])
+        metadata_source = next((s for s in sources_sorted if self._is_metadata_source(s)), None)
+        total_expected_blocks, _toc_entries, _nav_label_specs = self._count_total_expected_blocks(
+            sources_sorted,
+            metadata_source=metadata_source,
+        )
+        if len(lines) != total_expected_blocks:
+            raise ValueError(
+                f"EPUB image text line count mismatch: expected {total_expected_blocks} "
+                f"blocks from XHTML extraction, got {len(lines)} translated lines."
+            )
+
+        rendered_lines = decode_compressed_lines(lines)
+        self._translated_image_texts.clear()
+
+        cursor = 0
+        for source in sources_sorted:
+            if self._is_slot_translatable_source(source):
+                slot_texts = self._extract_source_slots(source)
+                cursor += len(self._flatten_slot_texts_to_lines(slot_texts))
+                continue
+
+            if source["source_type"] != "image" or not source.get("ocr_json"):
+                continue
+
+            image_lines = self._extract_image_embedded_lines(source)
+            num_blocks = len(image_lines)
+            if num_blocks == 0:
+                continue
+
+            image_translations = rendered_lines[cursor : cursor + num_blocks]
+            self._translated_image_texts[source["source_id"]] = "\n".join(image_translations)
+            cursor += num_blocks
+
+        return cursor
+
     async def set_text(
         self,
         lines: list[str],
@@ -1165,30 +1694,11 @@ class EPUBDocument(Document):
         self._translated_nav_label_specs = None
         self._translated_metadata_title = None
 
-        # First pass: count expected blocks
-        total_expected_blocks = 0
-        for source in sources_sorted:
-            if self._is_slot_translatable_source(source):
-                slot_texts = self._extract_source_slots(source)
-                total_expected_blocks += len(self._flatten_slot_texts_to_lines(slot_texts))
-            elif source["source_type"] == "image" and source.get("ocr_json"):
-                total_expected_blocks += len(self._extract_image_embedded_lines(source))
-
         metadata_source = next((s for s in sources_sorted if self._is_metadata_source(s)), None)
-        toc_entries: list[TocEntry] = []
-        nav_label_specs: list[dict[str, Any]] = []
-        if metadata_source is not None:
-            try:
-                metadata_json = json.loads(metadata_source["text_content"])
-            except Exception:
-                metadata_json = {}
-            total_expected_blocks += len(self._metadata_title_lines(metadata_json))
-            toc_entries_json = metadata_json.get("toc", [])
-            if isinstance(toc_entries_json, list):
-                toc_entries = self._deserialize_toc(toc_entries_json)
-                total_expected_blocks += len(self._flatten_toc_title_lines(toc_entries))
-            nav_label_specs = self._deserialize_nav_label_specs(metadata_json.get(NAV_LABEL_SPECS_KEY, []))
-            total_expected_blocks += sum(len(self._split_text_to_lines(spec["text"])) for spec in nav_label_specs)
+        total_expected_blocks, toc_entries, nav_label_specs = self._count_total_expected_blocks(
+            sources_sorted,
+            metadata_source=metadata_source,
+        )
 
         if len(lines) != total_expected_blocks:
             raise ValueError(
@@ -1207,7 +1717,11 @@ class EPUBDocument(Document):
                     continue
 
                 slot_translations, cursor = self._consume_slot_texts_from_lines(slot_templates, rendered_lines, cursor)
-                translated_xhtml, _ = inject_translations_into_xhtml(source["text_content"], slot_translations)
+                translated_xhtml, _ = inject_translations_into_xhtml(
+                    source["text_content"],
+                    slot_translations,
+                    strip_ruby_annotations=self._should_strip_epub_ruby(),
+                )
                 self._translated_chapters[source["source_id"]] = translated_xhtml
 
             elif source["source_type"] == "image" and source.get("ocr_json"):
@@ -1315,28 +1829,40 @@ class EPUBDocument(Document):
         sources_sorted = sorted(sources, key=lambda s: s["sequence_number"])
         base_epub = cls._load_original_archive_payload(sources_sorted)
         persisted_reembedded = doc.repo.load_reembedded_images(doc.document_id)
-        member_updates = cls._collect_member_updates(doc, sources_sorted, persisted_reembedded)
+        metadata_source = next((s for s in sources_sorted if cls._is_metadata_source(s)), None)
+        if metadata_source is not None:
+            try:
+                metadata_json = json.loads(metadata_source["text_content"])
+            except Exception:
+                metadata_json = {}
+        else:
+            metadata_json = {}
+
+        visible_toc_document_paths: set[str] = set()
+        if doc._force_horizontal_ltr_export:
+            visible_toc_document_paths = cls._extract_visible_toc_document_paths(metadata_json)
+            visible_toc_document_paths.update(cls._infer_visible_toc_document_paths(sources_sorted))
+        member_updates = cls._collect_member_updates(
+            doc,
+            sources_sorted,
+            persisted_reembedded,
+            visible_toc_document_paths=visible_toc_document_paths,
+        )
 
         if doc._translated_toc:
             toc_to_apply = doc._translated_toc
-            metadata_source = next((s for s in sources_sorted if cls._is_metadata_source(s)), None)
-            if metadata_source is not None:
-                try:
-                    metadata_json = json.loads(metadata_source["text_content"])
-                except Exception:
-                    metadata_json = {}
-                original_toc_json = metadata_json.get("toc", [])
-                package_path = str(metadata_json.get("package_path", ""))
-                if isinstance(original_toc_json, list) and original_toc_json:
-                    original_toc = cls._deserialize_toc(original_toc_json)
-                    heading_map = cls._build_heading_translation_map(sources_sorted, doc._translated_chapters)
-                    if heading_map:
-                        toc_to_apply = cls._sync_toc_with_chapter_headings(
-                            doc._translated_toc,
-                            original_toc,
-                            heading_map,
-                            package_path,
-                        )
+            original_toc_json = metadata_json.get("toc", [])
+            package_path = str(metadata_json.get("package_path", ""))
+            if isinstance(original_toc_json, list) and original_toc_json:
+                original_toc = cls._deserialize_toc(original_toc_json)
+                heading_map = cls._build_heading_translation_map(sources_sorted, doc._translated_chapters)
+                if heading_map:
+                    toc_to_apply = cls._sync_toc_with_chapter_headings(
+                        doc._translated_toc,
+                        original_toc,
+                        heading_map,
+                        package_path,
+                    )
 
             member_updates.update(
                 cls._collect_toc_label_updates(
@@ -1354,31 +1880,25 @@ class EPUBDocument(Document):
                 )
             )
 
-        metadata_source = next((s for s in sources_sorted if cls._is_metadata_source(s)), None)
-        if metadata_source is not None:
-            try:
-                metadata_json = json.loads(metadata_source["text_content"])
-            except Exception:
-                metadata_json = {}
+        package_path = str(metadata_json.get("package_path", "")).strip().lstrip("/")
+        translated_language_tag = cls._to_bcp47_language_tag(doc._translation_target_language)
+        if doc._translation_target_language and translated_language_tag is None:
+            logger.warning(
+                "Unknown translation target language '%s'; keeping original OPF dc:language",
+                doc._translation_target_language,
+            )
 
-            package_path = str(metadata_json.get("package_path", "")).strip().lstrip("/")
-            translated_language_tag = cls._to_bcp47_language_tag(doc._translation_target_language)
-            if doc._translation_target_language and translated_language_tag is None:
-                logger.warning(
-                    "Unknown translation target language '%s'; keeping original OPF dc:language",
-                    doc._translation_target_language,
+        if package_path:
+            opf_payload = cls._read_member_payload_from_archive(base_epub, package_path)
+            if opf_payload is not None:
+                patched_opf = cls._patch_opf_metadata_payload(
+                    opf_payload,
+                    translated_title=doc._translated_metadata_title,
+                    translated_language_tag=translated_language_tag,
+                    force_horizontal_ltr=doc._force_horizontal_ltr_export,
                 )
-
-            if package_path:
-                opf_payload = cls._read_member_payload_from_archive(base_epub, package_path)
-                if opf_payload is not None:
-                    patched_opf = cls._patch_opf_metadata_payload(
-                        opf_payload,
-                        translated_title=doc._translated_metadata_title,
-                        translated_language_tag=translated_language_tag,
-                    )
-                    if patched_opf is not None:
-                        member_updates[package_path] = patched_opf
+                if patched_opf is not None:
+                    member_updates[package_path] = patched_opf
 
         output_path.write_bytes(patch_epub_members(base_epub, member_updates))
 
@@ -1397,8 +1917,11 @@ class EPUBDocument(Document):
         doc: EPUBDocument,
         sources_sorted: list[dict[str, Any]],
         persisted_reembedded: dict[int, tuple[bytes, str]],
+        *,
+        visible_toc_document_paths: set[str] | None = None,
     ) -> dict[str, bytes]:
         updates: dict[str, bytes] = {}
+        toc_document_paths = visible_toc_document_paths or set()
         for source in sources_sorted:
             if cls._is_metadata_source(source) or cls._is_original_archive_source(source):
                 continue
@@ -1406,11 +1929,28 @@ class EPUBDocument(Document):
             relative_path = str(source.get("relative_path", ""))
             if not relative_path:
                 continue
+            normalized_relative_path = relative_path.strip().lstrip("/")
+            toc_document = normalized_relative_path in toc_document_paths
 
             if source["source_type"] == "text":
                 translated = doc._translated_chapters.get(source["source_id"], source["text_content"])
-                translated = cls._normalize_text_source_for_export(source, translated)
+                translated = cls._normalize_text_source_for_export(
+                    source,
+                    translated,
+                    force_horizontal_ltr=doc._force_horizontal_ltr_export,
+                    toc_document=toc_document,
+                )
                 updates[relative_path] = translated.encode("utf-8")
+                continue
+
+            if source["source_type"] == "asset":
+                normalized_asset = cls._normalize_asset_payload_for_export(
+                    source,
+                    force_horizontal_ltr=doc._force_horizontal_ltr_export,
+                    toc_document=toc_document,
+                )
+                if normalized_asset is not None:
+                    updates[relative_path] = normalized_asset
                 continue
 
             if source["source_type"] == "image" and source.get("binary_content"):

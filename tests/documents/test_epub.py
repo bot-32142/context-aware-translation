@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from PIL import Image
 
-from context_aware_translation.config import OCRConfig
+from context_aware_translation.config import OCRConfig, TranslatorConfig
 from context_aware_translation.documents.epub import METADATA_PATH, EPUBDocument
 from context_aware_translation.documents.epub_container import (
     EpubBook,
@@ -21,6 +21,7 @@ from context_aware_translation.documents.epub_container import (
     read_epub,
     write_epub,
 )
+from context_aware_translation.documents.epub_xhtml_utils import extract_text_from_xhtml
 
 # =========================================================================
 # Fixtures
@@ -218,6 +219,171 @@ def _make_epub_with_inline_toc_nav_label(tmp_path: Path) -> Path:
         zf.writestr("OEBPS/ch1.xhtml", "<html><body><p>Hello</p></body></html>")
         zf.writestr("OEBPS/nav.xhtml", nav_xhtml)
         zf.writestr("OEBPS/toc.ncx", ncx_xml)
+    return epub_path
+
+
+def _make_epub_with_vertical_nav_title(tmp_path: Path) -> Path:
+    """Create an EPUB with a vertical-styled nav document title."""
+    epub_path = tmp_path / "vertical_nav_title.epub"
+
+    container_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"""
+
+    opf_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Vertical Nav Title</dc:title>
+  </metadata>
+  <manifest>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="navdoc" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+  </manifest>
+  <spine>
+    <itemref idref="ch1"/>
+  </spine>
+</package>"""
+
+    chapter_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body><p>Hello</p></body>
+</html>"""
+
+    nav_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" dir="rtl">
+  <head>
+    <style type="text/css">
+      body { writing-mode: vertical-rl; direction: rtl; }
+      h1 { height: 1em; overflow: hidden; }
+      nav li { position: relative; left: -0.5em; }
+      nav a {
+        display: block;
+        height: 1em;
+        overflow: hidden;
+        text-indent: -0.5em;
+      }
+    </style>
+  </head>
+  <body style="writing-mode: vertical-rl; direction: rtl;">
+    <h1 style="height: 1em; overflow: hidden;">目录</h1>
+    <nav epub:type="toc">
+      <ol><li><a href="ch1.xhtml">Chapter 1</a></li></ol>
+    </nav>
+  </body>
+</html>"""
+
+    with zipfile.ZipFile(epub_path, "w") as zf:
+        zf.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+        zf.writestr("META-INF/container.xml", container_xml)
+        zf.writestr("OEBPS/content.opf", opf_xml)
+        zf.writestr("OEBPS/ch1.xhtml", chapter_xhtml)
+        zf.writestr("OEBPS/nav.xhtml", nav_xhtml)
+    return epub_path
+
+
+def _make_epub_with_vertical_toc_document(tmp_path: Path, *, include_guide_reference: bool) -> Path:
+    epub_name = "vertical_toc_with_guide.epub" if include_guide_reference else "vertical_toc_inferred.epub"
+    epub_path = tmp_path / epub_name
+
+    container_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"""
+
+    guide_xml = (
+        """
+  <guide>
+    <reference type="toc" title="目次" href="c21.xhtml"/>
+  </guide>"""
+        if include_guide_reference
+        else ""
+    )
+
+    opf_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Vertical TOC</dc:title>
+    <dc:language>ja</dc:language>
+  </metadata>
+  <manifest>
+    <item id="css" href="stylesheet.css" media-type="text/css"/>
+    <item id="tocpage" href="c21.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch1" href="c3M.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch2" href="cGW.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ch3" href="c1A8.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine page-progression-direction="rtl">
+    <itemref idref="tocpage"/>
+    <itemref idref="ch1"/>
+    <itemref idref="ch2"/>
+    <itemref idref="ch3"/>
+  </spine>{guide_xml}
+</package>"""
+
+    toc_xhtml = """<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ja" dir="rtl">
+<head>
+<link rel="stylesheet" type="text/css" href="stylesheet.css" />
+<title>c21</title>
+</head>
+<body class="class-2" style="writing-mode: vertical-rl; direction: rtl;">
+<p class="class_s27">目录</p>
+<div class="class_s2R"><p class="class_s29-0"><a href="c3M.xhtml" class="class_s5CR"><span class="class_s5CS">序章</span> 春天是踏上旅途的季节！</a></p><p class="class_s29-0"><a href="cGW.xhtml" class="class_s5CR"><span class="class_s5CS">第一章</span> 我的名字是纳佐野·赛涅！</a></p><p class="class_s29-0"><a href="c1A8.xhtml" class="class_s5CR"><span class="class_s5CS">第二章</span> 这次你一定看不穿我的变装！</a></p></div>
+</body>
+</html>"""
+
+    chapter_xhtml = """<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body><p>正文</p></body>
+</html>"""
+
+    css_text = """
+body {
+  writing-mode: vertical-rl;
+  direction: rtl;
+}
+.class-2 {
+  writing-mode: vertical-rl;
+  direction: rtl;
+}
+.class_s27 {
+  font-size: 1.3em;
+  margin-top: 2.30769em;
+}
+.class_s2R {
+  color: blue;
+  font-size: 1.1em;
+  margin-right: 1.90909em;
+  margin-top: 1.81818em;
+  padding-top: 4em;
+  text-indent: -4em;
+}
+.class_s29-0 {
+  margin-left: 0;
+  margin-right: 0;
+}
+.class_s5CR {
+  text-decoration: overline;
+}
+.class_s5CS {
+  font-weight: bold;
+}
+"""
+
+    with zipfile.ZipFile(epub_path, "w") as zf:
+        zf.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+        zf.writestr("META-INF/container.xml", container_xml)
+        zf.writestr("OEBPS/content.opf", opf_xml)
+        zf.writestr("OEBPS/c21.xhtml", toc_xhtml)
+        zf.writestr("OEBPS/c3M.xhtml", chapter_xhtml)
+        zf.writestr("OEBPS/cGW.xhtml", chapter_xhtml)
+        zf.writestr("OEBPS/c1A8.xhtml", chapter_xhtml)
+        zf.writestr("OEBPS/stylesheet.css", css_text)
     return epub_path
 
 
@@ -850,6 +1016,39 @@ class TestGetText:
 
         assert "Original Book Name" in lines
 
+    def test_get_text_strips_epub_ruby_annotations_by_default(self, tmp_path: Path):
+        chapters = [
+            ("ch1.xhtml", "<html><body><p>Before <ruby>漢字<rt>かんじ</rt></ruby> after</p></body></html>"),
+        ]
+        epub_path = _make_epub_file(tmp_path, chapters=chapters)
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+
+        doc_row = repo.list_documents()[0]
+        doc = EPUBDocument(repo, doc_row["document_id"])
+        lines = doc.get_text().splitlines()
+
+        assert "Before ⟪RUBY:0⟫漢字⟪/RUBY:0⟫ after" in lines
+        assert not any("かんじ" in line for line in lines)
+
+    def test_get_text_keeps_epub_ruby_annotations_when_flag_disabled(self, tmp_path: Path):
+        chapters = [
+            ("ch1.xhtml", "<html><body><p>Before <ruby>漢字<rt>かんじ</rt></ruby> after</p></body></html>"),
+        ]
+        epub_path = _make_epub_file(tmp_path, chapters=chapters)
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+
+        doc_row = repo.list_documents()[0]
+        doc = EPUBDocument(
+            repo,
+            doc_row["document_id"],
+            translator_config=TranslatorConfig(strip_epub_ruby=False),
+        )
+        lines = doc.get_text().splitlines()
+
+        assert "Before ⟪RUBY:0⟫漢字(かんじ)⟪/RUBY:0⟫ after" in lines
+
     def test_get_text_includes_page_list_and_landmarks_labels(self, tmp_path: Path):
         epub_path = _make_epub_with_nav_sections(tmp_path)
         repo = _setup_repo(tmp_path)
@@ -1389,6 +1588,17 @@ class TestCanExport:
 
 
 class TestExport:
+    @pytest.mark.parametrize(
+        ("language_label", "expected_tag"),
+        [
+            ("中文（简体）", "zh-Hans"),
+            ("English", "en"),
+            ("日本語", "ja"),
+        ],
+    )
+    def test_to_bcp47_language_tag_accepts_ui_display_labels(self, language_label: str, expected_tag: str):
+        assert EPUBDocument._to_bcp47_language_tag(language_label) == expected_tag
+
     def test_export_preserve_structure_raises(self, tmp_path: Path):
         repo = _setup_repo(tmp_path)
         doc = EPUBDocument(repo, 1)
@@ -1454,6 +1664,59 @@ class TestExport:
         assert read_back.metadata.title == "Libro Traducido"
 
     @pytest.mark.asyncio
+    async def test_export_epub_strips_ruby_annotations_when_enabled(self, tmp_path: Path):
+        chapters = [
+            ("ch1.xhtml", "<html><body><p>Before <ruby>漢字<rt>かんじ</rt></ruby> after</p></body></html>"),
+        ]
+        epub_path = _make_epub_file(tmp_path, chapters=chapters)
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+
+        doc_row = repo.list_documents()[0]
+        doc = EPUBDocument(repo, doc_row["document_id"])
+        source_lines = doc.get_text().splitlines()
+        consumed = await doc.set_text(source_lines)
+        assert consumed == len(source_lines)
+
+        output = tmp_path / "ruby_stripped.epub"
+        EPUBDocument.export_merged([doc], "epub", output)
+
+        with zipfile.ZipFile(output, "r") as zf:
+            chapter_out = zf.read("OEBPS/ch1.xhtml").decode("utf-8")
+
+        assert "かんじ" not in chapter_out
+        assert extract_text_from_xhtml(chapter_out, strip_ruby_annotations=True) == [
+            "Before ⟪RUBY:0⟫漢字⟪/RUBY:0⟫ after"
+        ]
+
+    @pytest.mark.asyncio
+    async def test_export_epub_keeps_ruby_annotations_when_disabled(self, tmp_path: Path):
+        chapters = [
+            ("ch1.xhtml", "<html><body><p>Before <ruby>漢字<rt>かんじ</rt></ruby> after</p></body></html>"),
+        ]
+        epub_path = _make_epub_file(tmp_path, chapters=chapters)
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+
+        doc_row = repo.list_documents()[0]
+        doc = EPUBDocument(
+            repo,
+            doc_row["document_id"],
+            translator_config=TranslatorConfig(strip_epub_ruby=False),
+        )
+        source_lines = doc.get_text().splitlines()
+        consumed = await doc.set_text(source_lines)
+        assert consumed == len(source_lines)
+
+        output = tmp_path / "ruby_preserved.epub"
+        EPUBDocument.export_merged([doc], "epub", output)
+
+        with zipfile.ZipFile(output, "r") as zf:
+            chapter_out = zf.read("OEBPS/ch1.xhtml").decode("utf-8")
+
+        assert "かんじ" in chapter_out
+
+    @pytest.mark.asyncio
     async def test_export_epub_updates_opf_dc_language_from_target_language(self, tmp_path: Path):
         epub_path = _make_epub_file(
             tmp_path,
@@ -1476,6 +1739,186 @@ class TestExport:
 
         read_back = read_epub(output)
         assert read_back.metadata.language == "zh-Hans"
+
+    @pytest.mark.asyncio
+    async def test_export_epub_updates_opf_dc_language_from_ui_display_label(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ):
+        epub_path = _make_epub_file(
+            tmp_path,
+            chapters=[("ch1.xhtml", "<html><body><p>Body text</p></body></html>")],
+            title="Book",
+            language="ja",
+        )
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+
+        doc_row = repo.list_documents()[0]
+        doc = EPUBDocument(repo, doc_row["document_id"])
+        source_lines = doc.get_text().splitlines()
+        consumed = await doc.set_text(source_lines)
+        assert consumed == len(source_lines)
+        doc.set_translation_target_language("中文（简体）")
+
+        caplog.set_level("WARNING")
+        output = tmp_path / "language_translated_display_label.epub"
+        EPUBDocument.export_merged([doc], "epub", output)
+
+        read_back = read_epub(output)
+        assert read_back.metadata.language == "zh-Hans"
+        assert not any("Unknown translation target language" in record.getMessage() for record in caplog.records)
+
+    def test_export_epub_can_force_horizontal_ltr_layout(self, tmp_path: Path):
+        epub_path = tmp_path / "vertical_book.epub"
+
+        container_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"""
+
+        opf_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Vertical Book</dc:title>
+    <dc:language>ja</dc:language>
+  </metadata>
+  <manifest>
+    <item id="css" href="style.css" media-type="text/css"/>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine page-progression-direction="rtl">
+    <itemref idref="ch1"/>
+  </spine>
+</package>"""
+
+        chapter_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" dir="rtl">
+  <head>
+    <link rel="stylesheet" href="style.css"/>
+  </head>
+  <body style="writing-mode: vertical-rl; direction: rtl;">
+    <p style="-epub-writing-mode: vertical-rl; text-orientation: upright;">縦書き本文</p>
+  </body>
+</html>"""
+
+        css_text = """
+body {
+  writing-mode: vertical-rl;
+  direction: rtl;
+}
+
+p {
+  -epub-writing-mode: vertical-rl;
+  text-orientation: upright;
+}
+"""
+
+        with zipfile.ZipFile(epub_path, "w") as zf:
+            zf.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+            zf.writestr("META-INF/container.xml", container_xml)
+            zf.writestr("OEBPS/content.opf", opf_xml)
+            zf.writestr("OEBPS/ch1.xhtml", chapter_xml)
+            zf.writestr("OEBPS/style.css", css_text)
+
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+
+        doc_row = repo.list_documents()[0]
+        doc = EPUBDocument(repo, doc_row["document_id"])
+        doc.set_export_layout_preferences(force_horizontal_ltr=True)
+
+        output = tmp_path / "horizontal_ltr.epub"
+        EPUBDocument.export_merged([doc], "epub", output)
+
+        with zipfile.ZipFile(output, "r") as zf:
+            opf_out = zf.read("OEBPS/content.opf").decode("utf-8")
+            chapter_out = zf.read("OEBPS/ch1.xhtml").decode("utf-8")
+            css_out = zf.read("OEBPS/style.css").decode("utf-8")
+
+        assert 'page-progression-direction="ltr"' in opf_out
+        assert 'page-progression-direction="rtl"' not in opf_out
+        assert 'dir="ltr"' in chapter_out
+        assert "cat-horizontal-ltr-export" in chapter_out
+        assert "writing-mode: horizontal-tb" in chapter_out
+        assert "direction: ltr" in chapter_out
+        assert "text-orientation: mixed" in chapter_out
+        assert "vertical-rl" not in css_out
+        assert "direction: rtl" not in css_out
+        assert "writing-mode: horizontal-tb" in css_out
+        assert "cat-horizontal-ltr-export" in css_out
+
+    def test_export_epub_force_horizontal_ltr_updates_nav_document_title_layout(self, tmp_path: Path):
+        epub_path = _make_epub_with_vertical_nav_title(tmp_path)
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+
+        doc_row = repo.list_documents()[0]
+        doc = EPUBDocument(repo, doc_row["document_id"])
+        doc.set_export_layout_preferences(force_horizontal_ltr=True)
+
+        output = tmp_path / "horizontal_nav.epub"
+        EPUBDocument.export_merged([doc], "epub", output)
+
+        with zipfile.ZipFile(output, "r") as zf:
+            nav_out = zf.read("OEBPS/nav.xhtml").decode("utf-8")
+
+        assert 'dir="ltr"' in nav_out
+        assert "cat-horizontal-ltr-export" in nav_out
+        assert "writing-mode: horizontal-tb" in nav_out
+        assert "direction: ltr" in nav_out
+        assert "height: auto !important;" in nav_out
+        assert "overflow: visible !important;" in nav_out
+        assert "position: static !important;" in nav_out
+        assert "left: auto !important;" in nav_out
+        assert "text-indent: 0 !important;" in nav_out
+        assert "clip-path: none !important;" in nav_out
+        assert "vertical-rl" not in nav_out
+
+    def test_export_epub_force_horizontal_ltr_updates_visible_toc_document_layout(self, tmp_path: Path):
+        epub_path = _make_epub_with_vertical_toc_document(tmp_path, include_guide_reference=True)
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+
+        doc_row = repo.list_documents()[0]
+        doc = EPUBDocument(repo, doc_row["document_id"])
+        doc.set_export_layout_preferences(force_horizontal_ltr=True)
+
+        output = tmp_path / "horizontal_visible_toc.epub"
+        EPUBDocument.export_merged([doc], "epub", output)
+
+        with zipfile.ZipFile(output, "r") as zf:
+            toc_out = zf.read("OEBPS/c21.xhtml").decode("utf-8")
+
+        assert 'data-cat-horizontal-ltr-toc="1"' in toc_out
+        assert "cat-horizontal-ltr-export" in toc_out
+        assert 'body[data-cat-horizontal-ltr-toc="1"] div' in toc_out
+        assert "padding-top: 0 !important;" in toc_out
+        assert "text-indent: 0 !important;" in toc_out
+        assert "display: block !important;" in toc_out
+        assert "writing-mode: horizontal-tb" in toc_out
+        assert 'dir="ltr"' in toc_out
+
+    def test_export_epub_force_horizontal_ltr_infers_visible_toc_document_without_guide(self, tmp_path: Path):
+        epub_path = _make_epub_with_vertical_toc_document(tmp_path, include_guide_reference=False)
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+
+        doc_row = repo.list_documents()[0]
+        doc = EPUBDocument(repo, doc_row["document_id"])
+        doc.set_export_layout_preferences(force_horizontal_ltr=True)
+
+        output = tmp_path / "horizontal_visible_toc_inferred.epub"
+        EPUBDocument.export_merged([doc], "epub", output)
+
+        with zipfile.ZipFile(output, "r") as zf:
+            toc_out = zf.read("OEBPS/c21.xhtml").decode("utf-8")
+
+        assert 'data-cat-horizontal-ltr-toc="1"' in toc_out
+        assert "cat-horizontal-ltr-export" in toc_out
+        assert "padding-top: 0 !important;" in toc_out
+        assert "text-indent: 0 !important;" in toc_out
 
     @pytest.mark.asyncio
     async def test_export_epub_normalizes_xml_header_encoding_to_utf8(self, tmp_path: Path):

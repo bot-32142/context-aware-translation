@@ -127,6 +127,10 @@ class DocumentRepository:
         """Get all sources for a document, ordered by sequence_number."""
         return self.db.get_document_sources(document_id)
 
+    def get_document_sources_without_binary(self, document_id: int) -> list[dict]:
+        """Get source rows needed for text workflows without loading binary blobs."""
+        return self.db.get_document_sources_without_binary(document_id)
+
     def get_document_sources_metadata(self, document_id: int) -> list[dict]:
         """Get source metadata (no binary_content/text_content) for a document."""
         return self.db.get_document_sources_metadata(document_id)

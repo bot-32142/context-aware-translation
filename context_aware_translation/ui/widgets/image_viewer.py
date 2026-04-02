@@ -1,9 +1,12 @@
 """Zoomable image viewer widget."""
 
+import io
 from collections.abc import Callable
 
+from PIL import Image, ImageOps, UnidentifiedImageError
 from PySide6.QtCore import QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPixmap, QWheelEvent
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QGraphicsPixmapItem,
     QGraphicsRectItem,
@@ -90,14 +93,49 @@ class ImageViewer(QGraphicsView):
         Args:
             data: Image binary data
         """
-        # Load image from bytes
-        image = QImage()
-        if not image.loadFromData(data):
+        pixmap = self._decode_pixmap(data)
+        if pixmap is None or pixmap.isNull():
             self.clear_image()
             return
-
-        pixmap = QPixmap.fromImage(image)
         self._set_pixmap(pixmap)
+
+    def _decode_pixmap(self, data: bytes) -> QPixmap | None:
+        if self._looks_like_svg(data):
+            return self._decode_svg_pixmap(data)
+
+        try:
+            with Image.open(io.BytesIO(data)) as pil_image:
+                pil_image = ImageOps.exif_transpose(pil_image)
+                rgba_image = pil_image.convert("RGBA")
+                width, height = rgba_image.size
+                raw_bytes = rgba_image.tobytes("raw", "RGBA")
+        except (UnidentifiedImageError, OSError, ValueError):
+            return None
+
+        image = QImage(raw_bytes, width, height, width * 4, QImage.Format.Format_RGBA8888).copy()
+        return QPixmap.fromImage(image)
+
+    @staticmethod
+    def _looks_like_svg(data: bytes) -> bool:
+        head = data[:512].lstrip()
+        return head.startswith(b"<svg") or (head.startswith(b"<?xml") and b"<svg" in head)
+
+    def _decode_svg_pixmap(self, data: bytes) -> QPixmap | None:
+        renderer = QSvgRenderer(data)
+        if not renderer.isValid():
+            return None
+
+        size = renderer.defaultSize()
+        width = max(size.width(), 1)
+        height = max(size.height(), 1)
+        image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(image)
+        try:
+            renderer.render(painter)
+        finally:
+            painter.end()
+        return QPixmap.fromImage(image)
 
     def _set_pixmap(self, pixmap: QPixmap) -> None:
         """Set the pixmap in the scene.

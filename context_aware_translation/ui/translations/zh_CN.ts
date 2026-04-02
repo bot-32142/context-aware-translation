@@ -1099,13 +1099,13 @@
         <translation>这些工具仅适用于当前文档。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="492"/>
-        <location filename="../features/document_workspace_view.py" line="545"/>
+        <location filename="../features/document_workspace_view.py" line="527"/>
+        <location filename="../features/document_workspace_view.py" line="580"/>
         <source>Document</source>
         <translation>文档</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="500"/>
+        <location filename="../features/document_workspace_view.py" line="535"/>
         <source>%1</source>
         <translation>%1</translation>
     </message>
@@ -2278,109 +2278,114 @@ All completed results are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../features/workflow_profile_editor.py" line="215"/>
+        <source>Strip EPUB ruby annotations</source>
+        <translation>移除 EPUB 注音标注</translation>
+    </message>
+    <message>
+        <location filename="../features/workflow_profile_editor.py" line="221"/>
         <source>Max tokens per call</source>
         <translation>每次调用的最大令牌数</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="223"/>
+        <location filename="../features/workflow_profile_editor.py" line="229"/>
         <source>Chunk size</source>
         <translation>分块大小</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="233"/>
+        <location filename="../features/workflow_profile_editor.py" line="239"/>
         <source>OCR DPI</source>
         <translation>OCR DPI</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="241"/>
+        <location filename="../features/workflow_profile_editor.py" line="247"/>
         <source>Strip artifacts</source>
         <translation>移除伪影</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="288"/>
+        <location filename="../features/workflow_profile_editor.py" line="294"/>
         <source>Auto</source>
         <translation>自动</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="289"/>
+        <location filename="../features/workflow_profile_editor.py" line="295"/>
         <source>Off</source>
         <translation>关闭</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="290"/>
-        <location filename="../features/workflow_profile_editor.py" line="297"/>
+        <location filename="../features/workflow_profile_editor.py" line="296"/>
+        <location filename="../features/workflow_profile_editor.py" line="303"/>
         <source>Low</source>
         <translation>低</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="291"/>
-        <location filename="../features/workflow_profile_editor.py" line="298"/>
+        <location filename="../features/workflow_profile_editor.py" line="297"/>
+        <location filename="../features/workflow_profile_editor.py" line="304"/>
         <source>Medium</source>
         <translation>中</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="292"/>
-        <location filename="../features/workflow_profile_editor.py" line="299"/>
+        <location filename="../features/workflow_profile_editor.py" line="298"/>
+        <location filename="../features/workflow_profile_editor.py" line="305"/>
         <source>High</source>
         <translation>高</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="295"/>
+        <location filename="../features/workflow_profile_editor.py" line="301"/>
         <source>Inherit from connection</source>
         <translation>沿用连接设置</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="296"/>
+        <location filename="../features/workflow_profile_editor.py" line="302"/>
         <source>None</source>
         <translation>无</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="308"/>
+        <location filename="../features/workflow_profile_editor.py" line="314"/>
         <source>Step Settings</source>
         <translation>步骤设置</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="353"/>
+        <location filename="../features/workflow_profile_editor.py" line="359"/>
         <source>Invalid Settings</source>
         <translation>设置无效</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="386"/>
+        <location filename="../features/workflow_profile_editor.py" line="392"/>
         <source>Override</source>
         <translation>覆盖</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="446"/>
+        <location filename="../features/workflow_profile_editor.py" line="452"/>
         <source>Connection overrides apply only to this workflow step and override the selected connection.</source>
         <translation>连接覆盖项仅对当前工作流步骤生效，并会覆盖所选连接的设置。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="249"/>
+        <location filename="../features/workflow_profile_editor.py" line="255"/>
         <source>Temperature</source>
         <translation>温度</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="259"/>
+        <location filename="../features/workflow_profile_editor.py" line="265"/>
         <source>Timeout</source>
         <translation>超时</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="269"/>
+        <location filename="../features/workflow_profile_editor.py" line="275"/>
         <source>Max retries</source>
         <translation>最大重试次数</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="278"/>
+        <location filename="../features/workflow_profile_editor.py" line="284"/>
         <source>Concurrency</source>
         <translation>并发数</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="480"/>
+        <location filename="../features/workflow_profile_editor.py" line="486"/>
         <source>Reasoning effort</source>
         <translation>推理强度</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="487"/>
+        <location filename="../features/workflow_profile_editor.py" line="493"/>
         <source>Custom parameters</source>
         <translation>自定义参数</translation>
     </message>
@@ -2397,32 +2402,32 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation type="vanished">此步骤除连接和模型外没有其他附加设置。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="509"/>
+        <location filename="../features/workflow_profile_editor.py" line="515"/>
         <source>Disabled</source>
         <translation>禁用</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="510"/>
+        <location filename="../features/workflow_profile_editor.py" line="516"/>
         <source>Gemini AI Studio</source>
         <translation>Gemini AI Studio</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="521"/>
+        <location filename="../features/workflow_profile_editor.py" line="527"/>
         <source>Provider</source>
         <translation>提供商</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="522"/>
+        <location filename="../features/workflow_profile_editor.py" line="528"/>
         <source>API key</source>
         <translation>API 密钥</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="523"/>
+        <location filename="../features/workflow_profile_editor.py" line="529"/>
         <source>Batch size</source>
         <translation>批次大小</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="524"/>
+        <location filename="../features/workflow_profile_editor.py" line="530"/>
         <source>Thinking mode</source>
         <translation>思考模式</translation>
     </message>
@@ -3376,28 +3381,28 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>WorkExportDialog</name>
     <message>
-        <location filename="../features/document_workspace_view.py" line="255"/>
-        <location filename="../features/document_workspace_view.py" line="276"/>
+        <location filename="../features/document_workspace_view.py" line="290"/>
+        <location filename="../features/document_workspace_view.py" line="311"/>
         <source>Export</source>
         <translation>导出</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="262"/>
+        <location filename="../features/document_workspace_view.py" line="297"/>
         <source>Export %1</source>
         <translation>导出 %1</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="264"/>
+        <location filename="../features/document_workspace_view.py" line="299"/>
         <source>Export selected documents</source>
         <translation>导出所选文档</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="303"/>
+        <location filename="../features/document_workspace_view.py" line="338"/>
         <source>Export Failed</source>
         <translation>导出失败</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="307"/>
+        <location filename="../features/document_workspace_view.py" line="342"/>
         <source>Export Complete</source>
         <translation>导出完成</translation>
     </message>
@@ -3598,48 +3603,48 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>WorkflowProfileEditorDialog</name>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1054"/>
+        <location filename="../features/workflow_profile_editor.py" line="1060"/>
         <source>Workflow Profile</source>
         <translation>工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1078"/>
+        <location filename="../features/workflow_profile_editor.py" line="1084"/>
         <source>A workflow profile is a user-facing wrapper over the existing step-based config. Edit connection and model choices here.</source>
         <translation>工作流配置档案是对现有分步骤配置的用户界面封装。可在此编辑连接和模型选择。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1083"/>
+        <location filename="../features/workflow_profile_editor.py" line="1089"/>
         <source>General</source>
         <translation>常规</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1105"/>
+        <location filename="../features/workflow_profile_editor.py" line="1111"/>
         <source>Profile name</source>
         <translation>配置档案名称</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1106"/>
+        <location filename="../features/workflow_profile_editor.py" line="1112"/>
         <source>Target language</source>
         <translation>目标语言</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1112"/>
+        <location filename="../features/workflow_profile_editor.py" line="1118"/>
         <source>Workflow Routing</source>
         <translation>工作流路由</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1116"/>
+        <location filename="../features/workflow_profile_editor.py" line="1122"/>
         <source>Use the Advanced column to edit step-specific settings.</source>
         <translation>使用“高级”列编辑步骤专用设置。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1156"/>
         <location filename="../features/workflow_profile_editor.py" line="1162"/>
+        <location filename="../features/workflow_profile_editor.py" line="1168"/>
         <source>Missing Information</source>
         <translation>缺少信息</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1156"/>
+        <location filename="../features/workflow_profile_editor.py" line="1162"/>
         <source>Target language is required.</source>
         <translation>目标语言为必填项。</translation>
     </message>
@@ -3655,34 +3660,34 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>WorkflowRoutesEditor</name>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="619"/>
+        <location filename="../features/workflow_profile_editor.py" line="625"/>
         <source>Step</source>
         <translation>步骤</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="620"/>
+        <location filename="../features/workflow_profile_editor.py" line="626"/>
         <source>Connection</source>
         <translation>连接</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="621"/>
+        <location filename="../features/workflow_profile_editor.py" line="627"/>
         <source>Model</source>
         <translation>模型</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="622"/>
-        <location filename="../features/workflow_profile_editor.py" line="831"/>
+        <location filename="../features/workflow_profile_editor.py" line="628"/>
+        <location filename="../features/workflow_profile_editor.py" line="837"/>
         <source>Advanced</source>
         <translation>高级</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="664"/>
-        <location filename="../features/workflow_profile_editor.py" line="850"/>
+        <location filename="../features/workflow_profile_editor.py" line="670"/>
+        <location filename="../features/workflow_profile_editor.py" line="856"/>
         <source>Direct batch config</source>
         <translation>直接批处理配置</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="775"/>
+        <location filename="../features/workflow_profile_editor.py" line="781"/>
         <source>Select connection</source>
         <translation>选择连接</translation>
     </message>
@@ -3797,22 +3802,22 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation type="vanished">导出此文档</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="372"/>
+        <location filename="../features/document_workspace_view.py" line="407"/>
         <source>Export</source>
         <translation>导出</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="404"/>
+        <location filename="../features/document_workspace_view.py" line="439"/>
         <source>Export Failed</source>
         <translation>导出失败</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="424"/>
+        <location filename="../features/document_workspace_view.py" line="459"/>
         <source>Export this document using the selected format and options.</source>
         <translation>使用所选格式和选项导出此文档。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="428"/>
+        <location filename="../features/document_workspace_view.py" line="463"/>
         <source>Choose a valid format and output path before exporting this document.</source>
         <translation>导出此文档前，请先选择有效的格式和输出路径。</translation>
     </message>
@@ -3820,70 +3825,80 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>_ExportControls</name>
     <message>
-        <location filename="../features/document_workspace_view.py" line="85"/>
+        <location filename="../features/document_workspace_view.py" line="86"/>
         <source>Format</source>
         <translation>格式</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="93"/>
+        <location filename="../features/document_workspace_view.py" line="94"/>
         <source>Browse...</source>
         <translation>浏览...</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="96"/>
+        <location filename="../features/document_workspace_view.py" line="97"/>
         <source>Output path</source>
         <translation>输出路径</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="99"/>
+        <location filename="../features/document_workspace_view.py" line="100"/>
         <source>Preserve folder structure</source>
         <translation>保留文件夹结构</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="104"/>
+        <location filename="../features/document_workspace_view.py" line="105"/>
         <source>Allow fallback to original content for untranslated chunks</source>
         <translation>允许未翻译分块回退为原始内容</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="134"/>
+        <location filename="../features/document_workspace_view.py" line="111"/>
+        <source>Convert vertical Japanese EPUB to horizontal left-to-right</source>
+        <translation>将纵排日文 EPUB 转为横排从左到右</translation>
+    </message>
+    <message>
+        <location filename="../features/document_workspace_view.py" line="115"/>
+        <source>EPUB only. Forces horizontal left-to-right layout and scrollbar direction in the exported file.</source>
+        <translation>仅适用于 EPUB。会在导出的文件中强制使用横排从左到右布局，并同步调整滚动方向。</translation>
+    </message>
+    <message>
+        <location filename="../features/document_workspace_view.py" line="146"/>
         <source>Preserve folder structure is not supported for this export.</source>
         <translation>此导出不支持保留文件夹结构。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="143"/>
+        <location filename="../features/document_workspace_view.py" line="155"/>
         <source>Fallback to original content is only needed when translation is incomplete.</source>
         <translation>仅在翻译不完整时才需要回退到原始内容。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="177"/>
+        <location filename="../features/document_workspace_view.py" line="193"/>
         <source>Output path is required.</source>
         <translation>输出路径为必填项。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="218"/>
+        <location filename="../features/document_workspace_view.py" line="253"/>
         <source>Select Output Folder</source>
         <translation>选择输出文件夹</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="177"/>
-        <location filename="../features/document_workspace_view.py" line="181"/>
-        <location filename="../features/document_workspace_view.py" line="224"/>
+        <location filename="../features/document_workspace_view.py" line="193"/>
+        <location filename="../features/document_workspace_view.py" line="197"/>
+        <location filename="../features/document_workspace_view.py" line="259"/>
         <source>Missing Information</source>
         <translation>缺少信息</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="181"/>
-        <location filename="../features/document_workspace_view.py" line="224"/>
+        <location filename="../features/document_workspace_view.py" line="197"/>
+        <location filename="../features/document_workspace_view.py" line="259"/>
         <source>Export format is required.</source>
         <translation>导出格式为必填项。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="229"/>
+        <location filename="../features/document_workspace_view.py" line="264"/>
         <source>Save Export File</source>
         <translation>保存导出文件</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="231"/>
+        <location filename="../features/document_workspace_view.py" line="266"/>
         <source>%1 Files (*.%2)</source>
         <translation>%1 文件 (*.%2)</translation>
     </message>

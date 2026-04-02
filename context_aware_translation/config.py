@@ -208,6 +208,7 @@ class TranslatorConfig(LLMConfig):
 
     # Translation-specific settings
     enable_polish: bool = True
+    strip_epub_ruby: bool = True
     num_of_chunks_per_llm_call: int = 3
     max_tokens_per_llm_call: int = 4000
     chunk_size: int = 1000  # Max token size per chunk for text processing
@@ -218,6 +219,7 @@ class TranslatorConfig(LLMConfig):
         base.update(
             {
                 "enable_polish": self.enable_polish,
+                "strip_epub_ruby": self.strip_epub_ruby,
                 "num_of_chunks_per_llm_call": self.num_of_chunks_per_llm_call,
                 "max_tokens_per_llm_call": self.max_tokens_per_llm_call,
                 "chunk_size": self.chunk_size,
@@ -241,6 +243,7 @@ class TranslatorConfig(LLMConfig):
             kwargs=data.get("kwargs", {}),
             _explicit_fields=_explicit_llm_fields(data, cls),
             enable_polish=data.get("enable_polish", True),
+            strip_epub_ruby=data.get("strip_epub_ruby", True),
             num_of_chunks_per_llm_call=data.get("num_of_chunks_per_llm_call", 3),
             max_tokens_per_llm_call=data.get("max_tokens_per_llm_call", 4000),
             chunk_size=data.get("chunk_size", 1000),

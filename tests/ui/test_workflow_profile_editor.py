@@ -404,6 +404,34 @@ def test_step_advanced_config_dialog_updates_route_config():
     }
 
 
+def test_step_advanced_config_dialog_updates_translator_ruby_flag():
+    from context_aware_translation.ui.features.workflow_profile_editor import StepAdvancedConfigDialog
+
+    route = WorkflowStepRoute(
+        step_id=WorkflowStepId.TRANSLATOR,
+        step_label="Translator",
+        connection_id="conn-gemini",
+        connection_label="Gemini",
+        model="gemini-3-flash-preview",
+        step_config={
+            "strip_epub_ruby": False,
+            "max_tokens_per_llm_call": 4000,
+            "chunk_size": 1000,
+        },
+    )
+
+    dialog = StepAdvancedConfigDialog(route)
+    assert dialog.strip_epub_ruby_check.isChecked() is False
+    dialog.strip_epub_ruby_check.setChecked(True)
+    dialog.max_tokens_spin.setValue(5000)
+    dialog.chunk_size_spin.setValue(1200)
+
+    updated = dialog.route()
+    assert updated.step_config["strip_epub_ruby"] is True
+    assert updated.step_config["max_tokens_per_llm_call"] == 5000
+    assert updated.step_config["chunk_size"] == 1200
+
+
 def test_workflow_profile_editor_shows_advanced_button_for_each_step():
     from context_aware_translation.ui.features import workflow_profile_editor as editor_module
 

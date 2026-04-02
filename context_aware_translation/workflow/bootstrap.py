@@ -70,6 +70,7 @@ def _build_manager(
         chunk_translator=chunk_translator,
         term_reviewer=term_reviewer,
         term_memory_updater=term_memory_updater,
+        max_term_description_length=runtime_config.summarizor_config.max_term_description_length,
     )
     manager = TranslationContextManagerAdapter(base_manager)
 

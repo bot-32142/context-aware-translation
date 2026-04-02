@@ -202,7 +202,7 @@ class ImageReembeddingHandler:
                     return Decision(allowed=False, reason="source_ids must contain only integers.")
                 all_source_ids: set[int] = set()
                 for d in selected_docs:
-                    doc_sources = doc_repo.get_document_sources(int(d["document_id"]))
+                    doc_sources = doc_repo.get_document_sources_metadata(int(d["document_id"]))
                     for s in doc_sources:
                         all_source_ids.add(int(s["source_id"]))
                 missing = source_id_set - all_source_ids

@@ -174,7 +174,7 @@ def _iter_block_slot_roots(elem: _ET.Element) -> Iterator[tuple[_ET.Element, boo
         yield from _iter_block_slot_roots(child)
 
 
-def _collect_ruby_text(ruby_elem: _ET.Element) -> str:
+def _collect_ruby_text(ruby_elem: _ET.Element, *, strip_annotations: bool = False) -> str:
     """Merge <ruby> base text and <rt> annotation into a single string.
 
     Example: <ruby>泥掘り<rt>マッドディグ</rt></ruby>  →  "泥掘り(マッドディグ)"
@@ -191,6 +191,8 @@ def _collect_ruby_text(ruby_elem: _ET.Element) -> str:
         elif tag == "rt":
             rt_text = child.text or ""
             break
+    if strip_annotations:
+        return base
     if rt_text.strip():
         return f"{base}({rt_text})"
     return base
@@ -299,7 +301,12 @@ def _nearest_render_parent(stack: list[_ET.Element | None]) -> _ET.Element | Non
     return None
 
 
-def _set_text_slot_from_inline_markers_source_truth(node: _ET.Element, value: str) -> None:
+def _set_text_slot_from_inline_markers_source_truth(
+    node: _ET.Element,
+    value: str,
+    *,
+    strip_ruby_annotations: bool = False,
+) -> None:
     normalized = _normalize_alt_inline_marker_delimiters(value)
     try:
         tokens, segments = _scan_merged_translation(
@@ -367,7 +374,7 @@ def _set_text_slot_from_inline_markers_source_truth(node: _ET.Element, value: st
                 continue
             ruby = _ET.Element(_qualified_inline_tag(node, "ruby"))
             parent.append(ruby)
-            _set_ruby_text(ruby, seg)
+            _set_ruby_text(ruby, seg, strip_annotations=strip_ruby_annotations)
             continue
 
         if _MERGED_RUBY_CLOSE_RE.match(token):
@@ -404,6 +411,7 @@ def _iter_translatable_slots(
     elem: _ET.Element,
     *,
     skip_block_descendants: bool = False,
+    strip_ruby_annotations: bool = False,
 ) -> Iterator[tuple[_ET.Element, str, str | None, str]]:
     """Yield translatable slots (text/tail/attribute) in document order."""
     text = elem.text
@@ -419,7 +427,7 @@ def _iter_translatable_slots(
         if child_local == "ruby":
             # Merge base text + <rt> annotation into one slot so that ruby
             # annotations don't fragment sentences into extra translation blocks.
-            combined = _collect_ruby_text(child)
+            combined = _collect_ruby_text(child, strip_annotations=strip_ruby_annotations)
             if combined.strip():
                 yield (child, "ruby", None, combined)
             tail = child.tail
@@ -430,7 +438,11 @@ def _iter_translatable_slots(
             continue
         child_is_block = child_local in BLOCK_TAGS
         if not (skip_block_descendants and child_is_block):
-            yield from _iter_translatable_slots(child, skip_block_descendants=skip_block_descendants)
+            yield from _iter_translatable_slots(
+                child,
+                skip_block_descendants=skip_block_descendants,
+                strip_ruby_annotations=strip_ruby_annotations,
+            )
         tail = child.tail
         if tail is not None and tail.strip():
             yield (child, "tail", None, tail)
@@ -493,7 +505,7 @@ def _has_descendant_block(elem: _ET.Element) -> bool:
     return False
 
 
-def _has_non_whitespace_inline_text(elem: _ET.Element) -> bool:
+def _has_non_whitespace_inline_text(elem: _ET.Element, *, strip_ruby_annotations: bool = False) -> bool:
     text = elem.text
     if text is not None and text.strip():
         return True
@@ -502,9 +514,9 @@ def _has_non_whitespace_inline_text(elem: _ET.Element) -> bool:
         child_local = _local_tag(child.tag)
         if child_local in _RUBY_ANNOTATION_TAGS:
             continue
-        if child_local == "ruby" and _collect_ruby_text(child).strip():
+        if child_local == "ruby" and _collect_ruby_text(child, strip_annotations=strip_ruby_annotations).strip():
             return True
-        if _has_non_whitespace_inline_text(child):
+        if _has_non_whitespace_inline_text(child, strip_ruby_annotations=strip_ruby_annotations):
             return True
         tail = child.tail
         if tail is not None and tail.strip():
@@ -513,7 +525,12 @@ def _has_non_whitespace_inline_text(elem: _ET.Element) -> bool:
     return False
 
 
-def _is_merge_inline_candidate(block: _ET.Element, *, skip_block_descendants: bool) -> bool:
+def _is_merge_inline_candidate(
+    block: _ET.Element,
+    *,
+    skip_block_descendants: bool,
+    strip_ruby_annotations: bool = False,
+) -> bool:
     if skip_block_descendants:
         return False
     if _local_tag(block.tag) == "pre":
@@ -525,7 +542,11 @@ def _is_merge_inline_candidate(block: _ET.Element, *, skip_block_descendants: bo
     # If block content already maps to a single text slot, keep it plain.
     content_slots = [
         (node, slot_kind, text)
-        for node, slot_kind, _attr_name, text in _iter_translatable_slots(block, skip_block_descendants=False)
+        for node, slot_kind, _attr_name, text in _iter_translatable_slots(
+            block,
+            skip_block_descendants=False,
+            strip_ruby_annotations=strip_ruby_annotations,
+        )
         if slot_kind != "attr"
     ]
     if len(content_slots) <= 1:
@@ -541,9 +562,9 @@ def _is_merge_inline_candidate(block: _ET.Element, *, skip_block_descendants: bo
         if child_local == "br":
             return True
         if child_local == "ruby":
-            if _collect_ruby_text(child).strip():
+            if _collect_ruby_text(child, strip_annotations=strip_ruby_annotations).strip():
                 return True
-        elif _has_non_whitespace_inline_text(child):
+        elif _has_non_whitespace_inline_text(child, strip_ruby_annotations=strip_ruby_annotations):
             return True
         tail = child.tail
         if tail is not None and tail.strip():
@@ -552,7 +573,7 @@ def _is_merge_inline_candidate(block: _ET.Element, *, skip_block_descendants: bo
     return False
 
 
-def _build_merged_inline_plan(block: _ET.Element) -> _MergedInlinePlan:
+def _build_merged_inline_plan(block: _ET.Element, *, strip_ruby_annotations: bool = False) -> _MergedInlinePlan:
     tokens: list[str] = []
     anchors: list[_MergedAnchor] = []
     parts: list[str] = []
@@ -576,7 +597,7 @@ def _build_merged_inline_plan(block: _ET.Element) -> _MergedInlinePlan:
 
             if child_local == "ruby":
                 append_token(f"RUBY:{child_path}")
-                append_anchor(child, "ruby", _collect_ruby_text(child))
+                append_anchor(child, "ruby", _collect_ruby_text(child, strip_annotations=strip_ruby_annotations))
                 append_token(f"/RUBY:{child_path}")
                 append_anchor(child, "tail", child.tail)
                 continue
@@ -956,6 +977,7 @@ def _apply_aligned_merged_segments(
     block_tag: str,
     original_merged: str,
     translated: str,
+    strip_ruby_annotations: bool = False,
 ) -> None:
     """Apply translated merged-inline segments using deterministic token alignment."""
     assigned, drops = _align_lenient_segments_to_expected(
@@ -980,12 +1002,12 @@ def _apply_aligned_merged_segments(
         elif anchor.slot_kind == "tail":
             anchor.node.tail = replacement
         elif anchor.slot_kind == "ruby":
-            _set_slot_text(anchor.node, "ruby", None, replacement)
+            _set_slot_text(anchor.node, "ruby", None, replacement, strip_ruby_annotations=strip_ruby_annotations)
 
     _remove_lenient_nodes(plan.anchors[0].node, drops)
 
 
-def _clear_merged_inline_content(plan: _MergedInlinePlan) -> None:
+def _clear_merged_inline_content(plan: _MergedInlinePlan, *, strip_ruby_annotations: bool = False) -> None:
     """Clear all translatable text in a merged-inline block.
 
     Used when the translated line is intentionally compressed into an empty
@@ -997,7 +1019,7 @@ def _clear_merged_inline_content(plan: _MergedInlinePlan) -> None:
         elif anchor.slot_kind == "tail":
             anchor.node.tail = ""
         elif anchor.slot_kind == "ruby":
-            _set_slot_text(anchor.node, "ruby", None, "")
+            _set_slot_text(anchor.node, "ruby", None, "", strip_ruby_annotations=strip_ruby_annotations)
 
     # For compressed lines, prune lenient wrappers (<ruby>/<br>/style tags)
     # while preserving strict semantic/media nodes (e.g. <a>, <img>, <abbr>).
@@ -1006,10 +1028,16 @@ def _clear_merged_inline_content(plan: _MergedInlinePlan) -> None:
         _remove_lenient_nodes(plan.anchors[0].node, drops)
 
 
-def _apply_merged_inline_translation(block: _ET.Element, translated: str, original_merged: str) -> None:
-    plan = _build_merged_inline_plan(block)
+def _apply_merged_inline_translation(
+    block: _ET.Element,
+    translated: str,
+    original_merged: str,
+    *,
+    strip_ruby_annotations: bool = False,
+) -> None:
+    plan = _build_merged_inline_plan(block, strip_ruby_annotations=strip_ruby_annotations)
     if not translated.strip():
-        _clear_merged_inline_content(plan)
+        _clear_merged_inline_content(plan, strip_ruby_annotations=strip_ruby_annotations)
         return
 
     try:
@@ -1036,6 +1064,7 @@ def _apply_merged_inline_translation(block: _ET.Element, translated: str, origin
             block_tag=_local_tag(block.tag),
             original_merged=original_merged or plan.merged_text,
             translated=translated,
+            strip_ruby_annotations=strip_ruby_annotations,
         )
     except InlineMergeParseError as exc:
         has_strict_structure = any(_is_strict_inline_token(token) for token in plan.tokens)
@@ -1059,10 +1088,14 @@ def _apply_merged_inline_translation(block: _ET.Element, translated: str, origin
         block_root.text = ""
         for child in list(block_root):
             block_root.remove(child)
-        _set_text_slot_from_inline_markers_source_truth(block_root, translated)
+        _set_text_slot_from_inline_markers_source_truth(
+            block_root,
+            translated,
+            strip_ruby_annotations=strip_ruby_annotations,
+        )
 
 
-def _set_ruby_text(node: _ET.Element, value: str) -> None:
+def _set_ruby_text(node: _ET.Element, value: str, *, strip_annotations: bool = False) -> None:
     """Write translated ruby text to <ruby>, normalizing to a single <rt> annotation.
 
     Note: some EPUBs include alternative annotation containers like <rtc>.
@@ -1078,6 +1111,8 @@ def _set_ruby_text(node: _ET.Element, value: str) -> None:
         rt_text = match.group("rt_ascii") or match.group("rt_full") or ""
     else:
         base_text = _strip_trailing_empty_bracket_pairs(normalized)
+        rt_text = ""
+    if strip_annotations:
         rt_text = ""
     if not rt_text.strip():
         rt_text = ""
@@ -1131,11 +1166,17 @@ def _set_slot_text(
     value: str,
     *,
     source_text: str | None = None,
+    strip_ruby_annotations: bool = False,
 ) -> None:
     if slot_kind == "merged_inline":
-        _apply_merged_inline_translation(node, value, source_text or "")
+        _apply_merged_inline_translation(
+            node,
+            value,
+            source_text or "",
+            strip_ruby_annotations=strip_ruby_annotations,
+        )
     elif slot_kind == "ruby":
-        _set_ruby_text(node, value)
+        _set_ruby_text(node, value, strip_annotations=strip_ruby_annotations)
     elif slot_kind == "tail":
         node.tail = _plain_text_from_marker_string(
             value,
@@ -1144,7 +1185,11 @@ def _set_slot_text(
         )
     elif slot_kind == "text":
         if extract_inline_markers(value, include_unknown=True):
-            _set_text_slot_from_inline_markers_source_truth(node, value)
+            _set_text_slot_from_inline_markers_source_truth(
+                node,
+                value,
+                strip_ruby_annotations=strip_ruby_annotations,
+            )
         else:
             node.text = value
     elif slot_kind == "attr" and attr_name is not None:
@@ -1167,6 +1212,8 @@ def _iter_elements(elem: _ET.Element) -> Iterator[_ET.Element]:
 
 def _collect_translatable_slots(
     root: _ET.Element,
+    *,
+    strip_ruby_annotations: bool = False,
 ) -> list[tuple[_ET.Element, str, str | None, str]]:
     """Collect all translatable slots in stable order.
 
@@ -1178,8 +1225,12 @@ def _collect_translatable_slots(
     seen_attr_slots: set[tuple[int, str]] = set()
 
     for block, skip_block_descendants in _iter_block_slot_roots(root):
-        if _is_merge_inline_candidate(block, skip_block_descendants=skip_block_descendants):
-            merged_plan = _build_merged_inline_plan(block)
+        if _is_merge_inline_candidate(
+            block,
+            skip_block_descendants=skip_block_descendants,
+            strip_ruby_annotations=strip_ruby_annotations,
+        ):
+            merged_plan = _build_merged_inline_plan(block, strip_ruby_annotations=strip_ruby_annotations)
             if any(anchor.text.strip() for anchor in merged_plan.anchors):
                 slots.append((block, "merged_inline", None, merged_plan.merged_text))
             for node, slot_kind, attr_name, slot_text in _iter_translatable_attrs(
@@ -1194,6 +1245,7 @@ def _collect_translatable_slots(
         for node, slot_kind, attr_name, slot_text in _iter_translatable_slots(
             block,
             skip_block_descendants=skip_block_descendants,
+            strip_ruby_annotations=strip_ruby_annotations,
         ):
             slots.append((node, slot_kind, attr_name, slot_text))
             if slot_kind == "attr" and attr_name is not None:
@@ -1249,7 +1301,7 @@ def extract_heading_texts(xhtml_content: str) -> list[str]:
     return headings
 
 
-def extract_text_from_xhtml(xhtml_content: str) -> list[str]:
+def extract_text_from_xhtml(xhtml_content: str, *, strip_ruby_annotations: bool = False) -> list[str]:
     """Extract translatable text slots from XHTML.
 
     Most blocks use slot-level extraction (``.text``/``.tail``/attributes).
@@ -1258,13 +1310,21 @@ def extract_text_from_xhtml(xhtml_content: str) -> list[str]:
     """
     root = DefusedET.fromstring(xhtml_content)
 
-    return [slot_text for _node, _slot_kind, _attr_name, slot_text in _collect_translatable_slots(root)]
+    return [
+        slot_text
+        for _node, _slot_kind, _attr_name, slot_text in _collect_translatable_slots(
+            root,
+            strip_ruby_annotations=strip_ruby_annotations,
+        )
+    ]
 
 
 def inject_translations_into_xhtml(
     xhtml_content: str,
     translations: list[str],
     offset: int = 0,
+    *,
+    strip_ruby_annotations: bool = False,
 ) -> tuple[str, int]:
     """Replace slot values with translations in original extraction order.
 
@@ -1275,11 +1335,21 @@ def inject_translations_into_xhtml(
     root = DefusedET.fromstring(xhtml_content)
 
     pos = offset
-    for node, slot_kind, attr_name, slot_text in _collect_translatable_slots(root):
+    for node, slot_kind, attr_name, slot_text in _collect_translatable_slots(
+        root,
+        strip_ruby_annotations=strip_ruby_annotations,
+    ):
         if pos >= len(translations):
             break
         translated = preserve_outer_whitespace(slot_text, decode_compressed_line(translations[pos]))
-        _set_slot_text(node, slot_kind, attr_name, translated, source_text=slot_text)
+        _set_slot_text(
+            node,
+            slot_kind,
+            attr_name,
+            translated,
+            source_text=slot_text,
+            strip_ruby_annotations=strip_ruby_annotations,
+        )
         pos += 1
 
     consumed = pos - offset

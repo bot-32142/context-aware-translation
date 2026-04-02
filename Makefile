@@ -18,10 +18,17 @@ install-dev:
 	uv sync --group dev
 
 test:
-	$(PYTEST) tests/
+	$(PYTEST) tests/ --ignore=tests/ui/
+	QT_QPA_PLATFORM=offscreen $(PYTHON) scripts/run_ui_tests.py
 
 test-cov:
-	$(PYTEST) tests/ --cov=context_aware_translation --cov-report=term-missing
+	rm -f .coverage .coverage.*
+	$(PYTEST) tests/ --ignore=tests/ui/ --cov=context_aware_translation --cov-report=
+	QT_QPA_PLATFORM=offscreen $(PYTHON) scripts/run_ui_tests.py \
+		--cov=context_aware_translation \
+		--cov-report= \
+		--cov-append
+	uv run coverage report --show-missing
 
 lint:
 	$(RUFF) check context_aware_translation/ tests/

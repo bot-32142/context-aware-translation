@@ -228,6 +228,16 @@ class TestResolveWithProfile:
         assert restored.batch_size == 321
         assert restored.thinking_mode == "high"
 
+    def test_translator_config_strip_epub_ruby_defaults_true(self):
+        restored = TranslatorConfig.from_dict({})
+        assert restored.strip_epub_ruby is True
+        assert restored.to_dict()["strip_epub_ruby"] is True
+
+    def test_translator_config_strip_epub_ruby_round_trips_false(self):
+        restored = TranslatorConfig.from_dict({"strip_epub_ruby": False})
+        assert restored.strip_epub_ruby is False
+        assert restored.to_dict()["strip_epub_ruby"] is False
+
 
 class TestConfigWithProfiles:
     """Tests for Config with endpoint profiles."""

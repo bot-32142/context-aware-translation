@@ -107,7 +107,7 @@ def test_document_has_load_classmethod():
     assert hasattr(Document, "load")
     assert isinstance(inspect.getattr_static(Document, "load"), classmethod)
     load_sig = inspect.signature(Document.load)
-    assert list(load_sig.parameters.keys()) == ["repo", "ocr_config"]
+    assert list(load_sig.parameters.keys()) == ["repo", "ocr_config", "translator_config"]
 
 
 def test_document_load_dispatches_to_text_document():
