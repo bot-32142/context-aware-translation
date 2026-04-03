@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 from bisect import bisect_right
+from dataclasses import dataclass
 from typing import Any, cast
 
 from PySide6.QtCore import QEvent, QSignalBlocker, Qt, QTimer
@@ -15,6 +17,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QButtonGroup,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -66,6 +69,130 @@ _STATUS_ICON: dict[SurfaceStatus, str] = {
     SurfaceStatus.DONE: "✓",
     SurfaceStatus.CANCELLED: "–",
 }
+
+_FIND_MODE_LITERAL = "literal"
+_FIND_MODE_REGEX = "regex"
+_FIND_MODE_WILDCARD = "wildcard"
+_FIND_GROUP_REFERENCE_PATTERN = re.compile(r"(?<!\\)\$(\d+)")
+_FIND_HINT_STYLESHEET = (
+    "color: #5f5447;"
+    "font-size: 12px;"
+    "padding: 6px 10px;"
+    "border: 1px solid #ddd4c8;"
+    "border-radius: 12px;"
+    "background: #fcfaf6;"
+)
+_FIND_FEEDBACK_STYLESHEET = "color: #6b7280; font-size: 12px;"
+_FIND_FEEDBACK_ERROR_STYLESHEET = "color: #b42318; font-size: 12px; font-weight: 600;"
+
+
+def _wildcard_pattern_to_regex(pattern: str) -> str:
+    parts: list[str] = []
+    index = 0
+    while index < len(pattern):
+        char = pattern[index]
+        if char == "\\" and index + 1 < len(pattern):
+            index += 1
+            parts.append(re.escape(pattern[index]))
+        elif char == "\\":
+            parts.append(re.escape(char))
+        elif char == "*":
+            parts.append("([^\\n]*?)")
+        elif char == "?":
+            parts.append("([^\\n])")
+        else:
+            parts.append(re.escape(char))
+        index += 1
+    return "".join(parts)
+
+
+def _normalize_group_references(replacement: str) -> str:
+    literal_dollar = "\0cat-literal-dollar\0"
+    normalized = replacement.replace("$$", literal_dollar)
+    normalized = _FIND_GROUP_REFERENCE_PATTERN.sub(lambda match: rf"\g<{match.group(1)}>", normalized)
+    return normalized.replace(literal_dollar, "$")
+
+
+@dataclass(frozen=True)
+class _SearchSpan:
+    start: int
+    end: int
+
+    @property
+    def length(self) -> int:
+        return self.end - self.start
+
+    @property
+    def is_empty(self) -> bool:
+        return self.length == 0
+
+
+@dataclass(frozen=True)
+class _LastFindMatch:
+    row: int
+    pattern: str
+    mode: str
+    span: _SearchSpan
+
+
+@dataclass(frozen=True)
+class _FindQuery:
+    pattern: str
+    mode: str
+    regex: re.Pattern[str] | None = None
+
+    @classmethod
+    def build(cls, pattern: str, mode: str) -> _FindQuery:
+        if mode == _FIND_MODE_LITERAL:
+            return cls(pattern=pattern, mode=mode)
+        try:
+            regex = re.compile(
+                pattern if mode == _FIND_MODE_REGEX else _wildcard_pattern_to_regex(pattern),
+                re.MULTILINE,
+            )
+        except re.error as exc:  # pragma: no cover - exercised via callers
+            raise ValueError(str(exc)) from exc
+        return cls(pattern=pattern, mode=mode, regex=regex)
+
+    def find_span(self, text: str, *, start_position: int = 0) -> _SearchSpan | None:
+        search_from = max(0, start_position)
+        if self.mode == _FIND_MODE_LITERAL:
+            match_start = text.find(self.pattern, search_from)
+            if match_start < 0:
+                return None
+            return _SearchSpan(match_start, match_start + len(self.pattern))
+
+        if self.regex is None:
+            return None
+        if search_from > len(text):
+            return None
+        match = self.regex.search(text, search_from)
+        if match is None:
+            return None
+        return _SearchSpan(match.start(), match.end())
+
+    def replace_selected(self, selected_text: str, replacement: str) -> str | None:
+        if self.mode == _FIND_MODE_LITERAL:
+            return replacement if selected_text == self.pattern else None
+        if self.regex is None:
+            return None
+        match = self.regex.fullmatch(selected_text)
+        if match is None:
+            return None
+        try:
+            return match.expand(_normalize_group_references(replacement))
+        except re.error as exc:
+            raise ValueError(str(exc)) from exc
+
+    def replace_all(self, text: str, replacement: str) -> str:
+        if self.mode == _FIND_MODE_LITERAL:
+            return text.replace(self.pattern, replacement)
+        if self.regex is None:
+            return text
+        try:
+            return self.regex.sub(_normalize_group_references(replacement), text)
+        except re.error as exc:
+            raise ValueError(str(exc)) from exc
 
 
 class _TranslationUnitListDelegate(QStyledItemDelegate):
@@ -130,6 +257,7 @@ class DocumentTranslationView(QWidget):
         self._translation_block_tops: list[float] = []
         self._translation_block_heights: list[float] = []
         self._shortcuts: list[QShortcut] = []
+        self._last_find_match: _LastFindMatch | None = None
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -189,9 +317,19 @@ class DocumentTranslationView(QWidget):
         translation_panel = QWidget()
         translation_layout = QVBoxLayout(translation_panel)
         translation_layout.setContentsMargins(0, 0, 0, 0)
+
+        translation_header = QHBoxLayout()
+        translation_header.setContentsMargins(0, 0, 0, 0)
         self.translation_label = QLabel(self.tr("Translation"))
         self.translation_label.setStyleSheet("font-weight: 600;")
-        translation_layout.addWidget(self.translation_label)
+        translation_header.addWidget(self.translation_label)
+        translation_header.addStretch()
+        self.search_hint_label = QLabel(self.tr("Find/replace · Ctrl/Cmd+F"))
+        self.search_hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.search_hint_label.setStyleSheet(_FIND_HINT_STYLESHEET)
+        self.search_hint_label.setToolTip(self.tr("Find and replace supports literal, regex, and wildcard patterns."))
+        translation_header.addWidget(self.search_hint_label, 0, Qt.AlignmentFlag.AlignRight)
+        translation_layout.addLayout(translation_header)
 
         self.find_input = QLineEdit()
         self.find_input.setPlaceholderText(self.tr("Find..."))
@@ -211,6 +349,16 @@ class DocumentTranslationView(QWidget):
         self.replace_all_button.clicked.connect(self._replace_all)
         self.close_find_button = QPushButton("\u00d7")
         self.close_find_button.clicked.connect(self._hide_find_panel)
+        self.find_mode_group = QButtonGroup(self)
+        self.find_mode_group.setExclusive(True)
+        self.literal_mode_button = QPushButton(self.tr("Literal"))
+        self.regex_mode_button = QPushButton(self.tr("Regex"))
+        self.wildcard_mode_button = QPushButton(self.tr("Wildcard"))
+        for button in (self.literal_mode_button, self.regex_mode_button, self.wildcard_mode_button):
+            button.setCheckable(True)
+            button.clicked.connect(self._on_find_mode_changed)
+            self.find_mode_group.addButton(button)
+        self.literal_mode_button.setChecked(True)
 
         self.find_panel = QFrame(right_panel)
         self.find_panel.setObjectName("translationFindPanel")
@@ -236,6 +384,18 @@ class DocumentTranslationView(QWidget):
         find_row.addWidget(self.close_find_button)
         find_panel_layout.addLayout(find_row)
 
+        mode_row = QHBoxLayout()
+        mode_row.setContentsMargins(0, 0, 0, 0)
+        mode_row.addWidget(self.literal_mode_button)
+        mode_row.addWidget(self.regex_mode_button)
+        mode_row.addWidget(self.wildcard_mode_button)
+        mode_row.addStretch()
+        find_panel_layout.addLayout(mode_row)
+
+        self.find_feedback_label = create_tip_label("")
+        self.find_feedback_label.setStyleSheet(_FIND_FEEDBACK_STYLESHEET)
+        find_panel_layout.addWidget(self.find_feedback_label)
+
         self.replace_panel = QWidget(self.find_panel)
         replace_row = QHBoxLayout(self.replace_panel)
         replace_row.setContentsMargins(0, 0, 0, 0)
@@ -246,7 +406,7 @@ class DocumentTranslationView(QWidget):
 
         self.translation_text = QTextEdit()
         self._configure_text_editor(self.translation_text, read_only=False)
-        self.translation_text.textChanged.connect(self._schedule_wrapped_line_sync)
+        self.translation_text.textChanged.connect(self._on_translation_text_changed)
         translation_layout.addWidget(self.translation_text, 1)
 
         self.line_hint = QLabel()
@@ -285,6 +445,8 @@ class DocumentTranslationView(QWidget):
         set_button_tone(self.replace_button, size="compact")
         set_button_tone(self.replace_all_button, size="compact")
         set_button_tone(self.close_find_button, "ghost", size="compact")
+        self._refresh_find_mode_buttons()
+        self._refresh_find_feedback()
         set_button_tone(self.save_button, "primary")
         set_button_tone(self.retranslate_button)
         set_button_tone(self.previous_button, size="compact")
@@ -356,6 +518,7 @@ class DocumentTranslationView(QWidget):
 
     def _render_selected_unit(self, unit: TranslationUnitState | None) -> None:
         if unit is None:
+            self._reset_find_match()
             self._rendered_unit_id = None
             self.selection_label.setText(self.tr("No unit selected"))
             self.blocker_label.hide()
@@ -371,6 +534,7 @@ class DocumentTranslationView(QWidget):
             self._sync_chrome_state()
             return
 
+        self._reset_find_match()
         self._clear_find_highlight()
         self._rendered_unit_id = unit.unit_id
         self.selection_label.setText(f"{translate_backend_text(unit.label)} · {self.tr(_STATUS_TEXT[unit.status])}")
@@ -609,61 +773,135 @@ class DocumentTranslationView(QWidget):
         return " | ".join(parts)
 
     def _on_find_text_changed(self, _text: str) -> None:
+        self._reset_find_match()
+        self._clear_find_highlight()
+        self._refresh_find_feedback()
+
+    def _active_find_mode(self) -> str:
+        if self.regex_mode_button.isChecked():
+            return _FIND_MODE_REGEX
+        if self.wildcard_mode_button.isChecked():
+            return _FIND_MODE_WILDCARD
+        return _FIND_MODE_LITERAL
+
+    def _search_mode_feedback(self) -> str:
+        mode = self._active_find_mode()
+        if mode == _FIND_MODE_REGEX:
+            return self.tr("Regex mode supports capture groups. Use $1, $2, ... in replace.")
+        if mode == _FIND_MODE_WILDCARD:
+            return self.tr("Wildcard mode: * matches any characters and ? matches a single character.")
+        return self.tr("Literal mode searches exact text.")
+
+    def _set_find_feedback(self, text: str, *, is_error: bool = False) -> None:
+        self.find_feedback_label.setText(text)
+        self.find_feedback_label.setVisible(bool(text))
+        self.find_feedback_label.setStyleSheet(
+            _FIND_FEEDBACK_ERROR_STYLESHEET if is_error else _FIND_FEEDBACK_STYLESHEET
+        )
+
+    def _refresh_find_mode_buttons(self) -> None:
+        for button in (self.literal_mode_button, self.regex_mode_button, self.wildcard_mode_button):
+            set_button_tone(button, "primary" if button.isChecked() else "ghost", size="compact")
+
+    def _on_find_mode_changed(self) -> None:
+        self._reset_find_match()
+        self._refresh_find_mode_buttons()
+        self._refresh_find_feedback()
         self._clear_find_highlight()
 
-    def _find_next(self) -> None:
+    def _refresh_find_feedback(self) -> None:
+        if not self.find_input.text():
+            self._set_find_feedback(self._search_mode_feedback())
+            return
+        self._build_find_query()
+
+    def _build_find_query(self) -> _FindQuery | None:
         search_text = self.find_input.text()
-        if not search_text or self._state is None or not self._state.units:
+        if not search_text:
+            self._set_find_feedback(self._search_mode_feedback())
+            return None
+        try:
+            query = _FindQuery.build(search_text, self._active_find_mode())
+        except ValueError as exc:
+            self._set_find_feedback(
+                self.tr("Invalid search pattern: %1").replace("%1", str(exc)),
+                is_error=True,
+            )
+            return None
+        self._set_find_feedback(self._search_mode_feedback())
+        return query
+
+    def _find_next(self) -> None:
+        query = self._build_find_query()
+        if query is None or self._state is None or not self._state.units:
             return
         self._show_find_panel(show_replace=self.show_replace_button.isChecked())
         self._clear_find_highlight()
         current_row = self.unit_list.currentRow()
         if current_row < 0:
             current_row = 0
-        start_position = self._find_start_position()
-        match_start = self._find_in_unit_row(current_row, search_text, start_position=start_position)
-        if match_start is not None:
-            self._select_find_match(current_row, match_start, len(search_text))
+        start_position = self._find_start_position(query, current_row)
+        match_span = self._find_in_unit_row(current_row, query, start_position=start_position)
+        if match_span is not None:
+            self._select_find_match(current_row, match_span, query)
             return
 
         for row in range(current_row + 1, len(self._state.units)):
-            match_start = self._find_in_unit_row(row, search_text)
-            if match_start is not None:
-                self._select_find_match(row, match_start, len(search_text))
+            match_span = self._find_in_unit_row(row, query)
+            if match_span is not None:
+                self._select_find_match(row, match_span, query)
                 return
 
         for row in range(0, current_row):
-            match_start = self._find_in_unit_row(row, search_text)
-            if match_start is not None:
-                self._select_find_match(row, match_start, len(search_text))
+            match_span = self._find_in_unit_row(row, query)
+            if match_span is not None:
+                self._select_find_match(row, match_span, query)
                 return
 
-        wrapped_match = self._find_in_unit_row(current_row, search_text)
-        if wrapped_match is not None and wrapped_match < start_position:
-            self._select_find_match(current_row, wrapped_match, len(search_text))
+        wrapped_match = self._find_in_unit_row(current_row, query)
+        if wrapped_match is not None and wrapped_match.start < start_position:
+            self._select_find_match(current_row, wrapped_match, query)
 
     def _replace_current(self) -> None:
-        search_text = self.find_input.text()
-        if not search_text:
+        query = self._build_find_query()
+        if query is None:
             return
         self._show_find_panel(show_replace=True)
         cursor = self.translation_text.textCursor()
-        if cursor.hasSelection() and self._normalized_selected_text(cursor) == search_text:
-            cursor.insertText(self.replace_input.text())
+        if cursor.hasSelection():
+            try:
+                replacement = query.replace_selected(self._normalized_selected_text(cursor), self.replace_input.text())
+            except ValueError as exc:
+                self._set_find_feedback(self.tr("Invalid replacement: %1").replace("%1", str(exc)), is_error=True)
+                return
+            if replacement is not None:
+                cursor.insertText(replacement)
+                self._set_find_feedback(self._search_mode_feedback())
         self._find_next()
 
     def _replace_all(self) -> None:
-        search_text = self.find_input.text()
-        if not search_text:
+        query = self._build_find_query()
+        if query is None:
             return
         self._show_find_panel(show_replace=True)
-        self.translation_text.setPlainText(
-            self.translation_text.toPlainText().replace(search_text, self.replace_input.text())
-        )
+        try:
+            replaced_text = query.replace_all(self.translation_text.toPlainText(), self.replace_input.text())
+        except ValueError as exc:
+            self._set_find_feedback(self.tr("Invalid replacement: %1").replace("%1", str(exc)), is_error=True)
+            return
+        self.translation_text.setPlainText(replaced_text)
+        self._set_find_feedback(self._search_mode_feedback())
         self._clear_find_highlight()
 
     def _clear_find_highlight(self) -> None:
         self.translation_text.setExtraSelections([])
+
+    def _reset_find_match(self) -> None:
+        self._last_find_match = None
+
+    def _on_translation_text_changed(self) -> None:
+        self._reset_find_match()
+        self._schedule_wrapped_line_sync()
 
     def _configure_text_editor(self, editor: QTextEdit, *, read_only: bool) -> None:
         fixed_font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
@@ -820,6 +1058,7 @@ class DocumentTranslationView(QWidget):
         self.find_panel.hide()
         self._set_replace_toggle_state(False)
         self.replace_panel.hide()
+        self._reset_find_match()
         self.translation_text.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _set_replace_toggle_state(self, checked: bool) -> None:
@@ -841,16 +1080,26 @@ class DocumentTranslationView(QWidget):
         except RuntimeError:
             return
 
-    def _find_start_position(self) -> int:
+    def _find_start_position(self, query: _FindQuery, row: int) -> int:
         cursor = self.translation_text.textCursor()
         if cursor.hasSelection():
             return cursor.selectionEnd()
-        return cursor.position()
+        position = cursor.position()
+        last_match = self._last_find_match
+        if (
+            last_match is None
+            or last_match.row != row
+            or last_match.pattern != query.pattern
+            or last_match.mode != query.mode
+            or not last_match.span.is_empty
+            or position != last_match.span.start
+        ):
+            return position
+        return last_match.span.start + 1
 
-    def _find_in_unit_row(self, row: int, search_text: str, *, start_position: int = 0) -> int | None:
+    def _find_in_unit_row(self, row: int, query: _FindQuery, *, start_position: int = 0) -> _SearchSpan | None:
         text = self._translation_text_for_row(row)
-        match_start = text.find(search_text, max(0, start_position))
-        return match_start if match_start >= 0 else None
+        return query.find_span(text, start_position=start_position)
 
     def _translation_text_for_row(self, row: int) -> str:
         if self._state is None or row < 0 or row >= len(self._state.units):
@@ -859,14 +1108,15 @@ class DocumentTranslationView(QWidget):
             return self.translation_text.toPlainText()
         return self._display_text_for_unit(self._state.units[row])
 
-    def _select_find_match(self, row: int, start: int, length: int) -> None:
+    def _select_find_match(self, row: int, span: _SearchSpan, query: _FindQuery) -> None:
         if row != self.unit_list.currentRow():
             self.unit_list.setCurrentRow(row)
         self.translation_text.setFocus(Qt.FocusReason.OtherFocusReason)
         cursor = self.translation_text.textCursor()
-        cursor.setPosition(start)
-        cursor.setPosition(start + length, QTextCursor.MoveMode.KeepAnchor)
+        cursor.setPosition(span.start)
+        cursor.setPosition(span.end, QTextCursor.MoveMode.KeepAnchor)
         self.translation_text.setTextCursor(cursor)
+        self._last_find_match = _LastFindMatch(row=row, pattern=query.pattern, mode=query.mode, span=span)
         self.translation_text.ensureCursorVisible()
         self._ensure_find_match_clear_of_overlay()
 
@@ -912,9 +1162,14 @@ class DocumentTranslationView(QWidget):
     def retranslateUi(self) -> None:
         self.source_label.setText(self.tr("Source"))
         self.translation_label.setText(self.tr("Translation"))
+        self.search_hint_label.setText(self.tr("Find/replace · Ctrl/Cmd+F"))
+        self.search_hint_label.setToolTip(self.tr("Find and replace supports literal, regex, and wildcard patterns."))
         self.find_input.setPlaceholderText(self.tr("Find..."))
         self.replace_input.setPlaceholderText(self.tr("Replace with..."))
         self.find_next_button.setText(self.tr("Find Next"))
+        self.literal_mode_button.setText(self.tr("Literal"))
+        self.regex_mode_button.setText(self.tr("Regex"))
+        self.wildcard_mode_button.setText(self.tr("Wildcard"))
         self.show_replace_button.setText(self.tr("Replace"))
         self.replace_button.setText(self.tr("Replace"))
         self.replace_all_button.setText(self.tr("Replace All"))
@@ -923,6 +1178,7 @@ class DocumentTranslationView(QWidget):
         self.retranslate_button.setText(self.tr("Retranslate"))
         self.previous_button.setText("\u2190 " + self.tr("Previous"))
         self.next_button.setText(self.tr("Next") + " \u2192")
+        self._refresh_find_feedback()
         self.viewmodel.retranslate()
         self._sync_chrome_state()
 
