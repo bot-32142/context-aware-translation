@@ -1573,11 +1573,11 @@ class TestCanExport:
         assert doc.can_export("md") is True
         assert doc.can_export("docx") is True
         assert doc.can_export("html") is True
+        assert doc.can_export("txt") is True
 
     def test_can_export_unsupported_formats(self, tmp_path: Path):
         repo = _setup_repo(tmp_path)
         doc = EPUBDocument(repo, 1)
-        assert doc.can_export("txt") is False
         assert doc.can_export("pdf") is False
         assert doc.can_export("anything") is False
 
@@ -2117,7 +2117,80 @@ p {
         assert "{=html}" not in content
         assert "<rt>" not in content
 
-    def test_export_non_epub_uses_intermediate_epub_conversion(self, tmp_path: Path):
+    def test_export_epub_does_not_treat_generic_link_list_as_visible_toc(self, tmp_path: Path):
+        book = EpubBook(
+            metadata=EpubMetadata(title="Helpful links"),
+            spine_items=[
+                EpubItem(
+                    file_name="OEBPS/links.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        b'<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Helpful links</h1>'
+                        b'<p><a href="ch1.xhtml">Read chapter one</a></p>'
+                        b'<p><a href="ch2.xhtml">Read chapter two</a></p>'
+                        b'<p><a href="ch3.xhtml">Read chapter three</a></p>'
+                        b"</body></html>"
+                    ),
+                    item_id="links",
+                ),
+                EpubItem(
+                    file_name="OEBPS/ch1.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(b'<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Alpha</h1></body></html>'),
+                    item_id="ch1",
+                ),
+                EpubItem(
+                    file_name="OEBPS/ch2.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(b'<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Beta</h1></body></html>'),
+                    item_id="ch2",
+                ),
+                EpubItem(
+                    file_name="OEBPS/ch3.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(b'<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Gamma</h1></body></html>'),
+                    item_id="ch3",
+                ),
+            ],
+            resources=[],
+            toc=[
+                TocEntry(title="Alpha", href="ch1.xhtml"),
+                TocEntry(title="Beta", href="ch2.xhtml"),
+                TocEntry(title="Gamma", href="ch3.xhtml"),
+            ],
+        )
+        epub_path = tmp_path / "helpful_links_input.epub"
+        write_epub(epub_path, book)
+
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+        doc = EPUBDocument(repo, repo.list_documents()[0]["document_id"])
+        doc._translated_toc = [
+            TocEntry(title="Uno", href="ch1.xhtml"),
+            TocEntry(title="Dos", href="ch2.xhtml"),
+            TocEntry(title="Tres", href="ch3.xhtml"),
+        ]
+
+        output = tmp_path / "helpful_links_output.epub"
+        EPUBDocument.export_merged([doc], "epub", output)
+
+        with zipfile.ZipFile(output, "r") as zf:
+            links_xhtml = zf.read("OEBPS/links.xhtml").decode("utf-8")
+
+        assert "Read chapter one" in links_xhtml
+        assert "Read chapter two" in links_xhtml
+        assert "Read chapter three" in links_xhtml
+        assert ">Uno<" not in links_xhtml
+        assert ">Dos<" not in links_xhtml
+        assert ">Tres<" not in links_xhtml
+
+    @pytest.mark.parametrize(("export_format", "output_name"), [("md", "output.md"), ("txt", "output.txt")])
+    def test_export_non_epub_uses_intermediate_epub_conversion(
+        self,
+        tmp_path: Path,
+        export_format: str,
+        output_name: str,
+    ):
         chapters = [
             ("ch1.xhtml", "<html><body><p>Hello world.</p></body></html>"),
         ]
@@ -2127,18 +2200,18 @@ p {
 
         docs = repo.list_documents()
         doc = EPUBDocument(repo, docs[0]["document_id"])
-        output = tmp_path / "output.md"
+        output = tmp_path / output_name
 
         def _fake_convert(input_path: Path, output_path: Path, fmt: str, from_fmt: str) -> None:
             assert input_path.suffix == ".epub"
             assert input_path.exists()
             assert output_path == output
-            assert fmt == "md"
+            assert fmt == export_format
             assert from_fmt == "epub"
             output_path.write_text("converted")
 
         with patch("context_aware_translation.documents.epub.export_pandoc_file", side_effect=_fake_convert) as mock:
-            EPUBDocument.export_merged([doc], "md", output)
+            EPUBDocument.export_merged([doc], export_format, output)
 
         assert mock.call_count == 1
         assert output.read_text() == "converted"
@@ -2147,7 +2220,7 @@ p {
         with pytest.raises(ValueError, match="No documents to export"):
             EPUBDocument.export_merged([], "epub", Path("/tmp/test.epub"))
 
-    def test_export_txt_raises_unsupported_format(self, tmp_path: Path):
+    def test_export_txt_calls_pandoc_plain(self, tmp_path: Path):
         chapters = [
             ("ch1.xhtml", "<html><body><p>Hello world.</p></body></html>"),
         ]
@@ -2158,8 +2231,15 @@ p {
         docs = repo.list_documents()
         doc = EPUBDocument(repo, docs[0]["document_id"])
 
-        with pytest.raises(ValueError, match="Requested format 'txt' is not supported"):
+        with patch("context_aware_translation.utils.pandoc_export.pypandoc.convert_file") as mock_convert:
             EPUBDocument.export_merged([doc], "txt", tmp_path / "output.txt")
+
+        mock_convert.assert_called_once()
+        args, kwargs = mock_convert.call_args
+        assert args[0].endswith(".epub")
+        assert kwargs["to"] == "plain"
+        assert kwargs["format"] == "epub"
+        assert kwargs["outputfile"] == str(tmp_path / "output.txt")
 
     def test_export_md_multi_document(self, tmp_path: Path):
         """EPUB export path should reject multi-document calls."""
@@ -2477,6 +2557,498 @@ p {
         assert len(read_back.toc) == 1
         # TOC should keep its own independent translation
         assert read_back.toc[0].title == "1. Primer Capitulo"
+
+    @pytest.mark.asyncio
+    async def test_export_epub_sync_visible_toc_preserves_doctype(self, tmp_path: Path):
+        book = EpubBook(
+            metadata=EpubMetadata(title="Visible TOC DOCTYPE"),
+            spine_items=[
+                EpubItem(
+                    file_name="OEBPS/toc.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        b'<?xml version="1.0" encoding="utf-8"?>\n'
+                        b"<!DOCTYPE html>\n"
+                        b'<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Contents</h1>'
+                        b'<p><a href="ch1.xhtml">Chapter One</a></p>'
+                        b'<p><a href="ch2.xhtml">Chapter Two</a></p>'
+                        b'<p><a href="ch3.xhtml">Chapter Three</a></p>'
+                        b"</body></html>"
+                    ),
+                    item_id="toc",
+                ),
+                EpubItem(
+                    file_name="OEBPS/ch1.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        b'<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                        b"<h1>Chapter One</h1><p>Body one.</p>"
+                        b"</body></html>"
+                    ),
+                    item_id="ch1",
+                ),
+                EpubItem(
+                    file_name="OEBPS/ch2.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        b'<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                        b"<h1>Chapter Two</h1><p>Body two.</p>"
+                        b"</body></html>"
+                    ),
+                    item_id="ch2",
+                ),
+                EpubItem(
+                    file_name="OEBPS/ch3.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        b'<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                        b"<h1>Chapter Three</h1><p>Body three.</p>"
+                        b"</body></html>"
+                    ),
+                    item_id="ch3",
+                ),
+            ],
+            resources=[],
+            toc=[
+                TocEntry(title="Chapter One", href="ch1.xhtml"),
+                TocEntry(title="Chapter Two", href="ch2.xhtml"),
+                TocEntry(title="Chapter Three", href="ch3.xhtml"),
+            ],
+        )
+        epub_path = tmp_path / "visible_toc_doctype_input.epub"
+        write_epub(epub_path, book)
+
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+        doc_row = repo.list_documents()[0]
+        doc = EPUBDocument(repo, doc_row["document_id"])
+
+        source_lines = doc.get_text().splitlines()
+        translations = ["Capitulo Uno" if line == "Chapter One" else line for line in source_lines]
+        chapter_one_indices = [idx for idx, line in enumerate(source_lines) if line == "Chapter One"]
+        assert len(chapter_one_indices) >= 2
+        visible_toc_index = chapter_one_indices[0]
+        translations[visible_toc_index] = source_lines[visible_toc_index].replace("Chapter One", "Wrong Chapter One")
+
+        consumed = await doc.set_text(translations)
+        assert consumed == len(translations)
+
+        output = tmp_path / "visible_toc_doctype_output.epub"
+        EPUBDocument.export_merged([doc], "epub", output)
+
+        with zipfile.ZipFile(output, "r") as zf:
+            toc_xhtml = zf.read("OEBPS/toc.xhtml").decode("utf-8")
+
+        assert toc_xhtml.startswith('<?xml version="1.0" encoding="utf-8"?>\n<!DOCTYPE html>\n')
+        assert "Wrong Chapter One" not in toc_xhtml
+        assert "Capitulo Uno" in toc_xhtml
+
+    def test_export_epub_syncs_visible_toc_links_by_fragment(self, tmp_path: Path):
+        book = EpubBook(
+            metadata=EpubMetadata(title="Fragmented visible TOC"),
+            spine_items=[
+                EpubItem(
+                    file_name="OEBPS/toc.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        b'<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Contents</h1>'
+                        b'<p><a href="ch1.xhtml#s1">Section One</a></p>'
+                        b'<p><a href="ch1.xhtml#s2">Section Two</a></p>'
+                        b'<p><a href="ch2.xhtml">Chapter Two</a></p>'
+                        b"</body></html>"
+                    ),
+                    item_id="toc",
+                ),
+                EpubItem(
+                    file_name="OEBPS/ch1.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        b'<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                        b'<h1 id="s1">Section One</h1><h2 id="s2">Section Two</h2>'
+                        b"</body></html>"
+                    ),
+                    item_id="ch1",
+                ),
+                EpubItem(
+                    file_name="OEBPS/ch2.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(b'<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>Chapter Two</h1></body></html>'),
+                    item_id="ch2",
+                ),
+            ],
+            resources=[],
+            toc=[
+                TocEntry(title="Section One", href="ch1.xhtml#s1"),
+                TocEntry(title="Section Two", href="ch1.xhtml#s2"),
+                TocEntry(title="Chapter Two", href="ch2.xhtml"),
+            ],
+        )
+        epub_path = tmp_path / "fragment_visible_toc_input.epub"
+        write_epub(epub_path, book)
+
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+        doc = EPUBDocument(repo, repo.list_documents()[0]["document_id"])
+        doc._translated_toc = [
+            TocEntry(title="Seccion Uno", href="ch1.xhtml#s1"),
+            TocEntry(title="Seccion Dos", href="ch1.xhtml#s2"),
+            TocEntry(title="Capitulo Dos", href="ch2.xhtml"),
+        ]
+
+        output = tmp_path / "fragment_visible_toc_output.epub"
+        EPUBDocument.export_merged([doc], "epub", output)
+
+        with zipfile.ZipFile(output, "r") as zf:
+            toc_xhtml = zf.read("OEBPS/toc.xhtml").decode("utf-8")
+
+        assert 'href="ch1.xhtml#s1">Seccion Uno<' in toc_xhtml
+        assert 'href="ch1.xhtml#s2">Seccion Dos<' in toc_xhtml
+        assert toc_xhtml.count("Seccion Uno") == 1
+        assert toc_xhtml.count("Seccion Dos") == 1
+        assert 'href="ch2.xhtml">Capitulo Dos<' in toc_xhtml
+
+    @pytest.mark.asyncio
+    async def test_export_epub_syncs_visible_toc_links_from_image_backed_titles(self, tmp_path: Path):
+        book = EpubBook(
+            metadata=EpubMetadata(title="Visible TOC Sync"),
+            spine_items=[
+                EpubItem(
+                    file_name="OEBPS/toc.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        '<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>目次</h1>'
+                        '<p><a href="title.xhtml"><span>序章</span>　春は旅立ちの季節！</a></p>'
+                        '<p><a href="ch2.xhtml">第二章 次の章</a></p>'
+                        '<p><a href="ch3.xhtml">終章 しめくくり</a></p>'
+                        "</body></html>"
+                    ).encode(),
+                    item_id="toc",
+                ),
+                EpubItem(
+                    file_name="OEBPS/title.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        b'<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                        b'<div><img src="images/title.png" alt=""/></div>'
+                        b"</body></html>"
+                    ),
+                    item_id="title",
+                ),
+                EpubItem(
+                    file_name="OEBPS/ch2.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                        "<h1>第二章 次の章</h1><p>本文二。</p>"
+                        "</body></html>"
+                    ).encode(),
+                    item_id="ch2",
+                ),
+                EpubItem(
+                    file_name="OEBPS/ch3.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                        "<h1>終章 しめくくり</h1><p>本文三。</p>"
+                        "</body></html>"
+                    ).encode(),
+                    item_id="ch3",
+                ),
+            ],
+            resources=[
+                EpubItem(
+                    file_name="OEBPS/images/title.png",
+                    media_type="image/png",
+                    content=_png_bytes((20, 40, 60), size=(8, 8)),
+                    item_id="title-image",
+                ),
+            ],
+            toc=[
+                TocEntry(title="序章 春は旅立ちの季節！", href="title.xhtml"),
+                TocEntry(title="第二章 次の章", href="ch2.xhtml"),
+                TocEntry(title="終章 しめくくり", href="ch3.xhtml"),
+            ],
+        )
+        epub_path = tmp_path / "visible_toc_sync_input.epub"
+        write_epub(epub_path, book)
+
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+        doc_row = repo.list_documents()[0]
+
+        image_source = next(
+            source
+            for source in repo.get_document_sources(doc_row["document_id"])
+            if source.get("relative_path") == "OEBPS/images/title.png"
+        )
+        ocr_json = [
+            {
+                "page_type": "content",
+                "content": [
+                    {
+                        "type": "image",
+                        "embedded_text": "序章\n春は旅立ちの季節！",
+                    }
+                ],
+            }
+        ]
+        repo.update_source_ocr(image_source["source_id"], json.dumps(ocr_json))
+        repo.update_source_ocr_completed(image_source["source_id"])
+
+        doc = EPUBDocument(repo, doc_row["document_id"])
+        source_lines = doc.get_text().splitlines()
+        translations = list(source_lines)
+
+        visible_toc_index = next(
+            idx
+            for idx, line in enumerate(source_lines)
+            if "⟪a:" in line and "春は旅立ちの季節！" in line
+        )
+        metadata_toc_index = source_lines.index("序章 春は旅立ちの季節！")
+        image_title_prefix_index = source_lines.index("序章")
+        image_title_suffix_index = source_lines.index("春は旅立ちの季節！")
+
+        translations[visible_toc_index] = "⟪a:0⟫⟪span:0/0⟫序章⟪/span:0/0⟫　错误的目录标题⟪/a:0⟫"
+        translations[metadata_toc_index] = "序章 错误的目录标题"
+        translations[image_title_prefix_index] = "序章"
+        translations[image_title_suffix_index] = "启程的季节！"
+
+        consumed = await doc.set_text(translations)
+        assert consumed == len(translations)
+
+        output = tmp_path / "visible_toc_sync_output.epub"
+        EPUBDocument.export_merged([doc], "epub", output)
+
+        read_back = read_epub(output)
+        assert len(read_back.toc) == 3
+        assert read_back.toc[0].title == "序章 启程的季节！"
+
+        with zipfile.ZipFile(output, "r") as zf:
+            toc_xhtml = zf.read("OEBPS/toc.xhtml").decode("utf-8")
+        assert "错误的目录标题" not in toc_xhtml
+        assert "启程的季节！" in toc_xhtml
+
+    @pytest.mark.asyncio
+    async def test_export_epub_syncs_visible_toc_links_to_final_toc_titles_without_image_title_override(
+        self,
+        tmp_path: Path,
+    ):
+        book = EpubBook(
+            metadata=EpubMetadata(title="Visible TOC Final Sync"),
+            spine_items=[
+                EpubItem(
+                    file_name="OEBPS/toc.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        '<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>目次</h1>'
+                        '<p><a href="title.xhtml"><span>序章</span>　春は旅立ちの季節！</a></p>'
+                        '<p><a href="ch2.xhtml">第二章 次の章</a></p>'
+                        '<p><a href="ch3.xhtml">終章 しめくくり</a></p>'
+                        "</body></html>"
+                    ).encode(),
+                    item_id="toc",
+                ),
+                EpubItem(
+                    file_name="OEBPS/title.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        b'<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                        b'<div><img src="images/title.png" alt=""/></div>'
+                        b"</body></html>"
+                    ),
+                    item_id="title",
+                ),
+                EpubItem(
+                    file_name="OEBPS/ch2.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                        "<h1>第二章 次の章</h1><p>本文二。</p>"
+                        "</body></html>"
+                    ).encode(),
+                    item_id="ch2",
+                ),
+                EpubItem(
+                    file_name="OEBPS/ch3.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                        "<h1>終章 しめくくり</h1><p>本文三。</p>"
+                        "</body></html>"
+                    ).encode(),
+                    item_id="ch3",
+                ),
+            ],
+            resources=[
+                EpubItem(
+                    file_name="OEBPS/images/title.png",
+                    media_type="image/png",
+                    content=_png_bytes((24, 44, 64), size=(8, 8)),
+                    item_id="title-image",
+                ),
+            ],
+            toc=[
+                TocEntry(title="序章 春は旅立ちの季節！", href="title.xhtml"),
+                TocEntry(title="第二章 次の章", href="ch2.xhtml"),
+                TocEntry(title="終章 しめくくり", href="ch3.xhtml"),
+            ],
+        )
+        epub_path = tmp_path / "visible_toc_final_sync_input.epub"
+        write_epub(epub_path, book)
+
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+        doc_row = repo.list_documents()[0]
+        doc = EPUBDocument(repo, doc_row["document_id"])
+
+        source_lines = doc.get_text().splitlines()
+        translations = list(source_lines)
+        visible_toc_index = next(
+            idx
+            for idx, line in enumerate(source_lines)
+            if "⟪a:" in line and "春は旅立ちの季節！" in line
+        )
+        metadata_toc_index = source_lines.index("序章 春は旅立ちの季節！")
+
+        translations[visible_toc_index] = "⟪a:0⟫⟪span:0/0⟫序章⟪/span:0/0⟫　这次你一定看不穿我的变装！⟪/a:0⟫"
+        translations[metadata_toc_index] = "序章 这次你绝对看不穿我的变装！"
+
+        consumed = await doc.set_text(translations)
+        assert consumed == len(translations)
+
+        output = tmp_path / "visible_toc_final_sync_output.epub"
+        EPUBDocument.export_merged([doc], "epub", output)
+
+        read_back = read_epub(output)
+        assert len(read_back.toc) == 3
+        assert read_back.toc[0].title == "序章 这次你绝对看不穿我的变装！"
+
+        with zipfile.ZipFile(output, "r") as zf:
+            toc_xhtml = zf.read("OEBPS/toc.xhtml").decode("utf-8")
+        assert "这次你一定看不穿我的变装！" not in toc_xhtml
+        assert "这次你绝对看不穿我的变装！" in toc_xhtml
+
+    @pytest.mark.asyncio
+    async def test_export_epub_syncs_image_backed_titles_without_inter_word_spaces(self, tmp_path: Path):
+        book = EpubBook(
+            metadata=EpubMetadata(title="Compact Image Title Sync"),
+            spine_items=[
+                EpubItem(
+                    file_name="OEBPS/toc.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        '<html xmlns="http://www.w3.org/1999/xhtml"><body><h1>目次</h1>'
+                        '<p><a href="title.xhtml">序章春は旅立ちの季節！</a></p>'
+                        '<p><a href="ch2.xhtml">第二章次の章</a></p>'
+                        '<p><a href="ch3.xhtml">終章しめくくり</a></p>'
+                        "</body></html>"
+                    ).encode(),
+                    item_id="toc",
+                ),
+                EpubItem(
+                    file_name="OEBPS/title.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        b'<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                        b'<div><img src="images/title.png" alt=""/></div>'
+                        b"</body></html>"
+                    ),
+                    item_id="title",
+                ),
+                EpubItem(
+                    file_name="OEBPS/ch2.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                        "<h1>第二章次の章</h1><p>本文二。</p>"
+                        "</body></html>"
+                    ).encode(),
+                    item_id="ch2",
+                ),
+                EpubItem(
+                    file_name="OEBPS/ch3.xhtml",
+                    media_type="application/xhtml+xml",
+                    content=(
+                        '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                        "<h1>終章しめくくり</h1><p>本文三。</p>"
+                        "</body></html>"
+                    ).encode(),
+                    item_id="ch3",
+                ),
+            ],
+            resources=[
+                EpubItem(
+                    file_name="OEBPS/images/title.png",
+                    media_type="image/png",
+                    content=_png_bytes((30, 50, 70), size=(8, 8)),
+                    item_id="title-image",
+                ),
+            ],
+            toc=[
+                TocEntry(title="序章春は旅立ちの季節！", href="title.xhtml"),
+                TocEntry(title="第二章次の章", href="ch2.xhtml"),
+                TocEntry(title="終章しめくくり", href="ch3.xhtml"),
+            ],
+        )
+        epub_path = tmp_path / "compact_visible_toc_sync_input.epub"
+        write_epub(epub_path, book)
+
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+        doc_row = repo.list_documents()[0]
+
+        image_source = next(
+            source
+            for source in repo.get_document_sources(doc_row["document_id"])
+            if source.get("relative_path") == "OEBPS/images/title.png"
+        )
+        ocr_json = [
+            {
+                "page_type": "content",
+                "content": [
+                    {
+                        "type": "image",
+                        "embedded_text": "序章\n春は旅立ちの季節！",
+                    }
+                ],
+            }
+        ]
+        repo.update_source_ocr(image_source["source_id"], json.dumps(ocr_json))
+        repo.update_source_ocr_completed(image_source["source_id"])
+
+        doc = EPUBDocument(repo, doc_row["document_id"])
+        source_lines = doc.get_text().splitlines()
+        translations = list(source_lines)
+
+        compact_title_indices = [idx for idx, line in enumerate(source_lines) if line == "序章春は旅立ちの季節！"]
+        assert len(compact_title_indices) == 2
+        visible_toc_index = compact_title_indices[0]
+        metadata_toc_index = source_lines.index("序章春は旅立ちの季節！")
+        image_title_prefix_index = source_lines.index("序章")
+        image_title_suffix_index = source_lines.index("春は旅立ちの季節！")
+
+        translations[visible_toc_index] = source_lines[visible_toc_index].replace(
+            "序章春は旅立ちの季節！",
+            "序章错误的目录标题",
+        )
+        translations[metadata_toc_index] = "序章错误的目录标题"
+        translations[image_title_prefix_index] = "序章"
+        translations[image_title_suffix_index] = "启程的季节！"
+
+        consumed = await doc.set_text(translations)
+        assert consumed == len(translations)
+
+        output = tmp_path / "compact_visible_toc_sync_output.epub"
+        EPUBDocument.export_merged([doc], "epub", output)
+
+        read_back = read_epub(output)
+        assert len(read_back.toc) == 3
+        assert read_back.toc[0].title == "序章启程的季节！"
+
+        with zipfile.ZipFile(output, "r") as zf:
+            toc_xhtml = zf.read("OEBPS/toc.xhtml").decode("utf-8")
+        assert "错误的目录标题" not in toc_xhtml
+        assert "序章启程的季节！" in toc_xhtml
 
     def test_export_epub_applies_persisted_reembedded_image(self, tmp_path: Path):
         original_png = _png_bytes((10, 10, 10), size=(8, 8))

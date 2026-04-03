@@ -32,7 +32,7 @@ class ScannedBookDocument(Document):
     """Document for scanned books (image folders). Operates on sources with source_type='image'."""
 
     document_type = "scanned_book"
-    supported_export_formats: tuple[str, ...] = ("epub", "md")
+    supported_export_formats: tuple[str, ...] = ("epub", "md", "txt")
     requires_ocr_config = True
     supports_preserve_structure = False
 
@@ -351,9 +351,9 @@ class ScannedBookDocument(Document):
             raise ValueError("No documents to export")
 
         # Validate format
-        if export_format.lower() not in ("epub", "md"):
+        if export_format.lower() not in ("epub", "md", "txt"):
             raise ValueError(
-                f"Scanned book documents only support 'epub' and 'md' export formats. "
+                f"Scanned book documents only support 'epub', 'md', and 'txt' export formats. "
                 f"Requested format '{export_format}' is not supported."
             )
 
@@ -388,7 +388,7 @@ class ScannedBookDocument(Document):
             fmt = export_format.lower()
             if fmt == "md":
                 output_path.write_text(merged_markdown, encoding="utf-8")
-            elif fmt == "epub":
+            else:
                 export_pandoc(merged_markdown, output_path, fmt, "md")
 
     def export_preserve_structure(self, output_folder: Path) -> None:

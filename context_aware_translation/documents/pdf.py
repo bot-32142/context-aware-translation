@@ -49,7 +49,7 @@ class PDFDocument(Document):
     """Document for PDF files. Operates on sources with source_type='image' (one per page)."""
 
     document_type = "pdf"
-    supported_export_formats: tuple[str, ...] = ("epub", "md")
+    supported_export_formats: tuple[str, ...] = ("epub", "md", "txt")
     requires_ocr_config = True
     supports_preserve_structure = False
 
@@ -699,9 +699,9 @@ class PDFDocument(Document):
             raise ValueError("No documents to export")
 
         # Validate format
-        if export_format.lower() not in ("epub", "md"):
+        if export_format.lower() not in ("epub", "md", "txt"):
             raise ValueError(
-                f"PDF documents only support 'epub' and 'md' export formats. "
+                f"PDF documents only support 'epub', 'md', and 'txt' export formats. "
                 f"Requested format '{export_format}' is not supported."
             )
 
@@ -737,7 +737,7 @@ class PDFDocument(Document):
             fmt = export_format.lower()
             if fmt == "md":
                 output_path.write_text(merged_markdown, encoding="utf-8")
-            elif fmt == "epub":
+            else:
                 export_pandoc(merged_markdown, output_path, fmt, "md")
 
     def export_preserve_structure(self, output_folder: Path) -> None:

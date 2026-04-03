@@ -93,6 +93,7 @@ BLOCK_TAGS = frozenset(
 TRANSLATABLE_ATTR_NAMES = frozenset({"alt", "title", "aria-label", "aria-description"})
 HEADING_TAGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
 _RUBY_ANNOTATION_TAGS = frozenset({"rt", "rp", "rtc"})
+_RUBY_BASE_WRAPPER_TAGS = frozenset({"rb"})
 _ALT_INLINE_MARKER_RE = re.compile(r"[《〈＜]([^《》〈〉＜＞]+)[》〉＞]")
 _INLINE_TOKEN_FALLBACK_RE = re.compile(r"⟪[^⟪⟫]*⟫")
 _VALID_INLINE_TAG_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9._-]*$")
@@ -1296,6 +1297,56 @@ def _ruby_has_annotation_text(ruby_elem: _ET.Element) -> bool:
     return False
 
 
+def _iter_unwrapped_ruby_parts(elem: _ET.Element) -> Iterator[str | _ET.Element]:
+    if elem.text:
+        yield elem.text
+
+    for child in list(elem):
+        child_local = _local_tag(child.tag)
+        child_tail = child.tail or ""
+        child.tail = None
+        elem.remove(child)
+
+        if child_local in _RUBY_ANNOTATION_TAGS:
+            if child_tail:
+                yield child_tail
+            continue
+
+        if child_local in _RUBY_BASE_WRAPPER_TAGS:
+            yield from _iter_unwrapped_ruby_parts(child)
+        else:
+            yield child
+
+        if child_tail:
+            yield child_tail
+
+
+def _splice_parts_into_parent(
+    parent: _ET.Element,
+    insert_at: int,
+    parts: list[str | _ET.Element],
+) -> int:
+    previous = parent[insert_at - 1] if insert_at > 0 else None
+    inserted_elements = 0
+
+    for part in parts:
+        if isinstance(part, str):
+            if not part:
+                continue
+            if previous is None:
+                parent.text = (parent.text or "") + part
+            else:
+                previous.tail = (previous.tail or "") + part
+            continue
+
+        parent.insert(insert_at, part)
+        previous = part
+        insert_at += 1
+        inserted_elements += 1
+
+    return inserted_elements
+
+
 def _flatten_annotationless_ruby_nodes(parent: _ET.Element) -> None:
     child_index = 0
     while child_index < len(parent):
@@ -1305,14 +1356,14 @@ def _flatten_annotationless_ruby_nodes(parent: _ET.Element) -> None:
             child_index += 1
             continue
 
-        replacement = "".join(_itertext_skip_ruby_annotations(child))
         tail = child.tail or ""
-        if child_index > 0:
-            prev = parent[child_index - 1]
-            prev.tail = (prev.tail or "") + replacement + tail
-        else:
-            parent.text = (parent.text or "") + replacement + tail
+        child.tail = None
+        replacement_parts = list(_iter_unwrapped_ruby_parts(child))
+        if tail:
+            replacement_parts.append(tail)
         parent.remove(child)
+        inserted_elements = _splice_parts_into_parent(parent, child_index, replacement_parts)
+        child_index += inserted_elements
 
 
 def flatten_annotationless_ruby_in_xhtml(xhtml_content: str) -> str:

@@ -727,7 +727,7 @@ class TestDoImport:
 def test_supported_export_formats():
     mock_repo = MagicMock()
     doc = PDFDocument(mock_repo, 1)
-    assert doc.supported_export_formats == ("epub", "md")
+    assert doc.supported_export_formats == ("epub", "md", "txt")
 
 
 def test_can_export_epub_returns_true():
@@ -742,10 +742,10 @@ def test_can_export_md_returns_true():
     assert doc.can_export("md") is True
 
 
-def test_can_export_txt_returns_false():
+def test_can_export_txt_returns_true():
     mock_repo = MagicMock()
     doc = PDFDocument(mock_repo, 1)
-    assert doc.can_export("txt") is False
+    assert doc.can_export("txt") is True
 
 
 def test_can_export_pdf_returns_false():
@@ -760,11 +760,31 @@ def test_export_unsupported_format_error_message(mock_ocr_content):
     doc._merged_content = mock_ocr_content
 
     with pytest.raises(ValueError) as exc_info:
-        PDFDocument.export_merged([doc], "txt", Path("/tmp/out.txt"))
+        PDFDocument.export_merged([doc], "pdf", Path("/tmp/out.pdf"))
 
     assert "epub" in str(exc_info.value)
     assert "md" in str(exc_info.value)
     assert "txt" in str(exc_info.value)
+    assert "pdf" in str(exc_info.value)
+
+
+def test_export_txt_calls_pandoc_plain(mock_ocr_content):
+    mock_repo = MagicMock()
+    doc = PDFDocument(mock_repo, 1, ocr_config=OCRConfig())
+    doc._merged_content = mock_ocr_content
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = Path(tmpdir) / "output.txt"
+
+        with patch("context_aware_translation.utils.pandoc_export.pypandoc.convert_text") as mock_convert:
+            PDFDocument.export_merged([doc], "txt", output_path)
+
+            mock_convert.assert_called_once()
+            args, kwargs = mock_convert.call_args
+            assert args[0]
+            assert kwargs["to"] == "plain"
+            assert kwargs["format"] == "md"
+            assert kwargs["outputfile"] == str(output_path)
 
 
 class TestPageImageExtraction:
