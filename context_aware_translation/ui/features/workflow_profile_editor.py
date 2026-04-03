@@ -198,7 +198,7 @@ class StepAdvancedConfigDialog(QDialog):
                 "max_gleaning",
                 0,
                 10,
-                3,
+                1,
             ),
             _SpinFieldSpec(
                 "max_term_name_spin",

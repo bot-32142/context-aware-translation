@@ -255,6 +255,7 @@ def test_recommended_workflow_profile_uses_ranked_step_rules() -> None:
 
     route_map = {route.step_id: route for route in detail.routes}
     assert route_map[WorkflowStepId.EXTRACTOR].model == "deepseek-chat"
+    assert route_map[WorkflowStepId.EXTRACTOR].step_config == {"max_gleaning": 1}
     assert route_map[WorkflowStepId.SUMMARIZER].model == "deepseek-chat"
     assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].model == "gemini-2.5-flash"
     assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
