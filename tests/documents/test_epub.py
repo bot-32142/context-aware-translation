@@ -2086,6 +2086,37 @@ p {
         content = output.read_text()
         assert "Hola mundo." in content
 
+    @pytest.mark.asyncio
+    async def test_export_md_flattens_ruby_markup_when_stripping_annotations(self, tmp_path: Path):
+        chapters = [
+            (
+                "ch1.xhtml",
+                (
+                    '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>'
+                    "伴随着一声<ruby><rb>痛苦</rb><rt></rt><rb></rb><rt></rt></ruby>的悲鸣。"
+                    "</p></body></html>"
+                ),
+            ),
+        ]
+        epub_path = _make_epub_file(tmp_path, chapters=chapters)
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+
+        doc_row = repo.list_documents()[0]
+        doc = EPUBDocument(repo, doc_row["document_id"])
+        source_lines = doc.get_text().splitlines()
+        consumed = await doc.set_text(source_lines)
+        assert consumed == len(source_lines)
+
+        output = tmp_path / "ruby_flattened.md"
+        EPUBDocument.export_merged([doc], "md", output)
+
+        content = output.read_text()
+        assert "伴随着一声痛苦的悲鸣。" in content
+        assert "<ruby>" not in content
+        assert "{=html}" not in content
+        assert "<rt>" not in content
+
     def test_export_non_epub_uses_intermediate_epub_conversion(self, tmp_path: Path):
         chapters = [
             ("ch1.xhtml", "<html><body><p>Hello world.</p></body></html>"),

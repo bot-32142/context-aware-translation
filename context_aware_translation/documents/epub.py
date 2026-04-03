@@ -54,6 +54,7 @@ from context_aware_translation.documents.epub_support.xml_utils import (
 from context_aware_translation.documents.epub_xhtml_utils import (
     extract_heading_texts,
     extract_text_from_xhtml,
+    flatten_annotationless_ruby_in_xhtml,
     inject_translations_into_xhtml,
 )
 from context_aware_translation.llm.epub_ocr import ocr_epub_images
@@ -716,11 +717,14 @@ class EPUBDocument(Document):
         *,
         force_horizontal_ltr: bool = False,
         toc_document: bool = False,
+        flatten_annotationless_ruby: bool = False,
     ) -> str:
         mime_type = str(source.get("mime_type", "") or "").strip().lower()
         relative_path = str(source.get("relative_path", "") or "").strip().lower()
         css_like_path = relative_path.endswith(".css")
+        xhtml_like_path = relative_path.endswith((".xhtml", ".html", ".htm"))
         xml_like_path = relative_path.endswith((".xhtml", ".html", ".htm", ".svg", ".xml", ".ncx", ".opf"))
+        xhtml_like_mime = mime_type in CHAPTER_MIME_TYPES
         xml_like_mime = mime_type in {
             *CHAPTER_MIME_TYPES,
             "image/svg+xml",
@@ -735,6 +739,9 @@ class EPUBDocument(Document):
                 text = cls._force_horizontal_ltr_css(text)
             elif xml_like_path or xml_like_mime or text.lstrip().startswith("<?xml"):
                 text = cls._force_horizontal_ltr_xml_text(text, toc_document=toc_document)
+
+        if flatten_annotationless_ruby and (xhtml_like_path or xhtml_like_mime):
+            text = flatten_annotationless_ruby_in_xhtml(text)
 
         if mime_type == "text/css" or css_like_path:
             return cls._normalize_css_charset_for_utf8(text)
@@ -1819,11 +1826,21 @@ class EPUBDocument(Document):
 
         with TemporaryDirectory(prefix="cat-epub-export-") as tmp_dir:
             intermediate_epub = Path(tmp_dir) / "intermediate.epub"
-            cls._export_native_epub(doc, intermediate_epub)
+            cls._export_native_epub(
+                doc,
+                intermediate_epub,
+                flatten_annotationless_ruby=doc._should_strip_epub_ruby(),
+            )
             export_pandoc_file(intermediate_epub, output_path, fmt, "epub")
 
     @classmethod
-    def _export_native_epub(cls, doc: EPUBDocument, output_path: Path) -> None:
+    def _export_native_epub(
+        cls,
+        doc: EPUBDocument,
+        output_path: Path,
+        *,
+        flatten_annotationless_ruby: bool = False,
+    ) -> None:
         """Export EPUB by patching translated members into the original archive."""
         sources = doc.repo.get_document_sources(doc.document_id)
         sources_sorted = sorted(sources, key=lambda s: s["sequence_number"])
@@ -1847,6 +1864,7 @@ class EPUBDocument(Document):
             sources_sorted,
             persisted_reembedded,
             visible_toc_document_paths=visible_toc_document_paths,
+            flatten_annotationless_ruby=flatten_annotationless_ruby,
         )
 
         if doc._translated_toc:
@@ -1919,6 +1937,7 @@ class EPUBDocument(Document):
         persisted_reembedded: dict[int, tuple[bytes, str]],
         *,
         visible_toc_document_paths: set[str] | None = None,
+        flatten_annotationless_ruby: bool = False,
     ) -> dict[str, bytes]:
         updates: dict[str, bytes] = {}
         toc_document_paths = visible_toc_document_paths or set()
@@ -1939,6 +1958,7 @@ class EPUBDocument(Document):
                     translated,
                     force_horizontal_ltr=doc._force_horizontal_ltr_export,
                     toc_document=toc_document,
+                    flatten_annotationless_ruby=flatten_annotationless_ruby,
                 )
                 updates[relative_path] = translated.encode("utf-8")
                 continue

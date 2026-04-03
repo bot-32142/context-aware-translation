@@ -1285,6 +1285,50 @@ def _itertext_skip_ruby_annotations(elem: _ET.Element) -> Iterator[str]:
             yield child.tail
 
 
+def _ruby_has_annotation_text(ruby_elem: _ET.Element) -> bool:
+    for descendant in ruby_elem.iter():
+        if descendant is ruby_elem:
+            continue
+        if _local_tag(descendant.tag) not in _RUBY_ANNOTATION_TAGS:
+            continue
+        if any(text.strip() for text in descendant.itertext()):
+            return True
+    return False
+
+
+def _flatten_annotationless_ruby_nodes(parent: _ET.Element) -> None:
+    child_index = 0
+    while child_index < len(parent):
+        child = parent[child_index]
+        _flatten_annotationless_ruby_nodes(child)
+        if _local_tag(child.tag) != "ruby" or _ruby_has_annotation_text(child):
+            child_index += 1
+            continue
+
+        replacement = "".join(_itertext_skip_ruby_annotations(child))
+        tail = child.tail or ""
+        if child_index > 0:
+            prev = parent[child_index - 1]
+            prev.tail = (prev.tail or "") + replacement + tail
+        else:
+            parent.text = (parent.text or "") + replacement + tail
+        parent.remove(child)
+
+
+def flatten_annotationless_ruby_in_xhtml(xhtml_content: str) -> str:
+    """Collapse ruby wrappers that no longer have any annotation text.
+
+    This is mainly useful before converting EPUB XHTML to Markdown. Some EPUB
+    readers render ``<ruby>base<rt></rt></ruby>`` as plain base text, but
+    pandoc preserves the raw HTML wrapper in Markdown output.
+    """
+    root = DefusedET.fromstring(xhtml_content)
+    _flatten_annotationless_ruby_nodes(root)
+    modified = _ET.tostring(root, encoding="unicode", xml_declaration=False)
+    header = normalize_xml_header_for_utf8(_extract_xml_header(xhtml_content))
+    return header + modified
+
+
 def extract_heading_texts(xhtml_content: str) -> list[str]:
     """Extract full text content of heading elements (h1-h6) in document order.
 
