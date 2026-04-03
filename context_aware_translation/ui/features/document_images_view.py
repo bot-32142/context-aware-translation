@@ -219,7 +219,7 @@ class DocumentImagesView(QWidget):
         return True
 
     def get_running_operations(self) -> list[str]:
-        if self._state is not None and self._state.active_task_id is not None:
+        if self._active_task_ids():
             return [self.tr("Put text back into images")]
         return []
 
@@ -227,8 +227,17 @@ class DocumentImagesView(QWidget):
         return []
 
     def request_cancel_running_operations(self, *, include_engine_tasks: bool = False) -> None:
-        if include_engine_tasks and self._state is not None and self._state.active_task_id is not None:
+        if include_engine_tasks and self._active_task_ids():
             self._cancel()
+
+    def _active_task_ids(self) -> list[str]:
+        if self._state is None:
+            return []
+        if self._state.active_task_ids:
+            return list(self._state.active_task_ids)
+        if self._state.active_task_id is not None:
+            return [self._state.active_task_id]
+        return []
 
     def activate_view(self) -> None:
         self._refresh_current_selection()
@@ -417,7 +426,10 @@ class DocumentImagesView(QWidget):
         self._schedule_viewer_auto_fit(delay_ms=75)
 
     def _render_progress(self, state: DocumentImagesState) -> None:
-        if state.active_task_id is None:
+        active_task_ids = list(state.active_task_ids) or (
+            [state.active_task_id] if state.active_task_id is not None else []
+        )
+        if not active_task_ids:
             self.progress_widget.reset()
             self.progress_widget.setVisible(False)
             return
@@ -611,13 +623,24 @@ class DocumentImagesView(QWidget):
         )
 
     def _cancel(self) -> None:
-        if self._state is None or self._state.active_task_id is None:
+        task_ids = self._active_task_ids()
+        if not task_ids:
             return
-        task_id: str = self._state.active_task_id
-        self._run_command(
-            lambda: self._service.cancel_image_reinsertion(self._project_id, task_id),
-            fallback_message=self.tr("Cancellation requested."),
-        )
+        try:
+            result = None
+            for task_id in task_ids:
+                result = self._service.cancel_image_reinsertion(self._project_id, task_id)
+        except ApplicationError as exc:
+            self.refresh()
+            self._set_message(exc.payload.message)
+            return
+        if self.refresh():
+            self._set_message(
+                result.message.text
+                if result is not None and result.message is not None
+                else self.tr("Cancellation requested."),
+                transient=True,
+            )
 
     def showEvent(self, event) -> None:  # type: ignore[override]
         super().showEvent(event)

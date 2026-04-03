@@ -156,6 +156,16 @@ def test_claims_with_valid_single_document():
     assert len(claims) == 2
 
 
+def test_claims_with_explicit_source_ids_use_cooperative_doc_claim_and_source_claims():
+    record = _make_record(document_ids_json=json.dumps([5]))
+    claims = handler.claims(record, {"source_ids": [11, 12]})
+    assert ResourceClaim("doc", "book-1", "5", ClaimMode.WRITE_COOPERATIVE) in claims
+    assert ResourceClaim("source", "book-1", "11", ClaimMode.WRITE_EXCLUSIVE) in claims
+    assert ResourceClaim("source", "book-1", "12", ClaimMode.WRITE_EXCLUSIVE) in claims
+    assert ResourceClaim("ocr", "book-1", "5", ClaimMode.WRITE_EXCLUSIVE) not in claims
+    assert len(claims) == 3
+
+
 def test_claims_empty_when_no_document_id():
     record = _make_record(document_ids_json=None)
     claims = handler.claims(record, {})

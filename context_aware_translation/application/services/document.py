@@ -127,16 +127,29 @@ class DefaultDocumentService:
         with self._runtime.open_book_db(project_id) as dbx:
             sources = dbx.document_repo.get_document_sources_metadata(document_id)
             image_sources = [source for source in sources if source.get("source_type") == "image"]
-            active_task = self._get_active_ocr_task(project_id, document_id)
-            active_source_ids = self._task_source_ids(active_task)
+            active_tasks = self._get_active_ocr_tasks(project_id, document_id)
+            active_task = self._primary_active_task(active_tasks)
+            active_source_ids = self._active_task_source_ids(active_tasks)
+            default_run_current_action = (
+                self._build_ocr_run_current_action(project_id, document_id, int(image_sources[0]["source_id"]))
+                if image_sources and (not active_tasks or active_source_ids is None)
+                else ActionState(enabled=True)
+            )
             pages = [
                 self._build_ocr_page(
                     project_id,
                     source,
                     document_repo=dbx.document_repo,
                     running=(
-                        active_task is not None
+                        bool(active_tasks)
                         and (active_source_ids is None or int(source["source_id"]) in active_source_ids)
+                    ),
+                    run_action=(
+                        self._build_ocr_run_current_action(project_id, document_id, int(source["source_id"]))
+                        if active_tasks
+                        and active_source_ids is not None
+                        and int(source["source_id"]) in active_source_ids
+                        else default_run_current_action
                     ),
                 )
                 for source in image_sources
@@ -151,13 +164,14 @@ class DefaultDocumentService:
             actions=self._build_ocr_actions(
                 project_id,
                 document_id,
-                current_source_id=pages[0].source_id if pages else None,
                 has_pages=bool(pages),
                 chunk_count=chunk_count,
-                active_task=active_task,
+                active_tasks=active_tasks,
+                run_current_action=pages[0].run_action if pages else None,
             ),
-            progress=progress_from_task(active_task) if active_task is not None else None,
+            progress=self._aggregate_progress(active_tasks),
             active_task_id=active_task.task_id if active_task is not None else None,
+            active_task_ids=[record.task_id for record in active_tasks],
         )
 
     def get_ocr_page_image(self, project_id: str, document_id: int, source_id: int) -> bytes | None:
@@ -241,21 +255,6 @@ class DefaultDocumentService:
         return self.get_ocr(request.project_id, request.document_id)
 
     def run_ocr(self, request: RunOCRRequest) -> AcceptedCommand:
-        with self._runtime.open_book_db(request.project_id) as dbx:
-            blocker = self._ocr_mutation_blocker(
-                request.project_id,
-                request.document_id,
-                chunk_count=dbx.document_repo.get_chunk_count(request.document_id),
-            )
-            if blocker is not None:
-                raise_application_error(
-                    ApplicationErrorCode.BLOCKED,
-                    blocker.message,
-                    project_id=request.project_id,
-                    document_id=request.document_id,
-                    source_id=request.source_id,
-                    decision_code=blocker.code.value,
-                )
         params: dict[str, object] = {"document_ids": [request.document_id]}
         if request.source_id is not None:
             params["source_ids"] = [request.source_id]
@@ -502,7 +501,9 @@ class DefaultDocumentService:
         workspace = self.get_workspace(project_id, document_id).model_copy(
             update={"active_tab": DocumentSection.IMAGES}
         )
-        active_task = self._find_active_image_reembedding_task(project_id, document_id)
+        active_tasks = self._get_active_image_reembedding_tasks(project_id, document_id)
+        active_task = self._primary_active_task(active_tasks)
+        active_source_ids = self._active_task_source_ids(active_tasks)
         with self._runtime.open_book_db(project_id) as dbx:
             doc_row = dbx.document_repo.get_document_by_id(document_id)
             if doc_row is None:
@@ -513,7 +514,8 @@ class DefaultDocumentService:
                 dbx.document_repo,
                 document_id=document_id,
                 document_type=document_type,
-                active_task=active_task,
+                has_active_task=bool(active_tasks),
+                active_source_ids=active_source_ids,
             )
             assets = self._apply_source_asset_actions(
                 project_id,
@@ -528,14 +530,15 @@ class DefaultDocumentService:
             document_id=document_id,
             document_type=document_type,
             assets=assets,
-            active_task=active_task,
+            active_tasks=active_tasks,
         )
         return DocumentImagesState(
             workspace=workspace,
             assets=assets,
             toolbar=toolbar,
-            progress=progress_from_task(active_task) if active_task is not None else None,
+            progress=self._aggregate_progress(active_tasks),
             active_task_id=active_task.task_id if active_task is not None else None,
+            active_task_ids=[record.task_id for record in active_tasks],
         )
 
     def run_image_reinsertion(self, request: RunImageReinsertionRequest) -> AcceptedCommand:
@@ -612,14 +615,56 @@ class DefaultDocumentService:
         self._runtime.invalidate_workboard(request.project_id)
         return result.model_copy(update={"document_id": request.document_id})
 
-    def _get_active_ocr_task(self, project_id: str, document_id: int) -> Any | None:
-        for record in self._runtime.task_engine.get_tasks(project_id, task_type="ocr", full=True):
-            if record.status in TERMINAL_TASK_STATUSES:
+    def _get_active_ocr_tasks(self, project_id: str, document_id: int) -> list[TaskRecord]:
+        return self._active_document_tasks(project_id, task_type="ocr", document_id=document_id)
+
+    def _get_active_ocr_task(self, project_id: str, document_id: int) -> TaskRecord | None:
+        return self._primary_active_task(self._get_active_ocr_tasks(project_id, document_id))
+
+    def _active_document_tasks(self, project_id: str, *, task_type: str, document_id: int) -> list[TaskRecord]:
+        records = self._runtime.task_store.list_tasks(book_id=project_id, task_type=task_type)
+        relevant = [
+            record
+            for record in records
+            if record.status not in TERMINAL_TASK_STATUSES
+            and (document_ids := self._task_document_ids(record)) is not None
+            and document_id in document_ids
+        ]
+        return sorted(relevant, key=self._task_activity_sort_key, reverse=True)
+
+    @staticmethod
+    def _task_activity_sort_key(record: TaskRecord) -> tuple[int, float]:
+        status_priority = 1 if record.status == "running" else 0
+        return (status_priority, float(record.updated_at))
+
+    @classmethod
+    def _primary_active_task(cls, records: list[TaskRecord]) -> TaskRecord | None:
+        if not records:
+            return None
+        return sorted(records, key=cls._task_activity_sort_key, reverse=True)[0]
+
+    def _aggregate_progress(self, records: list[TaskRecord]) -> ProgressInfo | None:
+        if not records:
+            return None
+        if len(records) == 1:
+            return progress_from_task(records[0])
+        current = 0
+        total = 0
+        has_total = False
+        has_progress = False
+        for record in records:
+            progress = progress_from_task(record)
+            if progress is None:
                 continue
-            document_ids = self._task_document_ids(record)
-            if document_ids == [document_id]:
-                return record
-        return None
+            has_progress = True
+            if progress.current is not None:
+                current += progress.current
+            if progress.total is not None:
+                total += progress.total
+                has_total = has_total or progress.total > 0
+        if has_progress and has_total:
+            return ProgressInfo(current=current, total=total, label=None)
+        return ProgressInfo(label=None)
 
     def _task_document_ids(self, record: Any) -> list[int] | None:
         if not getattr(record, "document_ids_json", None):
@@ -660,27 +705,34 @@ class DefaultDocumentService:
                 return None
         return values
 
-    def _find_active_image_reembedding_task(self, project_id: str, document_id: int) -> TaskRecord | None:
-        records = self._runtime.task_store.list_tasks(book_id=project_id, task_type="image_reembedding")
+    def _active_task_source_ids(self, records: list[TaskRecord]) -> set[int] | None:
+        if not records:
+            return set()
+        source_ids: set[int] = set()
         for record in records:
-            if record.status in TERMINAL_TASK_STATUSES:
-                continue
-            document_ids = self._task_document_ids(record)
-            if document_ids is not None and document_id in document_ids:
-                return record
-        return None
+            targeted = self._task_source_ids(record)
+            if targeted is None:
+                return None
+            source_ids.update(targeted)
+        return source_ids
+
+    def _find_active_image_reembedding_task(self, project_id: str, document_id: int) -> TaskRecord | None:
+        return self._primary_active_task(self._get_active_image_reembedding_tasks(project_id, document_id))
+
+    def _get_active_image_reembedding_tasks(self, project_id: str, document_id: int) -> list[TaskRecord]:
+        return self._active_document_tasks(project_id, task_type="image_reembedding", document_id=document_id)
 
     def _build_ocr_actions(
         self,
         project_id: str,
         document_id: int,
         *,
-        current_source_id: int | None,
         has_pages: bool,
         chunk_count: int,
-        active_task: Any,
+        active_tasks: list[TaskRecord],
+        run_current_action: ActionState | None,
     ) -> DocumentOCRActions:
-        if not has_pages or current_source_id is None:
+        if not has_pages:
             no_pages = ActionState(
                 enabled=False,
                 blocker=make_blocker(
@@ -697,29 +749,9 @@ class DefaultDocumentService:
             project_id,
             document_id,
             chunk_count=chunk_count,
-            active_task=active_task,
-        )
-        rerun_blocker = self._ocr_mutation_blocker(
-            project_id,
-            document_id,
-            chunk_count=chunk_count,
-            active_task=active_task,
+            active_task=self._primary_active_task(active_tasks),
         )
         save_action = ActionState(enabled=save_blocker is None, blocker=save_blocker)
-        if rerun_blocker is not None:
-            disabled = ActionState(enabled=False, blocker=rerun_blocker)
-            return DocumentOCRActions(save=save_action, run_current=disabled, run_pending=disabled)
-
-        current_allowed, current_blocker = self._decision_to_action_state(
-            project_id,
-            self._runtime.task_engine.preflight(
-                "ocr",
-                project_id,
-                {"document_ids": [document_id], "source_ids": [current_source_id]},
-                TaskAction.RUN,
-            ),
-            document_id=document_id,
-        )
         pending_allowed, pending_blocker = self._decision_to_action_state(
             project_id,
             self._runtime.task_engine.preflight(
@@ -732,9 +764,22 @@ class DefaultDocumentService:
         )
         return DocumentOCRActions(
             save=save_action,
-            run_current=ActionState(enabled=current_allowed, blocker=current_blocker),
+            run_current=run_current_action or ActionState(enabled=False),
             run_pending=ActionState(enabled=pending_allowed, blocker=pending_blocker),
         )
+
+    def _build_ocr_run_current_action(self, project_id: str, document_id: int, source_id: int) -> ActionState:
+        allowed, blocker = self._decision_to_action_state(
+            project_id,
+            self._runtime.task_engine.preflight(
+                "ocr",
+                project_id,
+                {"document_ids": [document_id], "source_ids": [source_id]},
+                TaskAction.RUN,
+            ),
+            document_id=document_id,
+        )
+        return ActionState(enabled=allowed, blocker=blocker)
 
     def _decision_to_action_state(
         self,
@@ -855,6 +900,7 @@ class DefaultDocumentService:
         *,
         document_repo: Any,
         running: bool,
+        run_action: ActionState,
     ) -> OCRPageState:
         from context_aware_translation.documents.content.ocr_content import SinglePageOCRContent
 
@@ -905,6 +951,7 @@ class DefaultDocumentService:
             image_path=image_path,
             extracted_text=extracted_text,
             elements=elements,
+            run_action=run_action,
         )
 
     @staticmethod
@@ -994,7 +1041,8 @@ class DefaultDocumentService:
         *,
         document_id: int,
         document_type: str,
-        active_task: TaskRecord | None,
+        has_active_task: bool,
+        active_source_ids: set[int] | None,
     ) -> list[ImageAssetState]:
         from context_aware_translation.documents.epub import EPUBDocument
 
@@ -1019,10 +1067,22 @@ class DefaultDocumentService:
             return []
 
         if document_type == "manga":
-            return self._collect_manga_assets(project_id, document_repo, document, active_task=active_task)
+            return self._collect_manga_assets(
+                project_id,
+                document_repo,
+                document,
+                has_active_task=has_active_task,
+                active_source_ids=active_source_ids,
+            )
         if document_type == "epub":
-            return self._collect_epub_assets(project_id, document_repo, document, active_task=active_task)
-        return self._collect_structured_assets(project_id, document, active_task=active_task)
+            return self._collect_epub_assets(
+                project_id,
+                document_repo,
+                document,
+                has_active_task=has_active_task,
+                active_source_ids=active_source_ids,
+            )
+        return self._collect_structured_assets(project_id, document, active_task=has_active_task)
 
     def _get_translated_lines_with_fallback(self, project_id: str, document_id: int, document_type: str) -> list[str]:
         with self._runtime.open_book_db(project_id) as dbx:
@@ -1049,7 +1109,8 @@ class DefaultDocumentService:
         document_repo: DocumentRepository,
         document: object,
         *,
-        active_task: TaskRecord | None,
+        has_active_task: bool,
+        active_source_ids: set[int] | None,
     ) -> list[ImageAssetState]:
         from context_aware_translation.documents.manga import MangaDocument
         from context_aware_translation.documents.manga_alignment import get_sources_with_nonempty_ocr_text
@@ -1057,7 +1118,6 @@ class DefaultDocumentService:
         if not isinstance(document, MangaDocument):
             return []
         persisted = document_repo.load_reembedded_images(document.document_id)
-        active_source_ids = self._task_source_ids(active_task) if active_task is not None else None
         items: list[ImageAssetState] = []
         for source_idx, source, _ocr_text in get_sources_with_nonempty_ocr_text(
             document_repo.get_document_sources(document.document_id)
@@ -1066,7 +1126,7 @@ class DefaultDocumentService:
             translated = document._page_translations.get(source_id, "")
             if not translated.strip():
                 continue
-            is_running = active_task is not None and (active_source_ids is None or source_id in active_source_ids)
+            is_running = has_active_task and (active_source_ids is None or source_id in active_source_ids)
             is_done = source_idx in persisted
             items.append(
                 ImageAssetState(
@@ -1081,9 +1141,9 @@ class DefaultDocumentService:
                     translated_text=translated,
                     original_image_bytes=source.get("binary_content"),
                     reembedded_image_bytes=persisted.get(source_idx, (None, ""))[0] if is_done else None,
-                    can_run=active_task is None,
+                    can_run=not has_active_task,
                     run_blocker=None
-                    if active_task is None
+                    if not has_active_task
                     else self._active_task_blocker(project_id=project_id, document_id=document.document_id),
                 )
             )
@@ -1095,14 +1155,14 @@ class DefaultDocumentService:
         document_repo: DocumentRepository,
         document: object,
         *,
-        active_task: TaskRecord | None,
+        has_active_task: bool,
+        active_source_ids: set[int] | None,
     ) -> list[ImageAssetState]:
         from context_aware_translation.documents.epub import EPUBDocument
 
         if not isinstance(document, EPUBDocument):
             return []
         persisted = document_repo.load_reembedded_images(document.document_id)
-        active_source_ids = self._task_source_ids(active_task) if active_task is not None else None
         items: list[ImageAssetState] = []
         sources = sorted(
             document_repo.get_document_sources_metadata(document.document_id),
@@ -1118,7 +1178,7 @@ class DefaultDocumentService:
             original_image_bytes = document_repo.get_source_binary_content(source_id)
             if not original_image_bytes:
                 continue
-            is_running = active_task is not None and (active_source_ids is None or source_id in active_source_ids)
+            is_running = has_active_task and (active_source_ids is None or source_id in active_source_ids)
             is_done = source_id in persisted
             items.append(
                 ImageAssetState(
@@ -1133,9 +1193,9 @@ class DefaultDocumentService:
                     translated_text=translated,
                     original_image_bytes=original_image_bytes,
                     reembedded_image_bytes=persisted.get(source_id, (None, ""))[0] if is_done else None,
-                    can_run=active_task is None,
+                    can_run=not has_active_task,
                     run_blocker=None
-                    if active_task is None
+                    if not has_active_task
                     else self._active_task_blocker(project_id=project_id, document_id=document.document_id),
                 )
             )
@@ -1146,7 +1206,7 @@ class DefaultDocumentService:
         project_id: str,
         document: object,
         *,
-        active_task: TaskRecord | None,
+        active_task: bool,
     ) -> list[ImageAssetState]:
         from context_aware_translation.documents.content.ocr_items import ImageItem
 
@@ -1168,7 +1228,7 @@ class DefaultDocumentService:
                     asset_id=str(index),
                     label=f"Image {len(items) + 1}",
                     status=SurfaceStatus.RUNNING
-                    if active_task is not None and not is_done
+                    if active_task and not is_done
                     else SurfaceStatus.DONE
                     if is_done
                     else SurfaceStatus.READY,
@@ -1194,28 +1254,28 @@ class DefaultDocumentService:
         document_id: int,
         document_type: str,
         assets: list[ImageAssetState],
-        active_task: TaskRecord | None,
+        active_tasks: list[TaskRecord],
     ) -> DocumentImagesToolbarState:
-        if active_task is not None:
-            cancel_decision = self._runtime.task_engine.preflight_task(active_task.task_id, TaskAction.CANCEL)
-            return DocumentImagesToolbarState(
-                can_cancel=cancel_decision.allowed,
-                cancel_blocker=None
-                if cancel_decision.allowed
-                else self._image_decision_to_blocker(
+        can_cancel = False
+        cancel_blocker: BlockerInfo | None = None
+        if active_tasks:
+            cancel_decisions = [
+                self._runtime.task_engine.preflight_task(record.task_id, TaskAction.CANCEL) for record in active_tasks
+            ]
+            can_cancel = any(decision.allowed for decision in cancel_decisions)
+            if not can_cancel:
+                primary_decision = cancel_decisions[0]
+                cancel_blocker = self._image_decision_to_blocker(
                     project_id,
                     document_id=document_id,
-                    decision_code=cancel_decision.code or "",
-                    reason=cancel_decision.reason or "",
+                    decision_code=primary_decision.code or "",
+                    reason=primary_decision.reason or "",
                     default_target=NavigationTargetKind.DOCUMENT_IMAGES,
-                ),
-                run_pending_blocker=self._active_task_blocker(project_id=project_id, document_id=document_id),
-                force_all_blocker=self._active_task_blocker(project_id=project_id, document_id=document_id),
-            )
+                )
 
         if not assets:
             if document_type not in _IMAGE_REEMBEDDABLE_DOCUMENT_TYPES:
-                return DocumentImagesToolbarState()
+                return DocumentImagesToolbarState(can_cancel=can_cancel, cancel_blocker=cancel_blocker)
             decision = self._runtime.task_engine.preflight(
                 "image_reembedding",
                 project_id,
@@ -1239,7 +1299,12 @@ class DefaultDocumentService:
                     document_id=document_id,
                 )
             )
-            return DocumentImagesToolbarState(run_pending_blocker=blocker, force_all_blocker=blocker)
+            return DocumentImagesToolbarState(
+                can_cancel=can_cancel,
+                cancel_blocker=cancel_blocker,
+                run_pending_blocker=blocker,
+                force_all_blocker=blocker,
+            )
 
         pending_assets = [asset for asset in assets if asset.status is not SurfaceStatus.DONE]
         pending_allowed, pending_blocker = self._run_image_action_state(
@@ -1265,6 +1330,8 @@ class DefaultDocumentService:
             has_work=bool(assets),
         )
         return DocumentImagesToolbarState(
+            can_cancel=can_cancel,
+            cancel_blocker=cancel_blocker,
             can_run_pending=pending_allowed,
             can_force_all=force_allowed,
             run_pending_blocker=pending_blocker,
@@ -1300,11 +1367,19 @@ class DefaultDocumentService:
                 updated.append(asset)
                 continue
             if active_task is not None:
+                allowed, blocker = self._run_image_action_state(
+                    project_id,
+                    document_id=document_id,
+                    source_id=asset.source_id,
+                    force_all=True,
+                    empty_blocker=None,
+                    has_work=True,
+                )
                 updated.append(
                     asset.model_copy(
                         update={
-                            "can_run": False,
-                            "run_blocker": self._active_task_blocker(project_id=project_id, document_id=document_id),
+                            "can_run": allowed,
+                            "run_blocker": blocker,
                         }
                     )
                 )

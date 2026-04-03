@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from context_aware_translation.application.contracts.common import SurfaceStatus
+from context_aware_translation.application.contracts.common import ActionState, SurfaceStatus
 from context_aware_translation.application.contracts.document import (
     CancelOCRRequest,
     DocumentOCRState,
@@ -508,7 +508,7 @@ class DocumentOCRTab(QWidget):
         return True
 
     def get_running_operations(self) -> list[str]:
-        if self._state is not None and self._state.active_task_id is not None:
+        if self._active_task_ids():
             return ["ocr"]
         return []
 
@@ -516,8 +516,17 @@ class DocumentOCRTab(QWidget):
         return []
 
     def request_cancel_running_operations(self, *, include_engine_tasks: bool = False) -> None:
-        if include_engine_tasks and self._state is not None and self._state.active_task_id is not None:
+        if include_engine_tasks and self._active_task_ids():
             self._cancel_ocr()
+
+    def _active_task_ids(self) -> list[str]:
+        if self._state is None:
+            return []
+        if self._state.active_task_ids:
+            return list(self._state.active_task_ids)
+        if self._state.active_task_id is not None:
+            return [self._state.active_task_id]
+        return []
 
     @property
     def _current_page(self) -> OCRPageState | None:
@@ -684,10 +693,11 @@ class DocumentOCRTab(QWidget):
             else self.tr("Save edited OCR text")
         )
 
-        self.run_current_button.setEnabled(page is not None and self._state.actions.run_current.enabled)
+        current_run_action = self._current_run_action(page)
+        self.run_current_button.setEnabled(page is not None and current_run_action.enabled)
         self.run_current_button.setToolTip(
-            translate_backend_text(self._state.actions.run_current.blocker.message)
-            if self._state.actions.run_current.blocker is not None
+            translate_backend_text(current_run_action.blocker.message)
+            if current_run_action.blocker is not None
             else self.tr("Run or re-run OCR on the current page")
         )
 
@@ -699,8 +709,15 @@ class DocumentOCRTab(QWidget):
         )
         self._sync_chrome_state()
 
+    def _current_run_action(self, page: OCRPageState | None) -> ActionState:
+        if self._state is None:
+            return ActionState(enabled=False)
+        if page is not None and (page.run_action.enabled or page.run_action.blocker is not None):
+            return page.run_action
+        return self._state.actions.run_current
+
     def _apply_progress(self) -> None:
-        if self._state is None or self._state.active_task_id is None:
+        if not self._active_task_ids():
             self.progress_widget.reset()
             self.progress_widget.setVisible(False)
             self._sync_chrome_state()
@@ -847,19 +864,22 @@ class DocumentOCRTab(QWidget):
             )
 
     def _cancel_ocr(self) -> None:
-        if self._state is None or self._state.active_task_id is None:
+        task_ids = self._active_task_ids()
+        if not task_ids:
             return
-        try:
-            result = self._service.cancel_ocr(
-                CancelOCRRequest(project_id=self._project_id, task_id=self._state.active_task_id)
-            )
-        except ApplicationError as exc:
-            QMessageBox.warning(self, self.tr("OCR"), translate_backend_text(exc.payload.message))
-            self.refresh()
-            return
+        result = None
+        for task_id in task_ids:
+            try:
+                result = self._service.cancel_ocr(CancelOCRRequest(project_id=self._project_id, task_id=task_id))
+            except ApplicationError as exc:
+                QMessageBox.warning(self, self.tr("OCR"), translate_backend_text(exc.payload.message))
+                self.refresh()
+                return
         if self.refresh():
             self._set_message(
-                result.message.text if result.message is not None else self.tr("OCR cancellation requested."),
+                result.message.text
+                if result is not None and result.message is not None
+                else self.tr("OCR cancellation requested."),
                 transient=True,
             )
 

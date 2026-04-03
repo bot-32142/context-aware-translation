@@ -49,6 +49,7 @@ class OCRPageState(ContractModel):
     extracted_text: str | None = None
     elements: list[OCRTextElement] = Field(default_factory=list)
     blocker: BlockerInfo | None = None
+    run_action: ActionState = Field(default_factory=ActionState)
 
 
 class DocumentOCRActions(ContractModel):
@@ -64,6 +65,7 @@ class DocumentOCRState(ContractModel):
     actions: DocumentOCRActions = Field(default_factory=DocumentOCRActions)
     progress: ProgressInfo | None = None
     active_task_id: str | None = None
+    active_task_ids: list[str] = Field(default_factory=list)
 
 
 class SaveOCRPageRequest(ContractModel):
@@ -172,6 +174,7 @@ class DocumentImagesState(ContractModel):
     toolbar: DocumentImagesToolbarState = Field(default_factory=DocumentImagesToolbarState)
     progress: ProgressInfo | None = None
     active_task_id: str | None = None
+    active_task_ids: list[str] = Field(default_factory=list)
 
 
 class RunImageReinsertionRequest(ContractModel):

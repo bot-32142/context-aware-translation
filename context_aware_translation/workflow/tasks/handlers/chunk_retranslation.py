@@ -68,6 +68,9 @@ class ChunkRetranslationHandler:
             # Allow parallel chunk retranslation within the same document while still
             # conflicting with document-wide WRITE_EXCLUSIVE operations.
             claims.add(ResourceClaim("doc", book_id, str(doc_id), ClaimMode.WRITE_COOPERATIVE))
+            # Source-scoped image reembedding snapshots translated document text up
+            # front, so chunk retranslation must stay exclusive with that snapshot.
+            claims.add(ResourceClaim("translation_snapshot", book_id, str(doc_id), ClaimMode.WRITE_EXCLUSIVE))
         else:
             claims.add(ResourceClaim("doc", book_id, "*"))
         if chunk_id is not None:

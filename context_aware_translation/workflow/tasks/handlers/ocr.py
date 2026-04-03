@@ -81,6 +81,18 @@ class OCRHandler:
         except ValueError:
             return frozenset()
         book_id = record.book_id
+        source_ids = (payload or {}).get("source_ids")
+        if isinstance(source_ids, list) and source_ids:
+            claims: set[ResourceClaim] = {
+                # Keep document-wide translation/extraction work mutually exclusive,
+                # while allowing different OCR pages in the same document to run together.
+                ResourceClaim("doc", book_id, str(doc_id), ClaimMode.WRITE_COOPERATIVE),
+            }
+            claims.update(
+                ResourceClaim("source", book_id, str(int(source_id)), ClaimMode.WRITE_EXCLUSIVE)
+                for source_id in source_ids
+            )
+            return frozenset(claims)
         return frozenset(
             {
                 ResourceClaim("ocr", book_id, str(doc_id), ClaimMode.WRITE_EXCLUSIVE),

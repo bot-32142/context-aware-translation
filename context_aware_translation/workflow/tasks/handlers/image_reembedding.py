@@ -10,6 +10,7 @@ from context_aware_translation.adapters.qt.workers.image_reembedding_task_worker
 from context_aware_translation.workflow.tasks.claims import (
     AllDocuments,
     ClaimArbiter,
+    ClaimMode,
     DocumentScope,
     ResourceClaim,
     SomeDocuments,
@@ -76,10 +77,35 @@ class ImageReembeddingHandler:
         doc_scope = self.scope(record, payload)
         book_id = record.book_id
         claims: set[ResourceClaim] = set()
+        raw_source_ids = (payload or {}).get("source_ids")
+        specific_source_ids = (
+            [int(source_id) for source_id in raw_source_ids] if isinstance(raw_source_ids, list) else []
+        )
+        has_specific_sources = bool(specific_source_ids)
         if isinstance(doc_scope, AllDocuments):
-            claims.add(ResourceClaim("doc", book_id, "*"))
+            claims.add(
+                ResourceClaim(
+                    "doc",
+                    book_id,
+                    "*",
+                    ClaimMode.WRITE_COOPERATIVE if has_specific_sources else ClaimMode.WRITE_EXCLUSIVE,
+                )
+            )
         elif isinstance(doc_scope, SomeDocuments):
-            claims.update(ResourceClaim("doc", book_id, str(doc_id)) for doc_id in doc_scope.doc_ids)
+            mode = ClaimMode.WRITE_COOPERATIVE if has_specific_sources else ClaimMode.WRITE_EXCLUSIVE
+            claims.update(ResourceClaim("doc", book_id, str(doc_id), mode) for doc_id in doc_scope.doc_ids)
+        if has_specific_sources:
+            claims.update(
+                ResourceClaim("source", book_id, str(source_id), ClaimMode.WRITE_EXCLUSIVE)
+                for source_id in specific_source_ids
+            )
+            if isinstance(doc_scope, AllDocuments):
+                claims.add(ResourceClaim("translation_snapshot", book_id, "*", ClaimMode.READ_SHARED))
+            elif isinstance(doc_scope, SomeDocuments):
+                claims.update(
+                    ResourceClaim("translation_snapshot", book_id, str(doc_id), ClaimMode.READ_SHARED)
+                    for doc_id in doc_scope.doc_ids
+                )
         # No glossary or context_tree claims needed for reembedding
         return frozenset(claims)
 
