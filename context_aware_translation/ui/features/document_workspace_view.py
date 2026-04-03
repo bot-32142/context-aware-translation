@@ -108,7 +108,7 @@ class _ExportControls(QWidget):
         self.allow_original_fallback_cb.toggled.connect(self._on_options_changed)
         layout.addWidget(self.allow_original_fallback_cb)
 
-        self.use_original_images_cb = QCheckBox(self.tr("Use original images instead of reembedded ones"))
+        self.use_original_images_cb = QCheckBox(self.tr("Use original image"))
         self.use_original_images_cb.setVisible(False)
         self.use_original_images_cb.toggled.connect(self._on_options_changed)
         layout.addWidget(self.use_original_images_cb)

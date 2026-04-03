@@ -3920,8 +3920,8 @@ All completed results are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../features/document_workspace_view.py" line="111"/>
-        <source>Use original images instead of reembedded ones</source>
-        <translation>使用原始图片而不是重嵌入后的图片</translation>
+        <source>Use original image</source>
+        <translation>使用原始图片</translation>
     </message>
     <message>
         <location filename="../features/document_workspace_view.py" line="117"/>
