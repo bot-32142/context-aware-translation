@@ -779,6 +779,8 @@ def _recommended_step_route(
 
     step_config: dict[str, Any] = {}
     reasoning_kwargs = _wizard_reasoning_kwargs(step_id, selected)
+    if step_id is WorkflowStepId.EXTRACTOR:
+        step_config["max_gleaning"] = 1
     if reasoning_kwargs is not None:
         step_config["kwargs"] = reasoning_kwargs
     if step_id is WorkflowStepId.IMAGE_REEMBEDDING and selected is not None:
