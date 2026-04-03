@@ -35,6 +35,7 @@ class ScannedBookDocument(Document):
     supported_export_formats: tuple[str, ...] = ("epub", "md", "txt")
     requires_ocr_config = True
     supports_preserve_structure = False
+    supports_original_image_export = True
 
     def __init__(self, repo: DocumentRepository, document_id: int, ocr_config: OCRConfig | None = None):
         super().__init__(repo, document_id)
@@ -345,7 +346,14 @@ class ScannedBookDocument(Document):
         return export_format.lower() in self.supported_export_formats
 
     @classmethod
-    def export_merged(cls, documents: list[Document], export_format: str, output_path: Path) -> None:
+    def export_merged(
+        cls,
+        documents: list[Document],
+        export_format: str,
+        output_path: Path,
+        *,
+        use_original_images: bool = False,
+    ) -> None:
         """Export multiple scanned book documents merged into a single file."""
         if not documents:
             raise ValueError("No documents to export")
@@ -375,7 +383,11 @@ class ScannedBookDocument(Document):
 
                 # Extract markdown from each document
                 strip_artifacts = ocr_config.strip_llm_artifacts if ocr_config else True
-                markdown = doc._merged_content.to_markdown(Path(tmpdirname), strip_llm_artifacts=strip_artifacts)
+                markdown = doc._merged_content.to_markdown(
+                    Path(tmpdirname),
+                    strip_llm_artifacts=strip_artifacts,
+                    use_original_images=use_original_images,
+                )
                 merged_parts.append(markdown)
 
             # Combine all markdown with separators

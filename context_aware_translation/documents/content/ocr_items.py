@@ -190,6 +190,7 @@ class RenderContext:
     image_dir: Path
     insert_new_page_before_chapter: bool
     strip_llm_artifacts: bool = True
+    use_original_images: bool = False
     first_cover_rendered: bool = False  # Tracks if first cover has been rendered
 
 
@@ -523,8 +524,11 @@ class ImageItem(OCRItem):
         if self.caption and self.translated_lines is None:
             raise ValueError("Cannot render markdown without translations. Call set_texts() first.")
 
-        # Use reembedded image if available, otherwise use original image
-        image_data = self.reembedded_image_bytes if self.reembedded_image_bytes else self.image_bytes
+        # Default export prefers reembedded images, but some export flows keep the original asset bytes.
+        if ctx.use_original_images or self.reembedded_image_bytes is None:
+            image_data = self.image_bytes
+        else:
+            image_data = self.reembedded_image_bytes
 
         if not ctx.image_dir or image_data is None:
             raise Exception("Image not found. This is a bug. Please report it.")

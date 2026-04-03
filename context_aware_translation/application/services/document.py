@@ -588,6 +588,7 @@ class DefaultDocumentService:
             available_formats=prepared.available_formats,
             default_output_path=prepared.default_output_path,
             supports_preserve_structure=prepared.supports_preserve_structure,
+            supports_original_image_export=prepared.supports_original_image_export,
             supports_epub_layout_conversion=prepared.supports_epub_layout_conversion,
             incomplete_translation_message=prepared.incomplete_translation_message,
         )

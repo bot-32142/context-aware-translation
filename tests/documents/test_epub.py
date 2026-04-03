@@ -2800,9 +2800,7 @@ p {
         translations = list(source_lines)
 
         visible_toc_index = next(
-            idx
-            for idx, line in enumerate(source_lines)
-            if "⟪a:" in line and "春は旅立ちの季節！" in line
+            idx for idx, line in enumerate(source_lines) if "⟪a:" in line and "春は旅立ちの季節！" in line
         )
         metadata_toc_index = source_lines.index("序章 春は旅立ちの季節！")
         image_title_prefix_index = source_lines.index("序章")
@@ -2904,9 +2902,7 @@ p {
         source_lines = doc.get_text().splitlines()
         translations = list(source_lines)
         visible_toc_index = next(
-            idx
-            for idx, line in enumerate(source_lines)
-            if "⟪a:" in line and "春は旅立ちの季節！" in line
+            idx for idx, line in enumerate(source_lines) if "⟪a:" in line and "春は旅立ちの季節！" in line
         )
         metadata_toc_index = source_lines.index("序章 春は旅立ちの季節！")
 
@@ -3095,6 +3091,52 @@ p {
 
         pixel = Image.open(io.BytesIO(exported_image.content)).convert("RGB").getpixel((0, 0))
         assert pixel == (220, 30, 30)
+
+    def test_export_epub_can_keep_original_image_bytes(self, tmp_path: Path):
+        original_png = _png_bytes((10, 10, 10), size=(8, 8))
+        replacement_png = _png_bytes((220, 30, 30), size=(8, 8))
+
+        epub_path = _make_epub_file(
+            tmp_path,
+            chapters=[("ch1.xhtml", "<html><body><p>Hello</p></body></html>")],
+            images=[("images/fig1.png", original_png, "image/png")],
+        )
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+
+        doc_row = repo.list_documents()[0]
+        source_rows = repo.get_document_sources(doc_row["document_id"])
+        image_source = next(s for s in source_rows if EPUBDocument._is_content_image(s))
+        source_id = image_source["source_id"]
+
+        ocr_json = [
+            {
+                "page_type": "content",
+                "content": [
+                    {
+                        "type": "image",
+                        "bbox": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0},
+                        "embedded_text": "Original",
+                    }
+                ],
+            }
+        ]
+        repo.update_source_ocr(source_id, json.dumps(ocr_json))
+        repo.update_source_ocr_completed(source_id)
+        repo.save_reembedded_image(doc_row["document_id"], source_id * 1_000_000, replacement_png, "image/png")
+
+        doc = EPUBDocument(repo, doc_row["document_id"])
+        for source in source_rows:
+            if EPUBDocument._is_chapter_source(source):
+                doc._translated_chapters[source["source_id"]] = source["text_content"]
+
+        output = tmp_path / "original_image_output.epub"
+        EPUBDocument.export_merged([doc], "epub", output, use_original_images=True)
+        read_back = read_epub(output)
+        exported_image = next(r for r in read_back.resources if r.file_name.endswith("fig1.png"))
+
+        pixel = Image.open(io.BytesIO(exported_image.content)).convert("RGB").getpixel((0, 0))
+        assert pixel == (10, 10, 10)
 
 
 # =========================================================================

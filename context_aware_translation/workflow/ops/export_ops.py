@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from context_aware_translation.core.progress import ProgressCallback, ProgressUpdate, WorkflowStep
-from context_aware_translation.documents.base import Document
+from context_aware_translation.documents.base import Document, supports_original_image_export_for_type
 from context_aware_translation.documents.epub import EPUBDocument
 from context_aware_translation.workflow.ops import bootstrap_ops
 
@@ -99,6 +99,7 @@ async def export(
     export_format: str | None = None,
     document_ids: list[int] | None = None,
     allow_original_fallback: bool = False,
+    use_original_images: bool = False,
     epub_force_horizontal_ltr: bool = False,
     progress_callback: ProgressCallback | None = None,
     cancel_check: Callable[[], bool] | None = None,
@@ -120,6 +121,8 @@ async def export(
     if not documents[0].can_export(export_format):
         supported = ", ".join(documents[0].supported_export_formats)
         raise ValueError(f"Format '{export_format}' not supported. Supported: {supported}")
+    if use_original_images and not supports_original_image_export_for_type(documents[0].document_type):
+        raise ValueError("Original-image export is not supported for this document type.")
 
     total_docs = len(documents)
     for idx, doc in enumerate(documents):
@@ -144,7 +147,7 @@ async def export(
 
     bootstrap_ops.check_cancel(cancel_check)
     doc_class = type(documents[0])
-    doc_class.export_merged(documents, export_format, file_path)
+    doc_class.export_merged(documents, export_format, file_path, use_original_images=use_original_images)
 
 
 async def export_preserve_structure(

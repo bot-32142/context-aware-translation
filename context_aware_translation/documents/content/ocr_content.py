@@ -182,12 +182,14 @@ class MergedOCRContent:
         image_dir: Path,
         insert_new_page_before_chapter: bool = False,
         strip_llm_artifacts: bool = True,
+        use_original_images: bool = False,
     ) -> str:
         lines: list[str] = []
         ctx = RenderContext(
             image_dir=image_dir,
             insert_new_page_before_chapter=insert_new_page_before_chapter,
             strip_llm_artifacts=strip_llm_artifacts,
+            use_original_images=use_original_images,
         )
 
         for elem in self.elements:

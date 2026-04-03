@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtWidgets import QApplication
 
 from context_aware_translation.application.composition import build_application_context
 from context_aware_translation.application.contracts.app_setup import ConnectionDraft, SetupWizardRequest
@@ -14,10 +14,10 @@ from context_aware_translation.application.contracts.work import PrepareExportRe
 from context_aware_translation.storage.schema.book_db import TranslationChunkRecord
 
 
-def _ensure_qt_app() -> QCoreApplication:
-    app = QCoreApplication.instance()
+def _ensure_qt_app() -> QApplication:
+    app = QApplication.instance()
     if app is None:
-        app = QCoreApplication([])
+        app = QApplication([])
     return app
 
 
@@ -128,6 +128,7 @@ def test_prepare_export_exposes_fallback_and_preserve_structure(tmp_path: Path) 
 
         assert state.document_labels == ["chapter-01.txt"]
         assert state.supports_preserve_structure is True
+        assert state.supports_original_image_export is False
         assert state.supports_epub_layout_conversion is False
         assert state.incomplete_translation_message is not None
         assert Path(state.default_output_path).suffix == f".{state.available_formats[0].format_id}"
@@ -150,8 +151,49 @@ def test_prepare_export_marks_epub_layout_conversion_support(tmp_path: Path) -> 
         )
 
         assert state.supports_preserve_structure is False
+        assert state.supports_original_image_export is True
         assert state.supports_epub_layout_conversion is True
         assert state.available_formats[0].format_id == "epub"
+    finally:
+        context.close()
+
+
+def test_work_run_export_passes_original_image_option(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="EPUB Work Export", target_language="English")
+        )
+        project_id = created.project.project_id
+        document_id = _insert_epub_document(context, project_id, chunk_id=5, translated=True, label="chapter.xhtml")
+
+        session = MagicMock()
+        session.__enter__.return_value = MagicMock(name="workflow")
+        session.__exit__.return_value = False
+        with (
+            patch(
+                "context_aware_translation.application.services._export_support.WorkflowSession.from_book",
+                return_value=session,
+            ),
+            patch(
+                "context_aware_translation.application.services._export_support.export_ops.export",
+                new_callable=AsyncMock,
+            ) as export_mock,
+        ):
+            context.services.work.run_export(
+                RunExportRequest(
+                    project_id=project_id,
+                    document_ids=[document_id],
+                    format_id="epub",
+                    output_path=str(tmp_path / "chapter.epub"),
+                    options={"use_original_images": True},
+                )
+            )
+
+        kwargs = export_mock.await_args.kwargs
+        assert kwargs["use_original_images"] is True
+        assert kwargs["export_format"] == "epub"
     finally:
         context.close()
 
@@ -216,6 +258,7 @@ def test_document_export_state_and_execution_use_document_service(tmp_path: Path
         state = context.services.document.get_export(project_id, document_id)
         assert state.can_export is True
         assert state.supports_preserve_structure is True
+        assert state.supports_original_image_export is False
         assert state.supports_epub_layout_conversion is False
         assert state.incomplete_translation_message is None
 
@@ -284,12 +327,13 @@ def test_document_export_passes_epub_layout_conversion_option(tmp_path: Path) ->
                     document_id=document_id,
                     format_id="epub",
                     output_path=str(tmp_path / "chapter.epub"),
-                    options={"epub_force_horizontal_ltr": True},
+                    options={"epub_force_horizontal_ltr": True, "use_original_images": True},
                 )
             )
 
         kwargs = export_mock.await_args.kwargs
         assert kwargs["epub_force_horizontal_ltr"] is True
+        assert kwargs["use_original_images"] is True
         assert kwargs["export_format"] == "epub"
     finally:
         context.close()

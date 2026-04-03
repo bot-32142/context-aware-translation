@@ -424,6 +424,20 @@ def test_export_md_creates_parent_directories(mock_ocr_content):
         assert output_path.exists()
 
 
+def test_export_md_passes_original_image_option_to_markdown_renderer():
+    mock_repo = MagicMock()
+    doc = ScannedBookDocument(mock_repo, 1, ocr_config=OCRConfig())
+    doc._merged_content = MagicMock()
+    doc._merged_content.to_markdown.return_value = "content"
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = Path(tmpdir) / "output.md"
+        ScannedBookDocument.export_merged([doc], "md", output_path, use_original_images=True)
+
+    doc._merged_content.to_markdown.assert_called_once()
+    assert doc._merged_content.to_markdown.call_args.kwargs["use_original_images"] is True
+
+
 def test_export_epub_calls_pandoc(mock_ocr_content):
     mock_repo = MagicMock()
     doc = ScannedBookDocument(mock_repo, 1, ocr_config=OCRConfig())

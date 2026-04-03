@@ -3851,31 +3851,36 @@ All completed results are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../features/document_workspace_view.py" line="111"/>
+        <source>Use original images instead of reembedded ones</source>
+        <translation>使用原始图片而不是重嵌入后的图片</translation>
+    </message>
+    <message>
+        <location filename="../features/document_workspace_view.py" line="117"/>
         <source>Convert vertical Japanese EPUB to horizontal left-to-right</source>
         <translation>将纵排日文 EPUB 转为横排从左到右</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="115"/>
+        <location filename="../features/document_workspace_view.py" line="121"/>
         <source>EPUB only. Forces horizontal left-to-right layout and scrollbar direction in the exported file.</source>
         <translation>仅适用于 EPUB。会在导出的文件中强制使用横排从左到右布局，并同步调整滚动方向。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="146"/>
+        <location filename="../features/document_workspace_view.py" line="153"/>
         <source>Preserve folder structure is not supported for this export.</source>
         <translation>此导出不支持保留文件夹结构。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="155"/>
+        <location filename="../features/document_workspace_view.py" line="162"/>
         <source>Fallback to original content is only needed when translation is incomplete.</source>
         <translation>仅在翻译不完整时才需要回退到原始内容。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="193"/>
+        <location filename="../features/document_workspace_view.py" line="202"/>
         <source>Output path is required.</source>
         <translation>输出路径为必填项。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="253"/>
+        <location filename="../features/document_workspace_view.py" line="274"/>
         <source>Select Output Folder</source>
         <translation>选择输出文件夹</translation>
     </message>

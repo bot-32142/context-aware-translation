@@ -448,7 +448,7 @@ async def test_translate_preflights_stack_for_ocr_required_selection():
 class _FakeExportDocument:
     document_type = "text"
     supported_export_formats = ["txt"]
-    export_calls: list[tuple[list[_FakeExportDocument], str, str]] = []
+    export_calls: list[tuple[list[_FakeExportDocument], str, str, bool]] = []
 
     def __init__(self, document_id: int = 1) -> None:
         self.document_id = document_id
@@ -464,12 +464,16 @@ class _FakeExportDocument:
         self.received_lines = list(lines)
 
     @classmethod
-    def export_merged(cls, documents, export_format, file_path) -> None:  # noqa: ANN001
-        cls.export_calls.append((list(documents), str(export_format), str(file_path)))
+    def export_merged(cls, documents, export_format, file_path, *, use_original_images=False) -> None:  # noqa: ANN001
+        cls.export_calls.append((list(documents), str(export_format), str(file_path), bool(use_original_images)))
 
 
 class _FakeMangaExportDocument(_FakeExportDocument):
     document_type = "manga"
+
+
+class _FakeOriginalImageExportDocument(_FakeExportDocument):
+    document_type = "pdf"
 
 
 @pytest.mark.asyncio
@@ -537,6 +541,36 @@ async def test_export_fallback_mode_merges_translated_and_original_chunks(tmp_pa
 
     assert fake_doc.received_lines == ["hola", "world", ""]
     assert _FakeExportDocument.export_calls
+
+
+@pytest.mark.asyncio
+async def test_export_forwards_original_image_option_to_document_exporter(tmp_path):
+    config = MagicMock()
+    config.image_reembedding_config = None
+
+    manager = MagicMock()
+    manager.get_translated_lines.return_value = ["translated", ""]
+
+    fake_doc = _FakeOriginalImageExportDocument()
+    _FakeOriginalImageExportDocument.export_calls = []
+    service = WorkflowContext(
+        config=config,
+        llm_client=MagicMock(),
+        context_tree=MagicMock(),
+        manager=manager,
+        db=MagicMock(),
+        document_repo=MagicMock(),
+    )
+    with patch("context_aware_translation.workflow.ops.bootstrap_ops.load_documents", return_value=[fake_doc]):
+        await export_ops.export(
+            service,
+            file_path=tmp_path / "out.txt",
+            export_format="txt",
+            use_original_images=True,
+        )
+
+    assert fake_doc.received_lines == ["translated", ""]
+    assert _FakeOriginalImageExportDocument.export_calls[-1][3] is True
 
 
 @pytest.mark.asyncio

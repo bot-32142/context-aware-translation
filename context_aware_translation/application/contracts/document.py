@@ -189,6 +189,7 @@ class DocumentExportState(ContractModel):
     default_output_path: str | None = None
     blocker: BlockerInfo | None = None
     supports_preserve_structure: bool = False
+    supports_original_image_export: bool = False
     supports_epub_layout_conversion: bool = False
     incomplete_translation_message: str | None = None
 

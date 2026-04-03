@@ -315,6 +315,7 @@ class EPUBDocument(Document):
     ocr_required_for_translation = False  # EPUB text content is available without OCR
     supports_preserve_structure = False
     supports_multi_export = False
+    supports_original_image_export = True
 
     def __init__(
         self,
@@ -2073,7 +2074,14 @@ class EPUBDocument(Document):
         return export_format.lower() in self.supported_export_formats
 
     @classmethod
-    def export_merged(cls, documents: list[Document], export_format: str, output_path: Path) -> None:
+    def export_merged(
+        cls,
+        documents: list[Document],
+        export_format: str,
+        output_path: Path,
+        *,
+        use_original_images: bool = False,
+    ) -> None:
         """Export EPUB documents to file.
 
         EPUB documents are single-export only (supports_multi_export=False).
@@ -2106,7 +2114,7 @@ class EPUBDocument(Document):
             raise ValueError("Document must be an EPUBDocument instance")
 
         if fmt == "epub":
-            cls._export_native_epub(doc, output_path)
+            cls._export_native_epub(doc, output_path, use_original_images=use_original_images)
             return
 
         with TemporaryDirectory(prefix="cat-epub-export-") as tmp_dir:
@@ -2115,6 +2123,7 @@ class EPUBDocument(Document):
                 doc,
                 intermediate_epub,
                 flatten_annotationless_ruby=doc._should_strip_epub_ruby(),
+                use_original_images=use_original_images,
             )
             export_pandoc_file(intermediate_epub, output_path, fmt, "epub")
 
@@ -2125,6 +2134,7 @@ class EPUBDocument(Document):
         output_path: Path,
         *,
         flatten_annotationless_ruby: bool = False,
+        use_original_images: bool = False,
     ) -> None:
         """Export EPUB by patching translated members into the original archive."""
         sources = doc.repo.get_document_sources(doc.document_id)
@@ -2177,6 +2187,7 @@ class EPUBDocument(Document):
             toc_titles_by_target=toc_titles_by_target,
             toc_titles_by_source_path=toc_titles_by_source_path,
             flatten_annotationless_ruby=flatten_annotationless_ruby,
+            use_original_images=use_original_images,
         )
 
         if doc._translated_toc:
@@ -2239,6 +2250,7 @@ class EPUBDocument(Document):
         toc_titles_by_target: dict[str, str] | None = None,
         toc_titles_by_source_path: dict[str, str] | None = None,
         flatten_annotationless_ruby: bool = False,
+        use_original_images: bool = False,
     ) -> dict[str, bytes]:
         updates: dict[str, bytes] = {}
         toc_document_paths = visible_toc_document_paths or set()
@@ -2285,7 +2297,7 @@ class EPUBDocument(Document):
 
             if source["source_type"] == "image" and source.get("binary_content"):
                 payload = bytes(source["binary_content"])
-                if cls._is_content_image(source):
+                if not use_original_images and cls._is_content_image(source):
                     in_memory_translated = doc._translated_resource_images.get(source["source_id"])
                     if in_memory_translated is not None:
                         payload = in_memory_translated[0]

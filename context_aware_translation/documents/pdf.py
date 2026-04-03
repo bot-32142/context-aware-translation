@@ -52,6 +52,7 @@ class PDFDocument(Document):
     supported_export_formats: tuple[str, ...] = ("epub", "md", "txt")
     requires_ocr_config = True
     supports_preserve_structure = False
+    supports_original_image_export = True
 
     # DPI settings for PDF page extraction.
     # Storage: Original embedded images at full resolution when possible.
@@ -693,7 +694,14 @@ class PDFDocument(Document):
         return export_format.lower() in self.supported_export_formats
 
     @classmethod
-    def export_merged(cls, documents: list[Document], export_format: str, output_path: Path) -> None:
+    def export_merged(
+        cls,
+        documents: list[Document],
+        export_format: str,
+        output_path: Path,
+        *,
+        use_original_images: bool = False,
+    ) -> None:
         """Export multiple PDF documents merged into a single file."""
         if not documents:
             raise ValueError("No documents to export")
@@ -724,7 +732,11 @@ class PDFDocument(Document):
                 # Extract markdown from each document
                 # CoverItem outputs YAML frontmatter with cover-image for pandoc
                 strip_artifacts = ocr_config.strip_llm_artifacts if ocr_config else True
-                markdown = doc._merged_content.to_markdown(Path(tmpdirname), strip_llm_artifacts=strip_artifacts)
+                markdown = doc._merged_content.to_markdown(
+                    Path(tmpdirname),
+                    strip_llm_artifacts=strip_artifacts,
+                    use_original_images=use_original_images,
+                )
                 merged_parts.append(markdown)
 
             # Combine all markdown with separators

@@ -66,6 +66,7 @@ class _ExportControls(QWidget):
     def __init__(self, *, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._default_output_path = ""
+        self._supports_original_image_export = False
         self._supports_epub_layout_conversion = False
         self._init_ui()
 
@@ -107,6 +108,11 @@ class _ExportControls(QWidget):
         self.allow_original_fallback_cb.toggled.connect(self._on_options_changed)
         layout.addWidget(self.allow_original_fallback_cb)
 
+        self.use_original_images_cb = QCheckBox(self.tr("Use original images instead of reembedded ones"))
+        self.use_original_images_cb.setVisible(False)
+        self.use_original_images_cb.toggled.connect(self._on_options_changed)
+        layout.addWidget(self.use_original_images_cb)
+
         self.epub_force_horizontal_ltr_cb = QCheckBox(
             self.tr("Convert vertical Japanese EPUB to horizontal left-to-right")
         )
@@ -121,6 +127,7 @@ class _ExportControls(QWidget):
 
     def apply_state(self, state: ExportDialogState | DocumentExportState) -> None:
         self._default_output_path = state.default_output_path or ""
+        self._supports_original_image_export = state.supports_original_image_export
         self._supports_epub_layout_conversion = state.supports_epub_layout_conversion
         self.blocker_label.setVisible(state.blocker is not None)
         self.blocker_label.setText(translate_backend_text(state.blocker.message if state.blocker is not None else ""))
@@ -156,6 +163,8 @@ class _ExportControls(QWidget):
             )
         else:
             self.allow_original_fallback_cb.setToolTip(translate_backend_text(state.incomplete_translation_message))
+        if not self._supports_original_image_export:
+            self.use_original_images_cb.setChecked(False)
         if not self._supports_epub_layout_conversion:
             self.epub_force_horizontal_ltr_cb.setChecked(False)
 
@@ -164,6 +173,7 @@ class _ExportControls(QWidget):
         else:
             self._sync_output_path()
         self._sync_output_tooltip()
+        self._sync_original_image_controls()
         self._sync_epub_layout_controls()
         self.changed.emit()
 
@@ -184,6 +194,7 @@ class _ExportControls(QWidget):
         return {
             "preserve_structure": self.preserve_structure_cb.isChecked(),
             "allow_original_fallback": self.allow_original_fallback_cb.isChecked(),
+            "use_original_images": self._original_image_export_enabled(),
             "epub_force_horizontal_ltr": self._epub_layout_conversion_enabled(),
         }
 
@@ -204,6 +215,7 @@ class _ExportControls(QWidget):
 
     def _on_options_changed(self) -> None:
         self._sync_output_path()
+        self._sync_original_image_controls()
         self._sync_epub_layout_controls()
         self.changed.emit()
 
@@ -238,6 +250,18 @@ class _ExportControls(QWidget):
             and self.format_id() == "epub"
             and self.epub_force_horizontal_ltr_cb.isChecked()
         )
+
+    def _original_image_export_enabled(self) -> bool:
+        return (
+            self._supports_original_image_export
+            and not self.preserve_structure_cb.isChecked()
+            and self.use_original_images_cb.isChecked()
+        )
+
+    def _sync_original_image_controls(self) -> None:
+        visible = self._supports_original_image_export and not self.preserve_structure_cb.isChecked()
+        self.use_original_images_cb.setVisible(visible)
+        self.use_original_images_cb.setEnabled(visible)
 
     def _sync_epub_layout_controls(self) -> None:
         visible = (

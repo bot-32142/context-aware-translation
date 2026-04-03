@@ -13,6 +13,7 @@ from context_aware_translation.application.runtime import ApplicationRuntime, ra
 from context_aware_translation.documents.base import (
     get_supported_formats_for_type,
     supports_multi_export_for_type,
+    supports_original_image_export_for_type,
     supports_preserve_structure_for_type,
 )
 from context_aware_translation.workflow.ops import export_ops
@@ -28,6 +29,7 @@ class PreparedExport:
     available_formats: list[ExportOption]
     default_output_path: str
     supports_preserve_structure: bool = False
+    supports_original_image_export: bool = False
     supports_epub_layout_conversion: bool = False
     incomplete_translation_message: str | None = None
 
@@ -105,6 +107,7 @@ def prepare_export(runtime: ApplicationRuntime, *, project_id: str, document_ids
         available_formats=available_formats,
         default_output_path=default_output_path,
         supports_preserve_structure=supports_preserve_structure_for_type(document_type),
+        supports_original_image_export=supports_original_image_export_for_type(document_type),
         supports_epub_layout_conversion=document_type == "epub",
         incomplete_translation_message=(
             "Selected documents are not fully translated. Enable fallback to use original content for untranslated chunks."
@@ -122,6 +125,7 @@ def to_export_dialog_state(prepared: PreparedExport) -> ExportDialogState:
         available_formats=prepared.available_formats,
         default_output_path=prepared.default_output_path,
         supports_preserve_structure=prepared.supports_preserve_structure,
+        supports_original_image_export=prepared.supports_original_image_export,
         supports_epub_layout_conversion=prepared.supports_epub_layout_conversion,
         incomplete_translation_message=prepared.incomplete_translation_message,
     )
@@ -140,6 +144,7 @@ def run_export(
 
     preserve_structure = bool(options.get("preserve_structure", False))
     allow_original_fallback = bool(options.get("allow_original_fallback", False))
+    use_original_images = bool(options.get("use_original_images", False))
     epub_force_horizontal_ltr = bool(options.get("epub_force_horizontal_ltr", False))
     if prepared.incomplete_translation_message and not allow_original_fallback:
         raise_application_error(
@@ -151,6 +156,12 @@ def run_export(
         raise_application_error(
             ApplicationErrorCode.UNSUPPORTED,
             "This document type does not support preserve-structure export.",
+            project_id=project_id,
+        )
+    if use_original_images and not prepared.supports_original_image_export:
+        raise_application_error(
+            ApplicationErrorCode.UNSUPPORTED,
+            "This document type does not support exporting original images.",
             project_id=project_id,
         )
     if epub_force_horizontal_ltr and not prepared.supports_epub_layout_conversion:
@@ -188,6 +199,7 @@ def run_export(
                         export_format=format_id,
                         document_ids=document_ids,
                         allow_original_fallback=allow_original_fallback,
+                        use_original_images=use_original_images,
                         epub_force_horizontal_ltr=epub_force_horizontal_ltr,
                     )
                 )

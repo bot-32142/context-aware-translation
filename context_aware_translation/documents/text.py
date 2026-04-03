@@ -190,8 +190,16 @@ class TextDocument(Document):
         return export_format.lower() in self.supported_export_formats
 
     @classmethod
-    def export_merged(cls, documents: list[Document], export_format: str, output_path: Path) -> None:
+    def export_merged(
+        cls,
+        documents: list[Document],
+        export_format: str,
+        output_path: Path,
+        *,
+        use_original_images: bool = False,
+    ) -> None:
         """Export multiple text documents merged into a single file."""
+        _ = use_original_images
         if not documents:
             raise ValueError("No documents to export")
 
