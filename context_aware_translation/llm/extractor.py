@@ -264,14 +264,12 @@ async def _run_gleaning_passes(
     if count <= 0:
         return []
 
-    seen_terms = set()
-    ordered_detected_terms: list[str] = []
-    for term in detected_terms:
-        normalized = term.strip()
+    seen_terms: set[str] = set()
+    for detected_name in detected_terms:
+        normalized = detected_name.strip()
         if not normalized or normalized in seen_terms:
             continue
         seen_terms.add(normalized)
-        ordered_detected_terms.append(normalized)
 
     gleaned_passes: list[list[ExtractedTermData]] = []
     for _ in range(count):
@@ -280,13 +278,12 @@ async def _run_gleaning_passes(
         response = await llm_client.chat(messages, step_config)
         gleaned_terms = parse_delimited_output(response, step_config.max_term_name_length)
         new_terms: list[ExtractedTermData] = []
-        for term in gleaned_terms:
-            name = term["name"]
+        for extracted_term in gleaned_terms:
+            name = extracted_term["name"]
             if name in seen_terms:
                 continue
             seen_terms.add(name)
-            ordered_detected_terms.append(name)
-            new_terms.append(term)
+            new_terms.append(extracted_term)
         messages.append({"role": "assistant", "content": response})
         gleaned_passes.append(new_terms)
     return gleaned_passes

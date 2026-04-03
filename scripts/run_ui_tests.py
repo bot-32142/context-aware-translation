@@ -10,6 +10,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 UI_TEST_ROOT = PROJECT_ROOT / "tests" / "ui"
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 def _ui_test_files() -> list[str]:
