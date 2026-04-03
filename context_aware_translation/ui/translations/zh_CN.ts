@@ -444,7 +444,7 @@
     </message>
     <message>
         <location filename="../features/document_images_view.py" line="115"/>
-        <location filename="../features/document_images_view.py" line="251"/>
+        <location filename="../features/document_images_view.py" line="260"/>
         <source>Translated text for the selected image appears here.</source>
         <translation>所选图片的译文会显示在这里。</translation>
     </message>
@@ -454,51 +454,51 @@
         <translation>将文字重新放回图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="366"/>
+        <location filename="../features/document_images_view.py" line="375"/>
         <source>Pending</source>
         <translation>待处理</translation>
     </message>
     <message>
         <location filename="../features/document_images_view.py" line="86"/>
-        <location filename="../features/document_images_view.py" line="243"/>
+        <location filename="../features/document_images_view.py" line="252"/>
         <source>Original</source>
         <translation>原文</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="363"/>
-        <location filename="../features/document_images_view.py" line="414"/>
+        <location filename="../features/document_images_view.py" line="372"/>
+        <location filename="../features/document_images_view.py" line="423"/>
         <source>Translated Text</source>
         <translation>翻译文本</translation>
     </message>
     <message>
         <location filename="../features/document_images_view.py" line="102"/>
-        <location filename="../features/document_images_view.py" line="325"/>
-        <location filename="../features/document_images_view.py" line="356"/>
-        <location filename="../features/document_images_view.py" line="411"/>
+        <location filename="../features/document_images_view.py" line="334"/>
+        <location filename="../features/document_images_view.py" line="365"/>
+        <location filename="../features/document_images_view.py" line="420"/>
         <source>Show Text</source>
         <translation>显示文本</translation>
     </message>
     <message>
         <location filename="../features/document_images_view.py" line="103"/>
-        <location filename="../features/document_images_view.py" line="244"/>
+        <location filename="../features/document_images_view.py" line="253"/>
         <source>Toggle between reembedded image and translated text</source>
         <translation>在重新嵌入的图片和翻译文本之间切换</translation>
     </message>
     <message>
         <location filename="../features/document_images_view.py" line="160"/>
-        <location filename="../features/document_images_view.py" line="245"/>
+        <location filename="../features/document_images_view.py" line="254"/>
         <source>First image</source>
         <translation>第一张图片</translation>
     </message>
     <message>
         <location filename="../features/document_images_view.py" line="164"/>
-        <location filename="../features/document_images_view.py" line="246"/>
+        <location filename="../features/document_images_view.py" line="255"/>
         <source>Previous image</source>
         <translation>上一张图片</translation>
     </message>
     <message>
         <location filename="../features/document_images_view.py" line="167"/>
-        <location filename="../features/document_images_view.py" line="318"/>
+        <location filename="../features/document_images_view.py" line="327"/>
         <source>Image 0 of 0</source>
         <translation>图片 0 / 0</translation>
     </message>
@@ -510,19 +510,19 @@
     </message>
     <message>
         <location filename="../features/document_images_view.py" line="174"/>
-        <location filename="../features/document_images_view.py" line="247"/>
+        <location filename="../features/document_images_view.py" line="256"/>
         <source>Next image</source>
         <translation>下一张图片</translation>
     </message>
     <message>
         <location filename="../features/document_images_view.py" line="178"/>
-        <location filename="../features/document_images_view.py" line="248"/>
+        <location filename="../features/document_images_view.py" line="257"/>
         <source>Last image</source>
         <translation>最后一张图片</translation>
     </message>
     <message>
         <location filename="../features/document_images_view.py" line="185"/>
-        <location filename="../features/document_images_view.py" line="249"/>
+        <location filename="../features/document_images_view.py" line="258"/>
         <source>Enter image number</source>
         <translation>输入图片编号</translation>
     </message>
@@ -533,21 +533,21 @@
         <translation>跳转</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="433"/>
-        <location filename="../features/document_images_view.py" line="440"/>
+        <location filename="../features/document_images_view.py" line="445"/>
+        <location filename="../features/document_images_view.py" line="452"/>
         <source>Reembedding</source>
         <translation>重新嵌入</translation>
     </message>
     <message>
         <location filename="../features/document_images_view.py" line="125"/>
-        <location filename="../features/document_images_view.py" line="252"/>
+        <location filename="../features/document_images_view.py" line="261"/>
         <location filename="../viewmodels/document_images_pane.py" line="211"/>
         <source>No reembeddable images are available for this document.</source>
         <translation>此文档没有可重嵌的图片。</translation>
     </message>
     <message>
         <location filename="../features/document_images_view.py" line="188"/>
-        <location filename="../features/document_images_view.py" line="250"/>
+        <location filename="../features/document_images_view.py" line="259"/>
         <source>Jump to image</source>
         <translation>跳转到图片</translation>
     </message>
@@ -570,56 +570,56 @@
         <translation>强制全部重新嵌入</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="333"/>
+        <location filename="../features/document_images_view.py" line="342"/>
         <source>Image %1 of %2</source>
         <translation>图片 %1 / %2</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="364"/>
+        <location filename="../features/document_images_view.py" line="373"/>
         <source>Show Image</source>
         <translation>显示图片</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="415"/>
+        <location filename="../features/document_images_view.py" line="424"/>
         <source>Show Reembedded</source>
         <translation>显示重嵌结果</translation>
     </message>
     <message>
         <location filename="../features/document_images_view.py" line="98"/>
-        <location filename="../features/document_images_view.py" line="324"/>
-        <location filename="../features/document_images_view.py" line="355"/>
-        <location filename="../features/document_images_view.py" line="358"/>
-        <location filename="../features/document_images_view.py" line="410"/>
+        <location filename="../features/document_images_view.py" line="333"/>
+        <location filename="../features/document_images_view.py" line="364"/>
+        <location filename="../features/document_images_view.py" line="367"/>
+        <location filename="../features/document_images_view.py" line="419"/>
         <source>Reembedded</source>
         <translation>重新嵌入后</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="486"/>
+        <location filename="../features/document_images_view.py" line="498"/>
         <source>Open App Setup</source>
         <translation>打开应用设置</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="489"/>
+        <location filename="../features/document_images_view.py" line="501"/>
         <source>Open Setup</source>
         <translation>打开设置</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="594"/>
+        <location filename="../features/document_images_view.py" line="606"/>
         <source>Image reinsertion queued.</source>
         <translation>图片重新嵌入已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="602"/>
+        <location filename="../features/document_images_view.py" line="614"/>
         <source>Pending image reinsertion queued.</source>
         <translation>待处理图片重新嵌入已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="610"/>
+        <location filename="../features/document_images_view.py" line="622"/>
         <source>Full image reinsertion queued.</source>
         <translation>全量图片重新嵌入已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_images_view.py" line="619"/>
+        <location filename="../features/document_images_view.py" line="641"/>
         <source>Cancellation requested.</source>
         <translation>已请求取消。</translation>
     </message>
@@ -659,221 +659,221 @@
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="381"/>
-        <location filename="../features/document_ocr_tab.py" line="945"/>
+        <location filename="../features/document_ocr_tab.py" line="965"/>
         <source>OCR text will appear here.</source>
         <translation>OCR 文本会显示在这里。</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="424"/>
-        <location filename="../features/document_ocr_tab.py" line="946"/>
+        <location filename="../features/document_ocr_tab.py" line="966"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="82"/>
         <source>|&lt;</source>
         <translation>|&lt;</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="434"/>
-        <location filename="../features/document_ocr_tab.py" line="566"/>
+        <location filename="../features/document_ocr_tab.py" line="575"/>
         <source>Page 0 of 0</source>
         <translation>第 0 页，共 0 页</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="445"/>
-        <location filename="../features/document_ocr_tab.py" line="952"/>
+        <location filename="../features/document_ocr_tab.py" line="972"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="94"/>
         <source>&gt;|</source>
         <translation>&gt;|</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="460"/>
-        <location filename="../features/document_ocr_tab.py" line="956"/>
+        <location filename="../features/document_ocr_tab.py" line="976"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="102"/>
         <source>Go</source>
         <translation>跳转</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="475"/>
-        <location filename="../features/document_ocr_tab.py" line="962"/>
+        <location filename="../features/document_ocr_tab.py" line="982"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="114"/>
         <source>Save</source>
         <translation>保存</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="470"/>
-        <location filename="../features/document_ocr_tab.py" line="960"/>
+        <location filename="../features/document_ocr_tab.py" line="980"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="110"/>
         <source>Run OCR for Pending Pages</source>
         <translation>对待处理页面运行 OCR</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="488"/>
-        <location filename="../features/document_ocr_tab.py" line="963"/>
+        <location filename="../features/document_ocr_tab.py" line="983"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="118"/>
         <source>No image pages are available for OCR in this document.</source>
         <translation>此文档中没有可供 OCR 的图片页面。</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="425"/>
-        <location filename="../features/document_ocr_tab.py" line="947"/>
+        <location filename="../features/document_ocr_tab.py" line="967"/>
         <source>First page</source>
         <translation>第一页</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="429"/>
-        <location filename="../features/document_ocr_tab.py" line="948"/>
+        <location filename="../features/document_ocr_tab.py" line="968"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="86"/>
         <source>&lt;</source>
         <translation>&lt;</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="430"/>
-        <location filename="../features/document_ocr_tab.py" line="949"/>
+        <location filename="../features/document_ocr_tab.py" line="969"/>
         <source>Previous page</source>
         <translation>上一页</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="440"/>
-        <location filename="../features/document_ocr_tab.py" line="950"/>
+        <location filename="../features/document_ocr_tab.py" line="970"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="90"/>
         <source>&gt;</source>
         <translation>&gt;</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="441"/>
-        <location filename="../features/document_ocr_tab.py" line="951"/>
+        <location filename="../features/document_ocr_tab.py" line="971"/>
         <source>Next page</source>
         <translation>下一页</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="446"/>
-        <location filename="../features/document_ocr_tab.py" line="953"/>
+        <location filename="../features/document_ocr_tab.py" line="973"/>
         <source>Last page</source>
         <translation>最后一页</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="450"/>
-        <location filename="../features/document_ocr_tab.py" line="954"/>
+        <location filename="../features/document_ocr_tab.py" line="974"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="98"/>
         <source>Go to:</source>
         <translation>跳转到：</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="457"/>
-        <location filename="../features/document_ocr_tab.py" line="955"/>
+        <location filename="../features/document_ocr_tab.py" line="975"/>
         <source>Enter page number</source>
         <translation>输入页码</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="461"/>
-        <location filename="../features/document_ocr_tab.py" line="957"/>
+        <location filename="../features/document_ocr_tab.py" line="977"/>
         <source>Jump to page</source>
         <translation>跳转到页面</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="465"/>
-        <location filename="../features/document_ocr_tab.py" line="958"/>
+        <location filename="../features/document_ocr_tab.py" line="978"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="106"/>
         <source>(Re)run OCR (Current Page)</source>
         <translation>（重新）运行OCR（当前页）</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="466"/>
-        <location filename="../features/document_ocr_tab.py" line="691"/>
-        <location filename="../features/document_ocr_tab.py" line="959"/>
+        <location filename="../features/document_ocr_tab.py" line="701"/>
+        <location filename="../features/document_ocr_tab.py" line="979"/>
         <source>Run or re-run OCR on the current page</source>
         <translation>在当前页运行或重新运行OCR</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="471"/>
-        <location filename="../features/document_ocr_tab.py" line="698"/>
-        <location filename="../features/document_ocr_tab.py" line="961"/>
+        <location filename="../features/document_ocr_tab.py" line="708"/>
+        <location filename="../features/document_ocr_tab.py" line="981"/>
         <source>Run OCR on all pending pages in this document</source>
         <translation>对此文档中所有待处理页面运行OCR</translation>
     </message>
     <message>
         <location filename="../features/document_ocr_tab.py" line="476"/>
-        <location filename="../features/document_ocr_tab.py" line="684"/>
+        <location filename="../features/document_ocr_tab.py" line="693"/>
         <source>Save edited OCR text</source>
         <translation>保存编辑后的OCR文本</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="598"/>
+        <location filename="../features/document_ocr_tab.py" line="607"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="55"/>
         <source>Page %1 of %2</source>
         <translation>第 %1 页，共 %2 页</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="629"/>
+        <location filename="../features/document_ocr_tab.py" line="638"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="63"/>
         <source>OCR Done</source>
         <translation>OCR已完成</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="632"/>
+        <location filename="../features/document_ocr_tab.py" line="641"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="65"/>
         <source>OCR Running</source>
         <translation>OCR 运行中</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="635"/>
+        <location filename="../features/document_ocr_tab.py" line="644"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="67"/>
         <source>OCR Failed</source>
         <translation>OCR 失败</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="638"/>
+        <location filename="../features/document_ocr_tab.py" line="647"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="68"/>
         <source>Pending OCR</source>
         <translation>待处理OCR</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="715"/>
-        <location filename="../features/document_ocr_tab.py" line="723"/>
+        <location filename="../features/document_ocr_tab.py" line="732"/>
+        <location filename="../features/document_ocr_tab.py" line="740"/>
         <location filename="../viewmodels/document_ocr_pane.py" line="122"/>
         <source>OCR running...</source>
         <translation>OCR 运行中...</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="769"/>
+        <location filename="../features/document_ocr_tab.py" line="786"/>
         <source>Line Count Mismatch</source>
         <translation>行数不匹配</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="770"/>
+        <location filename="../features/document_ocr_tab.py" line="787"/>
         <source>Structured OCR text must keep the same number of lines as the original OCR result.</source>
         <translation>结构化 OCR 文本必须与原始 OCR 结果保持相同的行数。</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="791"/>
-        <location filename="../features/document_ocr_tab.py" line="803"/>
-        <location filename="../features/document_ocr_tab.py" line="822"/>
+        <location filename="../features/document_ocr_tab.py" line="808"/>
+        <location filename="../features/document_ocr_tab.py" line="820"/>
         <location filename="../features/document_ocr_tab.py" line="839"/>
-        <location filename="../features/document_ocr_tab.py" line="857"/>
+        <location filename="../features/document_ocr_tab.py" line="856"/>
+        <location filename="../features/document_ocr_tab.py" line="875"/>
         <source>OCR</source>
         <translation>OCR</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="791"/>
+        <location filename="../features/document_ocr_tab.py" line="808"/>
         <source>No OCR data is available for this page yet.</source>
         <translation>此页尚无 OCR 数据。</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="807"/>
+        <location filename="../features/document_ocr_tab.py" line="824"/>
         <source>OCR text saved.</source>
         <translation>OCR 文本已保存。</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="828"/>
         <location filename="../features/document_ocr_tab.py" line="845"/>
+        <location filename="../features/document_ocr_tab.py" line="862"/>
         <source>OCR queued.</source>
         <translation>OCR 已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="862"/>
+        <location filename="../features/document_ocr_tab.py" line="882"/>
         <source>OCR cancellation requested.</source>
         <translation>已请求取消 OCR。</translation>
     </message>
     <message>
-        <location filename="../features/document_ocr_tab.py" line="942"/>
+        <location filename="../features/document_ocr_tab.py" line="962"/>
         <source>OCR applies only to the current document. Saving OCR clears later glossary, translation, and export results so they can be rebuilt from the updated OCR.</source>
         <translation>OCR 仅适用于当前文档。保存 OCR 会清除后续的术语、翻译和导出结果，以便根据更新后的 OCR 重新构建。</translation>
     </message>
