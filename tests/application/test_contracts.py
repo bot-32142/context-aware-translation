@@ -254,7 +254,7 @@ def test_recommended_workflow_profile_uses_ranked_step_rules() -> None:
     )
 
     route_map = {route.step_id: route for route in detail.routes}
-    assert route_map[WorkflowStepId.EXTRACTOR].model == "deepseek-chat"
+    assert route_map[WorkflowStepId.EXTRACTOR].model == "deepseek-reasoner"
     assert route_map[WorkflowStepId.EXTRACTOR].step_config == {"max_gleaning": 1}
     assert route_map[WorkflowStepId.SUMMARIZER].model == "deepseek-chat"
     assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].model == "gemini-2.5-flash"
@@ -262,7 +262,7 @@ def test_recommended_workflow_profile_uses_ranked_step_rules() -> None:
     assert route_map[WorkflowStepId.TRANSLATOR].model == "gemini-2.5-pro"
     assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
     assert route_map[WorkflowStepId.REVIEWER].model == "gemini-2.5-pro"
-    assert route_map[WorkflowStepId.OCR].model == "gemini-3-flash-preview"
+    assert route_map[WorkflowStepId.OCR].model == "gemini-3.1-flash"
     assert route_map[WorkflowStepId.OCR].step_config["kwargs"] == {"reasoning_effort": "none"}
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].model == "gemini-3-pro-image-preview"
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].step_config["backend"] == "gemini"
@@ -281,6 +281,8 @@ def test_recommended_workflow_profile_skips_unsupported_openai_ocr_reasoning_non
     )
 
     route_map = {route.step_id: route for route in detail.routes}
+    assert route_map[WorkflowStepId.EXTRACTOR].model == "o4-mini"
+    assert route_map[WorkflowStepId.EXTRACTOR].step_config == {"max_gleaning": 1}
     assert route_map[WorkflowStepId.OCR].model == "gpt-4.1-mini"
     assert route_map[WorkflowStepId.OCR].step_config == {}
     assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
