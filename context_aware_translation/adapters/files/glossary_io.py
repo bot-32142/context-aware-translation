@@ -79,44 +79,125 @@ def _validate_glossary_json(data: object) -> None:
             raise ValueError(f"Invalid glossary file: entry {i} missing or empty 'key'")
 
 
+def _validate_simple_glossary_json(data: object) -> None:
+    """Validate flat term-to-translation JSON mappings."""
+    if not isinstance(data, dict):
+        raise ValueError("Invalid glossary file: expected a JSON object")
+    for key, value in data.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("Invalid glossary file: flat mapping keys must be non-empty strings")
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("Invalid glossary file: flat mapping values must be non-empty strings")
+
+
+def _build_import_term_record(
+    key: str,
+    *,
+    translated_name: str | None = None,
+    description: str = "",
+    term_type: str | None = None,
+    ignored: bool = False,
+    is_reviewed: bool = False,
+) -> TermRecord:
+    now = time.time()
+    return TermRecord(
+        key=key,
+        descriptions={"imported": description} if description else {},
+        occurrence={},
+        votes=1,
+        total_api_calls=1,
+        term_type=normalize_term_type(term_type),
+        new_translation=None,
+        translated_name=translated_name,
+        ignored=ignored,
+        is_reviewed=is_reviewed,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def _import_structured_glossary(
+    db: SQLiteBookDB,
+    data: dict[str, object],
+    *,
+    include_translations: bool,
+) -> int:
+    # Wipe existing data
+    db.delete_all_term_memory(auto_commit=False)
+    db.conn.execute("DELETE FROM terms")
+
+    term_records = []
+    for entry in data["terms"]:
+        if not isinstance(entry, dict):
+            continue
+        term_records.append(
+            _build_import_term_record(
+                str(entry["key"]),
+                translated_name=entry.get("translated_name") if include_translations else None,
+                description=str(entry.get("description", "")),
+                term_type=entry.get("term_type") if isinstance(entry.get("term_type"), str) else None,
+                ignored=bool(entry.get("ignored", False)),
+                is_reviewed=bool(entry.get("is_reviewed", False)),
+            )
+        )
+
+    db.upsert_terms(term_records)
+    return len(term_records)
+
+
+def _import_simple_glossary(
+    db: SQLiteBookDB,
+    data: dict[str, object],
+    *,
+    include_translations: bool,
+) -> int:
+    term_records: list[TermRecord] = []
+    now = time.time()
+    for raw_key, raw_value in data.items():
+        key = raw_key.strip()
+        translated_name = raw_value.strip() if isinstance(raw_value, str) else ""
+        if not key:
+            raise ValueError("Invalid glossary file: flat mapping keys must be non-empty strings")
+        existing = db.get_term(key)
+        if existing is not None:
+            existing.translated_name = translated_name if include_translations else None
+            existing.ignored = False
+            existing.is_reviewed = True
+            existing.updated_at = now
+            term_records.append(existing)
+            continue
+        term_records.append(
+            _build_import_term_record(
+                key,
+                translated_name=translated_name if include_translations else None,
+                ignored=False,
+                is_reviewed=True,
+            )
+        )
+
+    if term_records:
+        db.upsert_terms(term_records)
+    return len(term_records)
+
+
 def import_glossary(
     db: SQLiteBookDB,
     input_path: Path,
     include_translations: bool = True,
 ) -> int:
-    """Import glossary terms from a JSON file, replacing all existing terms.
+    """Import glossary terms from a JSON file.
 
-    Returns the number of terms imported.
+    Structured glossary JSON preserves current replace-all behavior.
+    Flat term-to-translation JSON mappings are merged into the existing glossary.
+
+    Returns the number of terms processed.
     """
     with open(input_path, encoding="utf-8") as f:
         data = json.load(f)
 
-    _validate_glossary_json(data)
+    if isinstance(data, dict) and ("terms" in data or "version" in data):
+        _validate_glossary_json(data)
+        return _import_structured_glossary(db, data, include_translations=include_translations)
 
-    # Wipe existing data
-    db.delete_all_term_memory(auto_commit=False)
-    db.conn.execute("DELETE FROM terms")
-
-    # Build and insert term records
-    now = time.time()
-    term_records = []
-    for entry in data["terms"]:
-        description = entry.get("description", "")
-        term_record = TermRecord(
-            key=entry["key"],
-            descriptions={"imported": description} if description else {},
-            occurrence={},
-            votes=1,
-            total_api_calls=1,
-            term_type=normalize_term_type(entry.get("term_type")),
-            new_translation=None,
-            translated_name=entry.get("translated_name") if include_translations else None,
-            ignored=entry.get("ignored", False),
-            is_reviewed=entry.get("is_reviewed", False),
-            created_at=now,
-            updated_at=now,
-        )
-        term_records.append(term_record)
-
-    db.upsert_terms(term_records)
-    return len(term_records)
+    _validate_simple_glossary_json(data)
+    return _import_simple_glossary(db, data, include_translations=include_translations)

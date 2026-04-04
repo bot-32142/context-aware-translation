@@ -50,11 +50,15 @@ from context_aware_translation.application.contracts.terms import (
     ImportTermsRequest,
     ReviewTermsRequest,
     TermsTableState,
+    TermStatus,
     TermsToolbarState,
+    TermTableRow,
     TranslatePendingTermsRequest,
     UpdateTermRequest,
     UpdateTermRowsRequest,
     UpdateTermRowsResult,
+    UpsertProjectTermRequest,
+    UpsertProjectTermResult,
 )
 from context_aware_translation.application.contracts.work import (
     DeleteDocumentStackRequest,
@@ -284,6 +288,7 @@ class FakeTermsService:
                     if blocked
                     else any(not row.ignored and not row.reviewed and row.rare_candidate for row in rows)
                 ),
+                "can_add_terms": False if blocked else state.scope.document is None,
             }
         )
         return state.model_copy(update={"toolbar": toolbar})
@@ -349,6 +354,44 @@ class FakeTermsService:
     def import_terms(self, request: ImportTermsRequest) -> TermsTableState:
         self.calls.append(("import_terms", request))
         return self.project_state
+
+    def upsert_project_term(self, request: UpsertProjectTermRequest) -> UpsertProjectTermResult:
+        self.calls.append(("upsert_project_term", request))
+        updated_existing = False
+        rows = list(self.project_state.rows)
+        for index, row in enumerate(rows):
+            if row.term_key != request.term:
+                continue
+            updated_existing = True
+            rows[index] = row.model_copy(
+                update={
+                    "translation": request.translation,
+                    "ignored": False,
+                    "reviewed": True,
+                    "status": TermStatus.READY,
+                }
+            )
+            break
+        if not updated_existing:
+            rows.append(
+                TermTableRow(
+                    term_id=hash(request.term),
+                    term_key=request.term,
+                    term=request.term,
+                    term_type="other",
+                    translation=request.translation,
+                    description=None,
+                    description_tooltip=None,
+                    description_sort_key=-1,
+                    occurrences=0,
+                    votes=0,
+                    ignored=False,
+                    reviewed=True,
+                    status=TermStatus.READY,
+                )
+            )
+        self.project_state = self._with_recomputed_toolbar(self.project_state.model_copy(update={"rows": rows}))
+        return UpsertProjectTermResult(state=self.project_state, updated_existing=updated_existing)
 
     def export_terms(self, request: ExportTermsRequest) -> AcceptedCommand:
         self.calls.append(("export_terms", request))

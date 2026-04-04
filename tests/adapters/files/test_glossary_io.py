@@ -178,6 +178,10 @@ class TestImportGlossary:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
 
+    def _write_simple_glossary(self, path: Path, data: dict[str, str]) -> None:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+
     def test_import_basic(self, temp_db: SQLiteBookDB, tmp_path: Path) -> None:
         glossary_file = tmp_path / "import.json"
         self._write_glossary(
@@ -352,6 +356,49 @@ class TestImportGlossary:
         terms = temp_db.list_terms()
         assert terms[0].descriptions == {}
 
+    def test_import_simple_mapping_creates_new_terms(self, temp_db: SQLiteBookDB, tmp_path: Path) -> None:
+        glossary_file = tmp_path / "simple.json"
+        self._write_simple_glossary(glossary_file, {"hero": "英雄", "villain": "反派"})
+
+        count = import_glossary(temp_db, glossary_file)
+
+        assert count == 2
+        by_key = {term.key: term for term in temp_db.list_terms()}
+        assert by_key["hero"].translated_name == "英雄"
+        assert by_key["hero"].is_reviewed is True
+        assert by_key["hero"].ignored is False
+        assert by_key["villain"].translated_name == "反派"
+
+    def test_import_simple_mapping_updates_existing_and_preserves_unrelated_terms(
+        self, temp_db: SQLiteBookDB, tmp_path: Path
+    ) -> None:
+        hero = _make_term("hero", translated_name="old hero", ignored=True)
+        hero.updated_at = 1.0
+        temp_db.upsert_terms([hero, _make_term("sidekick", translated_name="ally")])
+        glossary_file = tmp_path / "simple.json"
+        self._write_simple_glossary(glossary_file, {"hero": "英雄"})
+
+        count = import_glossary(temp_db, glossary_file)
+
+        assert count == 1
+        by_key = {term.key: term for term in temp_db.list_terms()}
+        assert by_key["hero"].translated_name == "英雄"
+        assert by_key["hero"].is_reviewed is True
+        assert by_key["hero"].ignored is False
+        assert by_key["hero"].updated_at is not None
+        assert by_key["hero"].updated_at > 1.0
+        assert by_key["sidekick"].translated_name == "ally"
+
+    def test_import_simple_mapping_empty_object_is_noop(self, temp_db: SQLiteBookDB, tmp_path: Path) -> None:
+        temp_db.upsert_terms([_make_term("hero", translated_name="英雄")])
+        glossary_file = tmp_path / "simple.json"
+        self._write_simple_glossary(glossary_file, {})
+
+        count = import_glossary(temp_db, glossary_file)
+
+        assert count == 0
+        assert temp_db.get_term("hero") is not None
+
 
 # ========== Validation Tests ==========
 
@@ -378,6 +425,31 @@ class TestValidation:
 
     def test_version_missing_accepted(self) -> None:
         _validate_glossary_json({"terms": []})
+
+    def test_import_rejects_simple_mapping_with_nested_value(
+        self, temp_db: SQLiteBookDB, tmp_path: Path
+    ) -> None:
+        glossary_file = tmp_path / "bad.json"
+        glossary_file.write_text(json.dumps({"hero": {"translated_name": "英雄"}}), encoding="utf-8")
+
+        with pytest.raises(ValueError, match="flat mapping values must be non-empty strings"):
+            import_glossary(temp_db, glossary_file)
+
+    def test_import_rejects_simple_mapping_with_empty_translation(
+        self, temp_db: SQLiteBookDB, tmp_path: Path
+    ) -> None:
+        glossary_file = tmp_path / "bad.json"
+        glossary_file.write_text(json.dumps({"hero": ""}), encoding="utf-8")
+
+        with pytest.raises(ValueError, match="flat mapping values must be non-empty strings"):
+            import_glossary(temp_db, glossary_file)
+
+    def test_import_rejects_array_top_level(self, temp_db: SQLiteBookDB, tmp_path: Path) -> None:
+        glossary_file = tmp_path / "bad.json"
+        glossary_file.write_text(json.dumps([{"key": "hero", "translated_name": "英雄"}]), encoding="utf-8")
+
+        with pytest.raises(ValueError, match="expected a JSON object"):
+            import_glossary(temp_db, glossary_file)
 
 
 # ========== Round-Trip Tests ==========
