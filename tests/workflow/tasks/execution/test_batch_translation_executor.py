@@ -281,6 +281,26 @@ async def test_run_task_short_circuits_when_cancel_requested(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_run_task_passes_progress_callback_to_prepare(tmp_path):
+    executor = _build_executor(tmp_path)
+    try:
+        created = _create_task(executor, book_id="book-1")
+        progress_callback = MagicMock()
+        with patch(
+            "context_aware_translation.workflow.tasks.execution.batch_translation_executor.ensure_payload_prepared",
+            new_callable=AsyncMock,
+            return_value={"items": []},
+        ) as mock_prepare:
+            result = await executor.run_task(created.task_id, progress_callback=progress_callback)
+
+        assert result.status == STATUS_COMPLETED
+        assert result.phase == PHASE_DONE
+        assert mock_prepare.await_args.kwargs["progress_callback"] is progress_callback
+    finally:
+        executor.close()
+
+
+@pytest.mark.asyncio
 async def test_run_task_cancel_requested_retries_provider_cancel_when_batch_exists(tmp_path):
     executor = _build_executor(tmp_path)
     try:
@@ -780,9 +800,20 @@ async def test_ensure_payload_prepared_uses_batch_model_with_fixed_temperature()
     service.translator_config.return_value = translator_config
     service.batch_config.return_value = batch_config
     service._get_force.return_value = False
+    progress_callback = MagicMock()
 
-    payload = await ensure_payload_prepared(service, task, {}, cancel_check=None)
+    payload = await ensure_payload_prepared(
+        service,
+        task,
+        {},
+        cancel_check=None,
+        progress_callback=progress_callback,
+    )
 
+    manager.build_context_tree.assert_called_once_with(
+        cancel_check=None,
+        progress_callback=progress_callback,
+    )
     manager.collect_chunk_translation_inputs.assert_called_once_with(
         batch_size=0,
         max_tokens_per_batch=4000,

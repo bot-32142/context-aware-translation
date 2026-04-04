@@ -12,6 +12,7 @@ from typing import Any
 from context_aware_translation.adapters.qt.workers.base_worker import BaseWorker
 from context_aware_translation.adapters.qt.workers.batch_task_overlap_guard import has_any_batch_task_overlap
 from context_aware_translation.adapters.qt.workers.operation_tracker import DocumentOperationTracker
+from context_aware_translation.core.progress import ProgressUpdate, WorkflowStep
 from context_aware_translation.storage.library.book_manager import BookManager
 from context_aware_translation.storage.repositories.task_store import TaskStore
 from context_aware_translation.workflow.session import WorkflowSession
@@ -176,7 +177,7 @@ class BatchTranslationTaskWorker(BaseWorker):
                         executor.run_task(
                             self.task_id,
                             cancel_check=self._is_cancelled,
-                            progress_callback=self._emit_progress,
+                            progress_callback=self._on_progress,
                         )
                     )
                     # Persist remote_submission_state into payload_json so
@@ -209,3 +210,19 @@ class BatchTranslationTaskWorker(BaseWorker):
                 raise ValueError(f"Unsupported batch task worker action: {self.action}")
             finally:
                 executor.close()
+
+    def _on_progress(self, update: ProgressUpdate) -> None:
+        self._raise_if_cancelled()
+        # Preserve executor-managed batch phases; persist only the pre-submit
+        # term-memory progress that would otherwise be transient-only.
+        if update.step is WorkflowStep.TERM_MEMORY and self.task_store is not None and self.task_id is not None:
+            self.task_store.update(
+                self.task_id,
+                phase=update.step.value,
+                completed_items=update.current,
+                total_items=update.total,
+            )
+            if self.notify_task_changed is not None:
+                self.notify_task_changed(self.book_id)
+        self.progress.emit(update.current, update.total, update.message)
+        self._raise_if_cancelled()

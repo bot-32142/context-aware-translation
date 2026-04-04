@@ -322,9 +322,7 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
             == "dkey"
         )
         assert (
-            next(
-                profile for profile in endpoint_profiles if profile.name == "recommended-Gemini 3.1 Flash"
-            ).timeout
+            next(profile for profile in endpoint_profiles if profile.name == "recommended-Gemini 3.1 Flash").timeout
             == 300
         )
     finally:

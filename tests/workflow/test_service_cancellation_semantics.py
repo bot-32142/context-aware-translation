@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from context_aware_translation.config import TranslatorBatchConfig
+from context_aware_translation.core.progress import ProgressUpdate, WorkflowStep
 from context_aware_translation.workflow.ops import (
     bootstrap_ops,
     export_ops,
@@ -343,7 +344,7 @@ async def test_translate_builds_context_tree_and_forwards_force_flag():
         await translation_ops.translate(service, document_ids=[2], force=True)
 
     manager.detect_language.assert_awaited_once()
-    manager.build_context_tree.assert_called_once_with(cancel_check=None)
+    manager.build_context_tree.assert_called_once_with(cancel_check=None, progress_callback=None)
     manager.translate_chunks.assert_awaited_once()
     call_kwargs = manager.translate_chunks.await_args.kwargs
     assert call_kwargs["doc_type_by_id"] == {2: "manga"}
@@ -375,8 +376,76 @@ async def test_translate_builds_context_tree():
         await translation_ops.translate(service)
 
     manager.detect_language.assert_awaited_once()
-    manager.build_context_tree.assert_called_once_with(cancel_check=None)
+    manager.build_context_tree.assert_called_once_with(cancel_check=None, progress_callback=None)
     manager.translate_chunks.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_retranslate_chunk_forwards_progress_and_reports_single_chunk_completion():
+    progress_updates: list[ProgressUpdate] = []
+
+    def _build_context_tree(**kwargs):  # noqa: ANN003
+        callback = kwargs["progress_callback"]
+        assert callback is not None
+        callback(
+            ProgressUpdate(
+                step=WorkflowStep.TERM_MEMORY,
+                current=1,
+                total=2,
+                message="Summarizing term memory 1/2",
+            )
+        )
+
+    chunk = SimpleNamespace(chunk_id=42, text="source text", translation=None, is_translated=False)
+    term = SimpleNamespace(ignored=False)
+
+    config = MagicMock()
+    config.translator_config = SimpleNamespace(concurrency=2, num_of_chunks_per_llm_call=4)
+
+    manager = MagicMock()
+    manager.detect_language = AsyncMock()
+    manager.build_context_tree.side_effect = _build_context_tree
+    manager.term_repo.list_keyed_context.return_value = [term]
+    manager.build_batch_request_payload.return_value = (["source text"], ["term"])
+    manager.chunk_translator.translate = AsyncMock(return_value=["translated"])
+
+    db = MagicMock()
+    db.get_chunk_by_id.return_value = chunk
+    db.get_source_language.return_value = "Japanese"
+
+    service = WorkflowContext(
+        config=config,
+        llm_client=MagicMock(),
+        context_tree=MagicMock(),
+        manager=manager,
+        db=db,
+        document_repo=MagicMock(),
+    )
+
+    with patch.object(bootstrap_ops, "process_document", new=AsyncMock()):
+        translated = await translation_ops.retranslate_chunk(
+            service,
+            chunk_id=42,
+            document_id=7,
+            progress_callback=progress_updates.append,
+        )
+
+    assert translated == "translated"
+    manager.build_context_tree.assert_called_once_with(
+        cancel_check=None,
+        progress_callback=progress_updates.append,
+    )
+    assert [(update.step, update.current, update.total) for update in progress_updates] == [
+        (WorkflowStep.TERM_MEMORY, 1, 2),
+        (WorkflowStep.TRANSLATE_CHUNKS, 0, 1),
+        (WorkflowStep.TRANSLATE_CHUNKS, 1, 1),
+    ]
+    manager.chunk_translator.translate.assert_awaited_once_with(
+        ["source text"],
+        ["term"],
+        "Japanese",
+        cancel_check=None,
+    )
 
 
 @pytest.mark.asyncio
@@ -448,7 +517,7 @@ async def test_translate_preflights_stack_for_ocr_required_selection():
 class _FakeExportDocument:
     document_type = "text"
     supported_export_formats = ["txt"]
-    export_calls: list[tuple[list[_FakeExportDocument], str, str, bool]] = []
+    export_calls: list[tuple[list[_FakeExportDocument], str, str]] = []
 
     def __init__(self, document_id: int = 1) -> None:
         self.document_id = document_id
@@ -464,16 +533,12 @@ class _FakeExportDocument:
         self.received_lines = list(lines)
 
     @classmethod
-    def export_merged(cls, documents, export_format, file_path, *, use_original_images=False) -> None:  # noqa: ANN001
-        cls.export_calls.append((list(documents), str(export_format), str(file_path), bool(use_original_images)))
+    def export_merged(cls, documents, export_format, file_path) -> None:  # noqa: ANN001
+        cls.export_calls.append((list(documents), str(export_format), str(file_path)))
 
 
 class _FakeMangaExportDocument(_FakeExportDocument):
     document_type = "manga"
-
-
-class _FakeOriginalImageExportDocument(_FakeExportDocument):
-    document_type = "pdf"
 
 
 @pytest.mark.asyncio
@@ -541,36 +606,6 @@ async def test_export_fallback_mode_merges_translated_and_original_chunks(tmp_pa
 
     assert fake_doc.received_lines == ["hola", "world", ""]
     assert _FakeExportDocument.export_calls
-
-
-@pytest.mark.asyncio
-async def test_export_forwards_original_image_option_to_document_exporter(tmp_path):
-    config = MagicMock()
-    config.image_reembedding_config = None
-
-    manager = MagicMock()
-    manager.get_translated_lines.return_value = ["translated", ""]
-
-    fake_doc = _FakeOriginalImageExportDocument()
-    _FakeOriginalImageExportDocument.export_calls = []
-    service = WorkflowContext(
-        config=config,
-        llm_client=MagicMock(),
-        context_tree=MagicMock(),
-        manager=manager,
-        db=MagicMock(),
-        document_repo=MagicMock(),
-    )
-    with patch("context_aware_translation.workflow.ops.bootstrap_ops.load_documents", return_value=[fake_doc]):
-        await export_ops.export(
-            service,
-            file_path=tmp_path / "out.txt",
-            export_format="txt",
-            use_original_images=True,
-        )
-
-    assert fake_doc.received_lines == ["translated", ""]
-    assert _FakeOriginalImageExportDocument.export_calls[-1][3] is True
 
 
 @pytest.mark.asyncio

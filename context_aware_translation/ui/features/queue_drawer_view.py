@@ -187,10 +187,11 @@ class _QueueItemCard(QFrame):
         parts: list[str] = []
         if item.stage:
             parts.append(self.tr("Stage: {0}").format(translate_task_phase(item.stage)))
+        progress_label = translate_progress_label(item.progress.label) if item.progress is not None else ""
+        if progress_label and progress_label != translate_task_phase(item.stage or ""):
+            parts.append(progress_label)
         if item.progress is not None and item.progress.total is not None and item.progress.current is not None:
             parts.append(self.tr("Progress: {0}/{1}").format(item.progress.current, item.progress.total))
-        elif item.progress is not None and item.progress.label:
-            parts.append(translate_progress_label(item.progress.label))
         return " | ".join(parts)
 
 

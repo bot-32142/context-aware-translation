@@ -127,7 +127,7 @@ def test_run_action_updates_task_store_running_then_completed(monkeypatch: pytes
     worker.run()
 
     task_store.update.assert_any_call("task-1", status="running")
-    task_store.update.assert_any_call("task-1", status="completed")
+    task_store.update.assert_any_call("task-1", status="completed", phase="done", last_error=None)
 
 
 def test_run_action_does_not_auto_enqueue_reembedding(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -198,7 +198,12 @@ def test_run_action_on_cancel_sets_cancelled_status(monkeypatch: pytest.MonkeyPa
     assert success == []
     assert cancelled == [True]
     assert errors == []
-    task_store.update.assert_any_call("task-cancel", status="cancelled", cancel_requested=False)
+    task_store.update.assert_any_call(
+        "task-cancel",
+        status="cancelled",
+        phase="done",
+        cancel_requested=False,
+    )
 
 
 def test_run_action_on_error_sets_failed_status(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -235,7 +240,12 @@ def test_run_action_on_error_sets_failed_status(monkeypatch: pytest.MonkeyPatch,
     assert cancelled == []
     assert len(errors) == 1
     assert "translation failed" in errors[0]
-    task_store.update.assert_any_call("task-fail", status="failed", last_error="translation failed")
+    task_store.update.assert_any_call(
+        "task-fail",
+        status="failed",
+        phase="done",
+        last_error="translation failed",
+    )
 
 
 # --- cancel action ---
@@ -256,7 +266,12 @@ def test_cancel_action_sets_cancelled_status(tmp_path: Path):
 
     worker.run()
 
-    task_store.update.assert_called_once_with("task-cancel", status="cancelled", cancel_requested=False)
+    task_store.update.assert_called_once_with(
+        "task-cancel",
+        status="cancelled",
+        phase="done",
+        cancel_requested=False,
+    )
 
 
 def test_cancel_action_calls_notify_task_changed(tmp_path: Path):
@@ -277,6 +292,37 @@ def test_cancel_action_calls_notify_task_changed(tmp_path: Path):
     worker.run()
 
     notify.assert_called_with("book-id")
+
+
+def test_on_progress_updates_task_store_with_phase(tmp_path: Path):
+    """Progress updates persist both counts and the current translation phase."""
+    from context_aware_translation.adapters.qt.workers.translation_text_task_worker import TranslationTextTaskWorker
+    from context_aware_translation.core.progress import ProgressUpdate, WorkflowStep
+
+    task_store = MagicMock()
+    worker = TranslationTextTaskWorker(
+        _book_manager_with_db(tmp_path),
+        "book-id",
+        action="run",
+        task_id="task-progress",
+        task_store=task_store,
+    )
+
+    worker._on_progress(
+        ProgressUpdate(
+            step=WorkflowStep.TERM_MEMORY,
+            current=2,
+            total=5,
+            message="Summarizing term memory 2/5",
+        )
+    )
+
+    task_store.update.assert_called_once_with(
+        "task-progress",
+        phase="term_memory",
+        completed_items=2,
+        total_items=5,
+    )
 
 
 # --- document filtering ---

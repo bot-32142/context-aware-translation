@@ -748,9 +748,7 @@ def _recommended_step_route(
         gemini_batch = (
             _recommended_connection_by_model(drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-pro"))
             or _recommended_connection_by_model(drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash"))
-            or _recommended_connection_by_model(
-                drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-flash")
-            )
+            or _recommended_connection_by_model(drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-flash"))
             or _recommended_connection_by_model(
                 drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash-lite")
             )

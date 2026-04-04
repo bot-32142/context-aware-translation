@@ -240,6 +240,10 @@ _PROGRESS_PATTERNS: list[tuple[re.Pattern[str], object]] = [
         QT_TRANSLATE_NOOP("ProgressMessages", "Summarizing glossary term %1/%2"),
     ),
     (
+        re.compile(r"Summarizing term memory (\d+)/(\d+)"),
+        QT_TRANSLATE_NOOP("ProgressMessages", "Summarizing term memory %1/%2"),
+    ),
+    (
         re.compile(r"Collecting glossary term (\d+)/(\d+)"),
         QT_TRANSLATE_NOOP("ProgressMessages", "Collecting glossary term %1/%2"),
     ),
@@ -316,6 +320,7 @@ _TASK_TYPE_LABELS: dict[str, object] = {
 _TASK_PHASE_LABELS: dict[str, object] = {
     "ocr": QT_TRANSLATE_NOOP("TaskLabels", "OCR"),
     "extract_terms": QT_TRANSLATE_NOOP("TaskLabels", "Extracting terms"),
+    "term_memory": QT_TRANSLATE_NOOP("TaskLabels", "Summarizing term memory"),
     "review": QT_TRANSLATE_NOOP("TaskLabels", "Reviewing terms"),
     "translate_glossary": QT_TRANSLATE_NOOP("TaskLabels", "Translating glossary"),
     "translate_chunks": QT_TRANSLATE_NOOP("TaskLabels", "Translating chunks"),

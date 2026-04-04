@@ -13,6 +13,7 @@ from context_aware_translation.storage.library.book_manager import BookManager
 from context_aware_translation.storage.repositories.task_store import TaskStore
 from context_aware_translation.workflow.ops import translation_ops
 from context_aware_translation.workflow.session import WorkflowSession
+from context_aware_translation.workflow.tasks.models import PHASE_DONE
 
 logger = logging.getLogger(__name__)
 
@@ -83,23 +84,37 @@ class TranslationMangaTaskWorker(BaseWorker):
                     )
                 )
             if self._task_store is not None and self._task_id is not None:
-                self._task_store.update(self._task_id, status="completed")
-                self._task_store.update(self._task_id, last_error=None)
+                self._task_store.update(self._task_id, status="completed", phase=PHASE_DONE, last_error=None)
             self.finished_success.emit({"action": "run", "task_id": self._task_id})
         except OperationCancelledError:
             if self._task_store is not None and self._task_id is not None:
-                self._task_store.update(self._task_id, status="cancelled", cancel_requested=False)
+                self._task_store.update(
+                    self._task_id,
+                    status="cancelled",
+                    phase=PHASE_DONE,
+                    cancel_requested=False,
+                )
             raise  # Let BaseWorker.run() emit cancelled signal
         except Exception as exc:
             if self._task_store is not None and self._task_id is not None:
-                self._task_store.update(self._task_id, status="failed", last_error=str(exc))
+                self._task_store.update(
+                    self._task_id,
+                    status="failed",
+                    phase=PHASE_DONE,
+                    last_error=str(exc),
+                )
             raise  # Let BaseWorker.run() emit error signal
         finally:
             self._notify()
 
     def _run_cancel(self) -> None:
         if self._task_store is not None and self._task_id is not None:
-            self._task_store.update(self._task_id, status="cancelled", cancel_requested=False)
+            self._task_store.update(
+                self._task_id,
+                status="cancelled",
+                phase=PHASE_DONE,
+                cancel_requested=False,
+            )
         self._notify()
 
     def _on_progress(self, update: ProgressUpdate) -> None:
@@ -107,6 +122,7 @@ class TranslationMangaTaskWorker(BaseWorker):
         if self._task_store is not None and self._task_id is not None:
             self._task_store.update(
                 self._task_id,
+                phase=update.step.value,
                 completed_items=update.current,
                 total_items=update.total,
             )

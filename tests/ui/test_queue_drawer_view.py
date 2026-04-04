@@ -8,6 +8,7 @@ from context_aware_translation.application.contracts.common import (
     AcceptedCommand,
     NavigationTarget,
     NavigationTargetKind,
+    ProgressInfo,
     QueueActionKind,
     QueueStatus,
     UserMessage,
@@ -97,6 +98,39 @@ def test_queue_drawer_view_renders_backend_state():
         assert row.status_label.text() == "Running"
         assert "Document 4" in row.scope_label.text()
         assert not any(button.text() == "Refresh" for button in view.findChildren(QPushButton))
+    finally:
+        view.cleanup()
+
+
+def test_queue_drawer_view_shows_translated_stage_and_progress_counts():
+    from context_aware_translation.ui.features.queue_drawer_view import QueueDrawerView
+
+    service = FakeQueueService(
+        state=QueueState(
+            items=[
+                QueueItem(
+                    queue_item_id="task-1",
+                    title="Translate text",
+                    project_id="proj-1",
+                    document_id=4,
+                    status=QueueStatus.RUNNING,
+                    stage="term_memory",
+                    progress=ProgressInfo(current=2, total=5, label="term_memory"),
+                    related_target=NavigationTarget(
+                        kind=NavigationTargetKind.DOCUMENT_TRANSLATION,
+                        project_id="proj-1",
+                        document_id=4,
+                    ),
+                    available_actions=[QueueActionKind.OPEN_RELATED_ITEM, QueueActionKind.CANCEL],
+                )
+            ]
+        )
+    )
+    bus = InMemoryApplicationEventBus()
+    view = QueueDrawerView(service, bus)
+    try:
+        row = view._rows["task-1"]
+        assert row.detail_label.text() == "Stage: Summarizing term memory | Progress: 2/5"
     finally:
         view.cleanup()
 

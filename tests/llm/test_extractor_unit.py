@@ -4,9 +4,9 @@ from copy import deepcopy
 
 from context_aware_translation.config import ExtractorConfig
 from context_aware_translation.llm.extractor import (
-    build_gleaning_prompts,
     COMPLETION_DELIMITER,
     TUPLE_DELIMITER,
+    build_gleaning_prompts,
     extract_terms,
     merge_all_with_votes,
     parse_delimited_output,

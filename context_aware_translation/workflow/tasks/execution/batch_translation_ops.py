@@ -326,6 +326,7 @@ async def ensure_payload_prepared(
     payload: dict[str, Any],
     *,
     cancel_check: Callable[[], bool] | None,
+    progress_callback: ProgressCallback | None = None,
 ) -> dict[str, Any]:
     """Build and cache task payload items from current book chunks if missing."""
     existing_items = payload.get("items")
@@ -340,7 +341,10 @@ async def ensure_payload_prepared(
     service.raise_if_local_pause(task.task_id, cancel_check)
 
     _check_cancel(service.workflow, cancel_check)
-    service.workflow.manager.build_context_tree(cancel_check=cancel_check)
+    service.workflow.manager.build_context_tree(
+        cancel_check=cancel_check,
+        progress_callback=progress_callback,
+    )
 
     translator_config = service.translator_config()
     batch_config = service.batch_config()

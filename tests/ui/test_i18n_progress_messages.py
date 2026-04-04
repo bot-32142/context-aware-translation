@@ -25,6 +25,7 @@ def test_translate_progress_message_dynamic_patterns(monkeypatch):
     assert i18n.translate_progress_message("Translating glossary group 4/9") == "T:Translating glossary group 4/9"
     assert i18n.translate_progress_message("Translating batch 7/20") == "T:Translating batch 7/20"
     assert i18n.translate_progress_message("Translating manga batch 5/8") == "T:Translating manga batch 5/8"
+    assert i18n.translate_progress_message("Summarizing term memory 3/7") == "T:Summarizing term memory 3/7"
     assert i18n.translate_progress_message("Collecting glossary term 1/5") == "T:Collecting glossary term 1/5"
 
 

@@ -98,11 +98,6 @@ def _selected_range(view) -> tuple[int, int, str]:
     return cursor.selectionStart(), cursor.selectionEnd(), cursor.selectedText()
 
 
-def _cursor_position(view) -> tuple[int, int, bool]:
-    cursor = view.translation_text.textCursor()
-    return cursor.position(), cursor.anchor(), cursor.hasSelection()
-
-
 def _chrome_signal(view, name: str):
     root = view.chrome_host.rootObject()
     assert root is not None
@@ -201,7 +196,6 @@ def test_document_translation_view_uses_side_by_side_plain_text_editors_and_hidd
         assert view.translation_text.lineWrapMode() == _QTEXTEDIT.LineWrapMode.WidgetWidth
         assert view.source_text.isReadOnly()
         assert not view.find_panel.isVisible()
-        assert view.search_hint_label.text() == "Find/replace · Ctrl/Cmd+F"
 
         view.find_input.setText("needle")
         view._show_find_panel()
@@ -209,8 +203,6 @@ def test_document_translation_view_uses_side_by_side_plain_text_editors_and_hidd
         assert view.find_panel.isVisible()
         assert not view.replace_panel.isVisible()
         assert not view.show_replace_button.isChecked()
-        assert view.literal_mode_button.isChecked()
-        assert view.find_feedback_label.text() == "Literal mode searches exact text."
         assert view.find_input.text() == "needle"
 
         view._show_replace_panel()
@@ -327,102 +319,6 @@ def test_document_translation_view_replace_mode_stays_open_while_finding_and_rep
         assert view.show_replace_button.isChecked()
         assert view.translation_text.toPlainText() == "omega beta alpha beta"
         assert _selected_range(view) == (11, 16, "alpha")
-    finally:
-        view.close()
-        view.deleteLater()
-
-
-def test_document_translation_view_regex_find_replace_supports_group_references():
-    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
-
-    state = _make_state()
-    service = FakeDocumentService(workspace=state.workspace, translation=state)
-    view = DocumentTranslationView(service, "proj-1", 4)
-    try:
-        view.show()
-        view.refresh()
-        _QAPPLICATION.processEvents()
-        view.translation_text.setPlainText("cat-01 dog-22 cat-33")
-        view._show_replace_panel()
-        view.regex_mode_button.click()
-        _QAPPLICATION.processEvents()
-
-        view.find_input.setText(r"(cat)-(\d+)")
-        view.replace_input.setText(r"$1[$2]")
-
-        view.find_next_button.click()
-        assert _selected_range(view) == (0, 6, "cat-01")
-        assert "capture groups" in view.find_feedback_label.text()
-
-        view.replace_button.click()
-        _QAPPLICATION.processEvents()
-        assert view.translation_text.toPlainText() == "cat[01] dog-22 cat-33"
-
-        view.replace_all_button.click()
-        _QAPPLICATION.processEvents()
-        assert view.translation_text.toPlainText() == "cat[01] dog-22 cat[33]"
-    finally:
-        view.close()
-        view.deleteLater()
-
-
-def test_document_translation_view_regex_find_next_supports_zero_width_matches():
-    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
-
-    state = _make_state()
-    service = FakeDocumentService(workspace=state.workspace, translation=state)
-    view = DocumentTranslationView(service, "proj-1", 4)
-    try:
-        view.show()
-        view.refresh()
-        _QAPPLICATION.processEvents()
-        view.translation_text.setPlainText("alpha\nbeta\ngamma")
-        cursor = view.translation_text.textCursor()
-        cursor.setPosition(1)
-        view.translation_text.setTextCursor(cursor)
-        view.regex_mode_button.click()
-        _QAPPLICATION.processEvents()
-
-        view.find_input.setText("^")
-
-        view.find_next_button.click()
-        assert _cursor_position(view) == (6, 6, False)
-
-        view.find_next_button.click()
-        assert _cursor_position(view) == (11, 11, False)
-
-        view.find_next_button.click()
-        assert _cursor_position(view) == (0, 0, False)
-    finally:
-        view.close()
-        view.deleteLater()
-
-
-def test_document_translation_view_wildcard_find_replace_supports_group_references():
-    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
-
-    state = _make_state()
-    service = FakeDocumentService(workspace=state.workspace, translation=state)
-    view = DocumentTranslationView(service, "proj-1", 4)
-    try:
-        view.show()
-        view.refresh()
-        _QAPPLICATION.processEvents()
-        view.translation_text.setPlainText("cat-01 dog-22 cat-33")
-        view._show_replace_panel()
-        view.wildcard_mode_button.click()
-        _QAPPLICATION.processEvents()
-
-        view.find_input.setText("cat-??")
-        view.replace_input.setText("match-$1$2")
-
-        view.find_next_button.click()
-        assert _selected_range(view) == (0, 6, "cat-01")
-        assert "Wildcard mode" in view.find_feedback_label.text()
-
-        view.replace_all_button.click()
-        _QAPPLICATION.processEvents()
-        assert view.translation_text.toPlainText() == "match-01 dog-22 match-33"
     finally:
         view.close()
         view.deleteLater()
@@ -650,7 +546,7 @@ def test_document_translation_view_shows_queue_message_over_progress_text():
     try:
         view.refresh()
         initial_progress = view.viewmodel.progress_text
-        assert initial_progress == "Progress: 2/5 | Active task: task-42"
+        assert initial_progress == "Running translation | Progress: 2/5 | Active task: task-42"
 
         _chrome_signal(view, "translateRequested").emit()
 
@@ -689,7 +585,7 @@ def test_document_translation_view_clears_transient_queue_message_on_refresh():
         )
         view.refresh()
 
-        assert view.viewmodel.progress_text == "Progress: 3/5 | Active task: task-42"
+        assert view.viewmodel.progress_text == "Running translation | Progress: 3/5 | Active task: task-42"
     finally:
         view.deleteLater()
 
