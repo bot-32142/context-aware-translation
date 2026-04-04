@@ -98,6 +98,11 @@ def _selected_range(view) -> tuple[int, int, str]:
     return cursor.selectionStart(), cursor.selectionEnd(), cursor.selectedText()
 
 
+def _cursor_position(view) -> tuple[int, int, bool]:
+    cursor = view.translation_text.textCursor()
+    return cursor.position(), cursor.anchor(), cursor.hasSelection()
+
+
 def _chrome_signal(view, name: str):
     root = view.chrome_host.rootObject()
     assert root is not None
@@ -151,7 +156,6 @@ def test_document_translation_view_renders_units_and_routes_actions():
         assert view.retranslate_button.isEnabled()
         assert not view.previous_button.isEnabled()
         assert view.next_button.isEnabled()
-        assert "Line count must stay at 2" in view.line_hint.text()
 
         view.translation_text.setPlainText("One\nTwo updated")
         view.save_button.click()
@@ -196,19 +200,34 @@ def test_document_translation_view_uses_side_by_side_plain_text_editors_and_hidd
         assert view.translation_text.lineWrapMode() == _QTEXTEDIT.LineWrapMode.WidgetWidth
         assert view.source_text.isReadOnly()
         assert not view.find_panel.isVisible()
+        assert view.find_panel.parentWidget() is view
+        assert view.find_hint_button.parentWidget() is view.translation_header
+        assert view.find_hint_button.text() == "Find/replace · Ctrl/Cmd+F"
+        header_label_y = view.translation_label.mapTo(view.translation_header, _QPOINT(0, 0)).y()
+        header_button_y = view.find_hint_button.mapTo(view.translation_header, _QPOINT(0, 0)).y()
+        assert abs(header_label_y - header_button_y) <= 4
+        initial_source_height = view.source_text.height()
+        initial_translation_height = view.translation_text.height()
+        assert abs(initial_source_height - initial_translation_height) <= 1
 
         view.find_input.setText("needle")
-        view._show_find_panel()
+        view.find_hint_button.click()
         _QAPPLICATION.processEvents()
         assert view.find_panel.isVisible()
-        assert not view.replace_panel.isVisible()
-        assert not view.show_replace_button.isChecked()
-        assert view.find_input.text() == "needle"
-
-        view._show_replace_panel()
-        _QAPPLICATION.processEvents()
         assert view.replace_panel.isVisible()
         assert view.show_replace_button.isChecked()
+        assert view.literal_mode_button.isChecked()
+        assert view.find_feedback_label.text() == "Literal mode searches exact text."
+        assert view.find_input.text() == "needle"
+        panel_bottom = (
+            view.translation_text.viewport()
+            .mapFromGlobal(view.find_panel.mapToGlobal(view.find_panel.rect().bottomLeft()))
+            .y()
+        )
+        assert view.translation_text.height() == initial_translation_height
+        assert view.source_text.height() == initial_source_height
+        assert view.find_panel.geometry().top() < view.translation_text.mapTo(view, _QPOINT(0, 0)).y()
+        assert panel_bottom <= 0
 
         view.show_replace_button.click()
         _QAPPLICATION.processEvents()
@@ -319,6 +338,102 @@ def test_document_translation_view_replace_mode_stays_open_while_finding_and_rep
         assert view.show_replace_button.isChecked()
         assert view.translation_text.toPlainText() == "omega beta alpha beta"
         assert _selected_range(view) == (11, 16, "alpha")
+    finally:
+        view.close()
+        view.deleteLater()
+
+
+def test_document_translation_view_regex_find_replace_supports_group_references():
+    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
+
+    state = _make_state()
+    service = FakeDocumentService(workspace=state.workspace, translation=state)
+    view = DocumentTranslationView(service, "proj-1", 4)
+    try:
+        view.show()
+        view.refresh()
+        _QAPPLICATION.processEvents()
+        view.translation_text.setPlainText("cat-01 dog-22 cat-33")
+        view._show_replace_panel()
+        view.regex_mode_button.click()
+        _QAPPLICATION.processEvents()
+
+        view.find_input.setText(r"(cat)-(\d+)")
+        view.replace_input.setText(r"$1[$2]")
+
+        view.find_next_button.click()
+        assert _selected_range(view) == (0, 6, "cat-01")
+        assert "capture groups" in view.find_feedback_label.text()
+
+        view.replace_button.click()
+        _QAPPLICATION.processEvents()
+        assert view.translation_text.toPlainText() == "cat[01] dog-22 cat-33"
+
+        view.replace_all_button.click()
+        _QAPPLICATION.processEvents()
+        assert view.translation_text.toPlainText() == "cat[01] dog-22 cat[33]"
+    finally:
+        view.close()
+        view.deleteLater()
+
+
+def test_document_translation_view_regex_find_next_supports_zero_width_matches():
+    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
+
+    state = _make_state()
+    service = FakeDocumentService(workspace=state.workspace, translation=state)
+    view = DocumentTranslationView(service, "proj-1", 4)
+    try:
+        view.show()
+        view.refresh()
+        _QAPPLICATION.processEvents()
+        view.translation_text.setPlainText("alpha\nbeta\ngamma")
+        cursor = view.translation_text.textCursor()
+        cursor.setPosition(1)
+        view.translation_text.setTextCursor(cursor)
+        view.regex_mode_button.click()
+        _QAPPLICATION.processEvents()
+
+        view.find_input.setText("^")
+
+        view.find_next_button.click()
+        assert _cursor_position(view) == (6, 6, False)
+
+        view.find_next_button.click()
+        assert _cursor_position(view) == (11, 11, False)
+
+        view.find_next_button.click()
+        assert _cursor_position(view) == (0, 0, False)
+    finally:
+        view.close()
+        view.deleteLater()
+
+
+def test_document_translation_view_wildcard_find_replace_supports_group_references():
+    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
+
+    state = _make_state()
+    service = FakeDocumentService(workspace=state.workspace, translation=state)
+    view = DocumentTranslationView(service, "proj-1", 4)
+    try:
+        view.show()
+        view.refresh()
+        _QAPPLICATION.processEvents()
+        view.translation_text.setPlainText("cat-01 dog-22 cat-33")
+        view._show_replace_panel()
+        view.wildcard_mode_button.click()
+        _QAPPLICATION.processEvents()
+
+        view.find_input.setText("cat-??")
+        view.replace_input.setText("match-$1$2")
+
+        view.find_next_button.click()
+        assert _selected_range(view) == (0, 6, "cat-01")
+        assert "Wildcard mode" in view.find_feedback_label.text()
+
+        view.replace_all_button.click()
+        _QAPPLICATION.processEvents()
+        assert view.translation_text.toPlainText() == "match-01 dog-22 match-33"
     finally:
         view.close()
         view.deleteLater()
