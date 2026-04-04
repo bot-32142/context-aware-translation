@@ -12,6 +12,7 @@ Rectangle {
     signal translateRequested
     signal reviewRequested
     signal filterRequested
+    signal addRequested
     signal importRequested
     signal exportRequested
 
@@ -22,21 +23,25 @@ Rectangle {
     property string translateLabelText: termsPane ? termsPane.translate_label : "Translate Untranslated"
     property string reviewLabelText: termsPane ? termsPane.review_label : "Review Terms"
     property string filterLabelText: termsPane ? termsPane.filter_label : "Filter Rare"
+    property string addLabelText: termsPane ? termsPane.add_label : "Add Terms"
     property string importLabelText: termsPane ? termsPane.import_label : "Import Terms"
     property string exportLabelText: termsPane ? termsPane.export_label : "Export Terms"
     property string buildTooltipText: termsPane ? termsPane.build_tooltip : ""
     property string translateTooltipText: termsPane ? termsPane.translate_tooltip : ""
     property string reviewTooltipText: termsPane ? termsPane.review_tooltip : ""
     property string filterTooltipText: termsPane ? termsPane.filter_tooltip : ""
+    property string addTooltipText: termsPane ? termsPane.add_tooltip : ""
     property string importTooltipText: termsPane ? termsPane.import_tooltip : ""
     property string exportTooltipText: termsPane ? termsPane.export_tooltip : ""
     property bool showBuild: termsPane ? termsPane.show_build : false
+    property bool showAdd: termsPane ? termsPane.show_add : true
     property bool showImport: termsPane ? termsPane.show_import : true
     property bool showExport: termsPane ? termsPane.show_export : true
     property bool canBuild: termsPane ? termsPane.can_build : false
     property bool canTranslate: termsPane ? termsPane.can_translate : false
     property bool canReview: termsPane ? termsPane.can_review : false
     property bool canFilter: termsPane ? termsPane.can_filter : false
+    property bool canAdd: termsPane ? termsPane.can_add : false
     property bool canImport: termsPane ? termsPane.can_import : false
     property bool canExport: termsPane ? termsPane.can_export : false
 
@@ -80,6 +85,7 @@ Rectangle {
                     { "label": root.translateLabelText, "enabled": root.canTranslate, "kind": "translate", "tooltip": root.translateTooltipText },
                     { "label": root.reviewLabelText, "enabled": root.canReview, "kind": "review", "tooltip": root.reviewTooltipText },
                     { "label": root.filterLabelText, "enabled": root.canFilter, "kind": "filter", "tooltip": root.filterTooltipText },
+                    { "label": root.addLabelText, "enabled": root.canAdd, "kind": "add", "visible": root.showAdd, "tooltip": root.addTooltipText },
                     { "label": root.importLabelText, "enabled": root.canImport, "kind": "import", "visible": root.showImport, "tooltip": root.importTooltipText },
                     { "label": root.exportLabelText, "enabled": root.canExport, "kind": "export", "visible": root.showExport, "tooltip": root.exportTooltipText }
                 ]
@@ -117,6 +123,8 @@ Rectangle {
                                 root.reviewRequested()
                             } else if (modelData.kind === "filter") {
                                 root.filterRequested()
+                            } else if (modelData.kind === "add") {
+                                root.addRequested()
                             } else if (modelData.kind === "import") {
                                 root.importRequested()
                             } else {

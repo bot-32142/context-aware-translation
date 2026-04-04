@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
+from PySide6.QtCore import QEvent, QPoint, Qt, QTimer, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMenu,
     QMessageBox,
     QPushButton,
@@ -29,6 +31,7 @@ from context_aware_translation.application.contracts.terms import (
     TermTableRow,
     TranslatePendingTermsRequest,
     UpdateTermRowsRequest,
+    UpsertProjectTermRequest,
 )
 from context_aware_translation.application.errors import ApplicationError, BlockedOperationError
 from context_aware_translation.application.events import (
@@ -44,6 +47,213 @@ from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.viewmodels.terms_pane import TermsPaneViewModel
 from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
+
+
+class _AddTermsDialogTitleBar(QWidget):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("termsAddTitleBar")
+        self._drag_offset: QPoint | None = None
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(18, 14, 12, 8)
+        layout.setSpacing(12)
+
+        self.title_label = QLabel(self)
+        self.title_label.setObjectName("termsAddTitleLabel")
+        self.title_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        layout.addWidget(self.title_label, 1)
+
+        self.close_button = QPushButton("X", self)
+        self.close_button.setObjectName("termsAddCloseButton")
+        self.close_button.setFixedSize(36, 36)
+        self.close_button.clicked.connect(lambda: self.window().close())
+        layout.addWidget(self.close_button)
+
+    def mousePressEvent(self, event) -> None:  # noqa: ANN001
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_offset = event.globalPosition().toPoint() - self.window().frameGeometry().topLeft()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: ANN001
+        if self._drag_offset is not None and bool(event.buttons() & Qt.MouseButton.LeftButton):
+            self.window().move(event.globalPosition().toPoint() - self._drag_offset)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: ANN001
+        self._drag_offset = None
+        super().mouseReleaseEvent(event)
+
+
+class _AddTermsDialog(QDialog):
+    submitted = Signal(str, str)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("termsAddDialog")
+        self.setModal(False)
+        self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setMinimumWidth(620)
+        self._has_position = False
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        self.title_bar = _AddTermsDialogTitleBar(self)
+        layout.addWidget(self.title_bar)
+
+        content_layout = QVBoxLayout()
+        content_layout.setContentsMargins(18, 8, 18, 18)
+        content_layout.setSpacing(12)
+        layout.addLayout(content_layout)
+
+        row_layout = QHBoxLayout()
+        row_layout.setSpacing(10)
+        content_layout.addLayout(row_layout)
+
+        self.term_input = QLineEdit(self)
+        self.term_input.setObjectName("termsAddTermInput")
+        row_layout.addWidget(self.term_input, 1)
+
+        self.arrow_label = QLabel("=>", self)
+        self.arrow_label.setObjectName("termsAddArrowLabel")
+        row_layout.addWidget(self.arrow_label)
+
+        self.translation_input = QLineEdit(self)
+        self.translation_input.setObjectName("termsAddTranslationInput")
+        self.translation_input.returnPressed.connect(self._emit_submit)
+        row_layout.addWidget(self.translation_input, 1)
+
+        self.add_button = QPushButton(self)
+        self.add_button.setObjectName("termsAddSubmitButton")
+        self.add_button.clicked.connect(self._emit_submit)
+        row_layout.addWidget(self.add_button)
+
+        self.status_label = QLabel(self)
+        self.status_label.setObjectName("termsAddStatusLabel")
+        self.status_label.hide()
+        content_layout.addWidget(self.status_label)
+
+        apply_hybrid_control_theme(
+            self,
+            extra_stylesheet="""
+QDialog#termsAddDialog {
+    background: #2f2c31;
+    border: 1px solid #4c4852;
+    border-radius: 16px;
+}
+QLabel#termsAddTitleLabel {
+    color: #f5f3f7;
+    font-size: 26px;
+    font-weight: 700;
+}
+QLabel#termsAddArrowLabel {
+    color: #d6d1da;
+    font-size: 18px;
+    font-weight: 700;
+}
+QLineEdit#termsAddTermInput,
+QLineEdit#termsAddTranslationInput {
+    min-height: 46px;
+    background: #4b494f;
+    border: 1px solid #5a5660;
+    color: #f5f3f7;
+}
+QLineEdit#termsAddTermInput::placeholder,
+QLineEdit#termsAddTranslationInput::placeholder {
+    color: #aba4b0;
+}
+QLabel#termsAddStatusLabel {
+    color: #f7b3ad;
+    padding-left: 4px;
+    min-height: 22px;
+}
+QPushButton#termsAddCloseButton {
+    min-height: 32px;
+    min-width: 32px;
+    padding: 0;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: #d6d1da;
+    font-size: 14px;
+    font-weight: 700;
+}
+QPushButton#termsAddCloseButton:hover:enabled {
+    background: #403d44;
+}
+QPushButton#termsAddCloseButton:pressed:enabled {
+    background: #4b4850;
+}
+""",
+        )
+        set_button_tone(self.add_button, "primary")
+        self.retranslateUi()
+
+    def changeEvent(self, event: QEvent) -> None:
+        if event.type() == QEvent.Type.LanguageChange:
+            self.retranslateUi()
+        super().changeEvent(event)
+
+    def retranslateUi(self) -> None:
+        self.title_bar.title_label.setText(self.tr("Add Terms"))
+        self.term_input.setPlaceholderText(self.tr("Term"))
+        self.translation_input.setPlaceholderText(self.tr("Translation"))
+        self.add_button.setText(self.tr("Add"))
+
+    def show_near(self, anchor: QWidget) -> None:
+        if not self._has_position:
+            self.adjustSize()
+            center = anchor.mapToGlobal(anchor.rect().center())
+            self.move(center - QPoint(self.width() // 2, self.height() // 2))
+            self._has_position = True
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        self.term_input.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def show_status(self, severity: UserMessageSeverity, text: str) -> None:
+        color = {
+            UserMessageSeverity.SUCCESS: "#7bd88f",
+            UserMessageSeverity.WARNING: "#f4c86a",
+            UserMessageSeverity.ERROR: "#f7b3ad",
+        }.get(severity, "#8bc5ff")
+        self.status_label.setStyleSheet(f"color: {color};")
+        self.status_label.setText(text)
+        self.status_label.show()
+
+    def clear_status(self) -> None:
+        self.status_label.clear()
+        self.status_label.hide()
+
+    def handle_submit_success(self, *, updated_existing: bool) -> None:
+        self.term_input.clear()
+        self.translation_input.clear()
+        self.show_status(
+            UserMessageSeverity.SUCCESS,
+            self.tr("Updated existing term.") if updated_existing else self.tr("Term added."),
+        )
+        self.term_input.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def _emit_submit(self) -> None:
+        term = self.term_input.text().strip()
+        translation = self.translation_input.text().strip()
+        if not term:
+            self.show_status(UserMessageSeverity.ERROR, self.tr("Term is required."))
+            self.term_input.setFocus(Qt.FocusReason.OtherFocusReason)
+            return
+        if not translation:
+            self.show_status(UserMessageSeverity.ERROR, self.tr("Translation is required."))
+            self.translation_input.setFocus(Qt.FocusReason.OtherFocusReason)
+            return
+        self.clear_status()
+        self.submitted.emit(term, translation)
 
 
 class TermsView(QWidget):
@@ -72,6 +282,7 @@ class TermsView(QWidget):
         self._message_is_transient = False
         self._event_bridge: QtApplicationEventBridge | None = None
         self._pending_local_terms_invalidations = 0
+        self._add_terms_dialog: _AddTermsDialog | None = None
         self.viewmodel = (
             TermsPaneViewModel(document_scope=self._is_document_scope, embedded=self._embedded, parent=self)
             if self._use_qml_chrome
@@ -153,6 +364,12 @@ class TermsView(QWidget):
         if not self._use_qml_chrome:
             toolbar_layout.addWidget(self.filter_noise_button)
 
+        self.add_terms_button = QPushButton(self.tr("Add Terms"), self)
+        self.add_terms_button.clicked.connect(self._open_add_terms_dialog)
+        self.add_terms_button.setVisible(not self._is_document_scope and not self._use_qml_chrome)
+        if not self._is_document_scope and not self._use_qml_chrome:
+            toolbar_layout.addWidget(self.add_terms_button)
+
         self.edit_selected_action = QAction(self.tr("Edit Selected"), self)
         self.edit_selected_action.triggered.connect(self._edit_selected_terms)
         self.bulk_mark_reviewed_action = QAction(self.tr("Mark Reviewed"), self)
@@ -194,10 +411,12 @@ class TermsView(QWidget):
             self.translate_button,
             self.review_button,
             self.filter_noise_button,
+            self.add_terms_button,
             self.import_button,
             self.export_button,
         ):
             set_button_tone(button)
+        set_button_tone(self.add_terms_button, "primary")
 
     def refresh(self) -> None:
         self._clear_transient_message()
@@ -222,6 +441,8 @@ class TermsView(QWidget):
     def cleanup(self) -> None:
         if self._event_bridge is not None:
             self._event_bridge.close()
+        if self._add_terms_dialog is not None:
+            self._add_terms_dialog.close()
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:
@@ -235,6 +456,7 @@ class TermsView(QWidget):
         self.translate_button.setText(self.tr("Translate Untranslated"))
         self.review_button.setText(self.tr("Review Terms"))
         self.filter_noise_button.setText(self.tr("Filter Rare"))
+        self.add_terms_button.setText(self.tr("Add Terms"))
         self.edit_selected_action.setText(self.tr("Edit Selected"))
         self.bulk_mark_reviewed_action.setText(self.tr("Mark Reviewed"))
         self.bulk_unmark_reviewed_action.setText(self.tr("Unmark Reviewed"))
@@ -243,6 +465,8 @@ class TermsView(QWidget):
         self.bulk_delete_action.setText(self.tr("Delete Selected"))
         self.import_button.setText(self.tr("Import Terms"))
         self.export_button.setText(self.tr("Export Terms"))
+        if self._add_terms_dialog is not None:
+            self._add_terms_dialog.retranslateUi()
         self.table_panel.retranslateUi()
         if self.viewmodel is not None:
             self.viewmodel.retranslate()
@@ -269,6 +493,7 @@ class TermsView(QWidget):
         self.translate_button.setEnabled(toolbar.can_translate_pending)
         self.review_button.setEnabled(toolbar.can_review)
         self.filter_noise_button.setEnabled(toolbar.can_filter_noise)
+        self.add_terms_button.setEnabled(toolbar.can_add_terms)
         self.import_button.setEnabled(toolbar.can_import)
         self.export_button.setEnabled(toolbar.can_export)
 
@@ -298,10 +523,15 @@ class TermsView(QWidget):
                 )
             )
         )
+        add_terms_tooltip = (
+            translate_backend_text(toolbar.add_terms_blocker.message)
+            if toolbar.add_terms_blocker
+            else self.tr("Add or update a shared term translation for this project.")
+        )
         import_tooltip = (
             translate_backend_text(toolbar.import_blocker.message)
             if toolbar.import_blocker
-            else self.tr("Import terms from a JSON file and replace current project terms.")
+            else self.tr("Import terms from a JSON file.")
         )
         export_tooltip = (
             translate_backend_text(toolbar.export_blocker.message)
@@ -313,6 +543,7 @@ class TermsView(QWidget):
         self.translate_button.setToolTip(translate_tooltip)
         self.review_button.setToolTip(review_tooltip)
         self.filter_noise_button.setToolTip(filter_tooltip)
+        self.add_terms_button.setToolTip(add_terms_tooltip)
         self.import_button.setToolTip(import_tooltip)
         self.export_button.setToolTip(export_tooltip)
         if self.viewmodel is not None:
@@ -321,12 +552,14 @@ class TermsView(QWidget):
                 can_translate=toolbar.can_translate_pending,
                 can_review=toolbar.can_review,
                 can_filter=toolbar.can_filter_noise,
+                can_add=toolbar.can_add_terms,
                 can_import=toolbar.can_import,
                 can_export=toolbar.can_export,
                 build_tooltip=build_tooltip,
                 translate_tooltip=translate_tooltip,
                 review_tooltip=review_tooltip,
                 filter_tooltip=filter_tooltip,
+                add_tooltip=add_terms_tooltip,
                 import_tooltip=import_tooltip,
                 export_tooltip=export_tooltip,
             )
@@ -344,6 +577,7 @@ class TermsView(QWidget):
             ("translateRequested", self._on_translate_pending),
             ("reviewRequested", self._on_review_terms),
             ("filterRequested", self._on_filter_noise),
+            ("addRequested", self._open_add_terms_dialog),
             ("importRequested", self._on_import_terms),
             ("exportRequested", self._on_export_terms),
         ):
@@ -434,6 +668,13 @@ class TermsView(QWidget):
             return
         self._apply_state(state)
         self._show_message(UserMessageSeverity.SUCCESS, self.tr("Terms imported."))
+
+    def _open_add_terms_dialog(self) -> None:
+        if self._is_document_scope:
+            return
+        dialog = self._ensure_add_terms_dialog()
+        dialog.clear_status()
+        dialog.show_near(self)
 
     def _on_export_terms(self) -> None:
         if (
@@ -708,3 +949,27 @@ class TermsView(QWidget):
         return self.tr(
             "Terms are shared across the project. Build terms from document pages in document Terms, then translate, review, filter, import, or export them here."
         )
+
+    def _ensure_add_terms_dialog(self) -> _AddTermsDialog:
+        if self._add_terms_dialog is None:
+            self._add_terms_dialog = _AddTermsDialog(self.window())
+            self._add_terms_dialog.submitted.connect(self._on_add_terms_submitted)
+        return self._add_terms_dialog
+
+    def _on_add_terms_submitted(self, term: str, translation: str) -> None:
+        dialog = self._ensure_add_terms_dialog()
+        tracks_invalidation = self._event_bridge is not None
+        if tracks_invalidation:
+            self._pending_local_terms_invalidations += 1
+        try:
+            result = self._service.upsert_project_term(
+                UpsertProjectTermRequest(project_id=self.project_id, term=term, translation=translation)
+            )
+        except ApplicationError as exc:
+            dialog.show_status(UserMessageSeverity.ERROR, translate_backend_text(exc.payload.message))
+            return
+        finally:
+            if tracks_invalidation:
+                self._pending_local_terms_invalidations = max(0, self._pending_local_terms_invalidations - 1)
+        self._apply_state(result.state)
+        dialog.handle_submit_success(updated_existing=result.updated_existing)

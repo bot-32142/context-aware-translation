@@ -70,6 +70,7 @@ def _make_state(*, can_review: bool = False, can_export: bool = False, document_
             can_translate_pending=True,
             can_review=can_review,
             can_filter_noise=True,
+            can_add_terms=not document_scope,
             can_import=not document_scope,
             can_export=(can_export and not document_scope),
             review_blocker=(
@@ -162,9 +163,12 @@ def test_terms_view_loads_qml_project_chrome_and_routes_toolbar_actions():
         assert root is not None
         assert root.objectName() == "termsPaneChrome"
         assert root.property("titleText") == "Terms"
+        assert root.property("showAdd") is True
+        assert root.property("canAdd") is True
         assert root.property("canTranslate") is True
         assert root.property("canReview") is True
         assert root.property("canExport") is True
+        assert root.property("addTooltipText") == "Add or update a shared term translation for this project."
         assert root.property("translateTooltipText") == (
             "Translate all currently untranslated glossary terms for the current scope."
         )
@@ -187,6 +191,7 @@ def test_terms_view_loads_qml_project_chrome_and_routes_toolbar_actions():
             patch.object(QFileDialog, "getOpenFileName", return_value=("/tmp/glossary.json", "JSON Files (*.json)")),
             patch.object(QFileDialog, "getSaveFileName", return_value=("/tmp/out.json", "JSON Files (*.json)")),
         ):
+            root.addRequested.emit()
             root.translateRequested.emit()
             root.reviewRequested.emit()
             root.filterRequested.emit()
@@ -194,6 +199,7 @@ def test_terms_view_loads_qml_project_chrome_and_routes_toolbar_actions():
             root.exportRequested.emit()
 
         call_names = [name for name, _payload in service.calls]
+        assert "upsert_project_term" not in call_names
         assert "translate_pending" in call_names
         assert "review_terms" in call_names
         assert "filter_noise" in call_names
@@ -285,6 +291,7 @@ def test_terms_view_loads_qml_document_chrome_and_routes_document_actions():
         assert root is not None
         assert root.objectName() == "termsPaneChrome"
         assert root.property("showBuild") is True
+        assert root.property("showAdd") is False
         assert root.property("showImport") is False
         assert root.property("showExport") is False
         assert root.property("canBuild") is True
@@ -314,6 +321,73 @@ def test_terms_view_loads_qml_document_chrome_and_routes_document_actions():
         root.setProperty("buildLabelText", "Build Terms From The Current Document Before Review")
         QApplication.processEvents()
         assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
+    finally:
+        view.cleanup()
+        view.deleteLater()
+
+
+def test_terms_view_add_terms_dialog_upserts_project_terms_and_stays_open():
+    from context_aware_translation.ui.features.terms_view import TermsView
+
+    service = FakeTermsService(project_state=_make_state(can_review=True, can_export=True))
+    bus = InMemoryApplicationEventBus()
+    view = TermsView("proj-1", service, bus)
+    try:
+        view.show()
+        QApplication.processEvents()
+        root = view.chrome_host.rootObject()
+        assert root is not None
+
+        root.addRequested.emit()
+        dialog = view._add_terms_dialog
+        assert dialog is not None
+        assert dialog.isVisible() is True
+
+        dialog.term_input.setText("ギア5")
+        dialog.translation_input.setText("Gear 5")
+        dialog.add_button.click()
+
+        assert service.calls[-1][0] == "upsert_project_term"
+        assert dialog.isVisible() is True
+        assert dialog.term_input.text() == ""
+        assert dialog.translation_input.text() == ""
+        assert dialog.status_label.text() == "Term added."
+        assert any(row.term_key == "ギア5" and row.translation == "Gear 5" for row in view.table_panel.rows_snapshot())
+
+        dialog.term_input.setText("ルフィ")
+        dialog.translation_input.setText("Monkey D. Luffy")
+        dialog.add_button.click()
+
+        assert dialog.status_label.text() == "Updated existing term."
+        assert any(
+            row.term_key == "ルフィ" and row.translation == "Monkey D. Luffy" and row.reviewed and not row.ignored
+            for row in view.table_panel.rows_snapshot()
+        )
+    finally:
+        view.cleanup()
+        view.deleteLater()
+
+
+def test_terms_view_add_terms_dialog_validates_required_fields():
+    from context_aware_translation.ui.features.terms_view import TermsView
+
+    service = FakeTermsService(project_state=_make_state(can_review=True, can_export=True))
+    bus = InMemoryApplicationEventBus()
+    view = TermsView("proj-1", service, bus)
+    try:
+        view.show()
+        QApplication.processEvents()
+        view._open_add_terms_dialog()
+        dialog = view._add_terms_dialog
+        assert dialog is not None
+
+        dialog.add_button.click()
+        assert dialog.status_label.text() == "Term is required."
+
+        dialog.term_input.setText("ギア5")
+        dialog.add_button.click()
+        assert dialog.status_label.text() == "Translation is required."
+        assert not any(name == "upsert_project_term" for name, _payload in service.calls)
     finally:
         view.cleanup()
         view.deleteLater()

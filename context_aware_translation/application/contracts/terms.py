@@ -54,12 +54,14 @@ class TermsToolbarState(ContractModel):
     can_translate_pending: bool = False
     can_review: bool = False
     can_filter_noise: bool = False
+    can_add_terms: bool = False
     can_import: bool = True
     can_export: bool = True
     build_blocker: BlockerInfo | None = None
     translate_pending_blocker: BlockerInfo | None = None
     review_blocker: BlockerInfo | None = None
     filter_noise_blocker: BlockerInfo | None = None
+    add_terms_blocker: BlockerInfo | None = None
     import_blocker: BlockerInfo | None = None
     export_blocker: BlockerInfo | None = None
 
@@ -115,6 +117,17 @@ class FilterNoiseRequest(ContractModel):
 class ImportTermsRequest(ContractModel):
     project_id: str
     input_path: str
+
+
+class UpsertProjectTermRequest(ContractModel):
+    project_id: str
+    term: str
+    translation: str
+
+
+class UpsertProjectTermResult(ContractModel):
+    state: TermsTableState
+    updated_existing: bool = False
 
 
 class ExportTermsRequest(ContractModel):

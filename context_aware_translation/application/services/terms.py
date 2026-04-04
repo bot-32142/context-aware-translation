@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
@@ -30,6 +31,8 @@ from context_aware_translation.application.contracts.terms import (
     UpdateTermRequest,
     UpdateTermRowsRequest,
     UpdateTermRowsResult,
+    UpsertProjectTermRequest,
+    UpsertProjectTermResult,
 )
 from context_aware_translation.application.errors import (
     ApplicationErrorCode,
@@ -78,6 +81,8 @@ class TermsService(Protocol):
     def filter_noise(self, request: FilterNoiseRequest) -> TermsTableState: ...
 
     def import_terms(self, request: ImportTermsRequest) -> TermsTableState: ...
+
+    def upsert_project_term(self, request: UpsertProjectTermRequest) -> UpsertProjectTermResult: ...
 
     def export_terms(self, request: ExportTermsRequest) -> AcceptedCommand: ...
 
@@ -214,9 +219,64 @@ class DefaultTermsService:
         if blocker is not None:
             self._raise_blocked_blocker(blocker, project_id=request.project_id)
         with self._runtime.open_book_db(request.project_id) as dbx:
-            import_glossary(dbx.db, Path(request.input_path))
+            try:
+                import_glossary(dbx.db, Path(request.input_path))
+            except ValueError as exc:
+                raise_application_error(
+                    ApplicationErrorCode.VALIDATION,
+                    str(exc),
+                    project_id=request.project_id,
+                    input_path=request.input_path,
+                )
         self._runtime.invalidate_terms(request.project_id)
         return self.get_project_terms(request.project_id)
+
+    def upsert_project_term(self, request: UpsertProjectTermRequest) -> UpsertProjectTermResult:
+        blocker = self._glossary_mutation_blocker(request.project_id)
+        if blocker is not None:
+            self._raise_blocked_blocker(blocker, project_id=request.project_id)
+
+        term = request.term.strip()
+        translation = request.translation.strip()
+        if not term:
+            raise_application_error(ApplicationErrorCode.VALIDATION, "Term is required.", project_id=request.project_id)
+        if not translation:
+            raise_application_error(
+                ApplicationErrorCode.VALIDATION,
+                "Translation is required.",
+                project_id=request.project_id,
+                term=term,
+            )
+
+        updated_existing = False
+        with self._runtime.open_book_db(request.project_id) as dbx:
+            existing = dbx.db.get_term(term)
+            if existing is not None:
+                updated_existing = True
+                record = existing
+                record.translated_name = translation
+                record.ignored = False
+                record.is_reviewed = True
+                record.updated_at = time.time()
+            else:
+                record = TermRecord(
+                    key=term,
+                    descriptions={},
+                    occurrence={},
+                    votes=1,
+                    total_api_calls=1,
+                    term_type="other",
+                    translated_name=translation,
+                    ignored=False,
+                    is_reviewed=True,
+                )
+            dbx.term_repo.upsert_terms([record])
+
+        self._runtime.invalidate_terms(request.project_id)
+        return UpsertProjectTermResult(
+            state=self.get_project_terms(request.project_id),
+            updated_existing=updated_existing,
+        )
 
     def export_terms(self, request: ExportTermsRequest) -> AcceptedCommand:
         params: dict[str, object] = {"output_path": request.output_path}
@@ -409,6 +469,8 @@ class DefaultTermsService:
         )
 
         mutation_blocker = self._glossary_mutation_blocker(project_id)
+        add_terms_allowed = mutation_blocker is None and document_id is None
+        add_terms_blocker = mutation_blocker if document_id is None else None
         if mutation_blocker is not None:
             translate_allowed = False
             translate_blocker = mutation_blocker
@@ -436,12 +498,14 @@ class DefaultTermsService:
             can_translate_pending=translate_allowed,
             can_review=review_allowed,
             can_filter_noise=filter_noise_allowed,
+            can_add_terms=add_terms_allowed,
             can_import=import_allowed,
             can_export=export_allowed and has_rows,
             build_blocker=build_blocker,
             translate_pending_blocker=translate_blocker,
             review_blocker=review_blocker,
             filter_noise_blocker=filter_noise_blocker,
+            add_terms_blocker=add_terms_blocker,
             import_blocker=import_blocker,
             export_blocker=(
                 export_blocker

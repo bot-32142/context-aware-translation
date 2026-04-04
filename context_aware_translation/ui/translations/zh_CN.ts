@@ -3255,6 +3255,13 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation>过滤低频</translation>
     </message>
     <message>
+        <location filename="../features/terms_view.py" line="164"/>
+        <location filename="../features/terms_view.py" line="255"/>
+        <location filename="../viewmodels/terms_pane.py" line="73"/>
+        <source>Add Terms</source>
+        <translation>添加术语</translation>
+    </message>
+    <message>
         <location filename="../features/terms_view.py" line="156"/>
         <location filename="../features/terms_view.py" line="238"/>
         <source>Edit Selected</source>
@@ -3337,9 +3344,14 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation>自动忽略仅出现一次或仅在一个分块中被 LLM 识别的术语。</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="304"/>
-        <source>Import terms from a JSON file and replace current project terms.</source>
-        <translation>从 JSON 文件导入术语并替换当前项目术语。</translation>
+        <location filename="../features/terms_view.py" line="528"/>
+        <source>Add or update a shared term translation for this project.</source>
+        <translation>为此项目添加或更新共享术语翻译。</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="533"/>
+        <source>Import terms from a JSON file.</source>
+        <translation>从 JSON 文件导入术语。</translation>
     </message>
     <message>
         <location filename="../features/terms_view.py" line="309"/>
@@ -3445,6 +3457,49 @@ All completed results are already saved and won&apos;t be lost.</source>
         <location filename="../viewmodels/terms_pane.py" line="12"/>
         <source>Terms here are scoped to the current document. Build terms from page text, then translate, review, or filter only this document&apos;s glossary candidates.</source>
         <translation>这里的术语仅限当前文档范围。请先从页面文本构建术语，然后只对该文档的术语候选进行翻译、审校或过滤。</translation>
+    </message>
+</context>
+<context>
+    <name>_AddTermsDialog</name>
+    <message>
+        <location filename="../features/terms_view.py" line="202"/>
+        <source>Add Terms</source>
+        <translation>添加术语</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="203"/>
+        <source>Term</source>
+        <translation>术语</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="204"/>
+        <source>Translation</source>
+        <translation>翻译</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="205"/>
+        <source>Add</source>
+        <translation>添加</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="231"/>
+        <source>Updated existing term.</source>
+        <translation>已更新现有术语。</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="231"/>
+        <source>Term added.</source>
+        <translation>术语已添加。</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="240"/>
+        <source>Term is required.</source>
+        <translation>术语为必填项。</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="244"/>
+        <source>Translation is required.</source>
+        <translation>翻译为必填项。</translation>
     </message>
 </context>
 <context>

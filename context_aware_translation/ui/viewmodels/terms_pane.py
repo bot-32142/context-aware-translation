@@ -30,12 +30,14 @@ class TermsPaneViewModel(ViewModelBase):
         self._can_translate = False
         self._can_review = False
         self._can_filter = False
+        self._can_add = False
         self._can_import = False
         self._can_export = False
         self._build_tooltip = ""
         self._translate_tooltip = ""
         self._review_tooltip = ""
         self._filter_tooltip = ""
+        self._add_tooltip = ""
         self._import_tooltip = ""
         self._export_tooltip = ""
 
@@ -69,6 +71,10 @@ class TermsPaneViewModel(ViewModelBase):
         return QCoreApplication.translate("TermsView", "Filter Rare")
 
     @Property(str, notify=labels_changed)
+    def add_label(self) -> str:
+        return QCoreApplication.translate("TermsView", "Add Terms")
+
+    @Property(str, notify=labels_changed)
     def import_label(self) -> str:
         return QCoreApplication.translate("TermsView", "Import Terms")
 
@@ -82,6 +88,10 @@ class TermsPaneViewModel(ViewModelBase):
 
     @Property(bool, notify=labels_changed)
     def show_import(self) -> bool:
+        return not self._document_scope
+
+    @Property(bool, notify=labels_changed)
+    def show_add(self) -> bool:
         return not self._document_scope
 
     @Property(bool, notify=labels_changed)
@@ -103,6 +113,10 @@ class TermsPaneViewModel(ViewModelBase):
     @Property(bool, notify=chrome_state_changed)
     def can_filter(self) -> bool:
         return self._can_filter
+
+    @Property(bool, notify=chrome_state_changed)
+    def can_add(self) -> bool:
+        return self._can_add
 
     @Property(bool, notify=chrome_state_changed)
     def can_import(self) -> bool:
@@ -129,6 +143,10 @@ class TermsPaneViewModel(ViewModelBase):
         return self._filter_tooltip
 
     @Property(str, notify=chrome_state_changed)
+    def add_tooltip(self) -> str:
+        return self._add_tooltip
+
+    @Property(str, notify=chrome_state_changed)
     def import_tooltip(self) -> str:
         return self._import_tooltip
 
@@ -143,12 +161,14 @@ class TermsPaneViewModel(ViewModelBase):
         can_translate: bool,
         can_review: bool,
         can_filter: bool,
+        can_add: bool,
         can_import: bool,
         can_export: bool,
         build_tooltip: str,
         translate_tooltip: str,
         review_tooltip: str,
         filter_tooltip: str,
+        add_tooltip: str,
         import_tooltip: str,
         export_tooltip: str,
     ) -> None:
@@ -157,12 +177,14 @@ class TermsPaneViewModel(ViewModelBase):
             can_translate,
             can_review,
             can_filter,
+            can_add,
             can_import,
             can_export,
             build_tooltip,
             translate_tooltip,
             review_tooltip,
             filter_tooltip,
+            add_tooltip,
             import_tooltip,
             export_tooltip,
         )
@@ -171,12 +193,14 @@ class TermsPaneViewModel(ViewModelBase):
             self._can_translate,
             self._can_review,
             self._can_filter,
+            self._can_add,
             self._can_import,
             self._can_export,
             self._build_tooltip,
             self._translate_tooltip,
             self._review_tooltip,
             self._filter_tooltip,
+            self._add_tooltip,
             self._import_tooltip,
             self._export_tooltip,
         )
@@ -187,12 +211,14 @@ class TermsPaneViewModel(ViewModelBase):
             self._can_translate,
             self._can_review,
             self._can_filter,
+            self._can_add,
             self._can_import,
             self._can_export,
             self._build_tooltip,
             self._translate_tooltip,
             self._review_tooltip,
             self._filter_tooltip,
+            self._add_tooltip,
             self._import_tooltip,
             self._export_tooltip,
         ) = next_state
