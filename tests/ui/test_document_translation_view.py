@@ -29,15 +29,20 @@ from tests.application.fakes import FakeDocumentService
 
 try:
     from PySide6.QtCore import QPoint, Qt
-    from PySide6.QtWidgets import QApplication, QMessageBox, QTextEdit
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication, QMessageBox, QStackedWidget, QTextEdit, QVBoxLayout, QWidget
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
     QApplication = None
     QMessageBox = None
+    QStackedWidget = None
     QPoint = None
+    QTest = None
     Qt = None
     QTextEdit = None
+    QVBoxLayout = None
+    QWidget = None
     HAS_PYSIDE6 = False
 
 pytestmark = pytest.mark.skipif(not HAS_PYSIDE6, reason="PySide6 not available")
@@ -45,8 +50,12 @@ pytestmark = pytest.mark.skipif(not HAS_PYSIDE6, reason="PySide6 not available")
 _QAPPLICATION = cast(Any, QApplication)
 _QMESSAGEBOX = cast(Any, QMessageBox)
 _QPOINT = cast(Any, QPoint)
+_QSTACKEDWIDGET = cast(Any, QStackedWidget)
+_QTEST = cast(Any, QTest)
 _QT = cast(Any, Qt)
 _QTEXTEDIT = cast(Any, QTextEdit)
+_QVBOXLAYOUT = cast(Any, QVBoxLayout)
+_QWIDGET = cast(Any, QWidget)
 
 
 @pytest.fixture(autouse=True, scope="module")
@@ -130,6 +139,19 @@ def _top_visible_block_number(editor: Any) -> int:
     return cursor.blockNumber()
 
 
+class _OverlayHost(_QWIDGET):
+    def __init__(self) -> None:
+        super().__init__()
+        layout = _QVBOXLAYOUT(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        self.chrome_host = _QWIDGET(self)
+        self.chrome_host.setFixedHeight(88)
+        layout.addWidget(self.chrome_host)
+        self.content_stack = _QSTACKEDWIDGET(self)
+        layout.addWidget(self.content_stack, 1)
+
+
 def test_document_translation_view_renders_units_and_routes_actions():
     from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
 
@@ -203,6 +225,7 @@ def test_document_translation_view_uses_side_by_side_plain_text_editors_and_hidd
         assert view.find_panel.parentWidget() is view
         assert view.find_hint_button.parentWidget() is view.translation_header
         assert view.find_hint_button.text() == "Find/replace · Ctrl/Cmd+F"
+        assert not hasattr(view, "selection_label")
         header_label_y = view.translation_label.mapTo(view.translation_header, _QPOINT(0, 0)).y()
         header_button_y = view.find_hint_button.mapTo(view.translation_header, _QPOINT(0, 0)).y()
         assert abs(header_label_y - header_button_y) <= 4
@@ -215,6 +238,8 @@ def test_document_translation_view_uses_side_by_side_plain_text_editors_and_hidd
         _QAPPLICATION.processEvents()
         assert view.find_panel.isVisible()
         assert view.replace_panel.isVisible()
+        assert view.find_mode_panel.isVisible()
+        assert not view.find_mode_summary_label.isVisible()
         assert view.show_replace_button.isChecked()
         assert view.literal_mode_button.isChecked()
         assert view.find_feedback_label.text() == "Literal mode searches exact text."
@@ -227,12 +252,30 @@ def test_document_translation_view_uses_side_by_side_plain_text_editors_and_hidd
         assert view.translation_text.height() == initial_translation_height
         assert view.source_text.height() == initial_source_height
         assert view.find_panel.geometry().top() < view.translation_text.mapTo(view, _QPOINT(0, 0)).y()
-        assert panel_bottom <= 0
+        assert panel_bottom < view.translation_text.viewport().height()
+        original_panel_pos = view.find_panel.pos()
+        drag_start = view.find_panel_header.rect().center()
+        drag_end = drag_start + _QPOINT(-48, 24)
+        _QTEST.mousePress(view.find_panel_header, _QT.MouseButton.LeftButton, pos=drag_start)
+        _QTEST.mouseMove(view.find_panel_header, drag_end)
+        _QTEST.mouseRelease(view.find_panel_header, _QT.MouseButton.LeftButton, pos=drag_end)
+        _QAPPLICATION.processEvents()
+        assert view.find_panel.pos() != original_panel_pos
+
+        view.regex_mode_button.click()
+        _QAPPLICATION.processEvents()
+        assert view.regex_mode_button.isChecked()
+        assert view.find_feedback_label.text() == "Regex mode supports capture groups. Use $1, $2, ... in replace."
 
         view.show_replace_button.click()
         _QAPPLICATION.processEvents()
         assert not view.replace_panel.isVisible()
+        assert not view.find_mode_panel.isVisible()
         assert not view.show_replace_button.isChecked()
+        assert view.regex_mode_button.isChecked()
+        assert view.find_mode_summary_label.isVisible()
+        assert view.find_mode_summary_label.text() == "Regex"
+        assert view.find_feedback_label.text() == "Regex mode supports capture groups. Use $1, $2, ... in replace."
 
         view._hide_find_panel()
         _QAPPLICATION.processEvents()
@@ -241,6 +284,43 @@ def test_document_translation_view_uses_side_by_side_plain_text_editors_and_hidd
     finally:
         view.close()
         view.deleteLater()
+
+
+def test_document_translation_view_places_find_panel_above_editor_when_hosted_in_shell():
+    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
+
+    state = _make_state()
+    service = FakeDocumentService(workspace=state.workspace, translation=state)
+    host = _OverlayHost()
+    view = DocumentTranslationView(service, "proj-1", 4)
+    host.content_stack.addWidget(view)
+    try:
+        host.resize(1440, 900)
+        host.show()
+        view.refresh()
+        _QAPPLICATION.processEvents()
+
+        view.find_hint_button.click()
+        _QAPPLICATION.processEvents()
+
+        assert view.find_panel.isVisible()
+        assert view.find_panel.parentWidget() is host
+        assert "QFrame#translationFindPanel" in view.find_panel.styleSheet()
+        assert "QPushButton" in view.find_panel.styleSheet()
+        panel_top = view.find_panel.geometry().top()
+        panel_bottom = view.find_panel.geometry().bottom()
+        view_top = view.mapTo(host, _QPOINT(0, 0)).y()
+        editor_top = view.translation_text.mapTo(host, _QPOINT(0, 0)).y()
+        assert panel_top < view_top
+        assert panel_bottom < editor_top
+
+        view.hide()
+        _QAPPLICATION.processEvents()
+        assert not view.find_panel.isVisible()
+        assert view.find_panel.parentWidget() is view
+    finally:
+        host.close()
+        host.deleteLater()
 
 
 def test_document_translation_view_uses_stable_selection_fill_for_unit_list():

@@ -5,7 +5,7 @@ from bisect import bisect_right
 from dataclasses import dataclass
 from typing import Any, cast
 
-from PySide6.QtCore import QEvent, QSignalBlocker, Qt, QTimer
+from PySide6.QtCore import QEvent, QPoint, QSignalBlocker, Qt, QTimer
 from PySide6.QtGui import (
     QColor,
     QFontDatabase,
@@ -84,6 +84,46 @@ _FIND_HINT_STYLESHEET = (
 )
 _FIND_FEEDBACK_STYLESHEET = "color: #6b7280; font-size: 12px;"
 _FIND_FEEDBACK_ERROR_STYLESHEET = "color: #b42318; font-size: 12px; font-weight: 600;"
+_FIND_HINT_BUTTON_STYLESHEET = """
+QPushButton#findReplaceHintButton {
+    min-height: 0;
+    padding: 2px 10px;
+    border-radius: 10px;
+    border: 1px dashed #d9d0c4;
+    background: #fcfaf6;
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 500;
+    text-align: left;
+}
+QPushButton#findReplaceHintButton:hover:enabled {
+    background: #f6efe4;
+    color: #2f251d;
+}
+"""
+_FIND_PANEL_STYLESHEET = """
+QFrame#translationFindPanel {
+    border: 1px solid #d8d0c6;
+    border-radius: 18px;
+    background: #f6f3ed;
+}
+QWidget#translationFindPanelHeader {
+    background: transparent;
+}
+QLabel#translationFindPanelTitle {
+    color: #2d241d;
+    font-weight: 600;
+}
+QLabel#translationFindModeSummary {
+    color: #6e6154;
+    background: #ebe2d6;
+    border: 1px solid #d8d0c6;
+    border-radius: 10px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 600;
+}
+"""
 
 
 def _wildcard_pattern_to_regex(pattern: str) -> str:
@@ -250,6 +290,8 @@ class DocumentTranslationView(QWidget):
         self._drafts_by_unit_id: dict[str, str] = {}
         self._suppressed_draft_unit_ids: set[str] = set()
         self._rendered_unit_id: str | None = None
+        self._find_panel_drag_offset: QPoint | None = None
+        self._find_panel_custom_pos: QPoint | None = None
         self._syncing_editor_scroll = False
         self._line_height_sync_pending = False
         self._source_block_tops: list[float] = []
@@ -290,10 +332,6 @@ class DocumentTranslationView(QWidget):
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.selection_label = QLabel(self.tr("No unit selected"))
-        self.selection_label.setStyleSheet("font-weight: 600;")
-        right_layout.addWidget(self.selection_label)
 
         self.blocker_label = create_tip_label("")
         self.blocker_label.hide()
@@ -371,18 +409,26 @@ class DocumentTranslationView(QWidget):
         self.find_panel = QFrame(self)
         self.find_panel.setObjectName("translationFindPanel")
         self.find_panel.setVisible(False)
-        self.find_panel.setStyleSheet(
-            """
-            QFrame#translationFindPanel {
-                border: 1px solid #d9d0c4;
-                border-radius: 14px;
-                background: #fcfaf6;
-            }
-            """
-        )
         find_panel_layout = QVBoxLayout(self.find_panel)
         find_panel_layout.setContentsMargins(12, 12, 12, 12)
         find_panel_layout.setSpacing(8)
+
+        self.find_panel_header = QWidget(self.find_panel)
+        self.find_panel_header.setObjectName("translationFindPanelHeader")
+        find_panel_header_layout = QHBoxLayout(self.find_panel_header)
+        find_panel_header_layout.setContentsMargins(0, 0, 0, 0)
+        self.find_panel_title = QLabel(self.tr("Find / Replace"))
+        self.find_panel_title.setObjectName("translationFindPanelTitle")
+        find_panel_header_layout.addWidget(self.find_panel_title)
+        self.find_mode_summary_label = QLabel(self.find_panel)
+        self.find_mode_summary_label.setObjectName("translationFindModeSummary")
+        self.find_mode_summary_label.hide()
+        find_panel_header_layout.addWidget(self.find_mode_summary_label)
+        find_panel_header_layout.addStretch(1)
+        find_panel_layout.addWidget(self.find_panel_header)
+        for drag_handle in (self.find_panel_header, self.find_panel_title):
+            drag_handle.installEventFilter(self)
+            drag_handle.setCursor(Qt.CursorShape.OpenHandCursor)
 
         find_row = QHBoxLayout()
         find_row.setContentsMargins(0, 0, 0, 0)
@@ -392,13 +438,15 @@ class DocumentTranslationView(QWidget):
         find_row.addWidget(self.close_find_button)
         find_panel_layout.addLayout(find_row)
 
-        mode_row = QHBoxLayout()
+        self.find_mode_panel = QWidget(self.find_panel)
+        mode_row = QHBoxLayout(self.find_mode_panel)
         mode_row.setContentsMargins(0, 0, 0, 0)
         mode_row.addWidget(self.literal_mode_button)
         mode_row.addWidget(self.regex_mode_button)
         mode_row.addWidget(self.wildcard_mode_button)
         mode_row.addStretch()
-        find_panel_layout.addLayout(mode_row)
+        self.find_mode_panel.setVisible(False)
+        find_panel_layout.addWidget(self.find_mode_panel)
 
         self.find_feedback_label = create_tip_label("")
         self.find_feedback_label.setStyleSheet(_FIND_FEEDBACK_STYLESHEET)
@@ -410,6 +458,7 @@ class DocumentTranslationView(QWidget):
         replace_row.addWidget(self.replace_input, 1)
         replace_row.addWidget(self.replace_button)
         replace_row.addWidget(self.replace_all_button)
+        self.replace_panel.setVisible(False)
         find_panel_layout.addWidget(self.replace_panel)
 
         self.translation_text = QTextEdit()
@@ -444,24 +493,9 @@ class DocumentTranslationView(QWidget):
         layout.addWidget(splitter, 1)
         apply_hybrid_control_theme(
             self,
-            extra_stylesheet="""
-            QPushButton#findReplaceHintButton {
-                min-height: 0;
-                padding: 2px 10px;
-                border-radius: 10px;
-                border: 1px dashed #d9d0c4;
-                background: #fcfaf6;
-                color: #6b7280;
-                font-size: 12px;
-                font-weight: 500;
-                text-align: left;
-            }
-            QPushButton#findReplaceHintButton:hover:enabled {
-                background: #f6efe4;
-                color: #2f251d;
-            }
-            """,
+            extra_stylesheet=_FIND_HINT_BUTTON_STYLESHEET,
         )
+        apply_hybrid_control_theme(self.find_panel, extra_stylesheet=_FIND_PANEL_STYLESHEET)
         set_button_tone(self.find_next_button, size="compact")
         set_button_tone(self.show_replace_button, size="compact")
         set_button_tone(self.replace_button, size="compact")
@@ -543,7 +577,6 @@ class DocumentTranslationView(QWidget):
         if unit is None:
             self._reset_find_match()
             self._rendered_unit_id = None
-            self.selection_label.setText(self.tr("No unit selected"))
             self.blocker_label.hide()
             self.source_text.clear()
             self.translation_text.clear()
@@ -559,7 +592,6 @@ class DocumentTranslationView(QWidget):
         self._reset_find_match()
         self._clear_find_highlight()
         self._rendered_unit_id = unit.unit_id
-        self.selection_label.setText(f"{translate_backend_text(unit.label)} · {self.tr(_STATUS_TEXT[unit.status])}")
         self.source_text.setPlainText(unit.source_text or "")
         self.translation_text.setPlainText(self._display_text_for_unit(unit))
         self.translation_text.setReadOnly(not unit.actions.can_save)
@@ -820,9 +852,22 @@ class DocumentTranslationView(QWidget):
         for button in (self.literal_mode_button, self.regex_mode_button, self.wildcard_mode_button):
             set_button_tone(button, "primary" if button.isChecked() else "ghost", size="compact")
 
+    def _refresh_compact_find_mode_summary(self, *, show_replace: bool | None = None) -> None:
+        compact_mode = not self.show_replace_button.isChecked() if show_replace is None else not show_replace
+        text = ""
+        if compact_mode:
+            mode = self._active_find_mode()
+            if mode == _FIND_MODE_REGEX:
+                text = self.regex_mode_button.text()
+            elif mode == _FIND_MODE_WILDCARD:
+                text = self.wildcard_mode_button.text()
+        self.find_mode_summary_label.setText(text)
+        self.find_mode_summary_label.setVisible(bool(text))
+
     def _on_find_mode_changed(self) -> None:
         self._reset_find_match()
         self._refresh_find_mode_buttons()
+        self._refresh_compact_find_mode_summary()
         self._refresh_find_feedback()
         self._clear_find_highlight()
 
@@ -924,6 +969,57 @@ class DocumentTranslationView(QWidget):
         header_height = max(self.source_header.sizeHint().height(), self.translation_header.sizeHint().height())
         self.source_header.setFixedHeight(header_height)
         self.translation_header.setFixedHeight(header_height)
+
+    def _find_panel_overlay_host(self) -> QWidget:
+        host = self.window()
+        return host if isinstance(host, QWidget) else self
+
+    def _find_panel_anchor_widget(self) -> QWidget:
+        anchor: QWidget = self.chrome_host
+        current: QWidget | None = self
+        while current is not None:
+            chrome_host = getattr(current, "chrome_host", None)
+            if isinstance(chrome_host, QWidget) and chrome_host.isVisible():
+                anchor = chrome_host
+            current = current.parentWidget()
+        return anchor
+
+    def _ensure_find_panel_overlay_parent(self) -> QWidget:
+        host = self._find_panel_overlay_host()
+        if self.find_panel.parentWidget() is host:
+            return host
+        self.find_panel.hide()
+        self.find_panel.setParent(host)
+        return host
+
+    def _restore_find_panel_parent(self) -> None:
+        if self.find_panel.parentWidget() is self:
+            return
+        self.find_panel.hide()
+        self.find_panel.setParent(self)
+
+    def _find_panel_default_pos(self, panel_width: int, panel_height: int) -> QPoint:
+        _ = panel_height
+        host = self.find_panel.parentWidget() or self
+        anchor = self._find_panel_anchor_widget()
+        margin = 12
+        anchor_top_right = (
+            anchor.mapTo(host, anchor.rect().topRight()) if anchor is not host else anchor.rect().topRight()
+        )
+        anchor_top_left = anchor.mapTo(host, anchor.rect().topLeft()) if anchor is not host else anchor.rect().topLeft()
+        x = anchor_top_right.x() - panel_width - 24
+        y = anchor_top_left.y() + margin
+        return self._clamp_find_panel_pos(QPoint(x, y), panel_width, panel_height)
+
+    def _clamp_find_panel_pos(self, pos: QPoint, panel_width: int, panel_height: int) -> QPoint:
+        margin = 8
+        host = self.find_panel.parentWidget() or self
+        max_x = max(margin, host.width() - panel_width - margin)
+        max_y = max(margin, host.height() - panel_height - margin)
+        return QPoint(
+            min(max(margin, pos.x()), max_x),
+            min(max(margin, pos.y()), max_y),
+        )
 
     def _configure_text_editor(self, editor: QTextEdit, *, read_only: bool) -> None:
         fixed_font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
@@ -1051,9 +1147,12 @@ class DocumentTranslationView(QWidget):
         self._shortcuts = [find_shortcut, replace_shortcut, close_shortcut]
 
     def _show_find_panel(self, *, show_replace: bool = False) -> None:
+        self._ensure_find_panel_overlay_parent()
         if not self.find_panel.isVisible():
             self.find_panel.show()
         self._set_replace_toggle_state(show_replace)
+        self._refresh_compact_find_mode_summary(show_replace=show_replace)
+        self.find_mode_panel.setVisible(show_replace)
         self.replace_panel.setVisible(show_replace)
         self._position_find_panel()
         self.find_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
@@ -1075,37 +1174,50 @@ class DocumentTranslationView(QWidget):
             return
         if not self.find_panel.isVisible():
             return
+        self._refresh_compact_find_mode_summary(show_replace=False)
+        self.find_mode_panel.hide()
         self.replace_panel.hide()
         self._position_find_panel()
         self.find_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
 
-    def _hide_find_panel(self) -> None:
+    def _dismiss_find_panel(self, *, restore_focus: bool) -> None:
         self.find_panel.hide()
         self._set_replace_toggle_state(False)
+        self._refresh_compact_find_mode_summary(show_replace=False)
+        self.find_mode_panel.hide()
         self.replace_panel.hide()
         self._reset_find_match()
-        self.translation_text.setFocus(Qt.FocusReason.OtherFocusReason)
+        self._find_panel_drag_offset = None
+        self._find_panel_custom_pos = None
+        self._set_find_panel_drag_cursor(Qt.CursorShape.OpenHandCursor)
+        self._restore_find_panel_parent()
+        if restore_focus:
+            self.translation_text.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def _hide_find_panel(self) -> None:
+        self._dismiss_find_panel(restore_focus=True)
 
     def _set_replace_toggle_state(self, checked: bool) -> None:
         blocker = QSignalBlocker(self.show_replace_button)
         self.show_replace_button.setChecked(checked)
         del blocker
 
+    def _set_find_panel_drag_cursor(self, cursor: Qt.CursorShape) -> None:
+        for drag_handle in (self.find_panel_header, self.find_panel_title):
+            drag_handle.setCursor(cursor)
+
     def _position_find_panel(self) -> None:
         try:
             self.find_panel.adjustSize()
             panel_width = self.find_panel.sizeHint().width()
             panel_height = self.find_panel.sizeHint().height()
-            host = self.find_panel.parentWidget()
-            if host is None:
-                return
-            header_top_left = self.translation_header.mapTo(host, self.translation_header.rect().topLeft())
-            header_top_right = self.translation_header.mapTo(host, self.translation_header.rect().topRight())
-            margin = 8
-            min_x = max(margin, header_top_left.x())
-            max_x = max(min_x, host.rect().right() - panel_width - margin)
-            x = min(max(min_x, header_top_right.x() - panel_width), max_x)
-            y = max(margin, self.chrome_host.geometry().top() + margin)
+            if self._find_panel_custom_pos is None:
+                pos = self._find_panel_default_pos(panel_width, panel_height)
+            else:
+                pos = self._clamp_find_panel_pos(self._find_panel_custom_pos, panel_width, panel_height)
+                self._find_panel_custom_pos = pos
+            x = pos.x()
+            y = pos.y()
             self.find_panel.setGeometry(x, y, panel_width, panel_height)
             self.find_panel.raise_()
         except RuntimeError:
@@ -1185,23 +1297,59 @@ class DocumentTranslationView(QWidget):
             self.retranslateUi()
         super().changeEvent(event)
 
+    def eventFilter(self, watched, event) -> bool:  # noqa: ANN001
+        if watched in (self.find_panel_header, self.find_panel_title):
+            event_type = event.type()
+            if event_type == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
+                self._find_panel_drag_offset = (
+                    event.globalPosition().toPoint() - self.find_panel.frameGeometry().topLeft()
+                )
+                self._set_find_panel_drag_cursor(Qt.CursorShape.ClosedHandCursor)
+                return True
+            if event_type == QEvent.Type.MouseMove and self._find_panel_drag_offset is not None:
+                target = event.globalPosition().toPoint() - self._find_panel_drag_offset
+                self.find_panel.adjustSize()
+                panel_size = self.find_panel.size()
+                self._find_panel_custom_pos = self._clamp_find_panel_pos(
+                    target,
+                    panel_size.width(),
+                    panel_size.height(),
+                )
+                self.find_panel.move(self._find_panel_custom_pos)
+                return True
+            if event_type == QEvent.Type.MouseButtonRelease and self._find_panel_drag_offset is not None:
+                self._find_panel_drag_offset = None
+                self._set_find_panel_drag_cursor(Qt.CursorShape.OpenHandCursor)
+                return True
+        return super().eventFilter(watched, event)
+
     def resizeEvent(self, event) -> None:  # noqa: ANN001
         super().resizeEvent(event)
         self._sync_header_heights()
         self._position_find_panel()
         self._schedule_wrapped_line_sync()
 
+    def hideEvent(self, event) -> None:  # noqa: ANN001
+        if self.find_panel.isVisible() or self.find_panel.parentWidget() is not self:
+            self._dismiss_find_panel(restore_focus=False)
+        super().hideEvent(event)
+
+    def cleanup(self) -> None:
+        self._dismiss_find_panel(restore_focus=False)
+
     def retranslateUi(self) -> None:
         self.source_label.setText(self.tr("Source"))
         self.translation_label.setText(self.tr("Translation"))
         self.find_hint_button.setText(self.tr("Find/replace · Ctrl/Cmd+F"))
         self.find_hint_button.setToolTip(self.tr("Find and replace supports literal, regex, and wildcard patterns."))
+        self.find_panel_title.setText(self.tr("Find / Replace"))
         self.find_input.setPlaceholderText(self.tr("Find..."))
         self.replace_input.setPlaceholderText(self.tr("Replace with..."))
         self.find_next_button.setText(self.tr("Find Next"))
         self.literal_mode_button.setText(self.tr("Literal"))
         self.regex_mode_button.setText(self.tr("Regex"))
         self.wildcard_mode_button.setText(self.tr("Wildcard"))
+        self._refresh_compact_find_mode_summary()
         self.show_replace_button.setText(self.tr("Replace"))
         self.replace_button.setText(self.tr("Replace"))
         self.replace_all_button.setText(self.tr("Replace All"))

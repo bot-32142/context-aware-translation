@@ -901,112 +901,116 @@
         <translation>提交批量任务</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="279"/>
+        <location filename="../features/document_translation_view.py" line="321"/>
         <source>Units</source>
         <translation>单元</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="294"/>
-        <location filename="../features/document_translation_view.py" line="546"/>
         <source>No unit selected</source>
-        <translation>未选择单元</translation>
+        <translation type="vanished">未选择单元</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="312"/>
-        <location filename="../features/document_translation_view.py" line="1195"/>
+        <location filename="../features/document_translation_view.py" line="350"/>
+        <location filename="../features/document_translation_view.py" line="1341"/>
         <source>Source</source>
         <translation>原文</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="330"/>
-        <location filename="../features/document_translation_view.py" line="1196"/>
+        <location filename="../features/document_translation_view.py" line="368"/>
+        <location filename="../features/document_translation_view.py" line="1342"/>
         <source>Translation</source>
         <translation>翻译</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="334"/>
-        <location filename="../features/document_translation_view.py" line="1197"/>
+        <location filename="../features/document_translation_view.py" line="372"/>
+        <location filename="../features/document_translation_view.py" line="1343"/>
         <source>Find/replace · Ctrl/Cmd+F</source>
         <translation>查找/替换 · Ctrl/Cmd+F</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="337"/>
-        <location filename="../features/document_translation_view.py" line="1198"/>
+        <location filename="../features/document_translation_view.py" line="375"/>
+        <location filename="../features/document_translation_view.py" line="1344"/>
         <source>Find and replace supports literal, regex, and wildcard patterns.</source>
         <translation>查找和替换支持字面量、正则和通配符模式。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="343"/>
-        <location filename="../features/document_translation_view.py" line="1199"/>
+        <location filename="../features/document_translation_view.py" line="381"/>
+        <location filename="../features/document_translation_view.py" line="1346"/>
         <source>Find...</source>
         <translation>查找...</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="347"/>
-        <location filename="../features/document_translation_view.py" line="1200"/>
+        <location filename="../features/document_translation_view.py" line="385"/>
+        <location filename="../features/document_translation_view.py" line="1347"/>
         <source>Replace with...</source>
         <translation>替换为...</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="349"/>
-        <location filename="../features/document_translation_view.py" line="1201"/>
+        <location filename="../features/document_translation_view.py" line="387"/>
+        <location filename="../features/document_translation_view.py" line="1348"/>
         <source>Find Next</source>
         <translation>查找下一个</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="351"/>
-        <location filename="../features/document_translation_view.py" line="354"/>
-        <location filename="../features/document_translation_view.py" line="1205"/>
-        <location filename="../features/document_translation_view.py" line="1206"/>
+        <location filename="../features/document_translation_view.py" line="389"/>
+        <location filename="../features/document_translation_view.py" line="392"/>
+        <location filename="../features/document_translation_view.py" line="1353"/>
+        <location filename="../features/document_translation_view.py" line="1354"/>
         <source>Replace</source>
         <translation>替换</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="356"/>
-        <location filename="../features/document_translation_view.py" line="1207"/>
+        <location filename="../features/document_translation_view.py" line="394"/>
+        <location filename="../features/document_translation_view.py" line="1355"/>
         <source>Replace All</source>
         <translation>全部替换</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="362"/>
-        <location filename="../features/document_translation_view.py" line="1202"/>
+        <location filename="../features/document_translation_view.py" line="400"/>
+        <location filename="../features/document_translation_view.py" line="1349"/>
         <source>Literal</source>
         <translation>字面量</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="363"/>
-        <location filename="../features/document_translation_view.py" line="1203"/>
+        <location filename="../features/document_translation_view.py" line="401"/>
+        <location filename="../features/document_translation_view.py" line="1350"/>
         <source>Regex</source>
         <translation>正则</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="364"/>
-        <location filename="../features/document_translation_view.py" line="1204"/>
+        <location filename="../features/document_translation_view.py" line="402"/>
+        <location filename="../features/document_translation_view.py" line="1351"/>
         <source>Wildcard</source>
         <translation>通配符</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="426"/>
-        <location filename="../features/document_translation_view.py" line="1209"/>
+        <location filename="../features/document_translation_view.py" line="420"/>
+        <location filename="../features/document_translation_view.py" line="1345"/>
+        <source>Find / Replace</source>
+        <translation>查找/替换</translation>
+    </message>
+    <message>
+        <location filename="../features/document_translation_view.py" line="475"/>
+        <location filename="../features/document_translation_view.py" line="1357"/>
         <source>Save</source>
         <translation>保存</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="430"/>
-        <location filename="../features/document_translation_view.py" line="651"/>
-        <location filename="../features/document_translation_view.py" line="1210"/>
+        <location filename="../features/document_translation_view.py" line="479"/>
+        <location filename="../features/document_translation_view.py" line="683"/>
+        <location filename="../features/document_translation_view.py" line="1358"/>
         <source>Retranslate</source>
         <translation>重新翻译</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="433"/>
-        <location filename="../features/document_translation_view.py" line="1211"/>
+        <location filename="../features/document_translation_view.py" line="482"/>
+        <location filename="../features/document_translation_view.py" line="1359"/>
         <source>Previous</source>
         <translation>上一个</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="436"/>
-        <location filename="../features/document_translation_view.py" line="1212"/>
+        <location filename="../features/document_translation_view.py" line="485"/>
+        <location filename="../features/document_translation_view.py" line="1360"/>
         <source>Next</source>
         <translation>下一个</translation>
     </message>
@@ -1015,128 +1019,128 @@
         <translation type="vanished">行数必须保持为 %1。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="629"/>
+        <location filename="../features/document_translation_view.py" line="661"/>
         <source>Save Unavailable</source>
         <translation>无法保存</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="633"/>
+        <location filename="../features/document_translation_view.py" line="665"/>
         <source>Save Failed</source>
         <translation>保存失败</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="642"/>
+        <location filename="../features/document_translation_view.py" line="674"/>
         <source>Translation saved.</source>
         <translation>译文已保存。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="648"/>
+        <location filename="../features/document_translation_view.py" line="680"/>
         <source>page</source>
         <translation>页面</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="648"/>
+        <location filename="../features/document_translation_view.py" line="680"/>
         <source>chunk</source>
         <translation>分块</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="652"/>
+        <location filename="../features/document_translation_view.py" line="684"/>
         <source>Retranslate this %1? LLM API costs will be incurred.</source>
         <translation>要重新翻译此%1吗？这会产生 LLM API 成本。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="667"/>
+        <location filename="../features/document_translation_view.py" line="699"/>
         <source>Retranslate Unavailable</source>
         <translation>无法重新翻译</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="672"/>
+        <location filename="../features/document_translation_view.py" line="704"/>
         <source>Retranslate Failed</source>
         <translation>重新翻译失败</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="679"/>
+        <location filename="../features/document_translation_view.py" line="711"/>
         <source>Retranslate queued.</source>
         <translation>重新翻译已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="691"/>
+        <location filename="../features/document_translation_view.py" line="723"/>
         <source>Translate Unavailable</source>
         <translation>无法翻译</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="695"/>
+        <location filename="../features/document_translation_view.py" line="727"/>
         <source>Translate Failed</source>
         <translation>翻译失败</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="703"/>
+        <location filename="../features/document_translation_view.py" line="735"/>
         <source>Translation queued.</source>
         <translation>翻译已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="717"/>
+        <location filename="../features/document_translation_view.py" line="749"/>
         <source>Batch Translation Unavailable</source>
         <translation>批量翻译不可用</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="722"/>
+        <location filename="../features/document_translation_view.py" line="754"/>
         <source>Batch Translation Failed</source>
         <translation>批量翻译失败</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="730"/>
+        <location filename="../features/document_translation_view.py" line="762"/>
         <source>Async batch translation queued.</source>
         <translation>异步批量翻译已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="784"/>
+        <location filename="../features/document_translation_view.py" line="816"/>
         <source>Progress: %1/%2</source>
         <translation>进度：%1/%2</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="789"/>
+        <location filename="../features/document_translation_view.py" line="821"/>
         <source>Active task: %1</source>
         <translation>当前任务：%1</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="807"/>
+        <location filename="../features/document_translation_view.py" line="839"/>
         <source>Regex mode supports capture groups. Use $1, $2, ... in replace.</source>
         <translation>正则模式支持捕获组。替换时可使用 $1、$2 等。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="809"/>
+        <location filename="../features/document_translation_view.py" line="841"/>
         <source>Wildcard mode: * matches any characters and ? matches a single character.</source>
         <translation>通配符模式：* 匹配任意字符，? 匹配单个字符。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="810"/>
+        <location filename="../features/document_translation_view.py" line="842"/>
         <source>Literal mode searches exact text.</source>
         <translation>字面量模式按精确文本查找。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="844"/>
+        <location filename="../features/document_translation_view.py" line="889"/>
         <source>Invalid search pattern: %1</source>
         <translation>搜索模式无效：%1</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="892"/>
-        <location filename="../features/document_translation_view.py" line="907"/>
+        <location filename="../features/document_translation_view.py" line="937"/>
+        <location filename="../features/document_translation_view.py" line="952"/>
         <source>Invalid replacement: %1</source>
         <translation>替换内容无效：%1</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="1208"/>
+        <location filename="../features/document_translation_view.py" line="1356"/>
         <source>Close find panel</source>
         <translation>关闭查找面板</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="1233"/>
+        <location filename="../features/document_translation_view.py" line="1381"/>
         <source>Translate all pending units in this document with the current settings.</source>
         <translation>按当前设置翻译此文档中所有待处理单元。</translation>
     </message>
     <message>
-        <location filename="../features/document_translation_view.py" line="1234"/>
+        <location filename="../features/document_translation_view.py" line="1382"/>
         <source>Submit this document as an asynchronous batch translation job.</source>
         <translation>将此文档提交为异步批量翻译任务。</translation>
     </message>
