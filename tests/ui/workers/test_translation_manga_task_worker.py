@@ -75,7 +75,12 @@ def test_worker_run_sets_completed_status():
         mock_session_cls.from_book.return_value = fake_session
         worker._run_translation()
 
-    worker._task_store.update.assert_any_call(worker._task_id, status="completed")
+    worker._task_store.update.assert_any_call(
+        worker._task_id,
+        status="completed",
+        phase="done",
+        last_error=None,
+    )
 
 
 def test_worker_run_does_not_auto_enqueue_reembedding():
@@ -232,7 +237,12 @@ def test_worker_run_sets_failed_status_on_exception():
         with contextlib.suppress(RuntimeError):
             worker._run_translation()
 
-    worker._task_store.update.assert_any_call(worker._task_id, status="failed", last_error="test error")
+    worker._task_store.update.assert_any_call(
+        worker._task_id,
+        status="failed",
+        phase="done",
+        last_error="test error",
+    )
 
 
 def test_worker_run_sets_cancelled_status_on_cancel():
@@ -260,14 +270,24 @@ def test_worker_run_sets_cancelled_status_on_cancel():
         with contextlib.suppress(OperationCancelledError):
             worker._run_translation()
 
-    worker._task_store.update.assert_any_call(worker._task_id, status="cancelled", cancel_requested=False)
+    worker._task_store.update.assert_any_call(
+        worker._task_id,
+        status="cancelled",
+        phase="done",
+        cancel_requested=False,
+    )
 
 
 def test_worker_cancel_sets_cancelled_status():
     worker = _make_worker(action="cancel")
     worker._run_cancel()
 
-    worker._task_store.update.assert_called_once_with(worker._task_id, status="cancelled", cancel_requested=False)
+    worker._task_store.update.assert_called_once_with(
+        worker._task_id,
+        status="cancelled",
+        phase="done",
+        cancel_requested=False,
+    )
 
 
 def test_worker_cancel_notifies():
@@ -286,6 +306,7 @@ def test_on_progress_updates_task_store():
 
     worker._task_store.update.assert_called_with(
         worker._task_id,
+        phase="translate_chunks",
         completed_items=5,
         total_items=20,
     )

@@ -40,6 +40,7 @@ from context_aware_translation.documents.epub_support.nav_ops import (
     apply_translated_toc_to_resources,
     deserialize_nav_label_specs,
     extract_nav_label_specs,
+    replace_element_text_preserving_slots,
 )
 from context_aware_translation.documents.epub_support.slot_lines import (
     apply_toc_title_lines,
@@ -54,6 +55,7 @@ from context_aware_translation.documents.epub_support.xml_utils import (
 from context_aware_translation.documents.epub_xhtml_utils import (
     extract_heading_texts,
     extract_text_from_xhtml,
+    flatten_annotationless_ruby_in_xhtml,
     inject_translations_into_xhtml,
 )
 from context_aware_translation.llm.epub_ocr import ocr_epub_images
@@ -102,10 +104,15 @@ XHTML_NS = "http://www.w3.org/1999/xhtml"
 EPUB_NS = "http://www.idpf.org/2007/ops"
 NCX_NS = "http://www.daisy.org/z3986/2005/ncx/"
 XML_DECL_ENCODING_RE = re.compile(rb"^\s*<\?xml[^>]*encoding\s*=\s*['\"]([^'\"]+)['\"]", flags=re.IGNORECASE)
-XML_DECLARATION_RE = re.compile(r"^\s*<\?xml[^>]*\?>\s*", flags=re.IGNORECASE)
+XML_HEADER_RE = re.compile(
+    r"((?:\s*<\?xml[^?]*\?>\s*)?(?:\s*<!DOCTYPE[^>]*>\s*)?)",
+    flags=re.IGNORECASE | re.DOTALL,
+)
 CSS_CHARSET_RE = re.compile(r"^(\ufeff?\s*@charset\s+)(['\"])[^'\"]*\2(\s*;)", flags=re.IGNORECASE)
 CSS_CHARSET_CAPTURE_RE = re.compile(r"^\ufeff?\s*@charset\s+(['\"])([^'\"]+)\1\s*;", flags=re.IGNORECASE)
 BCP47_CODE_RE = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$")
+VISIBLE_TOC_FILENAME_RE = re.compile(r"(?:^|[^a-z0-9])(toc|nav|contents)(?:[^a-z0-9]|$)")
+VISIBLE_TOC_HEADING_HINTS = frozenset({"contents", "table of contents", "toc", "目次", "目录", "目錄"})
 HORIZONTAL_LTR_EXPORT_STYLE_ID = "cat-horizontal-ltr-export"
 HORIZONTAL_LTR_EXPORT_TOC_ATTRIBUTE = "data-cat-horizontal-ltr-toc"
 HORIZONTAL_LTR_EXPORT_STYLESHEET = (
@@ -302,12 +309,13 @@ class EPUBDocument(Document):
     """
 
     document_type = "epub"
-    supported_export_formats: tuple[str, ...] = ("epub", "md", "docx", "html")
+    supported_export_formats: tuple[str, ...] = ("epub", "md", "docx", "html", "txt")
     requires_ocr_config = True
     uses_translator_config = True
     ocr_required_for_translation = False  # EPUB text content is available without OCR
     supports_preserve_structure = False
     supports_multi_export = False
+    supports_original_image_export = True
 
     def __init__(
         self,
@@ -621,10 +629,14 @@ class EPUBDocument(Document):
         return normalized
 
     @staticmethod
-    def _prepend_xml_declaration_if_needed(original_text: str, serialized_text: str) -> str:
-        if not XML_DECLARATION_RE.match(original_text):
+    def _prepend_xml_header_if_needed(original_text: str, serialized_text: str) -> str:
+        match = XML_HEADER_RE.match(original_text)
+        if match is None:
             return serialized_text
-        return f'<?xml version="1.0" encoding="utf-8"?>\n{serialized_text}'
+        header = normalize_xml_header_for_utf8(match.group(1))
+        if not header:
+            return serialized_text
+        return f"{header}{serialized_text}"
 
     @classmethod
     def _find_child_by_local_name(cls, parent: _ET.Element, local_name: str) -> _ET.Element | None:
@@ -706,7 +718,7 @@ class EPUBDocument(Document):
             override.text = HORIZONTAL_LTR_EXPORT_SVG_STYLESHEET
 
         serialized = _ET.tostring(root, encoding="unicode")
-        return cls._prepend_xml_declaration_if_needed(normalized_input, serialized)
+        return cls._prepend_xml_header_if_needed(normalized_input, serialized)
 
     @classmethod
     def _normalize_text_source_for_export(
@@ -716,11 +728,14 @@ class EPUBDocument(Document):
         *,
         force_horizontal_ltr: bool = False,
         toc_document: bool = False,
+        flatten_annotationless_ruby: bool = False,
     ) -> str:
         mime_type = str(source.get("mime_type", "") or "").strip().lower()
         relative_path = str(source.get("relative_path", "") or "").strip().lower()
         css_like_path = relative_path.endswith(".css")
+        xhtml_like_path = relative_path.endswith((".xhtml", ".html", ".htm"))
         xml_like_path = relative_path.endswith((".xhtml", ".html", ".htm", ".svg", ".xml", ".ncx", ".opf"))
+        xhtml_like_mime = mime_type in CHAPTER_MIME_TYPES
         xml_like_mime = mime_type in {
             *CHAPTER_MIME_TYPES,
             "image/svg+xml",
@@ -735,6 +750,9 @@ class EPUBDocument(Document):
                 text = cls._force_horizontal_ltr_css(text)
             elif xml_like_path or xml_like_mime or text.lstrip().startswith("<?xml"):
                 text = cls._force_horizontal_ltr_xml_text(text, toc_document=toc_document)
+
+        if flatten_annotationless_ruby and (xhtml_like_path or xhtml_like_mime):
+            text = flatten_annotationless_ruby_in_xhtml(text)
 
         if mime_type == "text/css" or css_like_path:
             return cls._normalize_css_charset_for_utf8(text)
@@ -991,14 +1009,49 @@ class EPUBDocument(Document):
         )
 
     @staticmethod
-    def _resolve_toc_href_to_source_path(href: str, package_path: str) -> str:
-        """Resolve a TOC entry href to a source relative_path (zip path)."""
-        path = unquote(href.split("#")[0])
+    def _resolve_resource_href_to_source_path(href: str, base_path: str) -> str:
+        """Resolve a local href against another EPUB source path."""
+        path = unquote(href.split("#", 1)[0].split("?", 1)[0]).strip()
         if not path:
             return ""
-        opf_dir = posixpath.dirname(package_path)
-        resolved = posixpath.normpath(posixpath.join(opf_dir, path)) if opf_dir else posixpath.normpath(path)
+        lower_path = path.lower()
+        if path.startswith("//") or lower_path.startswith(("http://", "https://", "mailto:", "javascript:", "data:")):
+            return ""
+
+        normalized_base_path = str(base_path or "").strip().lstrip("/")
+        base_dir = posixpath.dirname(normalized_base_path)
+        if path.startswith("/"):
+            resolved = posixpath.normpath(path)
+        elif base_dir:
+            resolved = posixpath.normpath(posixpath.join(base_dir, path))
+        else:
+            resolved = posixpath.normpath(path)
+        if resolved in {"", "."}:
+            return ""
         return resolved.lstrip("/")
+
+    @staticmethod
+    def _resolve_toc_href_to_source_path(href: str, package_path: str) -> str:
+        """Resolve a TOC entry href to a source relative_path (zip path)."""
+        return EPUBDocument._resolve_resource_href_to_source_path(href, package_path)
+
+    @classmethod
+    def _resolve_resource_href_to_target(
+        cls,
+        href: str,
+        base_path: str,
+    ) -> tuple[str, str]:
+        source_path = cls._resolve_resource_href_to_source_path(href, base_path)
+        raw_fragment = href.split("#", 1)[1] if "#" in href else ""
+        fragment = unquote(raw_fragment).strip()
+
+        if not source_path and fragment:
+            source_path = str(base_path or "").strip().lstrip("/")
+        if not source_path:
+            return "", ""
+        if not fragment:
+            return source_path, source_path
+        return source_path, f"{source_path}#{fragment}"
 
     @classmethod
     def _extract_visible_toc_document_paths(cls, metadata_json: dict[str, Any]) -> set[str]:
@@ -1027,7 +1080,7 @@ class EPUBDocument(Document):
         return toc_paths
 
     @classmethod
-    def _looks_like_visible_toc_document(cls, text: str) -> bool:
+    def _looks_like_visible_toc_document(cls, text: str, *, relative_path: str = "") -> bool:
         try:
             normalized_input = cls._normalize_xml_header_for_utf8(text)
             root = DefusedET.fromstring(normalized_input.encode("utf-8"))
@@ -1043,8 +1096,18 @@ class EPUBDocument(Document):
 
         anchor_count = 0
         anchor_text_length = 0
+        has_nav = False
+        heading_matches_toc = False
         for element in body.iter():
-            if cls._local_tag(element.tag) != "a":
+            local_tag = cls._local_tag(element.tag)
+            if local_tag == "nav":
+                has_nav = True
+            elif local_tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+                heading_text = cls._normalize_whitespace("".join(element.itertext())).casefold()
+                if heading_text in VISIBLE_TOC_HEADING_HINTS:
+                    heading_matches_toc = True
+
+            if local_tag != "a":
                 continue
             href = str(element.get("href", "") or "").strip()
             if not href or href.startswith(("http://", "https://", "mailto:", "javascript:", "#")):
@@ -1059,7 +1122,12 @@ class EPUBDocument(Document):
         if total_text_length == 0:
             return False
 
-        return anchor_text_length / total_text_length >= 0.6
+        if anchor_text_length / total_text_length < 0.6:
+            return False
+
+        base_name = posixpath.splitext(posixpath.basename(relative_path.strip().lstrip("/")))[0].casefold()
+        basename_looks_like_toc = "tableofcontents" in base_name or bool(VISIBLE_TOC_FILENAME_RE.search(base_name))
+        return has_nav or heading_matches_toc or basename_looks_like_toc
 
     @classmethod
     def _infer_visible_toc_document_paths(cls, sources_sorted: list[dict[str, Any]]) -> set[str]:
@@ -1073,7 +1141,7 @@ class EPUBDocument(Document):
             text_content = source.get("text_content")
             if not isinstance(text_content, str) or not text_content.strip():
                 continue
-            if cls._looks_like_visible_toc_document(text_content):
+            if cls._looks_like_visible_toc_document(text_content, relative_path=relative_path):
                 inferred_paths.add(relative_path)
         return inferred_paths
 
@@ -1105,50 +1173,275 @@ class EPUBDocument(Document):
                 heading_map[rp] = list(zip(orig_headings, trans_headings, strict=True))
         return heading_map
 
+    @classmethod
+    def _extract_linked_image_source_paths(cls, source: dict[str, Any]) -> list[str]:
+        text_content = source.get("text_content")
+        if not isinstance(text_content, str) or not text_content.strip():
+            return []
+
+        try:
+            root = DefusedET.fromstring(cls._normalize_xml_header_for_utf8(text_content).encode("utf-8"))
+        except Exception:
+            return []
+
+        source_path = str(source.get("relative_path", "") or "").strip().lstrip("/")
+        image_paths: list[str] = []
+        seen: set[str] = set()
+        for element in root.iter():
+            if cls._local_tag(element.tag) not in {"img", "image"}:
+                continue
+
+            href = ""
+            for attr_name in ("src", "href", "{http://www.w3.org/1999/xlink}href"):
+                raw_value = element.get(attr_name)
+                if raw_value:
+                    href = str(raw_value).strip()
+                    break
+            if not href:
+                continue
+
+            resolved = cls._resolve_resource_href_to_source_path(href, source_path)
+            if resolved and resolved not in seen:
+                seen.add(resolved)
+                image_paths.append(resolved)
+        return image_paths
+
+    @classmethod
+    def _build_image_title_candidate_pairs(
+        cls,
+        original_lines: list[str],
+        translated_lines: list[str],
+    ) -> list[tuple[str, str]]:
+        original_candidates = [cls._normalize_whitespace(line) for line in original_lines]
+        translated_candidates = [cls._normalize_whitespace(line) for line in translated_lines]
+        original_candidates = [line for line in original_candidates if line]
+        translated_candidates = [line for line in translated_candidates if line]
+
+        limit = min(len(original_candidates), len(translated_candidates), 4)
+        if limit == 0:
+            return []
+
+        pairs: list[tuple[str, str]] = []
+        seen: set[str] = set()
+        for count in range(1, limit + 1):
+            original_parts = original_candidates[:count]
+            translated_parts = translated_candidates[:count]
+            for separator in (" ", ""):
+                original_title = separator.join(original_parts).strip()
+                translated_title = separator.join(translated_parts).strip()
+                normalized_original_title = cls._normalize_whitespace(original_title)
+                if not original_title or not translated_title or normalized_original_title in seen:
+                    continue
+                seen.add(normalized_original_title)
+                pairs.append((original_title, translated_title))
+        return pairs
+
+    @classmethod
+    def _build_image_title_translation_map(
+        cls,
+        sources_sorted: list[dict[str, Any]],
+        translated_image_texts: dict[int, str],
+    ) -> dict[str, list[tuple[str, str]]]:
+        source_by_path = {
+            str(source.get("relative_path", "") or "").strip().lstrip("/"): source
+            for source in sources_sorted
+            if str(source.get("relative_path", "") or "").strip()
+        }
+
+        title_map: dict[str, list[tuple[str, str]]] = {}
+        for source in sources_sorted:
+            if not cls._is_chapter_source(source):
+                continue
+
+            relative_path = str(source.get("relative_path", "") or "").strip().lstrip("/")
+            if not relative_path:
+                continue
+
+            pairs: list[tuple[str, str]] = []
+            for image_path in cls._extract_linked_image_source_paths(source):
+                image_source = source_by_path.get(image_path)
+                if image_source is None or image_source["source_type"] != "image" or not image_source.get("ocr_json"):
+                    continue
+
+                translated_text = translated_image_texts.get(image_source["source_id"], "").strip()
+                if not translated_text:
+                    continue
+
+                pairs.extend(
+                    cls._build_image_title_candidate_pairs(
+                        cls._extract_image_embedded_lines(image_source),
+                        translated_text.splitlines(),
+                    )
+                )
+
+            if not pairs:
+                continue
+
+            deduped_pairs: list[tuple[str, str]] = []
+            seen: set[str] = set()
+            for original_title, translated_title in pairs:
+                normalized_title = cls._normalize_whitespace(original_title)
+                if normalized_title in seen:
+                    continue
+                seen.add(normalized_title)
+                deduped_pairs.append((original_title, translated_title))
+            if deduped_pairs:
+                title_map[relative_path] = deduped_pairs
+        return title_map
+
+    @classmethod
+    def _merge_title_translation_maps(
+        cls,
+        *maps: dict[str, list[tuple[str, str]]],
+    ) -> dict[str, list[tuple[str, str]]]:
+        merged: dict[str, list[tuple[str, str]]] = {}
+        for current_map in maps:
+            for relative_path, pairs in current_map.items():
+                existing = merged.setdefault(relative_path, [])
+                seen = {cls._normalize_whitespace(original) for original, _translated in existing}
+                for original_title, translated_title in pairs:
+                    normalized_title = cls._normalize_whitespace(original_title)
+                    if normalized_title in seen:
+                        continue
+                    existing.append((original_title, translated_title))
+                    seen.add(normalized_title)
+        return merged
+
     @staticmethod
     def _normalize_whitespace(text: str) -> str:
         """Collapse runs of whitespace into a single space and strip."""
         return " ".join(text.split())
 
     @classmethod
-    def _sync_toc_with_chapter_headings(
+    def _sync_toc_with_title_map(
         cls,
         translated_toc: list[TocEntry],
         original_toc: list[TocEntry],
-        heading_map: dict[str, list[tuple[str, str]]],
+        title_map: dict[str, list[tuple[str, str]]],
         package_path: str,
     ) -> list[TocEntry]:
-        """Replace translated TOC titles with chapter heading translations where originals match.
+        """Replace translated TOC titles with synced chapter title translations where originals match.
 
-        For each TOC entry whose original title matches a heading in its target
-        chapter (after whitespace normalisation), the translated TOC title is
-        replaced with the corresponding translated heading.  This keeps the TOC
-        and chapter headings consistent without requiring a separate translation
-        pass.
+        For each TOC entry whose original title matches a visible chapter title
+        in its target chapter (after whitespace normalisation), the translated
+        TOC title is replaced with the corresponding chapter-title translation.
+        This keeps TOC labels aligned with both real XHTML headings and
+        image-backed title pages without requiring a separate translation pass.
         """
         synced: list[TocEntry] = []
         for translated, original in zip(translated_toc, original_toc, strict=True):
             new_title = translated.title
 
             source_path = cls._resolve_toc_href_to_source_path(original.href, package_path)
-            if source_path and source_path in heading_map:
+            if source_path and source_path in title_map:
                 norm_toc_title = cls._normalize_whitespace(original.title)
-                for orig_heading, trans_heading in heading_map[source_path]:
-                    if cls._normalize_whitespace(orig_heading) == norm_toc_title:
-                        new_title = trans_heading
+                for original_title, translated_title in title_map[source_path]:
+                    if cls._normalize_whitespace(original_title) == norm_toc_title:
+                        new_title = translated_title
                         break
 
             new_children = translated.children
             if translated.children and original.children:
-                new_children = cls._sync_toc_with_chapter_headings(
+                new_children = cls._sync_toc_with_title_map(
                     translated.children,
                     original.children,
-                    heading_map,
+                    title_map,
                     package_path,
                 )
 
             synced.append(TocEntry(title=new_title, href=translated.href, children=new_children))
         return synced
+
+    @classmethod
+    def _build_toc_title_maps(
+        cls,
+        toc_entries: list[TocEntry],
+        *,
+        package_path: str,
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        titles_by_target: dict[str, str] = {}
+        unique_titles_by_source_path: dict[str, str] = {}
+        duplicate_source_paths: set[str] = set()
+
+        def walk(entries: list[TocEntry]) -> None:
+            for entry in entries:
+                source_path, target_key = cls._resolve_resource_href_to_target(entry.href, package_path)
+                if target_key and target_key not in titles_by_target:
+                    titles_by_target[target_key] = entry.title
+                if source_path:
+                    existing = unique_titles_by_source_path.get(source_path)
+                    if existing is None:
+                        unique_titles_by_source_path[source_path] = entry.title
+                    elif existing != entry.title:
+                        duplicate_source_paths.add(source_path)
+                if entry.children:
+                    walk(entry.children)
+
+        walk(toc_entries)
+        for source_path in duplicate_source_paths:
+            unique_titles_by_source_path.pop(source_path, None)
+        return titles_by_target, unique_titles_by_source_path
+
+    @classmethod
+    def _iter_internal_link_targets(
+        cls,
+        root: _ET.Element,
+        *,
+        document_path: str,
+    ) -> list[tuple[_ET.Element, str, str]]:
+        targets: list[tuple[_ET.Element, str, str]] = []
+        for element in root.iter():
+            if cls._local_tag(element.tag) != "a":
+                continue
+
+            href = str(element.get("href", "") or "").strip()
+            if not href:
+                continue
+
+            source_path, target_key = cls._resolve_resource_href_to_target(href, document_path)
+            if not source_path or not target_key:
+                continue
+
+            target_text = cls._normalize_whitespace("".join(element.itertext()))
+            if not target_text:
+                continue
+
+            targets.append((element, source_path, target_key))
+        return targets
+
+    @classmethod
+    def _sync_visible_toc_document_with_toc_titles(
+        cls,
+        *,
+        translated_xhtml: str,
+        document_path: str,
+        toc_titles_by_target: dict[str, str],
+        toc_titles_by_source_path: dict[str, str],
+    ) -> str:
+        if not toc_titles_by_target and not toc_titles_by_source_path:
+            return translated_xhtml
+
+        try:
+            translated_root = DefusedET.fromstring(cls._normalize_xml_header_for_utf8(translated_xhtml).encode("utf-8"))
+        except Exception:
+            return translated_xhtml
+
+        translated_links = cls._iter_internal_link_targets(translated_root, document_path=document_path)
+
+        changed = False
+        for translated_link, source_path, target_key in translated_links:
+            translated_title = toc_titles_by_target.get(target_key)
+            if translated_title is None:
+                translated_title = toc_titles_by_source_path.get(source_path)
+            if not translated_title:
+                continue
+            changed = replace_element_text_preserving_slots(translated_link, translated_title) or changed
+
+        if not changed:
+            return translated_xhtml
+
+        serialized = _ET.tostring(translated_root, encoding="unicode")
+        return cls._prepend_xml_header_if_needed(translated_xhtml, serialized)
 
     def _extract_source_slots(self, source: dict[str, Any]) -> list[str]:
         """Extract translatable text slots from XHTML/SVG text sources."""
@@ -1781,7 +2074,14 @@ class EPUBDocument(Document):
         return export_format.lower() in self.supported_export_formats
 
     @classmethod
-    def export_merged(cls, documents: list[Document], export_format: str, output_path: Path) -> None:
+    def export_merged(
+        cls,
+        documents: list[Document],
+        export_format: str,
+        output_path: Path,
+        *,
+        use_original_images: bool = False,
+    ) -> None:
         """Export EPUB documents to file.
 
         EPUB documents are single-export only (supports_multi_export=False).
@@ -1792,7 +2092,7 @@ class EPUBDocument(Document):
 
         Args:
             documents: List of EPUBDocument instances with set_text() already called.
-            export_format: Output format (e.g., 'epub', 'md', 'docx', 'html').
+            export_format: Output format (e.g., 'epub', 'md', 'docx', 'html', 'txt').
             output_path: Path to write the output file.
         """
         if not documents:
@@ -1814,16 +2114,28 @@ class EPUBDocument(Document):
             raise ValueError("Document must be an EPUBDocument instance")
 
         if fmt == "epub":
-            cls._export_native_epub(doc, output_path)
+            cls._export_native_epub(doc, output_path, use_original_images=use_original_images)
             return
 
         with TemporaryDirectory(prefix="cat-epub-export-") as tmp_dir:
             intermediate_epub = Path(tmp_dir) / "intermediate.epub"
-            cls._export_native_epub(doc, intermediate_epub)
+            cls._export_native_epub(
+                doc,
+                intermediate_epub,
+                flatten_annotationless_ruby=doc._should_strip_epub_ruby(),
+                use_original_images=use_original_images,
+            )
             export_pandoc_file(intermediate_epub, output_path, fmt, "epub")
 
     @classmethod
-    def _export_native_epub(cls, doc: EPUBDocument, output_path: Path) -> None:
+    def _export_native_epub(
+        cls,
+        doc: EPUBDocument,
+        output_path: Path,
+        *,
+        flatten_annotationless_ruby: bool = False,
+        use_original_images: bool = False,
+    ) -> None:
         """Export EPUB by patching translated members into the original archive."""
         sources = doc.repo.get_document_sources(doc.document_id)
         sources_sorted = sorted(sources, key=lambda s: s["sequence_number"])
@@ -1838,32 +2150,48 @@ class EPUBDocument(Document):
         else:
             metadata_json = {}
 
-        visible_toc_document_paths: set[str] = set()
-        if doc._force_horizontal_ltr_export:
-            visible_toc_document_paths = cls._extract_visible_toc_document_paths(metadata_json)
-            visible_toc_document_paths.update(cls._infer_visible_toc_document_paths(sources_sorted))
+        visible_toc_document_paths = cls._extract_visible_toc_document_paths(metadata_json)
+        visible_toc_document_paths.update(cls._infer_visible_toc_document_paths(sources_sorted))
+
+        package_path = str(metadata_json.get("package_path", ""))
+        original_toc_json = metadata_json.get("toc", [])
+        original_toc: list[TocEntry] = []
+        if isinstance(original_toc_json, list) and original_toc_json:
+            original_toc = cls._deserialize_toc(original_toc_json)
+
+        title_map: dict[str, list[tuple[str, str]]] = {}
+        if doc._translated_chapters or doc._translated_image_texts:
+            heading_map = cls._build_heading_translation_map(sources_sorted, doc._translated_chapters)
+            image_title_map = cls._build_image_title_translation_map(sources_sorted, doc._translated_image_texts)
+            title_map = cls._merge_title_translation_maps(heading_map, image_title_map)
+
+        toc_to_apply = doc._translated_toc
+        if doc._translated_toc and original_toc and title_map:
+            toc_to_apply = cls._sync_toc_with_title_map(
+                doc._translated_toc,
+                original_toc,
+                title_map,
+                package_path,
+            )
+        toc_titles_by_target, toc_titles_by_source_path = (
+            cls._build_toc_title_maps(toc_to_apply, package_path=package_path)
+            if toc_to_apply and package_path
+            else ({}, {})
+        )
+
         member_updates = cls._collect_member_updates(
             doc,
             sources_sorted,
             persisted_reembedded,
             visible_toc_document_paths=visible_toc_document_paths,
+            toc_titles_by_target=toc_titles_by_target,
+            toc_titles_by_source_path=toc_titles_by_source_path,
+            flatten_annotationless_ruby=flatten_annotationless_ruby,
+            use_original_images=use_original_images,
         )
 
         if doc._translated_toc:
-            toc_to_apply = doc._translated_toc
-            original_toc_json = metadata_json.get("toc", [])
-            package_path = str(metadata_json.get("package_path", ""))
-            if isinstance(original_toc_json, list) and original_toc_json:
-                original_toc = cls._deserialize_toc(original_toc_json)
-                heading_map = cls._build_heading_translation_map(sources_sorted, doc._translated_chapters)
-                if heading_map:
-                    toc_to_apply = cls._sync_toc_with_chapter_headings(
-                        doc._translated_toc,
-                        original_toc,
-                        heading_map,
-                        package_path,
-                    )
-
+            assert toc_to_apply is not None
             member_updates.update(
                 cls._collect_toc_label_updates(
                     sources_sorted=sources_sorted,
@@ -1919,9 +2247,15 @@ class EPUBDocument(Document):
         persisted_reembedded: dict[int, tuple[bytes, str]],
         *,
         visible_toc_document_paths: set[str] | None = None,
+        toc_titles_by_target: dict[str, str] | None = None,
+        toc_titles_by_source_path: dict[str, str] | None = None,
+        flatten_annotationless_ruby: bool = False,
+        use_original_images: bool = False,
     ) -> dict[str, bytes]:
         updates: dict[str, bytes] = {}
         toc_document_paths = visible_toc_document_paths or set()
+        synced_toc_titles_by_target = toc_titles_by_target or {}
+        synced_toc_titles_by_source_path = toc_titles_by_source_path or {}
         for source in sources_sorted:
             if cls._is_metadata_source(source) or cls._is_original_archive_source(source):
                 continue
@@ -1934,11 +2268,19 @@ class EPUBDocument(Document):
 
             if source["source_type"] == "text":
                 translated = doc._translated_chapters.get(source["source_id"], source["text_content"])
+                if toc_document and (synced_toc_titles_by_target or synced_toc_titles_by_source_path):
+                    translated = cls._sync_visible_toc_document_with_toc_titles(
+                        translated_xhtml=translated,
+                        document_path=normalized_relative_path,
+                        toc_titles_by_target=synced_toc_titles_by_target,
+                        toc_titles_by_source_path=synced_toc_titles_by_source_path,
+                    )
                 translated = cls._normalize_text_source_for_export(
                     source,
                     translated,
                     force_horizontal_ltr=doc._force_horizontal_ltr_export,
                     toc_document=toc_document,
+                    flatten_annotationless_ruby=flatten_annotationless_ruby,
                 )
                 updates[relative_path] = translated.encode("utf-8")
                 continue
@@ -1955,7 +2297,7 @@ class EPUBDocument(Document):
 
             if source["source_type"] == "image" and source.get("binary_content"):
                 payload = bytes(source["binary_content"])
-                if cls._is_content_image(source):
+                if not use_original_images and cls._is_content_image(source):
                     in_memory_translated = doc._translated_resource_images.get(source["source_id"])
                     if in_memory_translated is not None:
                         payload = in_memory_translated[0]

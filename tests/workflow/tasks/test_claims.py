@@ -300,3 +300,56 @@ def test_ocr_vs_glossary_extraction_no_conflict():
     wanted = frozenset({ResourceClaim("ocr", "b1", "42"), ResourceClaim("doc", "b1", "42")})
     active = frozenset({ResourceClaim("glossary_state", "b1", "*", ClaimMode.WRITE_EXCLUSIVE)})
     assert arbiter.conflicts(wanted, active) is False
+
+
+def test_source_specific_doc_cooperative_claims_allow_parallel_pages():
+    arbiter = ClaimArbiter()
+    wanted = frozenset(
+        {
+            ResourceClaim("doc", "b1", "42", ClaimMode.WRITE_COOPERATIVE),
+            ResourceClaim("source", "b1", "100"),
+        }
+    )
+    active = frozenset(
+        {
+            ResourceClaim("doc", "b1", "42", ClaimMode.WRITE_COOPERATIVE),
+            ResourceClaim("source", "b1", "101"),
+        }
+    )
+    assert arbiter.conflicts(wanted, active) is False
+
+
+def test_source_specific_doc_cooperative_claims_still_conflict_with_document_wide_work():
+    arbiter = ClaimArbiter()
+    wanted = frozenset(
+        {
+            ResourceClaim("doc", "b1", "42", ClaimMode.WRITE_COOPERATIVE),
+            ResourceClaim("source", "b1", "100"),
+        }
+    )
+    active = frozenset({ResourceClaim("doc", "b1", "42", ClaimMode.WRITE_EXCLUSIVE)})
+    assert arbiter.conflicts(wanted, active) is True
+
+
+def test_same_source_claim_conflicts_across_task_types():
+    arbiter = ClaimArbiter()
+    wanted = frozenset(
+        {
+            ResourceClaim("doc", "b1", "42", ClaimMode.WRITE_COOPERATIVE),
+            ResourceClaim("source", "b1", "100"),
+        }
+    )
+    active = frozenset(
+        {
+            ResourceClaim("doc", "b1", "42", ClaimMode.WRITE_COOPERATIVE),
+            ResourceClaim("source", "b1", "100"),
+        }
+    )
+    assert arbiter.conflicts(wanted, active) is True
+
+
+def test_translation_snapshot_read_shared_conflicts_with_chunk_retranslation_write():
+    arbiter = ClaimArbiter()
+    wanted = frozenset({ResourceClaim("translation_snapshot", "b1", "42", ClaimMode.READ_SHARED)})
+    active = frozenset({ResourceClaim("translation_snapshot", "b1", "42", ClaimMode.WRITE_EXCLUSIVE)})
+    assert arbiter.conflicts(wanted, active) is True

@@ -160,6 +160,10 @@ class ContextManager:
     def _replace_term_memory_versions(self, term_key: str, versions: list[Any]) -> None:
         self.term_repo.replace_term_memory_versions(term_key, versions)
 
+    @staticmethod
+    def _term_memory_progress_message(*, current: int, total: int) -> str:
+        return f"Summarizing term memory {current}/{total}"
+
     def _add_legacy_context_chunks(
         self,
         terms_data: dict[str, dict[int, str]],
@@ -328,7 +332,11 @@ class ContextManager:
             self._state_update([], new_chunk_records)
         return chunk_id - 1
 
-    def build_context_tree(self, cancel_check: Callable[[], bool] | None = None) -> None:
+    def build_context_tree(
+        self,
+        cancel_check: Callable[[], bool] | None = None,
+        progress_callback: ProgressCallback | None = None,
+    ) -> None:
         """
         Build causal term-memory timelines from term descriptions.
         """
@@ -351,11 +359,26 @@ class ContextManager:
         terms_data = {k: v for k, v in terms_data.items() if v}
         if terms_data and self.term_memory_builder is not None:
             latest_term_memory = self.term_repo.list_latest_term_memory_versions()
-            for term in summary_terms:
+            pending_summary_terms = [
+                term
+                for term in summary_terms
+                if (data := terms_data.get(term.key))
+                and not self._term_memory_is_current(data, latest_term_memory.get(term.key))
+            ]
+            progress_total = len(pending_summary_terms)
+            if progress_callback and progress_total > 0:
+                progress_callback(
+                    ProgressUpdate(
+                        step=WorkflowStep.TERM_MEMORY,
+                        current=0,
+                        total=progress_total,
+                        message=self._term_memory_progress_message(current=0, total=progress_total),
+                    )
+                )
+            for index, term in enumerate(pending_summary_terms, start=1):
+                raise_if_cancelled(cancel_check)
                 data = terms_data.get(term.key)
                 if not data:
-                    continue
-                if self._term_memory_is_current(data, latest_term_memory.get(term.key)):
                     continue
                 versions = self.term_memory_builder.build_versions(
                     term.key,
@@ -363,6 +386,18 @@ class ContextManager:
                     cancel_check=cancel_check,
                 )
                 self._replace_term_memory_versions(term.key, versions)
+                if progress_callback:
+                    progress_callback(
+                        ProgressUpdate(
+                            step=WorkflowStep.TERM_MEMORY,
+                            current=index,
+                            total=progress_total,
+                            message=self._term_memory_progress_message(
+                                current=index,
+                                total=progress_total,
+                            ),
+                        )
+                    )
         if terms_data:
             self._add_legacy_context_chunks(terms_data, cancel_check=cancel_check)
 
@@ -1655,6 +1690,16 @@ class TranslationContextManager(ContextManager):
         progress_lock = asyncio.Lock()
         failure_order: list[BaseException] = []
         failure_lock = asyncio.Lock()
+
+        if progress_callback:
+            progress_callback(
+                ProgressUpdate(
+                    step=WorkflowStep.TRANSLATE_CHUNKS,
+                    current=0,
+                    total=total,
+                    message=f"Translating batch 0/{total}",
+                )
+            )
 
         async def process_batch(batch: list[TranslationChunkRecord]) -> None:
             nonlocal completed

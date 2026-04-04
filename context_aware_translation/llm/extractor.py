@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections import Counter
 from dataclasses import dataclass, field
@@ -32,7 +31,6 @@ class MergedExtractedTermData(ExtractedTermData):
 
 @dataclass
 class _MergedTermState:
-    votes: int = 0
     description: str = ""
     term_type_votes: Counter[str] = field(default_factory=Counter)
 
@@ -94,8 +92,11 @@ def _pass_winning_term_types(pass_results: list[ExtractedTermData]) -> dict[str,
 
 def merge_all_with_votes(results_by_pass: list[list[ExtractedTermData]]) -> list[MergedExtractedTermData]:
     """
-    Merge multiple extraction passes, keeping all terms.
-    For each term, track number of votes and keep the longest description.
+    Merge multiple extraction passes for one chunk.
+
+    A term found multiple times within the same chunk still contributes only one
+    final vote from that chunk. The passes are used to recover missed terms and
+    to pick the best description/type for the chunk-local term record.
     """
     if not results_by_pass:
         return []
@@ -108,40 +109,22 @@ def merge_all_with_votes(results_by_pass: list[list[ExtractedTermData]]) -> list
                 state.description = term["description"]
         for name, winner in _pass_winning_term_types(pass_results).items():
             state = merged.setdefault(name, _MergedTermState())
-            state.votes += 1
             state.term_type_votes[winner] += 1
 
     final: list[MergedExtractedTermData] = []
     for name, state in merged.items():
-        term_type_votes = dict(state.term_type_votes)
+        winner = choose_term_type(dict(state.term_type_votes))
+        term_type_votes = {winner: 1}
         final.append(
             {
                 "name": name,
                 "description": state.description,
-                "term_type": choose_term_type(term_type_votes),
-                "votes": state.votes,
+                "term_type": winner,
+                "votes": 1,
                 "term_type_votes": term_type_votes,
             }
         )
     return final
-
-
-async def _gather_gleaning(
-    count: int, system_prompt: str, user_prompt: str, llm_client: LLMClient, step_config: ExtractorConfig
-) -> list[str]:
-    if count <= 0:
-        return []
-    tasks = [
-        llm_client.chat(
-            [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            step_config,
-        )
-        for _ in range(count)
-    ]
-    return await asyncio.gather(*tasks)
 
 
 def _examples() -> str:
@@ -193,7 +176,7 @@ def _examples() -> str:
 """.strip()
 
 
-def build_extraction_prompts(chunk_text: str, source_language: str) -> tuple[str, str]:
+def _build_extraction_system_prompt(source_language: str) -> str:
     examples = _examples()
 
     system_prompt = f"""---角色---
@@ -240,7 +223,11 @@ def build_extraction_prompts(chunk_text: str, source_language: str) -> tuple[str
 ---示例---
 {examples}
 """
+    return system_prompt.strip()
 
+
+def build_extraction_prompts(chunk_text: str, source_language: str) -> tuple[str, str]:
+    system_prompt = _build_extraction_system_prompt(source_language)
     user_prompt = f"""---任务---
 从下方文本中抽取需要统一翻译的术语。
 
@@ -259,6 +246,49 @@ def build_extraction_prompts(chunk_text: str, source_language: str) -> tuple[str
     return system_prompt.strip(), user_prompt.strip()
 
 
+def build_gleaning_prompts() -> str:
+    user_prompt = (
+        f"只补充此前遗漏、且仍需要统一翻译的术语。"
+        f"不要重复或重写完整列表；如果没有遗漏，只输出 `{COMPLETION_DELIMITER}`。"
+    )
+    return user_prompt.strip()
+
+
+async def _run_gleaning_passes(
+    count: int,
+    detected_terms: list[str],
+    messages: list[dict[str, str]],
+    llm_client: LLMClient,
+    step_config: ExtractorConfig,
+) -> list[list[ExtractedTermData]]:
+    if count <= 0:
+        return []
+
+    seen_terms: set[str] = set()
+    for detected_name in detected_terms:
+        normalized = detected_name.strip()
+        if not normalized or normalized in seen_terms:
+            continue
+        seen_terms.add(normalized)
+
+    gleaned_passes: list[list[ExtractedTermData]] = []
+    for _ in range(count):
+        user_prompt = build_gleaning_prompts()
+        messages.append({"role": "user", "content": user_prompt})
+        response = await llm_client.chat(messages, step_config)
+        gleaned_terms = parse_delimited_output(response, step_config.max_term_name_length)
+        new_terms: list[ExtractedTermData] = []
+        for extracted_term in gleaned_terms:
+            name = extracted_term["name"]
+            if name in seen_terms:
+                continue
+            seen_terms.add(name)
+            new_terms.append(extracted_term)
+        messages.append({"role": "assistant", "content": response})
+        gleaned_passes.append(new_terms)
+    return gleaned_passes
+
+
 async def extract_terms(
     chunk_record: ChunkRecord,
     llm_client: LLMClient,
@@ -268,35 +298,30 @@ async def extract_terms(
     with llm_session_scope() as session_id:
         system_prompt, user_prompt = build_extraction_prompts(chunk_record.text, source_language)
         logger.debug("[llm_session=%s] Extracting terms for chunk_id=%s", session_id, chunk_record.chunk_id)
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
 
         # Initial extraction (sync to ensure it's cached by LLM provider)
         # extractor_config is always resolved at Config initialization
-        response = await llm_client.chat(
-            [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            extractor_config,
-        )
+        response = await llm_client.chat(messages, extractor_config)
         initial_terms = parse_delimited_output(response, extractor_config.max_term_name_length)
+        messages.append({"role": "assistant", "content": response})
 
         results_by_pass: list[list[ExtractedTermData]] = [initial_terms]
         glean_count = max(0, extractor_config.max_gleaning)
         total_api_calls = 1  # initial extraction
         if glean_count > 0:
-            # Run gleaning passes concurrently
-            # extractor_config is always resolved at Config initialization
-            glean_responses = await _gather_gleaning(
+            gleaned_passes = await _run_gleaning_passes(
                 glean_count,
-                system_prompt,
-                user_prompt,
+                [term["name"] for term in initial_terms],
+                messages,
                 llm_client,
                 extractor_config,
             )
             total_api_calls += glean_count
-            for glean_response in glean_responses:
-                gleaned = parse_delimited_output(glean_response, extractor_config.max_term_name_length)
-                results_by_pass.append(gleaned)
+            results_by_pass.extend(gleaned_passes)
 
         final_terms = merge_all_with_votes(results_by_pass)
         merged_terms: list[Term] = []

@@ -12,6 +12,7 @@ class WorkflowStep(Enum):
 
     OCR = "ocr"
     EXTRACT_TERMS = "extract_terms"
+    TERM_MEMORY = "term_memory"
     REVIEW = "review"
     TRANSLATE_GLOSSARY = "translate_glossary"
     TRANSLATE_CHUNKS = "translate_chunks"

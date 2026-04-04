@@ -22,6 +22,7 @@ class Document(ABC):
     ocr_required_for_translation: bool = True  # If False, translation proceeds without OCR
     supports_preserve_structure: bool = False  # Override in subclasses that support it
     supports_multi_export: bool = True  # Override to False for types that cannot merge
+    supports_original_image_export: bool = False  # Override in subclasses that can keep source images on export
 
     def __init__(self, repo: DocumentRepository, document_id: int):
         self.repo = repo
@@ -227,7 +228,14 @@ class Document(ABC):
 
     @classmethod
     @abstractmethod
-    def export_merged(cls, documents: list[Document], export_format: str, output_path: Path) -> None:
+    def export_merged(
+        cls,
+        documents: list[Document],
+        export_format: str,
+        output_path: Path,
+        *,
+        use_original_images: bool = False,
+    ) -> None:
         """Export multiple documents merged into a single file.
 
         Each document should have had set_text() called before this method.
@@ -237,6 +245,7 @@ class Document(ABC):
             documents: List of documents to merge
             export_format: Export format (e.g., 'txt', 'epub', 'md')
             output_path: Path to write the merged file
+            use_original_images: If True, prefer source images over reembedded replacements when supported.
 
         Raises:
             ValueError: If format is not supported or no content to export
@@ -356,4 +365,12 @@ def supports_preserve_structure_for_type(document_type: str) -> bool:
     for cls in get_document_classes():
         if cls.document_type == document_type:
             return cls.supports_preserve_structure
+    raise ValueError(f"Unknown document type: {document_type}")
+
+
+def supports_original_image_export_for_type(document_type: str) -> bool:
+    """Check if a document type can keep original images during export."""
+    for cls in get_document_classes():
+        if cls.document_type == document_type:
+            return cls.supports_original_image_export
     raise ValueError(f"Unknown document type: {document_type}")

@@ -132,7 +132,7 @@ class ExtractorConfig(LLMConfig):
     """Configuration for term extraction step."""
 
     # Extraction-specific settings
-    max_gleaning: int = 3
+    max_gleaning: int = 1
     max_term_name_length: int = 200
 
     def to_dict(self) -> dict[str, Any]:
@@ -161,7 +161,7 @@ class ExtractorConfig(LLMConfig):
             endpoint_profile=data.get("endpoint_profile"),
             kwargs=data.get("kwargs", {}),
             _explicit_fields=_explicit_llm_fields(data, cls),
-            max_gleaning=data.get("max_gleaning", 3),
+            max_gleaning=data.get("max_gleaning", 1),
             max_term_name_length=data.get("max_term_name_length", 200),
         )
 

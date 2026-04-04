@@ -162,8 +162,8 @@ _WIZARD_MODEL_CATALOG: dict[ProviderKind, tuple[WizardModelTemplate, ...]] = {
         ),
         WizardModelTemplate(
             ProviderKind.GEMINI,
-            "Gemini 3 Flash Preview",
-            "gemini-3-flash-preview",
+            "Gemini 3.1 Flash",
+            "gemini-3.1-flash",
             "https://generativelanguage.googleapis.com/v1beta/openai/",
             timeout=300,
         ),
@@ -209,9 +209,9 @@ _WIZARD_MODEL_CATALOG: dict[ProviderKind, tuple[WizardModelTemplate, ...]] = {
 
 _STEP_RECOMMENDATION_ORDER: dict[WorkflowStepId, tuple[StepModelPreference, ...]] = {
     WorkflowStepId.EXTRACTOR: (
-        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-chat"),
+        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-reasoner"),
         StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash-lite"),
-        StepModelPreference(ProviderKind.OPENAI, "gpt-4.1-nano"),
+        StepModelPreference(ProviderKind.OPENAI, "o4-mini"),
         StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-haiku-latest"),
     ),
     WorkflowStepId.SUMMARIZER: (
@@ -239,7 +239,7 @@ _STEP_RECOMMENDATION_ORDER: dict[WorkflowStepId, tuple[StepModelPreference, ...]
         StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-reasoner"),
     ),
     WorkflowStepId.OCR: (
-        StepModelPreference(ProviderKind.GEMINI, "gemini-3-flash-preview"),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-flash"),
         StepModelPreference(ProviderKind.OPENAI, "gpt-4.1-mini"),
         StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
     ),
@@ -748,9 +748,7 @@ def _recommended_step_route(
         gemini_batch = (
             _recommended_connection_by_model(drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-pro"))
             or _recommended_connection_by_model(drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash"))
-            or _recommended_connection_by_model(
-                drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-3-flash-preview")
-            )
+            or _recommended_connection_by_model(drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-flash"))
             or _recommended_connection_by_model(
                 drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash-lite")
             )
@@ -779,6 +777,8 @@ def _recommended_step_route(
 
     step_config: dict[str, Any] = {}
     reasoning_kwargs = _wizard_reasoning_kwargs(step_id, selected)
+    if step_id is WorkflowStepId.EXTRACTOR:
+        step_config["max_gleaning"] = 1
     if reasoning_kwargs is not None:
         step_config["kwargs"] = reasoning_kwargs
     if step_id is WorkflowStepId.IMAGE_REEMBEDDING and selected is not None:

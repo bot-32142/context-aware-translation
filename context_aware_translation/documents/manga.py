@@ -606,8 +606,16 @@ class MangaDocument(Document):
         return export_format.lower() in self.supported_export_formats
 
     @classmethod
-    def export_merged(cls, documents: list[Document], export_format: str, output_path: Path) -> None:
+    def export_merged(
+        cls,
+        documents: list[Document],
+        export_format: str,
+        output_path: Path,
+        *,
+        use_original_images: bool = False,
+    ) -> None:
         """Export manga documents. CBZ: zip of images. EPUB/MD: text with images."""
+        _ = use_original_images
         fmt = export_format.lower()
         if fmt == "cbz":
             cls._export_cbz(documents, output_path)

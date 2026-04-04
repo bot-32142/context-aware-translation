@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from context_aware_translation.core.progress import ProgressUpdate, WorkflowStep
 from context_aware_translation.storage.repositories.task_store import TaskRecord
 
 _VALID_SNAPSHOT = json.dumps({"snapshot_version": 1, "config": {"key": "value"}})
@@ -224,6 +225,7 @@ class TestBatchTranslationTaskWorkerSnapshot:
 
         mock_from_snapshot.assert_called_once_with(_VALID_SNAPSHOT, "book-1")
         mock_from_book.assert_not_called()
+        assert mock_executor.run_task.await_args.kwargs["progress_callback"] == worker._on_progress
 
     def test_run_fails_fast_when_snapshot_restore_fails(self):
         worker = self._make_worker(snapshot=_VALID_SNAPSHOT, action="run")
@@ -299,3 +301,38 @@ class TestBatchTranslationTaskWorkerSnapshot:
 
         mock_from_book.assert_called_once()
         mock_from_snapshot.assert_not_called()
+
+    def test_on_progress_persists_term_memory_and_notifies(self):
+        worker = self._make_worker(snapshot=None, action="run")
+        worker.notify_task_changed = MagicMock()
+
+        worker._on_progress(
+            ProgressUpdate(
+                step=WorkflowStep.TERM_MEMORY,
+                current=2,
+                total=5,
+                message="Summarizing term memory 2/5",
+            )
+        )
+
+        worker.task_store.update.assert_called_once_with(
+            "task-1",
+            phase="term_memory",
+            completed_items=2,
+            total_items=5,
+        )
+        worker.notify_task_changed.assert_called_once_with("book-1")
+
+    def test_on_progress_does_not_override_executor_managed_batch_phases(self):
+        worker = self._make_worker(snapshot=None, action="run")
+
+        worker._on_progress(
+            ProgressUpdate(
+                step=WorkflowStep.TRANSLATE_CHUNKS,
+                current=0,
+                total=3,
+                message="Batch task deadbeef translation: RUNNING",
+            )
+        )
+
+        worker.task_store.update.assert_not_called()

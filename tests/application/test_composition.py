@@ -246,7 +246,7 @@ def test_app_setup_preview_exposes_recommended_profile(tmp_path: Path) -> None:
                         provider=ProviderKind.GEMINI,
                         api_key="secret",
                         base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-                        default_model="gemini-3-flash-preview",
+                        default_model="gemini-3.1-flash",
                     ),
                     ConnectionDraft(
                         display_name="DeepSeek",
@@ -322,9 +322,7 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
             == "dkey"
         )
         assert (
-            next(
-                profile for profile in endpoint_profiles if profile.name == "recommended-Gemini 3 Flash Preview"
-            ).timeout
+            next(profile for profile in endpoint_profiles if profile.name == "recommended-Gemini 3.1 Flash").timeout
             == 300
         )
     finally:

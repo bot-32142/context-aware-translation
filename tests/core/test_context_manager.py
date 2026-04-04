@@ -703,6 +703,43 @@ def test_context_manager_build_context_tree_rebuilds_when_term_memory_is_stale(m
     assert mock_context_manager.term_repo.term_memory_versions["hero"][0].latest_evidence_chunk == 5
 
 
+def test_context_manager_build_context_tree_reports_term_memory_progress(mock_context_manager):
+    builder = RecordingTermMemoryBuilder()
+    mock_context_manager.term_memory_builder = builder
+
+    mock_context_manager.term_repo.keyed_contexts = {
+        "hero": Term(
+            key="hero",
+            descriptions={"1": "hero description", "2": "more hero description"},
+            occurrence={},
+            votes=1,
+            total_api_calls=1,
+            term_type="character",
+        ),
+        "villain": Term(
+            key="villain",
+            descriptions={"3": "villain description", "4": "more villain description"},
+            occurrence={},
+            votes=1,
+            total_api_calls=1,
+            term_type="organization",
+        ),
+    }
+    updates = []
+
+    mock_context_manager.build_context_tree(progress_callback=updates.append)
+
+    assert [term_key for term_key, _data in builder.calls] == ["hero", "villain"]
+    assert updates[0].step == WorkflowStep.TERM_MEMORY
+    assert updates[0].current == 0
+    assert updates[0].total == 2
+    assert updates[0].message == "Summarizing term memory 0/2"
+    assert updates[-1].step == WorkflowStep.TERM_MEMORY
+    assert updates[-1].current == 2
+    assert updates[-1].total == 2
+    assert updates[-1].message == "Summarizing term memory 2/2"
+
+
 def test_get_term_description_for_query_skips_term_memory_for_other_terms(mock_context_manager):
     term = Term(
         key="artifact_query",

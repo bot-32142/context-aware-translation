@@ -261,6 +261,31 @@ def test_document_images_view_cancels_active_task():
         view.deleteLater()
 
 
+def test_document_images_view_cancels_all_active_tasks():
+    from context_aware_translation.ui.features.document_images_view import DocumentImagesView
+
+    running_state = _images_state(active_task_id="task-1").model_copy(
+        update={"active_task_ids": ["task-1", "task-2"], "progress": ProgressInfo(current=4, total=7, label=None)}
+    )
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        images=running_state,
+        ocr_page_images={101: b"image-1", 102: b"image-2"},
+        command_result=AcceptedCommand(
+            command_name="cancel_image_reinsertion",
+            message=UserMessage(severity=UserMessageSeverity.INFO, text="Cancel requested."),
+        ),
+    )
+    view = DocumentImagesView("proj-1", 4, service)
+    try:
+        view.refresh()
+        view.request_cancel_running_operations(include_engine_tasks=True)
+        cancel_calls = [payload for name, payload in service.calls if name == "cancel_image_reinsertion"]
+        assert cancel_calls == [("proj-1", "task-1"), ("proj-1", "task-2")]
+    finally:
+        view.deleteLater()
+
+
 def test_document_images_view_uses_embedded_bytes_and_shows_reembedded_first():
     from context_aware_translation.ui.features.document_images_view import DocumentImagesView
 

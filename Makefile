@@ -1,4 +1,4 @@
-.PHONY: install install-dev test lint format typecheck check clean help eval eval-clean build-ui build-macos-app clean-ui lupdate release
+.PHONY: install install-dev test test-py test-ui test-cov test-cov-py test-ui-cov lint format typecheck check clean help eval eval-clean build-ui build-macos-app clean-ui lupdate release
 
 PYTHON := uv run python
 PYTEST := uv run pytest
@@ -18,17 +18,29 @@ install-dev:
 	uv sync --group dev
 
 test:
+	$(MAKE) test-py
+	$(MAKE) test-ui
+
+test-py:
 	$(PYTEST) tests/ --ignore=tests/ui/
-	QT_QPA_PLATFORM=offscreen $(PYTHON) scripts/run_ui_tests.py
+
+test-ui:
+	$(PYTHON) scripts/run_ui_tests.py
 
 test-cov:
 	rm -f .coverage .coverage.*
-	$(PYTEST) tests/ --ignore=tests/ui/ --cov=context_aware_translation --cov-report=
-	QT_QPA_PLATFORM=offscreen $(PYTHON) scripts/run_ui_tests.py \
-		--cov=context_aware_translation \
-		--cov-report= \
-		--cov-append
+	$(MAKE) test-cov-py
+	$(MAKE) test-ui-cov
 	uv run coverage report --show-missing
+
+test-cov-py:
+	$(PYTEST) tests/ --ignore=tests/ui/ --cov=context_aware_translation --cov-report=
+
+test-ui-cov:
+	$(PYTHON) scripts/run_ui_tests.py \
+		--cov=context_aware_translation \
+		--cov-report=
+	uv run coverage combine --append .coverage.ui.*
 
 lint:
 	$(RUFF) check context_aware_translation/ tests/

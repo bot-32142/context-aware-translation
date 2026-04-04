@@ -432,6 +432,23 @@ def test_step_advanced_config_dialog_updates_translator_ruby_flag():
     assert updated.step_config["chunk_size"] == 1200
 
 
+def test_step_advanced_config_dialog_uses_extractor_default_gleaning():
+    from context_aware_translation.ui.features.workflow_profile_editor import StepAdvancedConfigDialog
+
+    route = WorkflowStepRoute(
+        step_id=WorkflowStepId.EXTRACTOR,
+        step_label="Extractor",
+        connection_id="conn-deepseek",
+        connection_label="DeepSeek",
+        model="deepseek-chat",
+    )
+
+    dialog = StepAdvancedConfigDialog(route)
+
+    assert dialog.max_gleaning_spin.value() == 1
+    assert dialog.route().step_config["max_gleaning"] == 1
+
+
 def test_workflow_profile_editor_shows_advanced_button_for_each_step():
     from context_aware_translation.ui.features import workflow_profile_editor as editor_module
 

@@ -477,7 +477,13 @@ class BatchTranslationExecutor:
             # Do NOT reset payload for normal queued/paused resume. Resetting
             # here would discard checkpointed stage state (e.g. validate
             # outputs) and re-trigger avoidable LLM work on restart.
-            payload = await ensure_payload_prepared(self, task, payload, cancel_check=cancel_check)
+            payload = await ensure_payload_prepared(
+                self,
+                task,
+                payload,
+                cancel_check=cancel_check,
+                progress_callback=progress_callback,
+            )
             task = self.persist_payload(task_id, payload, phase=PHASE_TRANSLATION_SUBMIT, status=STATUS_RUNNING)
 
             if not payload.get("items"):

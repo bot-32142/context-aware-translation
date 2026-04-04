@@ -7,6 +7,7 @@ import pytest
 from context_aware_translation.documents.epub_xhtml_utils import (
     extract_heading_texts,
     extract_text_from_xhtml,
+    flatten_annotationless_ruby_in_xhtml,
     inject_translations_into_xhtml,
 )
 from context_aware_translation.utils.compression_marker import COMPRESSED_LINE_SENTINEL
@@ -181,6 +182,22 @@ class TestExtractHeadingTexts:
     def test_extract_heading_none(self):
         xhtml = "<html><body><p>No headings here</p></body></html>"
         assert extract_heading_texts(xhtml) == []
+
+
+class TestFlattenAnnotationlessRuby:
+    def test_flatten_annotationless_ruby_preserves_inline_children(self):
+        xhtml = (
+            '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>'
+            '<ruby><rb><a href="https://example.com"><em>Important</em></a></rb><rt></rt></ruby>'
+            " tail"
+            "</p></body></html>"
+        )
+
+        result = flatten_annotationless_ruby_in_xhtml(xhtml)
+
+        assert "<ruby" not in result
+        assert "<rt" not in result
+        assert '<a href="https://example.com"><em>Important</em></a>' in result
 
 
 class TestInjectTranslationsIntoXhtml:

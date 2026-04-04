@@ -521,6 +521,52 @@ def test_document_workspace_export_tab_exposes_epub_layout_toggle():
         _cleanup_view(view)
 
 
+def test_document_workspace_export_tab_exposes_original_image_toggle():
+    from context_aware_translation.ui.features.document_workspace_view import DocumentWorkspaceView
+
+    bus = InMemoryApplicationEventBus()
+    export_state = DocumentExportState(
+        workspace=_make_workspace_state(),
+        can_export=True,
+        available_formats=[ExportOption(format_id="epub", label="EPUB", is_default=True)],
+        default_output_path="/tmp/book.epub",
+        supports_original_image_export=True,
+    )
+    document_service = FakeDocumentService(
+        workspace=_make_workspace_state(),
+        export=export_state,
+        translation=_make_translation_state(),
+        images=DocumentImagesState(
+            workspace=_make_workspace_state().model_copy(update={"active_tab": DocumentSection.IMAGES}),
+            assets=[],
+        ),
+        ocr=_make_ocr_state(),
+        ocr_page_images={101: None, 102: None},
+        export_result=DocumentExportResult(
+            document_id=4,
+            output_path="/tmp/book.epub",
+            message=UserMessage(severity=UserMessageSeverity.SUCCESS, text="Export complete."),
+        ),
+    )
+    terms_service = FakeTermsService(project_state=_make_terms_state(), document_state=_make_terms_state())
+    work_service = FakeWorkService(state_by_project={"proj-1": object()})
+    view = DocumentWorkspaceView("proj-1", 4, document_service, terms_service, work_service, bus)
+    try:
+        view.show_section(DocumentSection.EXPORT)
+        export_tab = _current_section_widget(view)
+        assert export_tab.controls.use_original_images_cb.isHidden() is False
+
+        export_tab.controls.use_original_images_cb.setChecked(True)
+        with patch("context_aware_translation.ui.features.document_workspace_view.QMessageBox.warning") as mock_warning:
+            export_tab._run_export()
+
+        mock_warning.assert_not_called()
+        request = document_service.calls[-1][1]
+        assert request.options["use_original_images"] is True
+    finally:
+        _cleanup_view(view)
+
+
 def test_document_workspace_images_tab_refits_when_activated():
     view, _bus, document_service, _terms_service = _make_view()
     image_bytes = _png()

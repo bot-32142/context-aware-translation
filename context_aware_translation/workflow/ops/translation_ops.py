@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from context_aware_translation.core.progress import ProgressCallback
+from context_aware_translation.core.progress import ProgressCallback, ProgressUpdate, WorkflowStep
 from context_aware_translation.workflow.ops import bootstrap_ops
 
 if TYPE_CHECKING:
@@ -41,7 +41,10 @@ async def translate(
     await bootstrap_ops.prepare_llm_prerequisites(workflow, preflight_document_ids, cancel_check=cancel_check)
 
     bootstrap_ops.check_cancel(cancel_check)
-    workflow.manager.build_context_tree(cancel_check=cancel_check)
+    workflow.manager.build_context_tree(
+        cancel_check=cancel_check,
+        progress_callback=progress_callback,
+    )
 
     bootstrap_ops.check_cancel(cancel_check)
     doc_type_by_id = build_doc_type_by_id(workflow, document_ids)
@@ -74,6 +77,7 @@ async def retranslate_chunk(
     *,
     chunk_id: int,
     document_id: int,
+    progress_callback: ProgressCallback | None = None,
     cancel_check: Callable[[], bool] | None = None,
 ) -> str:
     """Retranslate a single chunk by ID using the LLM."""
@@ -84,7 +88,10 @@ async def retranslate_chunk(
     await bootstrap_ops.prepare_llm_prerequisites(workflow, preflight_document_ids, cancel_check=cancel_check)
 
     bootstrap_ops.check_cancel(cancel_check)
-    workflow.manager.build_context_tree(cancel_check=cancel_check)
+    workflow.manager.build_context_tree(
+        cancel_check=cancel_check,
+        progress_callback=progress_callback,
+    )
 
     bootstrap_ops.check_cancel(cancel_check)
 
@@ -103,6 +110,15 @@ async def retranslate_chunk(
     )
 
     bootstrap_ops.check_cancel(cancel_check)
+    if progress_callback is not None:
+        progress_callback(
+            ProgressUpdate(
+                step=WorkflowStep.TRANSLATE_CHUNKS,
+                current=0,
+                total=1,
+                message="Translating batch 0/1",
+            )
+        )
 
     translated_texts = await workflow.manager.chunk_translator.translate(
         [chunk.text], batch_terms, source_language, cancel_check=cancel_check
@@ -113,4 +129,13 @@ async def retranslate_chunk(
     chunk.is_translated = True
 
     workflow.manager._state_update([], [chunk])
+    if progress_callback is not None:
+        progress_callback(
+            ProgressUpdate(
+                step=WorkflowStep.TRANSLATE_CHUNKS,
+                current=1,
+                total=1,
+                message="Translating batch 1/1",
+            )
+        )
     return new_translation

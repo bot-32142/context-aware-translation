@@ -374,6 +374,99 @@ def test_document_ocr_tab_can_cancel_active_task():
         view.deleteLater()
 
 
+def test_document_ocr_tab_updates_run_current_action_when_switching_pages() -> None:
+    from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
+
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        ocr=DocumentOCRState(
+            workspace=_workspace_state(),
+            pages=[
+                OCRPageState(
+                    source_id=101,
+                    page_number=1,
+                    total_pages=2,
+                    status=SurfaceStatus.RUNNING,
+                    run_action=ActionState(
+                        enabled=False,
+                        blocker=BlockerInfo(code=BlockerCode.ALREADY_RUNNING_ELSEWHERE, message="Page 1 running."),
+                    ),
+                ),
+                OCRPageState(
+                    source_id=102,
+                    page_number=2,
+                    total_pages=2,
+                    status=SurfaceStatus.READY,
+                    run_action=ActionState(enabled=True),
+                ),
+            ],
+            current_page_index=0,
+            actions=DocumentOCRActions(
+                save={"enabled": False},
+                run_current=ActionState(
+                    enabled=False,
+                    blocker=BlockerInfo(code=BlockerCode.ALREADY_RUNNING_ELSEWHERE, message="Page 1 running."),
+                ),
+                run_pending={"enabled": False},
+            ),
+        ),
+        ocr_page_images={101: _png_1x1(), 102: _png_1x1()},
+    )
+    view = DocumentOCRTab(service, "proj-1", 4)
+    try:
+        view.refresh()
+        assert not view.run_current_button.isEnabled()
+
+        view._go_next()
+
+        assert view.run_current_button.isEnabled()
+        assert view.run_current_button.toolTip() == "Run or re-run OCR on the current page"
+    finally:
+        view.deleteLater()
+
+
+def test_document_ocr_tab_cancels_all_active_tasks():
+    from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
+
+    service = FakeDocumentService(
+        workspace=_workspace_state(),
+        ocr=DocumentOCRState(
+            workspace=_workspace_state(),
+            pages=[
+                OCRPageState(
+                    source_id=101,
+                    page_number=1,
+                    total_pages=1,
+                    status=SurfaceStatus.RUNNING,
+                    extracted_text="hello",
+                )
+            ],
+            current_page_index=0,
+            actions=DocumentOCRActions(
+                save={"enabled": False},
+                run_current={"enabled": False},
+                run_pending={"enabled": False},
+            ),
+            active_task_id="ocr-task-1",
+            active_task_ids=["ocr-task-1", "ocr-task-2"],
+            progress=ProgressInfo(current=3, total=7),
+        ),
+        ocr_page_images={101: _png_1x1()},
+        command_result=AcceptedCommand(
+            command_name="cancel_ocr",
+            message=UserMessage(severity=UserMessageSeverity.INFO, text="Cancel requested."),
+        ),
+    )
+    view = DocumentOCRTab(service, "proj-1", 4)
+    try:
+        view.refresh()
+        view.request_cancel_running_operations(include_engine_tasks=True)
+        cancel_requests = [payload for name, payload in service.calls if name == "cancel_ocr"]
+        assert [request.task_id for request in cancel_requests] == ["ocr-task-1", "ocr-task-2"]
+    finally:
+        view.deleteLater()
+
+
 def test_document_ocr_tab_empty_state_stays_embedded_and_renders_in_screenshot():
     from context_aware_translation.ui.features.document_ocr_tab import DocumentOCRTab
 

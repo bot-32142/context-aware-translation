@@ -53,7 +53,7 @@ from context_aware_translation.ui.widgets.table_support import (
 )
 
 _PROVIDER_DEFAULTS: dict[ProviderKind, tuple[str, str]] = {
-    ProviderKind.GEMINI: ("https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-3-flash-preview"),
+    ProviderKind.GEMINI: ("https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-3.1-flash"),
     ProviderKind.OPENAI: ("https://api.openai.com/v1", "gpt-4.1-mini"),
     ProviderKind.DEEPSEEK: ("https://api.deepseek.com", "deepseek-chat"),
     ProviderKind.ANTHROPIC: ("https://api.anthropic.com/v1", "claude-3-5-sonnet-latest"),
