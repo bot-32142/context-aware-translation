@@ -28,6 +28,8 @@ class WorkHomeViewModel(ViewModelBase):
         self._import_message = ""
         self._import_message_kind = ""
         self._can_import = False
+        self._remove_hard_wraps = False
+        self._can_remove_hard_wraps = False
         self._import_type_options: list[dict[str, object]] = []
         self._import_type_option_sources: list[tuple[str, str]] = []
         self._selected_import_type = ""
@@ -51,6 +53,17 @@ class WorkHomeViewModel(ViewModelBase):
     @Property(str, notify=labels_changed)
     def import_label(self) -> str:
         return QCoreApplication.translate("WorkView", "Import")
+
+    @Property(str, notify=labels_changed)
+    def remove_hard_wraps_label(self) -> str:
+        return QCoreApplication.translate("WorkView", "Remove hard wraps")
+
+    @Property(str, notify=labels_changed)
+    def remove_hard_wraps_warning(self) -> str:
+        return QCoreApplication.translate(
+            "WorkView",
+            "Warning: experimental and may merge intentional line breaks.",
+        )
 
     @Property(str, notify=content_changed)
     def context_summary(self) -> str:
@@ -95,6 +108,14 @@ class WorkHomeViewModel(ViewModelBase):
     @Property(bool, notify=content_changed)
     def can_import(self) -> bool:
         return self._can_import
+
+    @Property(bool, notify=content_changed)
+    def remove_hard_wraps(self) -> bool:
+        return self._remove_hard_wraps
+
+    @Property(bool, notify=content_changed)
+    def can_remove_hard_wraps(self) -> bool:
+        return self._can_remove_hard_wraps
 
     @Property("QVariantList", notify=content_changed)
     def import_type_options(self) -> list[dict[str, object]]:
@@ -149,6 +170,8 @@ class WorkHomeViewModel(ViewModelBase):
         can_import: bool,
         options: list[tuple[str, str]],
         selected_import_type: str | None,
+        remove_hard_wraps: bool = False,
+        can_remove_hard_wraps: bool = False,
     ) -> None:
         self._import_summary = summary
         self._import_message = message
@@ -156,6 +179,8 @@ class WorkHomeViewModel(ViewModelBase):
             _IMPORT_MESSAGE_ERROR if message and is_error else _IMPORT_MESSAGE_SUCCESS if message else ""
         )
         self._can_import = can_import
+        self._remove_hard_wraps = remove_hard_wraps
+        self._can_remove_hard_wraps = can_remove_hard_wraps
         resolved_selected = selected_import_type or ""
         self._selected_import_type = resolved_selected
         self._import_type_option_sources = list(options)

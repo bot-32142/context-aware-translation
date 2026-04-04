@@ -13,11 +13,14 @@ Rectangle {
     signal importRequested
     signal setupActionRequested
     signal importTypeSelected(string documentType)
+    signal removeHardWrapsToggled(bool enabled)
 
     property string tipText: workHome ? workHome.tip_text : ""
     property string selectFilesLabelText: workHome ? workHome.select_files_label : "Select Files"
     property string selectFolderLabelText: workHome ? workHome.select_folder_label : "Select Folder"
     property string importLabelText: workHome ? workHome.import_label : "Import"
+    property string removeHardWrapsLabelText: workHome ? workHome.remove_hard_wraps_label : "Remove hard wraps"
+    property string removeHardWrapsWarningText: workHome ? workHome.remove_hard_wraps_warning : ""
     property string selectFilesTooltipText: workHome ? workHome.select_files_tooltip : ""
     property string selectFolderTooltipText: workHome ? workHome.select_folder_tooltip : ""
     property string importTooltipText: workHome ? workHome.import_tooltip : ""
@@ -33,6 +36,8 @@ Rectangle {
     property string importMessageKind: workHome ? workHome.import_message_kind : ""
     property bool hasImportMessage: workHome ? workHome.has_import_message : false
     property bool canImport: workHome ? workHome.can_import : false
+    property bool removeHardWrapsEnabled: workHome ? workHome.remove_hard_wraps : false
+    property bool canRemoveHardWraps: workHome ? workHome.can_remove_hard_wraps : false
     property bool hasImportTypeOptions: workHome ? workHome.has_import_type_options : false
     property var importTypeOptions: workHome ? workHome.import_type_options : []
     property string selectedImportType: workHome ? workHome.selected_import_type : ""
@@ -159,6 +164,28 @@ Rectangle {
                                 onClicked: root.importTypeSelected(modelData.documentType)
                             }
                         }
+                    }
+                }
+
+                Row {
+                    width: parent.width
+                    spacing: 10
+
+                    Switch {
+                        id: removeHardWrapsSwitch
+                        checked: root.removeHardWrapsEnabled
+                        enabled: root.canRemoveHardWraps
+                        text: root.removeHardWrapsLabelText
+                        onToggled: root.removeHardWrapsToggled(checked)
+                    }
+
+                    Text {
+                        width: parent.width - removeHardWrapsSwitch.width - 10
+                        text: root.removeHardWrapsWarningText
+                        color: "#8b8174"
+                        opacity: root.canRemoveHardWraps ? 1.0 : 0.65
+                        font.pixelSize: 12
+                        wrapMode: Text.WordWrap
                     }
                 }
 

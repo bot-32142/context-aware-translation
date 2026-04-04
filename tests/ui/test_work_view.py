@@ -403,6 +403,86 @@ def test_work_view_inspects_paths_and_imports_document():
         view.cleanup()
 
 
+def test_work_view_passes_remove_hard_wraps_for_supported_imports():
+    action = DocumentRowAction(
+        kind=DocumentRowActionKind.OPEN_TRANSLATION,
+        label="Open Translation",
+        target=NavigationTarget(
+            kind=NavigationTargetKind.DOCUMENT_TRANSLATION,
+            project_id="proj-1",
+            document_id=4,
+        ),
+    )
+    view, _bus, work_service, _document_service, _terms_service = _make_view(work_state=_make_workboard(action=action))
+    work_service.import_inspection_state = ImportInspectionState(
+        selected_paths=["/tmp/book.epub"],
+        available_types=[ImportDocumentTypeOption(document_type="epub", label="EPUB")],
+        summary="book.epub",
+    )
+    try:
+        view._inspect_import_paths(["/tmp/book.epub"])
+        root = view.chrome_host.rootObject()
+        assert root is not None
+        assert root.property("canRemoveHardWraps") is True
+        assert root.property("removeHardWrapsEnabled") is False
+
+        root.removeHardWrapsToggled.emit(True)
+        root.importRequested.emit()
+
+        assert (
+            "import_documents",
+            ImportDocumentsRequest(
+                project_id="proj-1",
+                paths=["/tmp/book.epub"],
+                document_type="epub",
+                remove_hard_wraps=True,
+            ),
+        ) in work_service.calls
+    finally:
+        view.cleanup()
+
+
+def test_work_view_resets_remove_hard_wraps_for_new_selection_and_after_import():
+    action = DocumentRowAction(
+        kind=DocumentRowActionKind.OPEN_TRANSLATION,
+        label="Open Translation",
+        target=NavigationTarget(
+            kind=NavigationTargetKind.DOCUMENT_TRANSLATION,
+            project_id="proj-1",
+            document_id=4,
+        ),
+    )
+    view, _bus, work_service, _document_service, _terms_service = _make_view(work_state=_make_workboard(action=action))
+    try:
+        work_service.import_inspection_state = ImportInspectionState(
+            selected_paths=["/tmp/book.epub"],
+            available_types=[ImportDocumentTypeOption(document_type="epub", label="EPUB")],
+            summary="book.epub",
+        )
+        view._inspect_import_paths(["/tmp/book.epub"])
+        root = view.chrome_host.rootObject()
+        assert root is not None
+
+        root.removeHardWrapsToggled.emit(True)
+        assert root.property("removeHardWrapsEnabled") is True
+
+        work_service.import_inspection_state = ImportInspectionState(
+            selected_paths=["/tmp/book2.epub"],
+            available_types=[ImportDocumentTypeOption(document_type="epub", label="EPUB")],
+            summary="book2.epub",
+        )
+        view._inspect_import_paths(["/tmp/book2.epub"])
+        assert root.property("removeHardWrapsEnabled") is False
+
+        root.removeHardWrapsToggled.emit(True)
+        root.importRequested.emit()
+
+        assert root.property("removeHardWrapsEnabled") is False
+        assert view.viewmodel.import_summary == "No file or folder selected"
+    finally:
+        view.cleanup()
+
+
 def test_work_view_reset_and_delete_selected_document():
     action = DocumentRowAction(
         kind=DocumentRowActionKind.OPEN_TRANSLATION,

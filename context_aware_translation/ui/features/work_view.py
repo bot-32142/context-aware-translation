@@ -65,6 +65,7 @@ _TARGET_TO_SECTION: dict[NavigationTargetKind, DocumentSection] = {
 
 class WorkView(QWidget):
     _TABLE_MAX_VISIBLE_ROWS = 10
+    _HARD_WRAP_IMPORT_TYPES = frozenset({"text", "epub"})
     _TOOLBAR_BUTTON_STYLE = """
         QPushButton {
             min-width: 150px;
@@ -114,6 +115,7 @@ class WorkView(QWidget):
         self._import_message = ""
         self._import_message_is_error = False
         self._can_import = False
+        self._remove_hard_wraps = False
         self.viewmodel = WorkHomeViewModel(self)
         self._event_bridge = QtApplicationEventBridge(events, parent=self)
         self._event_bridge.workboard_invalidated.connect(self._on_workboard_invalidated)
@@ -394,6 +396,7 @@ class WorkView(QWidget):
 
     def _inspect_import_paths(self, paths: list[str]) -> None:
         self._selected_import_paths = list(paths)
+        self._remove_hard_wraps = False
         state = self._work_service.inspect_import_paths(
             InspectImportPathsRequest(project_id=self._project_id, paths=paths)
         )
@@ -416,6 +419,7 @@ class WorkView(QWidget):
                     project_id=self._project_id,
                     paths=self._selected_import_paths,
                     document_type=str(document_type) if document_type else None,
+                    remove_hard_wraps=self._remove_hard_wraps and self._can_remove_hard_wraps_for_selection(),
                 )
             )
         except BlockedOperationError as exc:
@@ -432,6 +436,7 @@ class WorkView(QWidget):
         self._import_options = []
         self._selected_import_type = None
         self._can_import = False
+        self._remove_hard_wraps = False
         self._import_summary = self._default_import_summary()
         self._sync_import_chrome_state()
         self.refresh()
@@ -450,6 +455,7 @@ class WorkView(QWidget):
         root.importRequested.connect(self._run_import)
         root.setupActionRequested.connect(self._on_setup_action_clicked)
         root.importTypeSelected.connect(self._on_import_type_selected)
+        root.removeHardWrapsToggled.connect(self._on_remove_hard_wraps_toggled)
 
     def _on_import_type_selected(self, document_type: str) -> None:
         if document_type not in {option[0] for option in self._import_options}:
@@ -457,12 +463,21 @@ class WorkView(QWidget):
         self._selected_import_type = document_type
         self._sync_import_chrome_state()
 
+    def _on_remove_hard_wraps_toggled(self, enabled: bool) -> None:
+        self._remove_hard_wraps = bool(enabled)
+        self._sync_import_chrome_state()
+
+    def _can_remove_hard_wraps_for_selection(self) -> bool:
+        return bool(self._selected_import_type in self._HARD_WRAP_IMPORT_TYPES)
+
     def _sync_import_chrome_state(self) -> None:
         self.viewmodel.set_import_state(
             summary=self._import_summary.strip() or self._default_import_summary(),
             message=self._import_message.strip(),
             is_error=self._import_message_is_error,
             can_import=self._can_import,
+            remove_hard_wraps=self._remove_hard_wraps,
+            can_remove_hard_wraps=self._can_remove_hard_wraps_for_selection(),
             options=self._import_options,
             selected_import_type=self._selected_import_type,
         )
