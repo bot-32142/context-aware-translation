@@ -9,6 +9,7 @@ from context_aware_translation.core.progress import ProgressCallback
 from context_aware_translation.documents.base import Document
 from context_aware_translation.utils.compression_marker import decode_compressed_lines
 from context_aware_translation.utils.file_utils import classify_file, scan_folder
+from context_aware_translation.utils.hard_wrap import unwrap_hard_wrapped_text
 
 if TYPE_CHECKING:
     from context_aware_translation.config import ImageReembeddingConfig
@@ -63,6 +64,7 @@ class TextDocument(Document):
         repo: DocumentRepository,
         path: Path,
         cancel_check: Callable[[], bool] | None = None,
+        remove_hard_wraps: bool = False,
     ) -> dict[str, int]:
         """Import text file(s) into repository with transaction handling.
 
@@ -92,6 +94,8 @@ class TextDocument(Document):
         for file_path in files_to_import:
             raise_if_cancelled(cancel_check)
             text_content = file_path.read_text(encoding="utf-8")
+            if remove_hard_wraps:
+                text_content = unwrap_hard_wrapped_text(text_content)
             raise_if_cancelled(cancel_check)
             if repo.source_exists_by_content(text_content):
                 skipped += 1

@@ -12,7 +12,7 @@ import pytest
 from PIL import Image
 
 from context_aware_translation.config import OCRConfig, TranslatorConfig
-from context_aware_translation.documents.epub import METADATA_PATH, EPUBDocument
+from context_aware_translation.documents.epub import IMPORT_SIGNATURE_KEY, METADATA_PATH, EPUBDocument
 from context_aware_translation.documents.epub_container import (
     EpubBook,
     EpubItem,
@@ -488,6 +488,35 @@ class TestDoImport:
         assert appendix["is_ocr_completed"] == 1
         assert EPUBDocument._is_chapter_source(appendix) is True
 
+    def test_import_can_remove_hard_wraps_from_xhtml_text(self, tmp_path: Path):
+        chapters = [
+            (
+                "chapter1.xhtml",
+                (
+                    "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>"
+                    "After a long conversation with the harbor master,\n"
+                    "Captain Leclere left Naples in agitation.\n"
+                    "Twenty-four hours later the fever took him."
+                    "</p></body></html>"
+                ),
+            ),
+        ]
+        epub_path = _make_epub_file(tmp_path, chapters=chapters)
+        repo = _setup_repo(tmp_path)
+
+        EPUBDocument.do_import(repo, epub_path, remove_hard_wraps=True)
+
+        doc_row = repo.list_documents()[0]
+        doc = EPUBDocument(repo, doc_row["document_id"])
+        lines = doc.get_text().splitlines()
+
+        assert (
+            "After a long conversation with the harbor master, "
+            "Captain Leclere left Naples in agitation. "
+            "Twenty-four hours later the fever took him."
+        ) in lines
+        assert "Captain Leclere left Naples in agitation." not in lines
+
     def test_import_media_type_checks_are_case_insensitive(self, tmp_path: Path):
         book = EpubBook(
             metadata=EpubMetadata(title="Mixed Media Types"),
@@ -756,6 +785,42 @@ class TestDoImport:
         result2 = EPUBDocument.do_import(repo, epub_path)
         assert result2["imported"] == 0
         assert result2["skipped"] == 1
+
+    def test_import_allows_reimport_when_remove_hard_wraps_setting_changes(self, tmp_path: Path):
+        epub_path = _make_epub_file(
+            tmp_path,
+            chapters=[
+                (
+                    "chapter1.xhtml",
+                    '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Line one\nLine two</p></body></html>',
+                )
+            ],
+        )
+        repo = _setup_repo(tmp_path)
+
+        result1 = EPUBDocument.do_import(repo, epub_path, remove_hard_wraps=False)
+        result2 = EPUBDocument.do_import(repo, epub_path, remove_hard_wraps=True)
+        result3 = EPUBDocument.do_import(repo, epub_path, remove_hard_wraps=True)
+
+        assert result1 == {"imported": 1, "skipped": 0}
+        assert result2 == {"imported": 1, "skipped": 0}
+        assert result3 == {"imported": 0, "skipped": 1}
+
+        docs = repo.list_documents()
+        assert len(docs) == 2
+
+        original_sources = repo.get_document_sources(docs[0]["document_id"])
+        normalized_sources = repo.get_document_sources(docs[1]["document_id"])
+
+        original_metadata = json.loads(next(s for s in original_sources if s["relative_path"] == METADATA_PATH)["text_content"])
+        normalized_metadata = json.loads(
+            next(s for s in normalized_sources if s["relative_path"] == METADATA_PATH)["text_content"]
+        )
+        assert original_metadata[IMPORT_SIGNATURE_KEY]["remove_hard_wraps"] is False
+        assert normalized_metadata[IMPORT_SIGNATURE_KEY]["remove_hard_wraps"] is True
+        assert original_metadata[IMPORT_SIGNATURE_KEY]["archive_sha256"] == normalized_metadata[IMPORT_SIGNATURE_KEY][
+            "archive_sha256"
+        ]
 
     def test_import_dedup_uses_archive_bytes_not_first_chapter_only(self, tmp_path: Path):
         epub_path1 = _make_epub_file(

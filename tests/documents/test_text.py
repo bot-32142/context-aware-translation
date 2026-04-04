@@ -9,7 +9,13 @@ import pytest
 
 from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.documents.text import TextDocument
+from context_aware_translation.storage.repositories.document_repository import DocumentRepository
+from context_aware_translation.storage.schema.book_db import SQLiteBookDB
 from context_aware_translation.utils.compression_marker import COMPRESSED_LINE_SENTINEL
+
+
+def _setup_repo(tmp_path: Path) -> DocumentRepository:
+    return DocumentRepository(SQLiteBookDB(tmp_path / "book.db"))
 
 
 def test_process_ocr_is_noop():
@@ -96,6 +102,30 @@ def test_mark_text_added_calls_db_method():
     doc.mark_text_added()
 
     mock_repo.update_all_sources_text_added.assert_called_once_with(1)
+
+
+def test_do_import_can_remove_hard_wraps(tmp_path: Path) -> None:
+    source = tmp_path / "chapter.txt"
+    source.write_text(
+        "After a long conversation with the harbor master,\n"
+        "Captain Leclere left Naples in agitation.\n"
+        "Twenty-four hours later the fever took him.",
+        encoding="utf-8",
+    )
+
+    repo = _setup_repo(tmp_path)
+    result = TextDocument.do_import(repo, source, remove_hard_wraps=True)
+
+    assert result == {"imported": 1, "skipped": 0}
+    doc_row = repo.get_document_row()
+    assert doc_row is not None
+    sources = repo.get_document_sources(doc_row["document_id"])
+    assert len(sources) == 1
+    assert sources[0]["text_content"] == (
+        "After a long conversation with the harbor master, "
+        "Captain Leclere left Naples in agitation. "
+        "Twenty-four hours later the fever took him."
+    )
 
 
 async def test_set_text_returns_line_count_and_stores_lines():

@@ -131,6 +131,8 @@ def test_work_home_viewmodel_retranslate_refreshes_dynamic_content_labels():
         viewmodel.retranslate()
 
         assert viewmodel.tip_text.startswith("T:Import documents here")
+        assert viewmodel.remove_hard_wraps_label == "T:Remove hard wraps"
+        assert viewmodel.remove_hard_wraps_warning.startswith("T:Warning: experimental")
         assert viewmodel.import_type_options == [{"documentType": "text", "label": "T:Text files", "selected": True}]
 
     assert notifications == ["content"]

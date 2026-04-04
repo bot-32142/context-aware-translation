@@ -63,6 +63,7 @@ class ImportDocumentsRequest(ContractModel):
     project_id: str
     paths: list[str]
     document_type: str | None = None
+    remove_hard_wraps: bool = False
 
 
 class InspectImportPathsRequest(ContractModel):

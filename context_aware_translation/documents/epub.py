@@ -9,6 +9,7 @@ formats (md/docx/html).
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -62,6 +63,7 @@ from context_aware_translation.llm.epub_ocr import ocr_epub_images
 from context_aware_translation.llm.image_generator import build_text_replacements, create_image_generator
 from context_aware_translation.ui.constants import LANGUAGES as UI_LANGUAGE_PRESETS
 from context_aware_translation.utils.compression_marker import decode_compressed_lines
+from context_aware_translation.utils.hard_wrap import unwrap_hard_wrapped_text
 from context_aware_translation.utils.image_utils import (
     compress_image_for_ocr,
     detect_mime_type,
@@ -79,6 +81,7 @@ logger = logging.getLogger(__name__)
 METADATA_PATH = "__epub_metadata__.json"
 ORIGINAL_ARCHIVE_PATH = "__epub_original__.epub"
 NAV_LABEL_SPECS_KEY = "nav_label_specs"
+IMPORT_SIGNATURE_KEY = "_import_signature"
 NAV_TRANSLATABLE_TYPES = frozenset({"page-list", "landmarks"})
 IMAGE_EXTENSIONS = frozenset(
     {
@@ -1455,6 +1458,24 @@ class EPUBDocument(Document):
         except Exception as e:
             raise ValueError(f"Invalid {source_kind} '{source_path}': {e}") from e
 
+    @classmethod
+    def _remove_hard_wraps_from_xhtml(cls, xhtml_content: str) -> str:
+        slot_texts = extract_text_from_xhtml(xhtml_content)
+        normalized_slots = [unwrap_hard_wrapped_text(slot_text) for slot_text in slot_texts]
+        if normalized_slots == slot_texts:
+            return xhtml_content
+        normalized_xhtml, consumed = inject_translations_into_xhtml(xhtml_content, normalized_slots)
+        if consumed != len(normalized_slots):
+            raise ValueError("Failed to normalize all XHTML text slots during hard-wrap removal.")
+        return normalized_xhtml
+
+    @staticmethod
+    def _build_import_signature(epub_bytes: bytes, *, remove_hard_wraps: bool) -> dict[str, Any]:
+        return {
+            "archive_sha256": hashlib.sha256(epub_bytes).hexdigest(),
+            "remove_hard_wraps": remove_hard_wraps,
+        }
+
     # =========================================================================
     # Import
     # =========================================================================
@@ -1472,6 +1493,7 @@ class EPUBDocument(Document):
         repo: DocumentRepository,
         path: Path,
         cancel_check: Callable[[], bool] | None = None,
+        remove_hard_wraps: bool = False,
     ) -> dict[str, int]:
         """Import an EPUB file into the repository.
 
@@ -1479,7 +1501,8 @@ class EPUBDocument(Document):
         image sources, and metadata/CSS/fonts as pre-marked sources.
 
         Manages transactions internally (begin/commit/rollback).
-        Skips EPUBs that have already been imported (exact archive-byte dedup).
+        Skips EPUBs that have already been imported with the same archive and
+        import options.
 
         Args:
             repo: DocumentRepository for database operations.
@@ -1501,10 +1524,6 @@ class EPUBDocument(Document):
             ) from e
 
         original_epub_bytes = path.read_bytes()
-        raise_if_cancelled(cancel_check)
-        if repo.source_exists_by_binary(original_epub_bytes):
-            return {"imported": 0, "skipped": 1}
-
         # spine_items are already filtered (no nav) and in spine order
         spine_items = book.spine_items
 
@@ -1524,6 +1543,15 @@ class EPUBDocument(Document):
 
         metadata["toc"] = cls._serialize_toc(book.toc)
         metadata[NAV_LABEL_SPECS_KEY] = cls._extract_nav_label_specs(book.resources)
+        metadata[IMPORT_SIGNATURE_KEY] = cls._build_import_signature(
+            original_epub_bytes,
+            remove_hard_wraps=remove_hard_wraps,
+        )
+        metadata_content = json.dumps(metadata, ensure_ascii=False)
+
+        raise_if_cancelled(cancel_check)
+        if repo.source_exists_by_content(metadata_content):
+            return {"imported": 0, "skipped": 1}
 
         repo.begin()
         try:
@@ -1537,7 +1565,7 @@ class EPUBDocument(Document):
                 seq,
                 "text",
                 relative_path=METADATA_PATH,
-                text_content=json.dumps(metadata, ensure_ascii=False),
+                text_content=metadata_content,
                 is_text_added=True,
                 is_ocr_completed=True,
                 auto_commit=False,
@@ -1574,6 +1602,8 @@ class EPUBDocument(Document):
                         extract_text_from_xhtml(text_content)
                     except Exception as e:
                         raise ValueError(f"Invalid XHTML chapter '{item.file_name}': {e}") from e
+                    if remove_hard_wraps:
+                        text_content = cls._remove_hard_wraps_from_xhtml(text_content)
 
                     repo.insert_document_source(
                         document_id,
@@ -1650,6 +1680,8 @@ class EPUBDocument(Document):
                         extract_text_from_xhtml(text_content)
                     except Exception as e:
                         raise ValueError(f"Invalid XHTML resource '{rp}': {e}") from e
+                    if remove_hard_wraps:
+                        text_content = cls._remove_hard_wraps_from_xhtml(text_content)
 
                     repo.insert_document_source(
                         document_id,

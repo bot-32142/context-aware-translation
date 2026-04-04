@@ -352,6 +352,7 @@ class DefaultWorkService:
                 dbx.document_repo,
                 paths=[Path(path) for path in request.paths],
                 document_type=request.document_type,
+                remove_hard_wraps=request.remove_hard_wraps,
             )
         self._runtime.invalidate_workboard(request.project_id)
         self._runtime.invalidate_projects()
