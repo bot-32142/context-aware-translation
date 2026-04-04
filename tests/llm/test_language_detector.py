@@ -90,8 +90,11 @@ async def test_detect_chinese_language(mock_llm_client, config):
 
 @pytest.mark.asyncio
 async def test_detect_language_with_long_text(mock_llm_client, config):
-    """Test that long text is properly sampled."""
-    long_text = "これは日本語のテキストです。" * 200  # Create a long text
+    """Test that long text is sampled across the full input, not just the prefix."""
+    english_front_matter = "ENGLISH_LICENSE_TEXT " * 120
+    french_body = "FRENCH_BODY_TEXT " * 120
+    french_ending = "FRENCH_ENDING_TEXT " * 120
+    long_text = english_front_matter + french_body + french_ending
 
     # Mock the chat response
     mock_llm_client.chat = AsyncMock(return_value='{"语言": "日语"}')
@@ -102,7 +105,9 @@ async def test_detect_language_with_long_text(mock_llm_client, config):
     # Check that the text sent is sampled (check via call args)
     call_args = mock_llm_client.chat.call_args
     user_message = call_args[0][0][1]["content"]
-    # Should be sampled to approximately 1000 characters
+    assert "ENGLISH_LICENSE_TEXT" in user_message
+    assert "FRENCH_BODY_TEXT" in user_message
+    assert "FRENCH_ENDING_TEXT" in user_message
     assert len(user_message) < len(long_text)
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from collections.abc import Callable
 
 from context_aware_translation.config import LLMConfig
@@ -15,6 +16,42 @@ logger = logging.getLogger(__name__)
 
 class LanguageDetectionError(Exception):
     """Raised when language detection fails."""
+
+
+def _build_representative_text_sample(text: str, sample_size: int) -> str:
+    """Return a representative sample spread across the full input text."""
+    if sample_size <= 0:
+        return text
+
+    normalized_text = text.strip()
+    if len(normalized_text) <= sample_size:
+        return normalized_text
+
+    window_count = min(5, max(2, math.ceil(len(normalized_text) / sample_size)))
+    separator = "\n"
+    text_budget = max(window_count, sample_size - (len(separator) * (window_count - 1)))
+    window_budget = max(1, text_budget // window_count)
+    span_size = math.ceil(len(normalized_text) / window_count)
+
+    snippets: list[str] = []
+    for index in range(window_count):
+        span_start = index * span_size
+        span_end = min(len(normalized_text), span_start + span_size)
+        if span_start >= span_end:
+            break
+
+        while span_start < span_end and normalized_text[span_start].isspace():
+            span_start += 1
+        if span_start >= span_end:
+            continue
+
+        snippet = normalized_text[span_start : min(span_end, span_start + window_budget)].strip()
+        if snippet:
+            snippets.append(snippet)
+
+    if not snippets:
+        return normalized_text[:sample_size]
+    return separator.join(snippets)
 
 
 async def detect_source_language(
@@ -40,10 +77,12 @@ async def detect_source_language(
         LanguageDetectionError: If language detection fails after retries
     """
     with llm_session_scope() as session_id:
-        # Sample the text if it's too long
-        text_sample = text[:sample_size] if len(text) > sample_size else text
+        # Sample the text if it's too long, keeping coverage across the whole input.
+        text_sample = _build_representative_text_sample(text, sample_size)
 
         system_prompt = """你是一个语言检测助手。分析提供的文本并确定其主要语言。
+
+如果文本包含封面、版权页、目录、许可证、网站模板、导航、作者信息等前后附加内容，请忽略这些噪声，判断正文/主体内容的主要语言。
 
 仅返回一个JSON对象，包含单个字段"语言"，值为中文语言名称。
 

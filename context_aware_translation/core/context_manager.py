@@ -85,6 +85,26 @@ def _select_final_exception(
     return exceptions[-1]
 
 
+def _select_representative_chunk_texts(
+    chunks: Sequence[TranslationChunkRecord],
+    *,
+    max_samples: int = 5,
+) -> list[str]:
+    """Select up to ``max_samples`` non-empty chunks spread across the corpus."""
+    nonempty_chunks = [chunk for chunk in chunks if chunk.text]
+    if max_samples <= 0 or len(nonempty_chunks) <= max_samples:
+        return [chunk.text for chunk in nonempty_chunks]
+
+    if max_samples == 1:
+        return [nonempty_chunks[0].text]
+
+    last_index = len(nonempty_chunks) - 1
+    selected_positions = {
+        (sample_index * last_index) // (max_samples - 1) for sample_index in range(max_samples)
+    }
+    return [nonempty_chunks[position].text for position in sorted(selected_positions)]
+
+
 class _TermLike(Protocol):
     """Protocol for term-like objects with key and votes attributes."""
 
@@ -675,16 +695,8 @@ class TranslationContextManager(ContextManager):
                     "then 'build_glossary' will process text and perform OCR."
                 )
 
-            # Sample from up to 5 evenly-spaced chunks for a representative sample
-            num_samples = min(5, len(chunks))
-            step = max(1, len(chunks) // num_samples)
-            samples: list[str] = []
-            for i in range(0, len(chunks), step):
-                if chunks[i].text:
-                    samples.append(chunks[i].text)
-                if len(samples) >= num_samples:
-                    break
-
+            # Sample from up to 5 evenly-spaced chunks for a representative sample.
+            samples = _select_representative_chunk_texts(chunks, max_samples=5)
             sample_text = "\n".join(samples)
             if not sample_text:
                 raise Exception("Please import text first. No text found.")

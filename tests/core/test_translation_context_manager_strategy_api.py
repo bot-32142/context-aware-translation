@@ -300,6 +300,34 @@ async def test_translation_context_manager_detect_language_uses_strategy_object(
 
 
 @pytest.mark.asyncio
+async def test_translation_context_manager_detect_language_samples_across_corpus():
+    tokenizer = DummyTokenizer()
+    context_tree = DummyContextTree()
+    chunks = [
+        TranslationChunkRecord(chunk_id=index, hash=f"hash{index}", text=f"chunk-{index}")
+        for index in range(9)
+    ]
+    term_repo = DummyTermRepo(source_language=None, chunks=chunks)
+    detector = DetectLanguageStrategy("French")
+
+    manager = TranslationContextManager(
+        term_repo=term_repo,
+        context_tree=context_tree,
+        context_extractor=DummyContextExtractor(),
+        tokenizer=tokenizer,
+        source_language_detector=detector,
+        glossary_translator=GlossaryTranslatorStrategy(),
+        chunk_translator=ChunkTranslatorStrategy(),
+        term_reviewer=None,
+    )
+
+    await manager.detect_language()
+
+    detector.detect.assert_awaited_once_with("chunk-0\nchunk-2\nchunk-4\nchunk-6\nchunk-8", cancel_check=None)
+    assert term_repo.get_source_language() == "French"
+
+
+@pytest.mark.asyncio
 async def test_translation_context_manager_translate_terms_uses_glossary_strategy_object():
     tokenizer = DummyTokenizer()
     context_tree = DummyContextTree()
