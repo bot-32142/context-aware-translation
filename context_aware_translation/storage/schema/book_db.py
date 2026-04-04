@@ -995,6 +995,13 @@ class SQLiteBookDB:
         cur.execute("UPDATE meta SET source_language = ?", (source_language,))
         self.conn.commit()
 
+    @_serialized_write()
+    def clear_source_language(self, auto_commit: bool = True) -> None:
+        """Clear the cached source language in the meta table."""
+        self.conn.execute("UPDATE meta SET source_language = NULL")
+        if auto_commit:
+            self.conn.commit()
+
     def get_source_language(self) -> str | None:
         """Get the source language from the meta table."""
         row = self.conn.execute("SELECT source_language FROM meta").fetchone()
@@ -1635,7 +1642,10 @@ class SQLiteBookDB:
                 affected_doc_ids,
             )
 
-        # Step 5: Commit
+        # Step 5: Source language must be re-detected after document stack changes.
+        self.clear_source_language(auto_commit=False)
+
+        # Step 6: Commit
         if auto_commit:
             self.conn.commit()
 
@@ -1694,6 +1704,8 @@ class SQLiteBookDB:
         reset_result = {"deleted_chunks": 0, "pruned_terms": 0, "deleted_terms": 0}
         if cutoff is not None:
             reset_result = self.reset_documents_from(cutoff, auto_commit=False)
+        else:
+            self.clear_source_language(auto_commit=False)
 
         # Delete document sources
         cur_sources = self.conn.execute(

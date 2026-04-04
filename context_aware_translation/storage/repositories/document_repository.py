@@ -223,6 +223,7 @@ class DocumentRepository:
             # Step 2: Clean book.db (chunks, terms, flags)
             result = self.db.reset_documents_from(cutoff)
         else:
+            self.db.clear_source_language()
             result = {
                 "affected_document_ids": affected_doc_ids,
                 "deleted_chunks": 0,

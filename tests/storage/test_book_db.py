@@ -1645,6 +1645,15 @@ def test_set_source_language_multiple_times(temp_db: SQLiteBookDB):
     assert temp_db.get_source_language() == "语言3"
 
 
+def test_clear_source_language(temp_db: SQLiteBookDB):
+    """Test clearing source language after it has been set."""
+    temp_db.set_source_language("英语")
+
+    temp_db.clear_source_language()
+
+    assert temp_db.get_source_language() is None
+
+
 # --- Transaction Operations ---
 
 
@@ -1847,6 +1856,7 @@ def test_reset_source_ocr_preserves_later_document_term_evidence(temp_db: SQLite
 def test_reset_documents_from_preserves_term_type_when_chunk_evidence_survives(temp_db: SQLiteBookDB):
     first_document_id = temp_db.insert_document("manga")
     second_document_id = temp_db.insert_document("manga")
+    temp_db.set_source_language("日语")
     temp_db.upsert_chunks(
         [
             TranslationChunkRecord(
@@ -1893,3 +1903,15 @@ def test_reset_documents_from_preserves_term_type_when_chunk_evidence_survives(t
     assert hero.term_type_votes == {"character": 2}
     assert result["deleted_chunks"] == 1
     assert result["pruned_terms"] == 1
+    assert temp_db.get_source_language() is None
+
+
+def test_delete_documents_from_clears_source_language_without_chunks(temp_db: SQLiteBookDB):
+    temp_db.set_source_language("法语")
+    temp_db.insert_document("text")
+    temp_db.insert_document("text")
+
+    result = temp_db.delete_documents_from(2)
+
+    assert result["deleted_documents"] == 1
+    assert temp_db.get_source_language() is None

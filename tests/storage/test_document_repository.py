@@ -339,6 +339,7 @@ def test_reset_document_stack_without_chunks_tracks_all_affected_documents(
     assert result["document_exists"] is True
     assert result["affected_document_ids"] == [3, 4]
     assert result["deleted_chunks"] == 0
+    mock_db.clear_source_language.assert_called_once_with()
 
 
 def test_delete_documents_stack_reports_missing_document(document_repository: DocumentRepository, mock_db: MagicMock):
@@ -354,6 +355,7 @@ def test_reset_document_stack_prunes_book_term_memory(tmp_path):
     book_db = SQLiteBookDB(tmp_path / "book.db")
     try:
         now = time.time()
+        book_db.set_source_language("English")
         book_db.insert_document("text")
         book_db.insert_document("text")
         book_db.insert_document_source(1, 0, "text", text_content="doc1")
@@ -425,6 +427,7 @@ def test_reset_document_stack_prunes_book_term_memory(tmp_path):
         result = repo.reset_document_stack(2)
 
         assert result["document_exists"] is True
+        assert book_db.get_source_language() is None
         versions = book_db.list_term_memory_versions("hero")
         assert [version.summary_text for version in versions] == ["early summary"]
     finally:
