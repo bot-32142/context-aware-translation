@@ -39,8 +39,8 @@ test-cov-py:
 test-ui-cov:
 	$(PYTHON) scripts/run_ui_tests.py \
 		--cov=context_aware_translation \
-		--cov-report= \
-		--cov-append
+		--cov-report=
+	uv run coverage combine --append .coverage.ui.*
 
 lint:
 	$(RUFF) check context_aware_translation/ tests/
