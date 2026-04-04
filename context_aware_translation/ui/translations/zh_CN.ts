@@ -3517,8 +3517,8 @@ All completed results are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../viewmodels/work_home.py" line="61"/>
-        <source>Warning: experimental and may merge intentional line breaks.</source>
-        <translation>警告：这是实验性功能，可能会合并原本有意保留的换行。</translation>
+        <source>Warning: may merge intentional line breaks.</source>
+        <translation>警告：可能会合并原本有意保留的换行。</translation>
     </message>
     <message>
         <location filename="../viewmodels/work_home.py" line="136"/>
