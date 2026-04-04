@@ -1003,10 +1003,12 @@ class DocumentTranslationView(QWidget):
         host = self.find_panel.parentWidget() or self
         anchor = self._find_panel_anchor_widget()
         margin = 12
-        anchor_top_right = (
-            anchor.mapTo(host, anchor.rect().topRight()) if anchor is not host else anchor.rect().topRight()
-        )
-        anchor_top_left = anchor.mapTo(host, anchor.rect().topLeft()) if anchor is not host else anchor.rect().topLeft()
+        if anchor is host:
+            anchor_top_right = anchor.rect().topRight()
+            anchor_top_left = anchor.rect().topLeft()
+        else:
+            anchor_top_right = host.mapFromGlobal(anchor.mapToGlobal(anchor.rect().topRight()))
+            anchor_top_left = host.mapFromGlobal(anchor.mapToGlobal(anchor.rect().topLeft()))
         x = anchor_top_right.x() - panel_width - 24
         y = anchor_top_left.y() + margin
         return self._clamp_find_panel_pos(QPoint(x, y), panel_width, panel_height)
