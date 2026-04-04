@@ -1,10 +1,17 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 
 Rectangle {
     id: root
     objectName: "workHomeChrome"
     color: "#f3efe7"
+    property int bodyFontSize: 14
+    property int detailFontSize: 13
+    property int buttonFontSize: 14
+    property int chipFontSize: 13
+    property int toggleLabelFontSize: 14
+    property int toggleWarningFontSize: 13
     implicitHeight: tipLabel.implicitHeight + importCard.implicitHeight + 48
         + (root.hasSetupBlocker ? setupCard.implicitHeight + 12 : 0)
 
@@ -50,14 +57,14 @@ Rectangle {
     Column {
         anchors.fill: parent
         anchors.margins: 18
-        spacing: 12
+        spacing: 10
 
         Text {
             id: tipLabel
             width: parent.width
             text: root.tipText
             color: "#5d5349"
-            font.pixelSize: 13
+            font.pixelSize: root.bodyFontSize
             wrapMode: Text.WordWrap
         }
 
@@ -73,7 +80,7 @@ Rectangle {
             Column {
                 id: importColumn
                 anchors.fill: parent
-                anchors.margins: 12
+                anchors.margins: 14
                 spacing: 10
 
                 Row {
@@ -87,17 +94,21 @@ Rectangle {
                         ]
 
                         delegate: Rectangle {
-                            width: modelData.signalName === "import" ? 110 : 126
+                            width: Math.max(
+                                buttonLabel.implicitWidth + 36,
+                                modelData.signalName === "import" ? 108 : 124
+                            )
                             height: 40
                             radius: 14
                             color: modelData.signalName === "import" && !root.canImport ? "#ddd4c8" : "#2f251d"
                             opacity: modelData.signalName === "import" && !root.canImport ? 0.65 : 1.0
 
                             Text {
+                                id: buttonLabel
                                 anchors.centerIn: parent
                                 text: modelData.label
                                 color: "#fcfaf6"
-                                font.pixelSize: 13
+                                font.pixelSize: root.buttonFontSize
                                 font.bold: true
                             }
 
@@ -146,7 +157,7 @@ Rectangle {
 
                             height: 34
                             radius: 12
-                            width: choiceLabel.implicitWidth + 24
+                            width: choiceLabel.implicitWidth + 20
                             color: modelData.selected ? "#c79c5d" : "#e8decf"
 
                             Text {
@@ -154,7 +165,7 @@ Rectangle {
                                 anchors.centerIn: parent
                                 text: modelData.label
                                 color: modelData.selected ? "#2f251d" : "#5d5349"
-                                font.pixelSize: 12
+                                font.pixelSize: root.chipFontSize
                                 font.bold: modelData.selected
                             }
 
@@ -167,25 +178,79 @@ Rectangle {
                     }
                 }
 
-                Row {
+                Rectangle {
+                    id: hardWrapCard
                     width: parent.width
-                    spacing: 10
+                    radius: 14
+                    color: root.canRemoveHardWraps ? "#f6efe3" : "#f3ede4"
+                    border.color: root.canRemoveHardWraps ? "#d9c7af" : "#ddd4c8"
+                    border.width: 1
+                    implicitHeight: hardWrapRow.implicitHeight + 18
+                    opacity: root.canRemoveHardWraps ? 1.0 : 0.8
 
-                    Switch {
-                        id: removeHardWrapsSwitch
-                        checked: root.removeHardWrapsEnabled
-                        enabled: root.canRemoveHardWraps
-                        text: root.removeHardWrapsLabelText
-                        onToggled: root.removeHardWrapsToggled(checked)
+                    RowLayout {
+                        id: hardWrapRow
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        spacing: 12
+
+                        Rectangle {
+                            id: hardWrapTrack
+                            Layout.alignment: Qt.AlignVCenter
+                            width: 52
+                            height: 30
+                            radius: 15
+                            color: root.removeHardWrapsEnabled ? "#2f251d" : "#cfc4b5"
+                            border.color: root.removeHardWrapsEnabled ? "#2f251d" : "#b7ab9c"
+                            border.width: 1
+
+                            Rectangle {
+                                id: hardWrapThumb
+                                width: 22
+                                height: 22
+                                radius: 11
+                                x: root.removeHardWrapsEnabled ? parent.width - width - 4 : 4
+                                y: 4
+                                color: "#fcfaf6"
+
+                                Behavior on x {
+                                    NumberAnimation {
+                                        duration: 120
+                                    }
+                                }
+                            }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+
+                            Text {
+                                Layout.fillWidth: true
+                                text: root.removeHardWrapsLabelText
+                                color: root.canRemoveHardWraps ? "#2f251d" : "#8b8174"
+                                font.pixelSize: root.toggleLabelFontSize
+                                font.bold: true
+                                wrapMode: Text.WordWrap
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                text: root.removeHardWrapsWarningText
+                                color: root.canRemoveHardWraps ? "#6f6458" : "#9a8f82"
+                                font.pixelSize: root.toggleWarningFontSize
+                                wrapMode: Text.WordWrap
+                            }
+                        }
                     }
 
-                    Text {
-                        width: parent.width - removeHardWrapsSwitch.width - 10
-                        text: root.removeHardWrapsWarningText
-                        color: "#8b8174"
-                        opacity: root.canRemoveHardWraps ? 1.0 : 0.65
-                        font.pixelSize: 12
-                        wrapMode: Text.WordWrap
+                    MouseArea {
+                        id: hardWrapMouseArea
+                        anchors.fill: parent
+                        z: 1
+                        enabled: root.canRemoveHardWraps
+                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        onClicked: root.removeHardWrapsToggled(!root.removeHardWrapsEnabled)
                     }
                 }
 
@@ -193,7 +258,7 @@ Rectangle {
                     width: parent.width
                     text: root.importSummaryText
                     color: "#2f251d"
-                    font.pixelSize: 13
+                    font.pixelSize: root.bodyFontSize
                     wrapMode: Text.WordWrap
                     elide: Text.ElideMiddle
                 }
@@ -203,7 +268,7 @@ Rectangle {
                     width: parent.width
                     text: root.importMessageText
                     color: root.importMessageKind === "error" ? "#b42318" : "#027a48"
-                    font.pixelSize: 12
+                    font.pixelSize: root.detailFontSize
                     font.bold: true
                     wrapMode: Text.WordWrap
                 }
@@ -218,34 +283,34 @@ Rectangle {
             color: "#fff3e8"
             border.color: "#f0b27a"
             border.width: 1
-            implicitHeight: setupRow.implicitHeight + 24
+            implicitHeight: setupRow.implicitHeight + 28
 
             Row {
                 id: setupRow
                 anchors.fill: parent
-                anchors.margins: 12
+                anchors.margins: 14
                 spacing: 12
 
                 Text {
                     width: parent.width - setupButton.width - 24
                     text: root.setupMessageText
                     color: "#6b3b11"
-                    font.pixelSize: 12
+                    font.pixelSize: root.detailFontSize
                     wrapMode: Text.WordWrap
                 }
 
                 Rectangle {
                     id: setupButton
-                    width: 126
-                    height: 38
-                    radius: 14
+                    width: 140
+                    height: 42
+                    radius: 16
                     color: "#6b3b11"
 
                     Text {
                         anchors.centerIn: parent
                         text: root.setupActionLabelText
                         color: "#fff9f2"
-                        font.pixelSize: 12
+                        font.pixelSize: root.detailFontSize
                         font.bold: true
                     }
 
