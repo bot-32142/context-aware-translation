@@ -62,7 +62,7 @@ class WorkHomeViewModel(ViewModelBase):
     def remove_hard_wraps_warning(self) -> str:
         return QCoreApplication.translate(
             "WorkView",
-            "Warning: experimental and may merge intentional line breaks.",
+            "Warning: may merge intentional line breaks.",
         )
 
     @Property(str, notify=content_changed)
