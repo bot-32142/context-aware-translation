@@ -134,6 +134,4 @@ def test_upsert_project_term_respects_glossary_mutation_blocker() -> None:
     service = DefaultTermsService(runtime)
 
     with pytest.raises(BlockedOperationError):
-        service.upsert_project_term(
-            UpsertProjectTermRequest(project_id="proj-1", term="ルフィ", translation="Luffy")
-        )
+        service.upsert_project_term(UpsertProjectTermRequest(project_id="proj-1", term="ルフィ", translation="Luffy"))

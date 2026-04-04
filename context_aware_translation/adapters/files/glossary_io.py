@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from context_aware_translation.core.models import normalize_term_type, ordered_description_values
 
@@ -127,7 +127,7 @@ def _import_structured_glossary(
     db.conn.execute("DELETE FROM terms")
 
     term_records = []
-    for entry in data["terms"]:
+    for entry in cast(list[object], data["terms"]):
         if not isinstance(entry, dict):
             continue
         term_records.append(

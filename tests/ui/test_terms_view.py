@@ -31,7 +31,7 @@ from tests.application.fakes import FakeTermsService
 
 try:
     from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QApplication, QFileDialog, QHeaderView, QMessageBox, QWidget
+    from PySide6.QtWidgets import QApplication, QFileDialog, QHeaderView, QMessageBox, QPushButton, QWidget
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -326,7 +326,7 @@ def test_terms_view_loads_qml_document_chrome_and_routes_document_actions():
         view.deleteLater()
 
 
-def test_terms_view_add_terms_dialog_upserts_project_terms_and_stays_open():
+def test_terms_view_add_terms_dialog_batches_rows_and_applies_from_popup():
     from context_aware_translation.ui.features.terms_view import TermsView
 
     service = FakeTermsService(project_state=_make_state(can_review=True, can_export=True))
@@ -346,21 +346,40 @@ def test_terms_view_add_terms_dialog_upserts_project_terms_and_stays_open():
         dialog.term_input.setText("ギア5")
         dialog.translation_input.setText("Gear 5")
         dialog.add_button.click()
+        assert dialog.pending_terms() == [("ギア5", "Gear 5")]
+        assert not any(name == "upsert_project_term" for name, _payload in service.calls)
 
-        assert service.calls[-1][0] == "upsert_project_term"
-        assert dialog.isVisible() is True
-        assert dialog.term_input.text() == ""
-        assert dialog.translation_input.text() == ""
-        assert dialog.status_label.text() == "Term added."
-        assert any(row.term_key == "ギア5" and row.translation == "Gear 5" for row in view.table_panel.rows_snapshot())
+        dialog.term_input.setText("ニカ")
+        dialog.translation_input.setText("Nika")
+        dialog.add_button.click()
+        assert dialog.pending_terms() == [("ギア5", "Gear 5"), ("ニカ", "Nika")]
+
+        delete_buttons = dialog.findChildren(QPushButton, "termsAddDeleteButton")
+        assert len(delete_buttons) == 2
+        delete_buttons[0].click()
+        assert dialog.pending_terms() == [("ニカ", "Nika")]
 
         dialog.term_input.setText("ルフィ")
         dialog.translation_input.setText("Monkey D. Luffy")
         dialog.add_button.click()
+        assert dialog.pending_terms() == [("ニカ", "Nika"), ("ルフィ", "Monkey D. Luffy")]
 
-        assert dialog.status_label.text() == "Updated existing term."
+        dialog.apply_button.click()
+
+        upsert_requests = [payload for name, payload in service.calls if name == "upsert_project_term"]
+        assert [request.term for request in upsert_requests] == ["ニカ", "ルフィ"]
+        assert [request.translation for request in upsert_requests] == ["Nika", "Monkey D. Luffy"]
+        assert dialog.isVisible() is True
+        assert dialog.term_input.text() == ""
+        assert dialog.translation_input.text() == ""
+        assert dialog.pending_terms() == []
+        assert dialog.status_label.text() == "Terms saved."
         assert any(
             row.term_key == "ルフィ" and row.translation == "Monkey D. Luffy" and row.reviewed and not row.ignored
+            for row in view.table_panel.rows_snapshot()
+        )
+        assert any(
+            row.term_key == "ニカ" and row.translation == "Nika" and row.reviewed and not row.ignored
             for row in view.table_panel.rows_snapshot()
         )
     finally:

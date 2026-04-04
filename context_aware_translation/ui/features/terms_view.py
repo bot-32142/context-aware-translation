@@ -8,12 +8,14 @@ from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMenu,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -56,8 +58,8 @@ class _AddTermsDialogTitleBar(QWidget):
         self._drag_offset: QPoint | None = None
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(18, 14, 12, 8)
-        layout.setSpacing(12)
+        layout.setContentsMargins(12, 8, 8, 6)
+        layout.setSpacing(8)
 
         self.title_label = QLabel(self)
         self.title_label.setObjectName("termsAddTitleLabel")
@@ -66,7 +68,7 @@ class _AddTermsDialogTitleBar(QWidget):
 
         self.close_button = QPushButton("X", self)
         self.close_button.setObjectName("termsAddCloseButton")
-        self.close_button.setFixedSize(36, 36)
+        self.close_button.setFixedSize(28, 28)
         self.close_button.clicked.connect(lambda: self.window().close())
         layout.addWidget(self.close_button)
 
@@ -89,8 +91,59 @@ class _AddTermsDialogTitleBar(QWidget):
         super().mouseReleaseEvent(event)
 
 
+class _PendingTermsRow(QWidget):
+    remove_requested = Signal(str)
+
+    def __init__(self, term: str, translation: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("termsAddPendingRow")
+        self.setFixedHeight(34)
+        self._term = term
+        self._translation = translation
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 0, 8, 0)
+        layout.setSpacing(8)
+
+        self.term_label = QLabel(term, self)
+        self.term_label.setObjectName("termsAddPendingTermLabel")
+        layout.addWidget(self.term_label, 1)
+
+        self.arrow_label = QLabel("=>", self)
+        self.arrow_label.setObjectName("termsAddPendingArrowLabel")
+        layout.addWidget(self.arrow_label)
+
+        self.translation_label = QLabel(translation, self)
+        self.translation_label.setObjectName("termsAddPendingTranslationLabel")
+        layout.addWidget(self.translation_label, 1)
+
+        self.delete_button = QPushButton(self)
+        self.delete_button.setObjectName("termsAddDeleteButton")
+        self.delete_button.setFixedSize(22, 22)
+        self.delete_button.clicked.connect(lambda: self.remove_requested.emit(self._term))
+        layout.addWidget(self.delete_button)
+
+        self.retranslateUi()
+
+    @property
+    def term(self) -> str:
+        return self._term
+
+    @property
+    def translation(self) -> str:
+        return self._translation
+
+    def update_translation(self, translation: str) -> None:
+        self._translation = translation
+        self.translation_label.setText(translation)
+
+    def retranslateUi(self) -> None:
+        self.delete_button.setText("×")
+        self.delete_button.setToolTip(self.tr("Delete"))
+
+
 class _AddTermsDialog(QDialog):
-    submitted = Signal(str, str)
+    apply_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -98,8 +151,12 @@ class _AddTermsDialog(QDialog):
         self.setModal(False)
         self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setMinimumWidth(620)
+        self.setMinimumWidth(480)
+        self.setMaximumWidth(560)
+        self.setMinimumHeight(280)
         self._has_position = False
+        self._pending_rows: dict[str, _PendingTermsRow] = {}
+        self._pending_order: list[str] = []
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -109,16 +166,17 @@ class _AddTermsDialog(QDialog):
         layout.addWidget(self.title_bar)
 
         content_layout = QVBoxLayout()
-        content_layout.setContentsMargins(18, 8, 18, 18)
-        content_layout.setSpacing(12)
+        content_layout.setContentsMargins(14, 6, 14, 14)
+        content_layout.setSpacing(10)
         layout.addLayout(content_layout)
 
         row_layout = QHBoxLayout()
-        row_layout.setSpacing(10)
+        row_layout.setSpacing(8)
         content_layout.addLayout(row_layout)
 
         self.term_input = QLineEdit(self)
         self.term_input.setObjectName("termsAddTermInput")
+        self.term_input.returnPressed.connect(lambda: self.translation_input.setFocus(Qt.FocusReason.OtherFocusReason))
         row_layout.addWidget(self.term_input, 1)
 
         self.arrow_label = QLabel("=>", self)
@@ -127,13 +185,45 @@ class _AddTermsDialog(QDialog):
 
         self.translation_input = QLineEdit(self)
         self.translation_input.setObjectName("termsAddTranslationInput")
-        self.translation_input.returnPressed.connect(self._emit_submit)
+        self.translation_input.returnPressed.connect(self._stage_term)
         row_layout.addWidget(self.translation_input, 1)
 
         self.add_button = QPushButton(self)
         self.add_button.setObjectName("termsAddSubmitButton")
-        self.add_button.clicked.connect(self._emit_submit)
+        self.add_button.clicked.connect(self._stage_term)
         row_layout.addWidget(self.add_button)
+
+        self.rows_scroll = QScrollArea(self)
+        self.rows_scroll.setObjectName("termsAddRowsScroll")
+        self.rows_scroll.setWidgetResizable(True)
+        self.rows_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.rows_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.rows_scroll.setFixedHeight(128)
+        content_layout.addWidget(self.rows_scroll)
+
+        self.rows_container = QWidget(self.rows_scroll)
+        self.rows_container.setObjectName("termsAddRowsContainer")
+        self.rows_layout = QVBoxLayout(self.rows_container)
+        self.rows_layout.setContentsMargins(8, 8, 8, 8)
+        self.rows_layout.setSpacing(6)
+        self.rows_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.rows_scroll.setWidget(self.rows_container)
+
+        self.empty_label = QLabel(self.rows_container)
+        self.empty_label.setObjectName("termsAddEmptyLabel")
+        self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.rows_layout.addWidget(self.empty_label)
+
+        footer_layout = QHBoxLayout()
+        footer_layout.setSpacing(8)
+        content_layout.addLayout(footer_layout)
+
+        footer_layout.addStretch(1)
+
+        self.apply_button = QPushButton(self)
+        self.apply_button.setObjectName("termsAddApplyButton")
+        self.apply_button.clicked.connect(self._emit_apply)
+        footer_layout.addWidget(self.apply_button)
 
         self.status_label = QLabel(self)
         self.status_label.setObjectName("termsAddStatusLabel")
@@ -146,21 +236,22 @@ class _AddTermsDialog(QDialog):
 QDialog#termsAddDialog {
     background: #2f2c31;
     border: 1px solid #4c4852;
-    border-radius: 16px;
+    border-radius: 14px;
 }
 QLabel#termsAddTitleLabel {
     color: #f5f3f7;
-    font-size: 26px;
-    font-weight: 700;
+    font-size: 16px;
+    font-weight: 650;
 }
 QLabel#termsAddArrowLabel {
     color: #d6d1da;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 700;
 }
 QLineEdit#termsAddTermInput,
 QLineEdit#termsAddTranslationInput {
-    min-height: 46px;
+    min-height: 34px;
+    padding: 0 10px;
     background: #4b494f;
     border: 1px solid #5a5660;
     color: #f5f3f7;
@@ -169,21 +260,51 @@ QLineEdit#termsAddTermInput::placeholder,
 QLineEdit#termsAddTranslationInput::placeholder {
     color: #aba4b0;
 }
+QScrollArea#termsAddRowsScroll {
+    background: #29262c;
+    border: 1px solid #4c4852;
+    border-radius: 10px;
+}
+QWidget#termsAddRowsContainer {
+    background: transparent;
+}
+QWidget#termsAddPendingRow {
+    background: #3c3940;
+    border: 1px solid #4c4852;
+    border-radius: 10px;
+}
+QLabel#termsAddPendingTermLabel,
+QLabel#termsAddPendingTranslationLabel,
+QLabel#termsAddPendingArrowLabel {
+    color: #f5f3f7;
+}
+QLabel#termsAddPendingArrowLabel {
+    color: #d6d1da;
+    font-weight: 700;
+}
+QLabel#termsAddEmptyLabel {
+    color: #aba4b0;
+    padding: 36px 4px;
+}
 QLabel#termsAddStatusLabel {
     color: #f7b3ad;
     padding-left: 4px;
-    min-height: 22px;
+    min-height: 18px;
 }
 QPushButton#termsAddCloseButton {
-    min-height: 32px;
-    min-width: 32px;
+    min-height: 28px;
+    min-width: 28px;
     padding: 0;
     border: none;
-    border-radius: 10px;
+    border-radius: 8px;
     background: transparent;
     color: #d6d1da;
     font-size: 14px;
     font-weight: 700;
+}
+QPushButton#termsAddDeleteButton {
+    padding: 0;
+    border-radius: 6px;
 }
 QPushButton#termsAddCloseButton:hover:enabled {
     background: #403d44;
@@ -193,8 +314,10 @@ QPushButton#termsAddCloseButton:pressed:enabled {
 }
 """,
         )
-        set_button_tone(self.add_button, "primary")
+        set_button_tone(self.add_button)
+        set_button_tone(self.apply_button, "primary")
         self.retranslateUi()
+        self._refresh_pending_state()
 
     def changeEvent(self, event: QEvent) -> None:
         if event.type() == QEvent.Type.LanguageChange:
@@ -206,6 +329,10 @@ QPushButton#termsAddCloseButton:pressed:enabled {
         self.term_input.setPlaceholderText(self.tr("Term"))
         self.translation_input.setPlaceholderText(self.tr("Translation"))
         self.add_button.setText(self.tr("Add"))
+        self.empty_label.setText(self.tr("No terms added yet."))
+        self.apply_button.setText(self.tr("Apply"))
+        for row in self._pending_rows.values():
+            row.retranslateUi()
 
     def show_near(self, anchor: QWidget) -> None:
         if not self._has_position:
@@ -232,16 +359,25 @@ QPushButton#termsAddCloseButton:pressed:enabled {
         self.status_label.clear()
         self.status_label.hide()
 
-    def handle_submit_success(self, *, updated_existing: bool) -> None:
+    def handle_apply_success(self) -> None:
+        self.clear_pending_terms()
         self.term_input.clear()
         self.translation_input.clear()
-        self.show_status(
-            UserMessageSeverity.SUCCESS,
-            self.tr("Updated existing term.") if updated_existing else self.tr("Term added."),
-        )
+        self.show_status(UserMessageSeverity.SUCCESS, self.tr("Terms saved."))
         self.term_input.setFocus(Qt.FocusReason.OtherFocusReason)
 
-    def _emit_submit(self) -> None:
+    def pending_terms(self) -> list[tuple[str, str]]:
+        return [(term, self._pending_rows[term].translation) for term in self._pending_order]
+
+    def clear_pending_terms(self) -> None:
+        for row in self._pending_rows.values():
+            row.hide()
+            row.deleteLater()
+        self._pending_rows.clear()
+        self._pending_order.clear()
+        self._refresh_pending_state()
+
+    def _stage_term(self) -> None:
         term = self.term_input.text().strip()
         translation = self.translation_input.text().strip()
         if not term:
@@ -253,7 +389,40 @@ QPushButton#termsAddCloseButton:pressed:enabled {
             self.translation_input.setFocus(Qt.FocusReason.OtherFocusReason)
             return
         self.clear_status()
-        self.submitted.emit(term, translation)
+        existing_row = self._pending_rows.get(term)
+        if existing_row is not None:
+            existing_row.update_translation(translation)
+        else:
+            row = _PendingTermsRow(term, translation, self.rows_container)
+            row.remove_requested.connect(self._remove_pending_term)
+            self._pending_rows[term] = row
+            self._pending_order.append(term)
+            self.rows_layout.addWidget(row)
+        self.term_input.clear()
+        self.translation_input.clear()
+        self._refresh_pending_state()
+        self.term_input.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def _remove_pending_term(self, term: str) -> None:
+        row = self._pending_rows.pop(term, None)
+        if row is None:
+            return
+        self._pending_order = [entry for entry in self._pending_order if entry != term]
+        row.hide()
+        row.deleteLater()
+        self._refresh_pending_state()
+
+    def _refresh_pending_state(self) -> None:
+        has_rows = bool(self._pending_order)
+        self.empty_label.setVisible(not has_rows)
+        self.apply_button.setEnabled(has_rows)
+
+    def _emit_apply(self) -> None:
+        if not self._pending_order:
+            self.show_status(UserMessageSeverity.WARNING, self.tr("Add at least one term."))
+            return
+        self.clear_status()
+        self.apply_requested.emit()
 
 
 class TermsView(QWidget):
@@ -658,6 +827,9 @@ class TermsView(QWidget):
         )
         if not path:
             return
+        self._import_terms_from_path(path)
+
+    def _import_terms_from_path(self, path: str) -> None:
         try:
             state = self._service.import_terms(ImportTermsRequest(project_id=self.project_id, input_path=path))
         except BlockedOperationError as exc:
@@ -953,23 +1125,29 @@ class TermsView(QWidget):
     def _ensure_add_terms_dialog(self) -> _AddTermsDialog:
         if self._add_terms_dialog is None:
             self._add_terms_dialog = _AddTermsDialog(self.window())
-            self._add_terms_dialog.submitted.connect(self._on_add_terms_submitted)
+            self._add_terms_dialog.apply_requested.connect(self._on_add_terms_apply_requested)
         return self._add_terms_dialog
 
-    def _on_add_terms_submitted(self, term: str, translation: str) -> None:
+    def _on_add_terms_apply_requested(self) -> None:
         dialog = self._ensure_add_terms_dialog()
-        tracks_invalidation = self._event_bridge is not None
-        if tracks_invalidation:
-            self._pending_local_terms_invalidations += 1
-        try:
-            result = self._service.upsert_project_term(
-                UpsertProjectTermRequest(project_id=self.project_id, term=term, translation=translation)
-            )
-        except ApplicationError as exc:
-            dialog.show_status(UserMessageSeverity.ERROR, translate_backend_text(exc.payload.message))
+        pending_terms = dialog.pending_terms()
+        if not pending_terms:
+            dialog.show_status(UserMessageSeverity.WARNING, self.tr("Add at least one term."))
             return
-        finally:
-            if tracks_invalidation:
-                self._pending_local_terms_invalidations = max(0, self._pending_local_terms_invalidations - 1)
-        self._apply_state(result.state)
-        dialog.handle_submit_success(updated_existing=result.updated_existing)
+
+        last_state: TermsTableState | None = None
+        for term, translation in pending_terms:
+            try:
+                result = self._service.upsert_project_term(
+                    UpsertProjectTermRequest(project_id=self.project_id, term=term, translation=translation)
+                )
+            except ApplicationError as exc:
+                if last_state is not None:
+                    self._apply_state(last_state)
+                dialog.show_status(UserMessageSeverity.ERROR, translate_backend_text(exc.payload.message))
+                return
+            last_state = result.state
+
+        if last_state is not None:
+            self._apply_state(last_state)
+        dialog.handle_apply_success()

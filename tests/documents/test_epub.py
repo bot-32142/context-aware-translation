@@ -493,7 +493,7 @@ class TestDoImport:
             (
                 "chapter1.xhtml",
                 (
-                    "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><p>"
+                    '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>'
                     "After a long conversation with the harbor master,\n"
                     "Captain Leclere left Naples in agitation.\n"
                     "Twenty-four hours later the fever took him."
@@ -812,15 +812,18 @@ class TestDoImport:
         original_sources = repo.get_document_sources(docs[0]["document_id"])
         normalized_sources = repo.get_document_sources(docs[1]["document_id"])
 
-        original_metadata = json.loads(next(s for s in original_sources if s["relative_path"] == METADATA_PATH)["text_content"])
+        original_metadata = json.loads(
+            next(s for s in original_sources if s["relative_path"] == METADATA_PATH)["text_content"]
+        )
         normalized_metadata = json.loads(
             next(s for s in normalized_sources if s["relative_path"] == METADATA_PATH)["text_content"]
         )
         assert original_metadata[IMPORT_SIGNATURE_KEY]["remove_hard_wraps"] is False
         assert normalized_metadata[IMPORT_SIGNATURE_KEY]["remove_hard_wraps"] is True
-        assert original_metadata[IMPORT_SIGNATURE_KEY]["archive_sha256"] == normalized_metadata[IMPORT_SIGNATURE_KEY][
-            "archive_sha256"
-        ]
+        assert (
+            original_metadata[IMPORT_SIGNATURE_KEY]["archive_sha256"]
+            == normalized_metadata[IMPORT_SIGNATURE_KEY]["archive_sha256"]
+        )
 
     def test_import_dedup_uses_archive_bytes_not_first_chapter_only(self, tmp_path: Path):
         epub_path1 = _make_epub_file(

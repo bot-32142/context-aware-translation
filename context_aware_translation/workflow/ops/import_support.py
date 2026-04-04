@@ -191,13 +191,14 @@ def import_via_repository(
         if not callable(import_method):
             raise ValueError(f"Document type {document_class.__name__} does not support import.")
         kwargs: dict[str, Any] = {"cancel_check": cancel_check}
+        parameter_names: set[str]
         try:
-            parameters = inspect.signature(import_method).parameters
+            parameter_names = set(inspect.signature(import_method).parameters)
         except (TypeError, ValueError):
-            parameters = {}
-        if "progress_callback" in parameters:
+            parameter_names = set()
+        if "progress_callback" in parameter_names:
             kwargs["progress_callback"] = progress_callback
-        if "remove_hard_wraps" in parameters:
+        if "remove_hard_wraps" in parameter_names:
             kwargs["remove_hard_wraps"] = remove_hard_wraps
         result = import_method(repo, import_path, **kwargs)
         document_id = resolve_imported_document_id(repo, existing_document_ids, int(result["imported"]))

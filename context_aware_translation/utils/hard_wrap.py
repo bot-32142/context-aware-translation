@@ -47,12 +47,7 @@ def _merge_lines(lines: list[str]) -> str:
         line = raw_line.strip()
         if not line:
             continue
-        if (
-            merged.endswith("-")
-            and len(merged) >= 2
-            and merged[-2].isalpha()
-            and line[0].isalpha()
-        ):
+        if merged.endswith("-") and len(merged) >= 2 and merged[-2].isalpha() and line[0].isalpha():
             merged = f"{merged[:-1]}{line}"
             continue
         if not merged:

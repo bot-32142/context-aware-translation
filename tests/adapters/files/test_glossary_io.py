@@ -426,18 +426,14 @@ class TestValidation:
     def test_version_missing_accepted(self) -> None:
         _validate_glossary_json({"terms": []})
 
-    def test_import_rejects_simple_mapping_with_nested_value(
-        self, temp_db: SQLiteBookDB, tmp_path: Path
-    ) -> None:
+    def test_import_rejects_simple_mapping_with_nested_value(self, temp_db: SQLiteBookDB, tmp_path: Path) -> None:
         glossary_file = tmp_path / "bad.json"
         glossary_file.write_text(json.dumps({"hero": {"translated_name": "英雄"}}), encoding="utf-8")
 
         with pytest.raises(ValueError, match="flat mapping values must be non-empty strings"):
             import_glossary(temp_db, glossary_file)
 
-    def test_import_rejects_simple_mapping_with_empty_translation(
-        self, temp_db: SQLiteBookDB, tmp_path: Path
-    ) -> None:
+    def test_import_rejects_simple_mapping_with_empty_translation(self, temp_db: SQLiteBookDB, tmp_path: Path) -> None:
         glossary_file = tmp_path / "bad.json"
         glossary_file.write_text(json.dumps({"hero": ""}), encoding="utf-8")
 

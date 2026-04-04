@@ -3215,240 +3215,245 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>TermsView</name>
     <message>
-        <location filename="../features/terms_view.py" line="107"/>
-        <location filename="../features/terms_view.py" line="232"/>
-        <location filename="../features/terms_view.py" line="488"/>
-        <location filename="../features/terms_view.py" line="548"/>
-        <location filename="../features/terms_view.py" line="646"/>
-        <location filename="../viewmodels/terms_pane.py" line="44"/>
+        <location filename="../features/terms_view.py" line="487"/>
+        <location filename="../features/terms_view.py" line="622"/>
+        <location filename="../features/terms_view.py" line="901"/>
+        <location filename="../features/terms_view.py" line="961"/>
+        <location filename="../features/terms_view.py" line="1059"/>
+        <location filename="../viewmodels/terms_pane.py" line="46"/>
         <source>Terms</source>
         <translation>术语</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="132"/>
-        <location filename="../features/terms_view.py" line="234"/>
-        <location filename="../features/terms_view.py" line="366"/>
-        <location filename="../viewmodels/terms_pane.py" line="57"/>
+        <location filename="../features/terms_view.py" line="512"/>
+        <location filename="../features/terms_view.py" line="624"/>
+        <location filename="../features/terms_view.py" line="769"/>
+        <location filename="../viewmodels/terms_pane.py" line="59"/>
         <source>Build Terms</source>
         <translation>构建术语</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="138"/>
-        <location filename="../features/terms_view.py" line="235"/>
-        <location filename="../viewmodels/terms_pane.py" line="61"/>
+        <location filename="../features/terms_view.py" line="518"/>
+        <location filename="../features/terms_view.py" line="625"/>
+        <location filename="../viewmodels/terms_pane.py" line="63"/>
         <source>Translate Untranslated</source>
         <translation>翻译未翻译项</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="144"/>
-        <location filename="../features/terms_view.py" line="236"/>
-        <location filename="../features/terms_view.py" line="383"/>
-        <location filename="../viewmodels/terms_pane.py" line="65"/>
+        <location filename="../features/terms_view.py" line="524"/>
+        <location filename="../features/terms_view.py" line="626"/>
+        <location filename="../features/terms_view.py" line="786"/>
+        <location filename="../viewmodels/terms_pane.py" line="67"/>
         <source>Review Terms</source>
         <translation>审校术语</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="150"/>
-        <location filename="../features/terms_view.py" line="237"/>
-        <location filename="../viewmodels/terms_pane.py" line="69"/>
+        <location filename="../features/terms_view.py" line="530"/>
+        <location filename="../features/terms_view.py" line="627"/>
+        <location filename="../viewmodels/terms_pane.py" line="71"/>
         <source>Filter Rare</source>
         <translation>过滤低频</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="164"/>
-        <location filename="../features/terms_view.py" line="255"/>
-        <location filename="../viewmodels/terms_pane.py" line="73"/>
+        <location filename="../features/terms_view.py" line="536"/>
+        <location filename="../features/terms_view.py" line="628"/>
+        <location filename="../viewmodels/terms_pane.py" line="75"/>
         <source>Add Terms</source>
         <translation>添加术语</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="156"/>
-        <location filename="../features/terms_view.py" line="238"/>
+        <location filename="../features/terms_view.py" line="542"/>
+        <location filename="../features/terms_view.py" line="629"/>
         <source>Edit Selected</source>
         <translation>编辑所选</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="158"/>
-        <location filename="../features/terms_view.py" line="239"/>
+        <location filename="../features/terms_view.py" line="544"/>
+        <location filename="../features/terms_view.py" line="630"/>
         <source>Mark Reviewed</source>
         <translation>标记为已审核</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="160"/>
-        <location filename="../features/terms_view.py" line="240"/>
+        <location filename="../features/terms_view.py" line="546"/>
+        <location filename="../features/terms_view.py" line="631"/>
         <source>Unmark Reviewed</source>
         <translation>取消审核标记</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="162"/>
-        <location filename="../features/terms_view.py" line="241"/>
+        <location filename="../features/terms_view.py" line="548"/>
+        <location filename="../features/terms_view.py" line="632"/>
         <source>Mark Ignored</source>
         <translation>标记为已忽略</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="164"/>
-        <location filename="../features/terms_view.py" line="242"/>
+        <location filename="../features/terms_view.py" line="550"/>
+        <location filename="../features/terms_view.py" line="633"/>
         <source>Unmark Ignored</source>
         <translation>取消忽略标记</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="166"/>
-        <location filename="../features/terms_view.py" line="243"/>
+        <location filename="../features/terms_view.py" line="552"/>
+        <location filename="../features/terms_view.py" line="634"/>
         <source>Delete Selected</source>
         <translation>删除所选</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="174"/>
-        <location filename="../features/terms_view.py" line="244"/>
-        <location filename="../features/terms_view.py" line="421"/>
-        <location filename="../features/terms_view.py" line="430"/>
-        <location filename="../features/terms_view.py" line="433"/>
-        <location filename="../viewmodels/terms_pane.py" line="73"/>
+        <location filename="../features/terms_view.py" line="560"/>
+        <location filename="../features/terms_view.py" line="635"/>
+        <location filename="../features/terms_view.py" line="824"/>
+        <location filename="../features/terms_view.py" line="836"/>
+        <location filename="../features/terms_view.py" line="839"/>
+        <location filename="../viewmodels/terms_pane.py" line="79"/>
         <source>Import Terms</source>
         <translation>导入术语</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="180"/>
-        <location filename="../features/terms_view.py" line="245"/>
-        <location filename="../features/terms_view.py" line="442"/>
-        <location filename="../features/terms_view.py" line="455"/>
-        <location filename="../features/terms_view.py" line="466"/>
-        <location filename="../features/terms_view.py" line="469"/>
-        <location filename="../viewmodels/terms_pane.py" line="77"/>
+        <location filename="../features/terms_view.py" line="566"/>
+        <location filename="../features/terms_view.py" line="636"/>
+        <location filename="../features/terms_view.py" line="855"/>
+        <location filename="../features/terms_view.py" line="868"/>
+        <location filename="../features/terms_view.py" line="879"/>
+        <location filename="../features/terms_view.py" line="882"/>
+        <location filename="../viewmodels/terms_pane.py" line="83"/>
         <source>Export Terms</source>
         <translation>导出术语</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="278"/>
+        <location filename="../features/terms_view.py" line="672"/>
         <source>Extract terms from this document.</source>
         <translation>从此文档提取术语。</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="283"/>
+        <location filename="../features/terms_view.py" line="677"/>
         <source>Translate all currently untranslated glossary terms for the current scope.</source>
         <translation>翻译当前范围内所有尚未翻译的术语。</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="288"/>
+        <location filename="../features/terms_view.py" line="682"/>
         <source>Run an LLM review pass on unreviewed glossary terms for the current scope.</source>
         <translation>对当前范围内尚未审核的术语运行一次 LLM 审校。</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="294"/>
+        <location filename="../features/terms_view.py" line="688"/>
         <source>Ignore rare terms for this document.</source>
         <translation>忽略此文档中的低频术语。</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="297"/>
+        <location filename="../features/terms_view.py" line="691"/>
         <source>Automatically ignore terms that occurred only once or were recognized by the LLM in only one chunk.</source>
         <translation>自动忽略仅出现一次或仅在一个分块中被 LLM 识别的术语。</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="528"/>
+        <location filename="../features/terms_view.py" line="698"/>
         <source>Add or update a shared term translation for this project.</source>
         <translation>为此项目添加或更新共享术语翻译。</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="533"/>
+        <location filename="../features/terms_view.py" line="703"/>
         <source>Import terms from a JSON file.</source>
         <translation>从 JSON 文件导入术语。</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="309"/>
+        <location filename="../features/terms_view.py" line="708"/>
         <source>Export terms to a JSON file.</source>
         <translation>将术语导出为 JSON 文件。</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="367"/>
+        <location filename="../features/terms_view.py" line="770"/>
         <source>Terms extraction queued for this document.</source>
         <translation>此文档的术语提取已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="375"/>
+        <location filename="../features/terms_view.py" line="778"/>
         <source>Translate Terms</source>
         <translation>翻译术语</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="390"/>
-        <location filename="../features/terms_view.py" line="405"/>
-        <location filename="../features/terms_view.py" line="408"/>
+        <location filename="../features/terms_view.py" line="793"/>
+        <location filename="../features/terms_view.py" line="808"/>
+        <location filename="../features/terms_view.py" line="811"/>
         <source>Filter Rare Terms</source>
         <translation>过滤低频术语</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="392"/>
+        <location filename="../features/terms_view.py" line="795"/>
         <source>This will mark terms as ignored when they occurred only once or were recognized in only one chunk. Continue?</source>
         <translation>这将把仅出现一次或仅在一个分块中被识别的术语标记为已忽略。是否继续？</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="415"/>
+        <location filename="../features/terms_view.py" line="818"/>
         <source>Rare terms were filtered.</source>
         <translation>已过滤低频术语。</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="413"/>
+        <location filename="../features/terms_view.py" line="1135"/>
+        <source>Add at least one term.</source>
+        <translation>请至少添加一个术语。</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="816"/>
         <source>Rare document terms were filtered.</source>
         <translation>已过滤文档中的低频术语。</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="423"/>
-        <location filename="../features/terms_view.py" line="457"/>
+        <location filename="../features/terms_view.py" line="826"/>
+        <location filename="../features/terms_view.py" line="870"/>
         <source>JSON Files (*.json);;All Files (*)</source>
         <translation>JSON 文件 (*.json);;所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="436"/>
+        <location filename="../features/terms_view.py" line="842"/>
         <source>Terms imported.</source>
         <translation>术语已导入。</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="444"/>
+        <location filename="../features/terms_view.py" line="857"/>
         <source>Exporting terms may build missing context summaries before writing the file. The export will run in the background and appear in Queue so you can keep working. Continue?</source>
         <translation>导出术语前可能需要先构建缺失的上下文摘要。导出会在后台运行，并显示在队列中，因此你可以继续工作。是否继续？</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="475"/>
+        <location filename="../features/terms_view.py" line="888"/>
         <source>Terms export was queued. Context summaries will be built in the background if needed. Check Queue for progress.</source>
         <translation>术语导出已加入队列。如有需要，系统会在后台构建上下文摘要。可在队列中查看进度。</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="501"/>
+        <location filename="../features/terms_view.py" line="914"/>
         <source>Task queued.</source>
         <translation>任务已加入队列。</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="561"/>
-        <location filename="../features/terms_view.py" line="584"/>
+        <location filename="../features/terms_view.py" line="974"/>
+        <location filename="../features/terms_view.py" line="997"/>
         <source>Delete Terms</source>
         <translation>删除术语</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="563"/>
+        <location filename="../features/terms_view.py" line="976"/>
         <source>Delete the selected terms from this document?</source>
         <translation>删除此文档中所选术语？</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="565"/>
+        <location filename="../features/terms_view.py" line="978"/>
         <source>Delete the selected terms from this project?</source>
         <translation>删除此项目中所选术语？</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="586"/>
+        <location filename="../features/terms_view.py" line="999"/>
         <source>Selected terms were deleted.</source>
         <translation>已删除所选术语。</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="612"/>
+        <location filename="../features/terms_view.py" line="1025"/>
         <source>Copy Description</source>
         <translation>复制描述</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="707"/>
+        <location filename="../features/terms_view.py" line="1120"/>
         <source>Review and adjust terms extracted for this document.</source>
         <translation>审核并调整为此文档提取的术语。</translation>
     </message>
     <message>
-        <location filename="../features/terms_view.py" line="709"/>
+        <location filename="../features/terms_view.py" line="1122"/>
         <location filename="../viewmodels/terms_pane.py" line="7"/>
         <source>Terms are shared across the project. Build terms from document pages in document Terms, then translate, review, filter, import, or export them here.</source>
         <translation>术语在整个项目中共享。请先在文档“术语”中从页面构建术语，然后在这里进行翻译、审校、过滤、导入或导出。</translation>
@@ -3457,49 +3462,6 @@ All completed results are already saved and won&apos;t be lost.</source>
         <location filename="../viewmodels/terms_pane.py" line="12"/>
         <source>Terms here are scoped to the current document. Build terms from page text, then translate, review, or filter only this document&apos;s glossary candidates.</source>
         <translation>这里的术语仅限当前文档范围。请先从页面文本构建术语，然后只对该文档的术语候选进行翻译、审校或过滤。</translation>
-    </message>
-</context>
-<context>
-    <name>_AddTermsDialog</name>
-    <message>
-        <location filename="../features/terms_view.py" line="202"/>
-        <source>Add Terms</source>
-        <translation>添加术语</translation>
-    </message>
-    <message>
-        <location filename="../features/terms_view.py" line="203"/>
-        <source>Term</source>
-        <translation>术语</translation>
-    </message>
-    <message>
-        <location filename="../features/terms_view.py" line="204"/>
-        <source>Translation</source>
-        <translation>翻译</translation>
-    </message>
-    <message>
-        <location filename="../features/terms_view.py" line="205"/>
-        <source>Add</source>
-        <translation>添加</translation>
-    </message>
-    <message>
-        <location filename="../features/terms_view.py" line="231"/>
-        <source>Updated existing term.</source>
-        <translation>已更新现有术语。</translation>
-    </message>
-    <message>
-        <location filename="../features/terms_view.py" line="231"/>
-        <source>Term added.</source>
-        <translation>术语已添加。</translation>
-    </message>
-    <message>
-        <location filename="../features/terms_view.py" line="240"/>
-        <source>Term is required.</source>
-        <translation>术语为必填项。</translation>
-    </message>
-    <message>
-        <location filename="../features/terms_view.py" line="244"/>
-        <source>Translation is required.</source>
-        <translation>翻译为必填项。</translation>
     </message>
 </context>
 <context>
@@ -3534,14 +3496,14 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>WorkView</name>
     <message>
-        <location filename="../features/work_view.py" line="142"/>
-        <location filename="../features/work_view.py" line="253"/>
+        <location filename="../features/work_view.py" line="144"/>
+        <location filename="../features/work_view.py" line="255"/>
         <source>#</source>
         <translation>#</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="143"/>
-        <location filename="../features/work_view.py" line="254"/>
+        <location filename="../features/work_view.py" line="145"/>
+        <location filename="../features/work_view.py" line="256"/>
         <source>Document</source>
         <translation>文档</translation>
     </message>
@@ -3551,88 +3513,88 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation>在此导入文档、查看项目范围的进度，并直接从表格中打开下一个文档工具。</translation>
     </message>
     <message>
-        <location filename="../viewmodels/work_home.py" line="45"/>
+        <location filename="../viewmodels/work_home.py" line="47"/>
         <source>Select Files</source>
         <translation>选择文件</translation>
     </message>
     <message>
-        <location filename="../viewmodels/work_home.py" line="49"/>
+        <location filename="../viewmodels/work_home.py" line="51"/>
         <source>Select Folder</source>
         <translation>选择文件夹</translation>
     </message>
     <message>
-        <location filename="../viewmodels/work_home.py" line="53"/>
+        <location filename="../viewmodels/work_home.py" line="55"/>
         <source>Import</source>
         <translation>导入</translation>
     </message>
     <message>
-        <location filename="../viewmodels/work_home.py" line="57"/>
+        <location filename="../viewmodels/work_home.py" line="59"/>
         <source>Remove hard wraps</source>
         <translation>移除硬换行</translation>
     </message>
     <message>
-        <location filename="../viewmodels/work_home.py" line="61"/>
+        <location filename="../viewmodels/work_home.py" line="63"/>
         <source>Warning: experimental and may merge intentional line breaks.</source>
         <translation>警告：这是实验性功能，可能会合并原本有意保留的换行。</translation>
     </message>
     <message>
-        <location filename="../viewmodels/work_home.py" line="136"/>
-        <location filename="../viewmodels/work_home.py" line="203"/>
+        <location filename="../viewmodels/work_home.py" line="157"/>
+        <location filename="../viewmodels/work_home.py" line="228"/>
         <source>Open project setup to fix this blocker.</source>
         <translation>打开项目设置以解决此阻碍。</translation>
     </message>
     <message>
-        <location filename="../viewmodels/work_home.py" line="163"/>
-        <location filename="../viewmodels/work_home.py" line="191"/>
+        <location filename="../viewmodels/work_home.py" line="188"/>
+        <location filename="../viewmodels/work_home.py" line="216"/>
         <source>Choose one or more source files to import.</source>
         <translation>选择一个或多个要导入的源文件。</translation>
     </message>
     <message>
-        <location filename="../viewmodels/work_home.py" line="166"/>
-        <location filename="../viewmodels/work_home.py" line="194"/>
+        <location filename="../viewmodels/work_home.py" line="191"/>
+        <location filename="../viewmodels/work_home.py" line="219"/>
         <source>Choose a folder and import supported files from it.</source>
         <translation>选择一个文件夹，并从中导入支持的文件。</translation>
     </message>
     <message>
-        <location filename="../viewmodels/work_home.py" line="170"/>
-        <location filename="../viewmodels/work_home.py" line="198"/>
+        <location filename="../viewmodels/work_home.py" line="195"/>
+        <location filename="../viewmodels/work_home.py" line="223"/>
         <source>Import the selected files or folder into this project.</source>
         <translation>将所选文件或文件夹导入此项目。</translation>
     </message>
     <message>
-        <location filename="../viewmodels/work_home.py" line="172"/>
-        <location filename="../viewmodels/work_home.py" line="200"/>
+        <location filename="../viewmodels/work_home.py" line="197"/>
+        <location filename="../viewmodels/work_home.py" line="225"/>
         <source>Select files or a folder before importing.</source>
         <translation>导入前请先选择文件或文件夹。</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="472"/>
+        <location filename="../features/work_view.py" line="487"/>
         <source>No file or folder selected</source>
         <translation>未选择文件或文件夹</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="144"/>
-        <location filename="../features/work_view.py" line="255"/>
+        <location filename="../features/work_view.py" line="146"/>
+        <location filename="../features/work_view.py" line="257"/>
         <source>Sources</source>
         <translation>源文件</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="145"/>
-        <location filename="../features/work_view.py" line="256"/>
+        <location filename="../features/work_view.py" line="147"/>
+        <location filename="../features/work_view.py" line="258"/>
         <location filename="../viewmodels/document_shell.py" line="43"/>
         <source>OCR</source>
         <translation>OCR</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="146"/>
-        <location filename="../features/work_view.py" line="257"/>
+        <location filename="../features/work_view.py" line="148"/>
+        <location filename="../features/work_view.py" line="259"/>
         <location filename="../viewmodels/document_shell.py" line="47"/>
         <source>Terms</source>
         <translation>术语</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="147"/>
-        <location filename="../features/work_view.py" line="258"/>
+        <location filename="../features/work_view.py" line="149"/>
+        <location filename="../features/work_view.py" line="260"/>
         <location filename="../viewmodels/document_shell.py" line="51"/>
         <source>Translation</source>
         <translation>翻译</translation>
@@ -3646,90 +3608,90 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation type="vanished">操作</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="181"/>
-        <location filename="../features/work_view.py" line="261"/>
-        <location filename="../features/work_view.py" line="499"/>
-        <location filename="../features/work_view.py" line="513"/>
+        <location filename="../features/work_view.py" line="183"/>
+        <location filename="../features/work_view.py" line="263"/>
+        <location filename="../features/work_view.py" line="514"/>
+        <location filename="../features/work_view.py" line="528"/>
         <source>Reset Document</source>
         <translation>重置文档</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="186"/>
-        <location filename="../features/work_view.py" line="262"/>
-        <location filename="../features/work_view.py" line="524"/>
-        <location filename="../features/work_view.py" line="538"/>
+        <location filename="../features/work_view.py" line="188"/>
+        <location filename="../features/work_view.py" line="264"/>
+        <location filename="../features/work_view.py" line="539"/>
+        <location filename="../features/work_view.py" line="553"/>
         <source>Delete Document</source>
         <translation>删除文档</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="194"/>
-        <location filename="../features/work_view.py" line="263"/>
+        <location filename="../features/work_view.py" line="196"/>
+        <location filename="../features/work_view.py" line="265"/>
         <source>No documents imported yet.</source>
         <translation>尚未导入文档。</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="279"/>
+        <location filename="../features/work_view.py" line="281"/>
         <source>Context not ready yet.</source>
         <translation>上下文尚未就绪。</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="364"/>
+        <location filename="../features/work_view.py" line="366"/>
         <source>Double-click or press Enter to %1.</source>
         <translation>双击或按 Enter 以执行 %1。</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="379"/>
+        <location filename="../features/work_view.py" line="381"/>
         <source>Select Document File(s)</source>
         <translation>选择文档文件（可多选）</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="381"/>
+        <location filename="../features/work_view.py" line="383"/>
         <source>All Files (*.*)</source>
         <translation>所有文件 (*.*)</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="389"/>
+        <location filename="../features/work_view.py" line="391"/>
         <source>Select Document Folder</source>
         <translation>选择文档文件夹</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="428"/>
+        <location filename="../features/work_view.py" line="432"/>
         <source>Import complete.</source>
         <translation>导入完成。</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="501"/>
+        <location filename="../features/work_view.py" line="516"/>
         <source>This will reset the selected document and all documents added after it. Glossary data, translations, and OCR state for affected documents will be cleared. Continue?</source>
         <translation>这将重置所选文档及其之后添加的所有文档。受影响文档的术语、翻译和 OCR 状态都会被清除。是否继续？</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="515"/>
+        <location filename="../features/work_view.py" line="530"/>
         <source>Reset Complete</source>
         <translation>重置完成</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="526"/>
+        <location filename="../features/work_view.py" line="541"/>
         <source>This will permanently delete the selected document and all documents added after it. This cannot be undone. Continue?</source>
         <translation>这将永久删除所选文档及其之后添加的所有文档。此操作无法撤销。是否继续？</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="540"/>
+        <location filename="../features/work_view.py" line="555"/>
         <source>Delete Complete</source>
         <translation>删除完成</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="610"/>
+        <location filename="../features/work_view.py" line="625"/>
         <location filename="../viewmodels/document_shell.py" line="59"/>
         <source>Export</source>
         <translation>导出</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="617"/>
+        <location filename="../features/work_view.py" line="632"/>
         <source>Open App Setup</source>
         <translation>打开应用设置</translation>
     </message>
     <message>
-        <location filename="../features/work_view.py" line="618"/>
+        <location filename="../features/work_view.py" line="633"/>
         <source>Open Setup</source>
         <translation>打开设置</translation>
     </message>
@@ -3926,6 +3888,59 @@ All completed results are already saved and won&apos;t be lost.</source>
     </message>
 </context>
 <context>
+    <name>_AddTermsDialog</name>
+    <message>
+        <location filename="../features/terms_view.py" line="328"/>
+        <source>Add Terms</source>
+        <translation>添加术语</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="329"/>
+        <source>Term</source>
+        <translation>术语</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="330"/>
+        <source>Translation</source>
+        <translation>翻译</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="331"/>
+        <source>Add</source>
+        <translation>添加</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="332"/>
+        <source>No terms added yet.</source>
+        <translation>尚未添加术语。</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="333"/>
+        <source>Apply</source>
+        <translation>应用</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="366"/>
+        <source>Terms saved.</source>
+        <translation>术语已保存。</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="384"/>
+        <source>Term is required.</source>
+        <translation>术语为必填项。</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="388"/>
+        <source>Translation is required.</source>
+        <translation>翻译为必填项。</translation>
+    </message>
+    <message>
+        <location filename="../features/terms_view.py" line="422"/>
+        <source>Add at least one term.</source>
+        <translation>请至少添加一个术语。</translation>
+    </message>
+</context>
+<context>
     <name>_DocumentExportTab</name>
     <message>
         <source>Export applies only to the current document. You can also start export directly from the Work list when that row is exportable.</source>
@@ -4040,6 +4055,14 @@ All completed results are already saved and won&apos;t be lost.</source>
         <location filename="../features/document_workspace_view.py" line="290"/>
         <source>%1 Files (*.%2)</source>
         <translation>%1 文件 (*.%2)</translation>
+    </message>
+</context>
+<context>
+    <name>_PendingTermsRow</name>
+    <message>
+        <location filename="../features/terms_view.py" line="142"/>
+        <source>Delete</source>
+        <translation>删除</translation>
     </message>
 </context>
 <context>
