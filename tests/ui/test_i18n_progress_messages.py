@@ -69,6 +69,7 @@ def test_translate_backend_text_runtime_warning_uses_runtime_map(monkeypatch):
 def test_translate_backend_text_runtime_task_titles_and_queued_messages(monkeypatch):
     translations = {
         "Build terms": "构建术语",
+        "Translate and Export": "一键翻译并导出",
         "Translate manga": "翻译漫画",
         "Put text back into images": "将文字重新放回图片",
         "%1 queued.": "%1 已排队",
@@ -77,8 +78,15 @@ def test_translate_backend_text_runtime_task_titles_and_queued_messages(monkeypa
 
     assert i18n.translate_backend_text("Build terms") == "构建术语"
     assert i18n.translate_backend_text("Build terms queued.") == "构建术语 已排队"
+    assert i18n.translate_backend_text("Translate and Export queued.") == "一键翻译并导出 已排队"
     assert i18n.translate_backend_text("Translate manga queued.") == "翻译漫画 已排队"
     assert i18n.translate_backend_text("Put text back into images queued.") == "将文字重新放回图片 已排队"
+
+
+def test_translate_progress_label_supports_one_shot_phase_and_title(monkeypatch):
+    monkeypatch.setattr(i18n, "_translate_task", lambda text: f"T:{text}")
+    assert i18n.translate_progress_label("rare_filter") == "T:Filtering rare terms"
+    assert i18n.translate_task_type("translate_and_export") == "T:Translate and Export"
 
 
 def test_resolve_startup_language_prefers_saved_language(monkeypatch):

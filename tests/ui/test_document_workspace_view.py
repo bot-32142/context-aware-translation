@@ -652,8 +652,9 @@ def test_translate_and_export_dialog_disables_unsupported_toggles():
     )
     try:
         assert dialog.batch_cb.isEnabled() is False
+        assert dialog.batch_cb.isVisible() is False
         assert dialog.reembedding_cb.isEnabled() is False
-        assert "Async batch translation is unavailable." in dialog.batch_hint.text()
+        assert dialog.batch_hint.isVisible() is False
         assert "Image reembedding is unavailable." in dialog.reembedding_hint.text()
         assert dialog.start_button.isEnabled() is True
     finally:

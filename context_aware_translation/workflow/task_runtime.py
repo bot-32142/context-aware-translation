@@ -21,6 +21,7 @@ def _default_handler_types() -> tuple[type[Any], ...]:
     from context_aware_translation.workflow.tasks.handlers.glossary_translation import GlossaryTranslationHandler
     from context_aware_translation.workflow.tasks.handlers.image_reembedding import ImageReembeddingHandler
     from context_aware_translation.workflow.tasks.handlers.ocr import OCRHandler
+    from context_aware_translation.workflow.tasks.handlers.translate_and_export import TranslateAndExportHandler
     from context_aware_translation.workflow.tasks.handlers.translation_manga import TranslationMangaHandler
     from context_aware_translation.workflow.tasks.handlers.translation_text import TranslationTextHandler
 
@@ -35,6 +36,7 @@ def _default_handler_types() -> tuple[type[Any], ...]:
         TranslationMangaHandler,
         OCRHandler,
         ImageReembeddingHandler,
+        TranslateAndExportHandler,
     )
 
 

@@ -34,7 +34,13 @@ class PreparedExport:
     incomplete_translation_message: str | None = None
 
 
-def prepare_export(runtime: ApplicationRuntime, *, project_id: str, document_ids: list[int]) -> PreparedExport:
+def prepare_export(
+    runtime: ApplicationRuntime,
+    *,
+    project_id: str,
+    document_ids: list[int],
+    require_complete_translation: bool = True,
+) -> PreparedExport:
     if not document_ids:
         raise_application_error(ApplicationErrorCode.VALIDATION, "At least one document must be selected for export.")
 
@@ -72,18 +78,19 @@ def prepare_export(runtime: ApplicationRuntime, *, project_id: str, document_ids
         )
 
     incomplete = False
-    for document_id in document_ids:
-        status = statuses.get(int(document_id))
-        if status is None:
-            raise_application_error(
-                ApplicationErrorCode.NOT_FOUND,
-                f"Export status missing for document {int(document_id)}.",
-            )
-        total_chunks = int(status.get("total_chunks", 0) or 0)
-        translated_chunks = int(status.get("chunks_translated", 0) or 0)
-        if total_chunks <= 0 or translated_chunks < total_chunks:
-            incomplete = True
-            break
+    if require_complete_translation:
+        for document_id in document_ids:
+            status = statuses.get(int(document_id))
+            if status is None:
+                raise_application_error(
+                    ApplicationErrorCode.NOT_FOUND,
+                    f"Export status missing for document {int(document_id)}.",
+                )
+            total_chunks = int(status.get("total_chunks", 0) or 0)
+            translated_chunks = int(status.get("chunks_translated", 0) or 0)
+            if total_chunks <= 0 or translated_chunks < total_chunks:
+                incomplete = True
+                break
 
     document_labels = [
         _document_label(int(doc["document_id"]), sources_by_doc.get(int(doc["document_id"]), [])) for doc in docs

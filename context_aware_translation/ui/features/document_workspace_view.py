@@ -433,6 +433,7 @@ class TranslateAndExportDialog(QDialog):
 
         self.batch_cb = QCheckBox(self.tr("Use async batch translation"))
         self.batch_cb.setEnabled(self._state.batch_available)
+        self.batch_cb.setVisible(self._state.batch_available)
         self.batch_cb.setToolTip(
             translate_backend_text(self._state.batch_blocker.message) if self._state.batch_blocker is not None else ""
         )
@@ -450,7 +451,7 @@ class TranslateAndExportDialog(QDialog):
         layout.addWidget(self.reembedding_cb)
 
         self.batch_hint = create_tip_label("")
-        self.batch_hint.setVisible(self._state.batch_blocker is not None)
+        self.batch_hint.setVisible(False)
         self.batch_hint.setText(
             translate_backend_text(self._state.batch_blocker.message) if self._state.batch_blocker is not None else ""
         )

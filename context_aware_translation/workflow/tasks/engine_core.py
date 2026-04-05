@@ -110,6 +110,30 @@ class EngineCore:
         self._probe_cache[book_id] = (now + _PROBE_CACHE_TTL, success)
         return success
 
+    def _payload_with_recovery_resume_guard(self, record: TaskRecord, payload: object) -> str | None:
+        if record.task_type != "translate_and_export" or not isinstance(payload, dict):
+            return None
+        try:
+            from context_aware_translation.workflow.tasks.translate_and_export_support import (
+                document_id_from_record,
+                with_resume_guard,
+            )
+
+            guarded_payload = with_resume_guard(
+                payload,
+                self._deps.book_manager.get_book_db_path(record.book_id),
+                document_id_from_record(record),
+                required=True,
+            )
+            return json.dumps(guarded_payload, ensure_ascii=False)
+        except Exception:
+            logger.warning(
+                "Failed to backfill one-shot resume guard for stale task %s during recovery",
+                record.task_id,
+                exc_info=True,
+            )
+            return None
+
     # ------------------------------------------------------------------
     # Action snapshot helpers
     # ------------------------------------------------------------------
@@ -214,6 +238,26 @@ class EngineCore:
     @staticmethod
     def _payload_json_for_task_rerun(task_type: str, payload_json: str | None) -> str | None:
         """Return payload_json override for rerun semantics, preserving existing keys when possible."""
+        if task_type == "translate_and_export":
+            if not payload_json:
+                raise ValueError(
+                    "Cannot rerun translate_and_export task: payload is missing. "
+                    "Task payload must be valid JSON object containing task parameters."
+                )
+            try:
+                decoded = json.loads(payload_json)
+            except json.JSONDecodeError as exc:
+                raise ValueError("Cannot rerun translate_and_export task: payload is malformed JSON.") from exc
+            if not isinstance(decoded, dict):
+                raise ValueError("Cannot rerun translate_and_export task: payload must be a JSON object.")
+            if not bool(decoded.get("use_batch", False)):
+                return payload_json
+            from context_aware_translation.workflow.tasks.execution.batch_translation_executor import (
+                prepare_payload_for_rerun,
+            )
+
+            return json.dumps(prepare_payload_for_rerun(decoded), ensure_ascii=False)
+
         if task_type != "image_reembedding":
             return payload_json
 
@@ -609,8 +653,12 @@ class EngineCore:
                     exc_info=True,
                 )
 
+            recovery_payload_json = self._payload_with_recovery_resume_guard(record, payload)
             if target_status == STATUS_CANCELLED:
-                self._store.update(record.task_id, status=STATUS_CANCELLED, cancel_requested=False)
+                update_kwargs: dict[str, object] = {"status": STATUS_CANCELLED, "cancel_requested": False}
+                if recovery_payload_json is not None:
+                    update_kwargs["payload_json"] = recovery_payload_json
+                self._store.update(record.task_id, **update_kwargs)
                 affected_book_ids.add(record.book_id)
                 continue
 
@@ -626,17 +674,25 @@ class EngineCore:
                 queued_allowed = False
 
             if queued_allowed:
-                self._store.update(record.task_id, status=STATUS_QUEUED, cancel_requested=False)
+                update_kwargs = {"status": STATUS_QUEUED, "cancel_requested": False}
+                if recovery_payload_json is not None:
+                    update_kwargs["payload_json"] = recovery_payload_json
+                self._store.update(record.task_id, **update_kwargs)
             else:
                 if target_status == STATUS_CANCELLED:
-                    self._store.update(record.task_id, status=STATUS_CANCELLED, cancel_requested=False)
+                    update_kwargs = {"status": STATUS_CANCELLED, "cancel_requested": False}
+                    if recovery_payload_json is not None:
+                        update_kwargs["payload_json"] = recovery_payload_json
+                    self._store.update(record.task_id, **update_kwargs)
                 else:
-                    self._store.update(
-                        record.task_id,
-                        status=STATUS_FAILED,
-                        cancel_requested=False,
-                        last_error=_INTERRUPTED_TASK_ERROR,
-                    )
+                    update_kwargs = {
+                        "status": STATUS_FAILED,
+                        "cancel_requested": False,
+                        "last_error": _INTERRUPTED_TASK_ERROR,
+                    }
+                    if recovery_payload_json is not None:
+                        update_kwargs["payload_json"] = recovery_payload_json
+                    self._store.update(record.task_id, **update_kwargs)
             affected_book_ids.add(record.book_id)
         return affected_book_ids
 

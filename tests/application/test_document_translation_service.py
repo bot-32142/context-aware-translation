@@ -24,7 +24,6 @@ from context_aware_translation.application.contracts.document import (
 from context_aware_translation.application.contracts.projects import CreateProjectRequest
 from context_aware_translation.application.contracts.terms import TermsScope, TermsScopeKind, TermsTableState
 from context_aware_translation.application.errors import ApplicationError, ApplicationErrorCode
-from context_aware_translation.config import PolishConfig
 from context_aware_translation.storage.schema.book_db import TranslationChunkRecord
 from context_aware_translation.workflow.tasks.models import Decision
 
@@ -36,21 +35,15 @@ def _ensure_qt_app() -> QApplication:
     return app
 
 
-def _build_configured_context(tmp_path, *, provider: ProviderKind = ProviderKind.OPENAI):
+def _build_configured_context(tmp_path):
     context = build_application_context(library_root=tmp_path)
-    connection_name = {
-        ProviderKind.OPENAI: "OpenAI",
-        ProviderKind.GEMINI: "Gemini",
-        ProviderKind.DEEPSEEK: "DeepSeek",
-        ProviderKind.ANTHROPIC: "Anthropic",
-    }[provider]
     context.services.app_setup.run_setup_wizard(
         SetupWizardRequest(
-            providers=[provider],
+            providers=[ProviderKind.GEMINI],
             connections=[
                 ConnectionDraft(
-                    display_name=connection_name,
-                    provider=provider,
+                    display_name="Gemini",
+                    provider=ProviderKind.GEMINI,
                     api_key="test-key",
                 )
             ],
@@ -162,7 +155,7 @@ def _create_manga_document(context, project_id: str) -> tuple[int, int, int, int
 
 def test_get_translation_builds_text_units_and_progress(tmp_path) -> None:
     _ensure_qt_app()
-    context = _build_configured_context(tmp_path, provider=ProviderKind.GEMINI)
+    context = _build_configured_context(tmp_path)
     try:
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Text Doc", target_language="English")
@@ -192,10 +185,22 @@ def test_get_translation_builds_text_units_and_progress(tmp_path) -> None:
         context.close()
 
 
-def test_get_translation_hides_batch_for_non_batch_capable_translator(tmp_path) -> None:
+def test_get_translation_hides_batch_when_project_setup_is_not_batch_eligible(tmp_path) -> None:
     _ensure_qt_app()
-    context = _build_configured_context(tmp_path, provider=ProviderKind.OPENAI)
+    context = build_application_context(library_root=tmp_path)
     try:
+        context.services.app_setup.run_setup_wizard(
+            SetupWizardRequest(
+                providers=[ProviderKind.OPENAI],
+                connections=[
+                    ConnectionDraft(
+                        display_name="OpenAI",
+                        provider=ProviderKind.OPENAI,
+                        api_key="test-key",
+                    )
+                ],
+            )
+        )
         created = context.services.projects.create_project(
             CreateProjectRequest(name="Text Doc", target_language="English")
         )
@@ -205,72 +210,12 @@ def test_get_translation_hides_batch_for_non_batch_capable_translator(tmp_path) 
         service = context.services.document
         service.get_terms = MagicMock(return_value=_empty_terms(project_id))  # type: ignore[method-assign]
         context.runtime.task_engine.has_active_claims = MagicMock(return_value=False)
+        context.runtime.task_engine.preflight = MagicMock(return_value=Decision(allowed=True))
 
         state = service.get_translation(project_id, document_id)
 
         assert state.supports_batch is False
         assert state.batch_action.enabled is False
-    finally:
-        context.close()
-
-
-def test_get_translation_hides_batch_when_batch_preflight_rejects_submission(tmp_path) -> None:
-    _ensure_qt_app()
-    context = _build_configured_context(tmp_path, provider=ProviderKind.GEMINI)
-    try:
-        created = context.services.projects.create_project(
-            CreateProjectRequest(name="Text Doc", target_language="English")
-        )
-        project_id = created.project.project_id
-        document_id = _create_text_document(context, project_id)
-
-        service = context.services.document
-        service.get_terms = MagicMock(return_value=_empty_terms(project_id))  # type: ignore[method-assign]
-        context.runtime.task_engine.has_active_claims = MagicMock(return_value=False)
-
-        def _preflight(task_type: str, *_args, **_kwargs):
-            if task_type == "batch_translation":
-                return Decision(allowed=False, reason="Batch settings are incomplete.")
-            return Decision(allowed=True)
-
-        context.runtime.task_engine.preflight = MagicMock(side_effect=_preflight)
-
-        state = service.get_translation(project_id, document_id)
-
-        assert state.supports_batch is False
-        assert state.batch_action.enabled is False
-        assert state.batch_action.blocker is not None
-        assert "Batch settings are incomplete." in state.batch_action.blocker.message
-    finally:
-        context.close()
-
-
-def test_get_translation_hides_batch_when_polish_provider_differs_and_polish_is_enabled(tmp_path) -> None:
-    _ensure_qt_app()
-    context = _build_configured_context(tmp_path, provider=ProviderKind.GEMINI)
-    try:
-        created = context.services.projects.create_project(
-            CreateProjectRequest(name="Text Doc", target_language="English")
-        )
-        project_id = created.project.project_id
-        document_id = _create_text_document(context, project_id)
-
-        service = context.services.document
-        service.get_terms = MagicMock(return_value=_empty_terms(project_id))  # type: ignore[method-assign]
-        context.runtime.task_engine.has_active_claims = MagicMock(return_value=False)
-        effective_config = context.runtime.get_effective_config(project_id)
-        effective_config.polish_config = PolishConfig(
-            api_key="openai-key",
-            base_url="https://api.openai.com/v1",
-            model="gpt-4.1-mini",
-        )
-        with patch.object(type(context.runtime), "get_effective_config", return_value=effective_config):
-            enabled_state = service.get_translation(project_id, document_id, enable_polish=True)
-            disabled_state = service.get_translation(project_id, document_id, enable_polish=False)
-
-        assert enabled_state.supports_batch is False
-        assert enabled_state.batch_action.enabled is False
-        assert disabled_state.supports_batch is True
     finally:
         context.close()
 

@@ -37,9 +37,9 @@ Current desktop builds are unsigned, so the first launch may show an OS security
 - Run `CAT-UI.exe`
 - If Windows SmartScreen warns that the app is unrecognized, click `More info` -> `Run anyway`
 
-## Quick Start
+## Initial Setup
 
-### 1. Open App Settings and start setup
+### 1. Open App Settings and start the setup wizard
 
 ![Initial setup screen](docs/screenshots/EN/InitialSetup.png)
 
@@ -47,7 +47,7 @@ Current desktop builds are unsigned, so the first launch may show an OS security
 
 ![Setup wizard screen](docs/screenshots/EN/Wizard.png)
 
-### 3. Choose providers and paste API keys. Gemini and DeepSeek are recommended and the only well-tested combination so far.
+### 3. Choose providers and add API keys
 
 ![API setup screen](docs/screenshots/EN/APISetup.png)
 
@@ -55,23 +55,45 @@ Current desktop builds are unsigned, so the first launch may show an OS security
 
 ![Language selection screen](docs/screenshots/EN/Language.png)
 
-### 5. Create a new project
+## One-Shot Translation
+
+> Warning: One-shot translation is currently tested only with the recommended workflow profiles using DeepSeek or Gemini models.
+
+### 1. Create a new project
 
 ![New project screen](docs/screenshots/EN/NewProject.png)
 
-### 6. Import files in reading order
+### 2. Import files in reading order
 
 ![Import screen](docs/screenshots/EN/Import.png)
 
-### 7. Build, filter, review, and translate terms before translation if needed
+### 3. Open `Translate and Export`
+
+Use the `Translate and Export` button beside `Reset Document` and `Delete Document`, then choose the translation mode, `Use reembedding`, and your export options.
+
+### 4. Run the one-shot task
+
+CAT will run OCR when needed, build and process the glossary, translate the document, optionally reembed images, and then export the result.
+
+## Translate With Review
+
+### 1. Create a new project
+
+![New project screen](docs/screenshots/EN/NewProject.png)
+
+### 2. Import files in reading order
+
+![Import screen](docs/screenshots/EN/Import.png)
+
+### 3. Build, filter, review, and translate terms
 
 ![Terms screen](docs/screenshots/EN/Terms.png)
 
-### 8. Run translation
+### 4. Run translation
 
 ![Translate screen](docs/screenshots/EN/Translate.png)
 
-### 9. Export the result
+### 5. Export the result
 
 ![Export screen](docs/screenshots/EN/Export.png)
 
