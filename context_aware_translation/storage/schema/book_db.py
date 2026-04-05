@@ -1186,7 +1186,8 @@ class SQLiteBookDB:
         - chunks_extracted: Number of chunks with is_extracted=1
         - chunks_mapped: Number of chunks with is_occurrence_mapped=1
         - chunks_translated: Number of chunks with is_translated=1
-        - first_source_relative_path, first_source_sequence_number: lightweight label hints for the document
+        - first_source_relative_path, first_source_sequence_number: best-effort label hints
+          that skip internal EPUB bookkeeping files when possible
         """
         rows = self.conn.execute(
             """
@@ -1237,13 +1238,22 @@ class SQLiteBookDB:
                     ds.relative_path as first_source_relative_path,
                     ds.sequence_number as first_source_sequence_number
                 FROM document_sources ds
-                INNER JOIN (
-                    SELECT document_id, MIN(sequence_number) as first_source_sequence_number
-                    FROM document_sources
-                    GROUP BY document_id
-                ) first_ds
-                    ON ds.document_id = first_ds.document_id
-                    AND ds.sequence_number = first_ds.first_source_sequence_number
+                WHERE ds.source_id = (
+                    SELECT candidate.source_id
+                    FROM document_sources candidate
+                    WHERE candidate.document_id = ds.document_id
+                    ORDER BY
+                        CASE
+                            WHEN LOWER(COALESCE(candidate.relative_path, '')) IN (
+                                '__epub_metadata__.json',
+                                '__epub_original__.epub'
+                            ) THEN 1
+                            ELSE 0
+                        END,
+                        candidate.sequence_number,
+                        candidate.source_id
+                    LIMIT 1
+                )
             ) first_src ON d.document_id = first_src.document_id
             ORDER BY d.document_id
             """

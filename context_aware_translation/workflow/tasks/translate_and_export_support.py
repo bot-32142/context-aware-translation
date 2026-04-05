@@ -22,6 +22,20 @@ from .models import Decision
 
 _ONE_SHOT_REEMBEDDABLE_DOCUMENT_TYPES = frozenset({"pdf", "scanned_book", "manga", "epub"})
 _RERUN_GUARD_REASON = "This one-shot task cannot be retried because the document or glossary changed after it stopped."
+_REMOTE_BATCH_PHASES = frozenset(
+    {
+        "translation_submit",
+        "translation_poll",
+        "translation_validate",
+        "translation_fallback",
+        "polish_submit",
+        "polish_poll",
+        "polish_validate",
+        "polish_fallback",
+        "apply",
+    }
+)
+_ACTIVE_REMOTE_BATCH_STATUSES = frozenset({"running", "cancel_requested", "cancelling"})
 
 
 def decode_translate_and_export_payload(record: TaskRecord) -> dict[str, Any]:
@@ -162,6 +176,12 @@ def with_resume_guard(
     return updated
 
 
+def _is_remote_batch_cleanup(task_record: TaskRecord | None, *, use_batch: bool) -> bool:
+    if task_record is None or not use_batch:
+        return False
+    return task_record.status in _ACTIVE_REMOTE_BATCH_STATUSES and (task_record.phase or "") in _REMOTE_BATCH_PHASES
+
+
 def _validate_translate_and_export(
     book_id: str,
     *,
@@ -228,12 +248,12 @@ def _validate_translate_and_export(
                         "or reembedding work has started for this document."
                     ),
                 )
-        if use_batch and document_type == "manga":
+        if use_batch and not _is_remote_batch_cleanup(task_record, use_batch=use_batch) and document_type == "manga":
             return Decision(
                 allowed=False,
                 reason="Async batch translation is only available for non-manga documents.",
             )
-        if use_batch:
+        if use_batch and not _is_remote_batch_cleanup(task_record, use_batch=use_batch):
             batch_provider = config_module.resolve_pipeline_batch_provider(
                 config.translator_config,
                 config.polish_config,

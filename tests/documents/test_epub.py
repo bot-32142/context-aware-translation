@@ -590,6 +590,18 @@ class TestDoImport:
         assert "title" in metadata
         assert "spine" in metadata
 
+    def test_import_stores_original_archive_filename(self, tmp_path: Path):
+        epub_path = _make_epub_file(tmp_path)
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+
+        docs = repo.list_documents()
+        sources = repo.get_document_sources(docs[0]["document_id"])
+
+        original_archive = next(source for source in sources if EPUBDocument._is_original_archive_source(source))
+        assert original_archive["relative_path"] == epub_path.name
+        assert original_archive["mime_type"] == "application/epub+zip"
+
     def test_import_stores_css(self, tmp_path: Path):
         epub_path = _make_epub_file(tmp_path, css="body { color: red; }")
         repo = _setup_repo(tmp_path)
@@ -1626,6 +1638,18 @@ class TestSourceClassification:
     def test_is_metadata_source(self):
         assert EPUBDocument._is_metadata_source({"relative_path": METADATA_PATH}) is True
         assert EPUBDocument._is_metadata_source({"relative_path": "chapter1.xhtml"}) is False
+
+    def test_is_original_archive_source_accepts_real_filename(self):
+        assert (
+            EPUBDocument._is_original_archive_source(
+                {
+                    "relative_path": "novel.epub",
+                    "source_type": "asset",
+                    "mime_type": "application/epub+zip",
+                }
+            )
+            is True
+        )
 
 
 # =========================================================================

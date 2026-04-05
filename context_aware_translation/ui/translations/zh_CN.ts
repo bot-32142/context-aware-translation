@@ -12,14 +12,14 @@
         <translation type="vanished">启用批量翻译器时必须提供模型。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="175"/>
+        <location filename="../features/workflow_profile_editor.py" line="181"/>
         <source>Every workflow step must use a connection and model.</source>
         <translation>每个工作流步骤都必须使用连接和模型。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="197"/>
+        <location filename="../features/workflow_profile_editor.py" line="203"/>
         <source>Gemini AI Studio</source>
-        <translation type="unfinished">Gemini AI Studio</translation>
+        <translation>Gemini AI Studio</translation>
     </message>
 </context>
 <context>
@@ -2332,22 +2332,22 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>StepAdvancedConfigDialog</name>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="114"/>
+        <location filename="../features/workflow_profile_editor.py" line="120"/>
         <source>Extraction settings control how aggressively terms are discovered.</source>
         <translation>提取设置控制术语发现的积极程度。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="117"/>
+        <location filename="../features/workflow_profile_editor.py" line="123"/>
         <source>Translator settings tune chunk sizing and request budget.</source>
         <translation>翻译器设置用于调整分块大小和请求预算。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="120"/>
+        <location filename="../features/workflow_profile_editor.py" line="126"/>
         <source>Polish settings control the optional editor pass after translation.</source>
         <translation>润色设置控制翻译后的可选编辑润色步骤。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="123"/>
+        <location filename="../features/workflow_profile_editor.py" line="129"/>
         <source>OCR settings control image compression and artifact cleanup.</source>
         <translation>OCR 设置控制图像压缩和伪影清理。</translation>
     </message>
@@ -2356,145 +2356,145 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation type="vanished">批处理设置用于配置可选的异步翻译任务。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="132"/>
+        <location filename="../features/workflow_profile_editor.py" line="138"/>
         <source>Edit advanced settings for this workflow step.</source>
         <translation>编辑此工作流步骤的高级设置。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="206"/>
+        <location filename="../features/workflow_profile_editor.py" line="212"/>
         <source>Max gleaning</source>
         <translation>最大补提取次数</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="214"/>
+        <location filename="../features/workflow_profile_editor.py" line="220"/>
         <source>Max term name length</source>
         <translation>术语名称最大长度</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="224"/>
+        <location filename="../features/workflow_profile_editor.py" line="230"/>
         <source>Strip EPUB ruby annotations</source>
         <translation>移除 EPUB 注音标注</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="230"/>
+        <location filename="../features/workflow_profile_editor.py" line="236"/>
         <source>Max tokens per call</source>
         <translation>每次调用的最大令牌数</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="238"/>
+        <location filename="../features/workflow_profile_editor.py" line="244"/>
         <source>Chunk size</source>
         <translation>分块大小</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="248"/>
+        <location filename="../features/workflow_profile_editor.py" line="254"/>
         <source>OCR DPI</source>
         <translation>OCR DPI</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="256"/>
+        <location filename="../features/workflow_profile_editor.py" line="262"/>
         <source>Strip artifacts</source>
         <translation>移除伪影</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="303"/>
+        <location filename="../features/workflow_profile_editor.py" line="309"/>
         <source>Auto</source>
         <translation>自动</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="304"/>
+        <location filename="../features/workflow_profile_editor.py" line="310"/>
         <source>Off</source>
         <translation>关闭</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="305"/>
-        <location filename="../features/workflow_profile_editor.py" line="312"/>
+        <location filename="../features/workflow_profile_editor.py" line="311"/>
+        <location filename="../features/workflow_profile_editor.py" line="318"/>
         <source>Low</source>
         <translation>低</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="306"/>
-        <location filename="../features/workflow_profile_editor.py" line="313"/>
+        <location filename="../features/workflow_profile_editor.py" line="312"/>
+        <location filename="../features/workflow_profile_editor.py" line="319"/>
         <source>Medium</source>
         <translation>中</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="307"/>
-        <location filename="../features/workflow_profile_editor.py" line="314"/>
+        <location filename="../features/workflow_profile_editor.py" line="313"/>
+        <location filename="../features/workflow_profile_editor.py" line="320"/>
         <source>High</source>
         <translation>高</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="310"/>
+        <location filename="../features/workflow_profile_editor.py" line="316"/>
         <source>Inherit from connection</source>
         <translation>沿用连接设置</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="311"/>
+        <location filename="../features/workflow_profile_editor.py" line="317"/>
         <source>None</source>
         <translation>无</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="323"/>
+        <location filename="../features/workflow_profile_editor.py" line="329"/>
         <source>Step Settings</source>
         <translation>步骤设置</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="368"/>
+        <location filename="../features/workflow_profile_editor.py" line="374"/>
         <source>Invalid Settings</source>
         <translation>设置无效</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="401"/>
+        <location filename="../features/workflow_profile_editor.py" line="407"/>
         <source>Override</source>
         <translation>覆盖</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="461"/>
+        <location filename="../features/workflow_profile_editor.py" line="467"/>
         <source>Connection overrides apply only to this workflow step and override the selected connection.</source>
         <translation>连接覆盖项仅对当前工作流步骤生效，并会覆盖所选连接的设置。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="536"/>
+        <location filename="../features/workflow_profile_editor.py" line="542"/>
         <source>Translator batch size</source>
-        <translation type="unfinished"></translation>
+        <translation>翻译批量大小</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="537"/>
+        <location filename="../features/workflow_profile_editor.py" line="543"/>
         <source>Polish batch size</source>
-        <translation type="unfinished"></translation>
+        <translation>润色批量大小</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="264"/>
+        <location filename="../features/workflow_profile_editor.py" line="270"/>
         <source>Temperature</source>
         <translation>温度</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="126"/>
+        <location filename="../features/workflow_profile_editor.py" line="132"/>
         <source>Batch inherits provider, model, and most request settings from the regular Translator and Polish steps. Custom kwargs might not work as expected. Not all models are supported. Please check your provider&apos;s documentation.</source>
-        <translation type="unfinished"></translation>
+        <translation>批量步骤会继承常规翻译器和润色步骤的提供商、模型以及大多数请求设置。自定义 kwargs 可能无法按预期工作，并且不是所有模型都受支持。请查阅你的提供商文档。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="274"/>
+        <location filename="../features/workflow_profile_editor.py" line="280"/>
         <source>Timeout</source>
         <translation>超时</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="284"/>
+        <location filename="../features/workflow_profile_editor.py" line="290"/>
         <source>Max retries</source>
         <translation>最大重试次数</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="293"/>
+        <location filename="../features/workflow_profile_editor.py" line="299"/>
         <source>Concurrency</source>
         <translation>并发数</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="495"/>
+        <location filename="../features/workflow_profile_editor.py" line="501"/>
         <source>Reasoning effort</source>
         <translation>推理强度</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="502"/>
+        <location filename="../features/workflow_profile_editor.py" line="508"/>
         <source>Custom parameters</source>
         <translation>自定义参数</translation>
     </message>
@@ -3857,48 +3857,48 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>WorkflowProfileEditorDialog</name>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1118"/>
+        <location filename="../features/workflow_profile_editor.py" line="1124"/>
         <source>Workflow Profile</source>
         <translation>工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1142"/>
+        <location filename="../features/workflow_profile_editor.py" line="1148"/>
         <source>A workflow profile is a user-facing wrapper over the existing step-based config. Edit connection and model choices here.</source>
         <translation>工作流配置档案是对现有分步骤配置的用户界面封装。可在此编辑连接和模型选择。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1147"/>
+        <location filename="../features/workflow_profile_editor.py" line="1153"/>
         <source>General</source>
         <translation>常规</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1169"/>
+        <location filename="../features/workflow_profile_editor.py" line="1175"/>
         <source>Profile name</source>
         <translation>配置档案名称</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1170"/>
+        <location filename="../features/workflow_profile_editor.py" line="1176"/>
         <source>Target language</source>
         <translation>目标语言</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1176"/>
+        <location filename="../features/workflow_profile_editor.py" line="1182"/>
         <source>Workflow Routing</source>
         <translation>工作流路由</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1180"/>
+        <location filename="../features/workflow_profile_editor.py" line="1186"/>
         <source>Use the Advanced column to edit step-specific settings.</source>
         <translation>使用“高级”列编辑步骤专用设置。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1220"/>
         <location filename="../features/workflow_profile_editor.py" line="1226"/>
+        <location filename="../features/workflow_profile_editor.py" line="1232"/>
         <source>Missing Information</source>
         <translation>缺少信息</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1220"/>
+        <location filename="../features/workflow_profile_editor.py" line="1226"/>
         <source>Target language is required.</source>
         <translation>目标语言为必填项。</translation>
     </message>
@@ -3914,23 +3914,23 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>WorkflowRoutesEditor</name>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="627"/>
+        <location filename="../features/workflow_profile_editor.py" line="633"/>
         <source>Step</source>
         <translation>步骤</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="628"/>
+        <location filename="../features/workflow_profile_editor.py" line="634"/>
         <source>Connection</source>
         <translation>连接</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="629"/>
+        <location filename="../features/workflow_profile_editor.py" line="635"/>
         <source>Model</source>
         <translation>模型</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="630"/>
-        <location filename="../features/workflow_profile_editor.py" line="896"/>
+        <location filename="../features/workflow_profile_editor.py" line="636"/>
+        <location filename="../features/workflow_profile_editor.py" line="902"/>
         <source>Advanced</source>
         <translation>高级</translation>
     </message>
@@ -3939,126 +3939,126 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation type="vanished">直接批处理配置</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="715"/>
+        <location filename="../features/workflow_profile_editor.py" line="721"/>
         <source>Select connection</source>
         <translation>选择连接</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="109"/>
+        <location filename="../features/workflow_profile_editor.py" line="115"/>
         <source>Connection and model settings for this workflow step.</source>
         <translation>此工作流步骤的连接和模型设置。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="64"/>
+        <location filename="../features/workflow_profile_editor.py" line="70"/>
         <source>Find candidate glossary terms from source text.</source>
         <translation>从源文本中查找候选术语。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="67"/>
+        <location filename="../features/workflow_profile_editor.py" line="73"/>
         <source>Summarize nearby context so later steps can work with less text.</source>
         <translation>总结邻近上下文，以便后续步骤用更少文本工作。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="70"/>
+        <location filename="../features/workflow_profile_editor.py" line="76"/>
         <source>Translate glossary terms before full document translation.</source>
         <translation>在全文翻译之前先翻译术语。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="73"/>
+        <location filename="../features/workflow_profile_editor.py" line="79"/>
         <source>Translate the main document text into the target language.</source>
         <translation>将文档正文翻译为目标语言。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="76"/>
+        <location filename="../features/workflow_profile_editor.py" line="82"/>
         <source>Polish translated text so it reads naturally without changing the meaning.</source>
         <translation>对译文进行润色，在不改变含义的前提下让表达更自然。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="79"/>
+        <location filename="../features/workflow_profile_editor.py" line="85"/>
         <source>Review glossary candidates and mark likely noise or confirmed terms.</source>
         <translation>审校术语候选，并标记可能的噪声项或已确认术语。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="82"/>
+        <location filename="../features/workflow_profile_editor.py" line="88"/>
         <source>Extract editable text from scanned or image-based pages.</source>
         <translation>从扫描页或图片页中提取可编辑文本。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="85"/>
+        <location filename="../features/workflow_profile_editor.py" line="91"/>
         <source>Put translated text back into document images.</source>
         <translation>将翻译后的文本回填到文档图片中。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="88"/>
+        <location filename="../features/workflow_profile_editor.py" line="94"/>
         <source>Translate manga pages with image-aware text handling.</source>
         <translation>使用图像感知文本处理来翻译漫画页面。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="91"/>
+        <location filename="../features/workflow_profile_editor.py" line="97"/>
         <source>Submit document translation through the provider&apos;s asynchronous batch API.</source>
         <translation>通过提供商的异步批处理 API 提交文档翻译。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="97"/>
+        <location filename="../features/workflow_profile_editor.py" line="103"/>
         <source>Extractor</source>
         <translation>提取器</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="98"/>
+        <location filename="../features/workflow_profile_editor.py" line="104"/>
         <source>Summarizer</source>
         <translation>摘要器</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="99"/>
+        <location filename="../features/workflow_profile_editor.py" line="105"/>
         <source>Glossary translator</source>
         <translation>术语翻译器</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="100"/>
+        <location filename="../features/workflow_profile_editor.py" line="106"/>
         <source>Translator</source>
         <translation>翻译器</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="101"/>
+        <location filename="../features/workflow_profile_editor.py" line="107"/>
         <source>Polish</source>
         <translation>润色</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="102"/>
+        <location filename="../features/workflow_profile_editor.py" line="108"/>
         <source>Reviewer</source>
         <translation>审校器</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="103"/>
+        <location filename="../features/workflow_profile_editor.py" line="109"/>
         <source>OCR</source>
         <translation>OCR</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="104"/>
+        <location filename="../features/workflow_profile_editor.py" line="110"/>
         <source>Image reembedding</source>
         <translation>图片重嵌入</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="105"/>
+        <location filename="../features/workflow_profile_editor.py" line="111"/>
         <source>Manga translator</source>
         <translation>漫画翻译器</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="106"/>
+        <location filename="../features/workflow_profile_editor.py" line="112"/>
         <source>Translator batch</source>
         <translation>批量翻译器</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="769"/>
-        <location filename="../features/workflow_profile_editor.py" line="918"/>
+        <location filename="../features/workflow_profile_editor.py" line="775"/>
+        <location filename="../features/workflow_profile_editor.py" line="924"/>
         <source>Unavailable</source>
-        <translation type="unfinished"></translation>
+        <translation>不可用</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="770"/>
-        <location filename="../features/workflow_profile_editor.py" line="920"/>
+        <location filename="../features/workflow_profile_editor.py" line="776"/>
+        <location filename="../features/workflow_profile_editor.py" line="926"/>
         <source>Inherited</source>
-        <translation type="unfinished"></translation>
+        <translation>继承</translation>
     </message>
     <message>
         <source>This step has no additional settings beyond connection and model.</source>

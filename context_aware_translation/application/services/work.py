@@ -59,6 +59,11 @@ from context_aware_translation.workflow.ops.import_support import (
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
 
 _IMAGE_DOCUMENT_TYPES = {"manga", "pdf", "epub", "scanned_book"}
+_INTERNAL_DOCUMENT_LABEL_PATHS = frozenset({"__epub_metadata__.json", "__epub_original__.epub"})
+
+
+def _is_internal_document_label_path(relative_path: str) -> bool:
+    return relative_path.strip().lower() in _INTERNAL_DOCUMENT_LABEL_PATHS
 
 
 class WorkService(Protocol):
@@ -303,7 +308,7 @@ class DefaultWorkService:
     ) -> DocumentRef:
         label = f"Document {order_index}"
         relative_path = first_source_relative_path.strip()
-        if relative_path:
+        if relative_path and not _is_internal_document_label_path(relative_path):
             label = Path(relative_path).name
         elif first_source_sequence_number > 0:
             label = f"{document_type.replace('_', ' ').title()} {first_source_sequence_number}"

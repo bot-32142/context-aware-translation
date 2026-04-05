@@ -300,13 +300,17 @@ class GeminiBatchJobGateway(BatchJobGateway):
         if str(batch_config.provider or "").lower() != _PROVIDER:
             raise ValueError(f"Unsupported batch provider for Gemini gateway: {batch_config.provider}")
 
-        cache_key = hashlib.sha256(batch_config.api_key.encode()).hexdigest()
+        api_key = str(batch_config.api_key or "").strip()
+        if not api_key:
+            raise ValueError("Gemini batch gateway requires a non-empty API key.")
+
+        cache_key = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
         cached = self._client_cache.get(cache_key)
         if cached is not None:
             return cached
 
         client_kwargs: dict[str, Any] = {
-            "api_key": batch_config.api_key,
+            "api_key": api_key,
             "http_options": {"timeout": int(_GEMINI_HTTP_TIMEOUT_SECONDS * 1000)},
         }
 

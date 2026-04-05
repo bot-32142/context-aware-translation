@@ -392,7 +392,13 @@ class EPUBDocument(Document):
 
     @staticmethod
     def _is_original_archive_source(source: dict[str, Any]) -> bool:
-        return source.get("relative_path") == ORIGINAL_ARCHIVE_PATH
+        relative_path = str(source.get("relative_path", "") or "").strip()
+        if relative_path == ORIGINAL_ARCHIVE_PATH:
+            return True
+        return (
+            str(source.get("source_type", "") or "").strip().lower() == "asset"
+            and str(source.get("mime_type", "") or "").strip().lower() == "application/epub+zip"
+        )
 
     @staticmethod
     def _is_content_image(source: dict[str, Any]) -> bool:
@@ -1577,7 +1583,7 @@ class EPUBDocument(Document):
                 document_id,
                 seq,
                 "asset",
-                relative_path=ORIGINAL_ARCHIVE_PATH,
+                relative_path=path.name or ORIGINAL_ARCHIVE_PATH,
                 binary_content=original_epub_bytes,
                 mime_type="application/epub+zip",
                 is_text_added=True,

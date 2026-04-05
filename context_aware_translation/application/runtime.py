@@ -81,6 +81,7 @@ _HIDDEN_CONNECTION_KWARG_KEYS = frozenset(
     }
 )
 
+
 def _openai_supports_reasoning_effort_none(model: str | None) -> bool:
     normalized = str(model or "").strip().lower()
     return normalized.startswith("o") or normalized.startswith("gpt-5")
@@ -142,6 +143,19 @@ _WORKFLOW_STEP_LAYOUT: tuple[tuple[WorkflowStepId, str, str | None], ...] = (
 
 _DEFAULT_BATCH_SIZE = 100
 _BATCH_PROVIDER_LABELS = {"gemini_ai_studio": "Gemini AI Studio"}
+
+
+def _coerce_batch_size(value: object, default: int) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return default
 
 
 @dataclass(frozen=True)
@@ -285,6 +299,7 @@ _STEP_RECOMMENDATION_ORDER: dict[WorkflowStepId, tuple[StepModelPreference, ...]
         StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
     ),
 }
+
 
 def _translator_recommendations(recommendation_mode: SetupWizardMode) -> tuple[StepModelPreference, ...]:
     if recommendation_mode is SetupWizardMode.QUALITY:
@@ -731,6 +746,8 @@ def _build_batch_route(
     polish_batch_payload = config.get("polish_batch_config")
     translator_batch_config = translator_batch_payload if isinstance(translator_batch_payload, dict) else {}
     polish_batch_config = polish_batch_payload if isinstance(polish_batch_payload, dict) else {}
+    translator_batch_size = _coerce_batch_size(translator_batch_config.get("batch_size"), _DEFAULT_BATCH_SIZE)
+    polish_batch_size = _coerce_batch_size(polish_batch_config.get("batch_size"), translator_batch_size)
     return WorkflowStepRoute(
         step_id=WorkflowStepId.TRANSLATOR_BATCH,
         step_label=step_label,
@@ -738,10 +755,8 @@ def _build_batch_route(
         connection_label=_batch_provider_label(provider),
         model=None,
         step_config={
-            "translator_batch_size": int(translator_batch_config.get("batch_size", _DEFAULT_BATCH_SIZE)),
-            "polish_batch_size": int(
-                polish_batch_config.get("batch_size", translator_batch_config.get("batch_size", _DEFAULT_BATCH_SIZE))
-            ),
+            "translator_batch_size": translator_batch_size,
+            "polish_batch_size": polish_batch_size,
         },
     )
 

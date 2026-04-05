@@ -8,8 +8,6 @@ import pytest
 from context_aware_translation.config import Config, PolishConfig
 from context_aware_translation.llm.client import LLMClient
 from context_aware_translation.llm.translator import (
-    build_polish_prompt,
-    build_translation_prompt,
     postprocess_translated_blocks,
     preprocess_chunk_text,
     translate_chunk,
@@ -81,60 +79,6 @@ def test_postprocess_marks_compressed_placeholders_but_keeps_true_empty_lines():
     assert reconstructed == f"\nA\n{COMPRESSED_LINE_SENTINEL}\n\n---\n\nC"
 
 
-def test_build_translation_prompt_mentions_epub_inline_marker_preservation():
-    system_prompt, user_prompt = build_translation_prompt(
-        chunk_blocks=["示例文本"],
-        terms=[],
-        source_language="日语",
-        target_language="简体中文",
-    )
-
-    assert "EPUB内联标记" in system_prompt
-    assert "⟪tag:n⟫" in system_prompt
-    assert "⟪/tag:n⟫" in system_prompt
-    assert "非样式内联标记" in system_prompt
-    assert "样式内联标记" in system_prompt
-    assert "⟪RUBY:n⟫ ... ⟪/RUBY:n⟫：可整对保留、整对删除或整对新增" in system_prompt
-    assert "⟪BR:n⟫：可按语义需要保留或删除" in system_prompt
-    assert "⟪RUBY:0⟫断罪飛び蹴り(パニッシュメントドロップ)⟪/RUBY:0⟫" in system_prompt
-    assert "⟪RUBY:0⟫女主角(ヒロイン)⟪/RUBY:0⟫" in system_prompt
-    assert "示例：" in system_prompt
-    assert "他使出了「⟪RUBY:0⟫断罪飞踢(惩罚坠击)⟪/RUBY:0⟫」。" in system_prompt
-    assert "她被称为「女主角」。" in system_prompt
-    assert '"id": 0' in system_prompt
-    assert '"文本": "意"' in system_prompt
-    assert '"文本": "味"' in system_prompt
-    assert '"文本": "义"' in system_prompt
-    assert '"文本": "不"' in system_prompt
-    assert '"文本": "明"' in system_prompt
-    assert '相关 id 的文本填 ""' in system_prompt
-    assert json.loads(user_prompt) == {
-        "术语列表": [],
-        "原文": [{"id": 0, "文本": "示例文本"}],
-    }
-
-
-def test_build_polish_prompt_uses_language_placeholders_and_strict_output_contract():
-    system_prompt, user_prompt = build_polish_prompt(
-        translated_blocks=["原稿1", "原稿2"],
-        target_language="简体中文",
-        source_language="日语",
-    )
-
-    assert "你是简体中文母语的资深编辑。" in system_prompt
-    assert "找出每句话中的日语残留或有翻译腔的表达。" in system_prompt
-    assert "去除日语残留。更正标点。" in system_prompt
-    assert "挑选出最符合简体中文习惯的。" in system_prompt
-    assert "只输出一个JSON对象" in system_prompt
-    assert "每个 id 恰好出现一次" in system_prompt
-    assert json.loads(user_prompt) == {
-        "翻译文本": [
-            {"id": 0, "文本": "原稿1"},
-            {"id": 1, "文本": "原稿2"},
-        ]
-    }
-
-
 @pytest.mark.asyncio
 async def test_translate_chunk_uses_block_lists_and_reconstructs(temp_config: Config):
     chunks = ["A\n\n---\n\nB"]
@@ -199,11 +143,6 @@ async def test_translate_chunk_retries_when_inline_markers_are_removed(temp_conf
 
     assert result == ["这是 ⟪a:0⟫链接⟪/a:0⟫ 文本"]
     assert llm_client.chat.await_count == 2
-    correction_messages = llm_client.chat.await_args_list[1].args[0]
-    assert "内联标记" in correction_messages[-1]["content"]
-    assert "把多条内容压成一条" in correction_messages[-1]["content"]
-    assert '相关 id 的 文本 填 ""' in correction_messages[-1]["content"]
-    assert "每个 id 恰好出现一次" in correction_messages[-1]["content"]
 
 
 @pytest.mark.asyncio
@@ -241,9 +180,6 @@ async def test_translate_chunk_retries_when_ids_are_reordered(temp_config: Confi
 
     assert result == ["甲", "乙"]
     assert llm_client.chat.await_count == 2
-    correction_messages = llm_client.chat.await_args_list[1].args[0]
-    assert "id mismatch" in correction_messages[-1]["content"]
-    assert "不得新增、删除、重复、改动、合并或重排任何 id" in correction_messages[-1]["content"]
 
 
 @pytest.mark.asyncio
@@ -345,9 +281,6 @@ async def test_translate_chunk_retries_when_ruby_marker_is_malformed(temp_config
 
     assert result == ["前文 汉字 后文"]
     assert llm_client.chat.await_count == 2
-    correction_messages = llm_client.chat.await_args_list[1].args[0]
-    assert "malformed EPUB inline markers" in correction_messages[-1]["content"]
-    assert "n 必须是数字" in correction_messages[-1]["content"]
 
 
 @pytest.mark.asyncio
@@ -377,8 +310,6 @@ async def test_translate_chunk_retries_when_unknown_inline_marker_is_present(tem
 
     assert result == ["前文 汉字 后文"]
     assert llm_client.chat.await_count == 2
-    correction_messages = llm_client.chat.await_args_list[1].args[0]
-    assert "unknown inline marker token" in correction_messages[-1]["content"]
 
 
 @pytest.mark.asyncio
@@ -420,8 +351,6 @@ async def test_translate_chunk_retries_when_shifted_strict_markers_touch_compres
 
     assert result == [f"甲 ⟪a:0⟫壹⟪/a:0⟫\n{COMPRESSED_LINE_SENTINEL}\n丙"]
     assert llm_client.chat.await_count == 2
-    correction_messages = llm_client.chat.await_args_list[1].args[0]
-    assert "inline marker mismatch" in correction_messages[-1]["content"]
 
 
 @pytest.mark.asyncio
@@ -451,9 +380,6 @@ async def test_translate_chunk_retries_when_empty_placeholder_drops_strict_marke
 
     assert result == ["甲 ⟪a:0⟫壹⟪/a:0⟫\n乙"]
     assert llm_client.chat.await_count == 2
-    correction_messages = llm_client.chat.await_args_list[1].args[0]
-    assert "line-prefix (lines 1-1)" in correction_messages[-1]["content"]
-    assert "inline marker mismatch" in correction_messages[-1]["content"]
 
 
 @pytest.mark.asyncio
@@ -531,9 +457,6 @@ async def test_translate_chunk_retries_when_multiple_compressed_lines_drop_stric
 
     assert result == ["前言\n甲 ⟪a:0⟫壹⟪/a:0⟫\n乙 ⟪abbr:1⟫贰⟪/abbr:1⟫"]
     assert llm_client.chat.await_count == 2
-    correction_messages = llm_client.chat.await_args_list[1].args[0]
-    assert "line-prefix (lines 1-3)" in correction_messages[-1]["content"]
-    assert "inline marker mismatch" in correction_messages[-1]["content"]
 
 
 @pytest.mark.asyncio

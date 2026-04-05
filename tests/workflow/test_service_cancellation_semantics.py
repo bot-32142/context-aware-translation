@@ -534,6 +534,8 @@ class _FakeExportDocument:
 
     @classmethod
     def export_merged(cls, documents, export_format, file_path, *, use_original_images=False) -> None:  # noqa: ANN001
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text("exported", encoding="utf-8")
         cls.export_calls.append((list(documents), str(export_format), str(file_path), bool(use_original_images)))
 
 

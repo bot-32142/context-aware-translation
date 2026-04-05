@@ -229,7 +229,7 @@ def _build_extraction_system_prompt(source_language: str) -> str:
 def build_extraction_prompts(chunk_text: str, source_language: str) -> tuple[str, str]:
     system_prompt = _build_extraction_system_prompt(source_language)
     user_prompt = f"""---任务---
-从下方文本中抽取需要统一翻译的术语。
+从下方文本中抽取需要统一翻译的术语。不要翻译！
 
 ---指令---
 1.  **严格遵守格式：** 使用系统提示指定的字段分隔符和格式。
@@ -248,7 +248,7 @@ def build_extraction_prompts(chunk_text: str, source_language: str) -> tuple[str
 
 def build_gleaning_prompts() -> str:
     user_prompt = (
-        f"只补充此前遗漏、且仍需要统一翻译的术语。"
+        f"只补充此前遗漏、且仍需要统一翻译的术语。不要翻译！"
         f"不要重复或重写完整列表；如果没有遗漏，只输出 `{COMPLETION_DELIMITER}`。"
     )
     return user_prompt.strip()

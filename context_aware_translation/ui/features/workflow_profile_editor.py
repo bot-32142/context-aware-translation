@@ -35,7 +35,6 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowStepId,
     WorkflowStepRoute,
 )
-from context_aware_translation.config import infer_async_batch_provider
 from context_aware_translation.ui.constants import LANGUAGES
 from context_aware_translation.ui.json_utils import parse_json_object_text
 from context_aware_translation.ui.tips import create_tip_label
@@ -58,6 +57,13 @@ class RouteRow:
     connection_label_widget: QLabel | None = None
     row_widget: QWidget | None = None
     step_label_widget: QLabel | None = None
+
+
+def _infer_async_batch_provider(base_url: str | None) -> str | None:
+    base = (base_url or "").strip().lower()
+    if "generativelanguage.googleapis.com" in base:
+        return "gemini_ai_studio"
+    return None
 
 
 _STEP_TOOLTIP_TEXTS = {
@@ -877,7 +883,7 @@ class WorkflowRoutesEditor(QWidget):
         choice = self._connection_choice_by_id.get(route.connection_id)
         if choice is None:
             return None
-        return infer_async_batch_provider(choice.base_url)
+        return _infer_async_batch_provider(choice.base_url)
 
     def _item(self, text: str, *, tooltip: str | None = None, centered: bool = False) -> QTableWidgetItem:
         item = QTableWidgetItem(text)

@@ -4,7 +4,7 @@ import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 import yaml
 
@@ -16,6 +16,11 @@ if TYPE_CHECKING:
     from context_aware_translation.storage.schema.registry_db import RegistryDB
 
 T = TypeVar("T", bound="LLMConfig")
+
+
+class _BatchSizeConfig(Protocol):
+    batch_size: int
+
 
 SQLITE_FILENAME = "terms.db"
 DEFAULT_OUTPUT_DIR = Path(".")
@@ -286,10 +291,11 @@ class TranslatorBatchConfig:
 _SUPPORTED_BATCH_PROVIDERS = {"gemini_ai_studio"}
 
 
-def _validate_translator_batch_config(config: TranslatorBatchConfig, *, config_name: str) -> None:
-    if int(config.batch_size) <= 0:
+def _validate_batch_size_config(config: _BatchSizeConfig, *, config_name: str) -> None:
+    batch_size = int(config.batch_size)
+    if batch_size <= 0:
         raise ValueError(f"{config_name}.batch_size must be greater than 0")
-    if int(config.batch_size) > 5000:
+    if batch_size > 5000:
         raise ValueError(f"{config_name}.batch_size must not exceed 5000")
 
 
@@ -986,9 +992,9 @@ class Config:
                 setattr(self, config_name, resolved)
 
         if self.translator_batch_config is not None:
-            _validate_translator_batch_config(self.translator_batch_config, config_name="translator_batch_config")
+            _validate_batch_size_config(self.translator_batch_config, config_name="translator_batch_config")
         if self.polish_batch_config is not None:
-            _validate_translator_batch_config(self.polish_batch_config, config_name="polish_batch_config")
+            _validate_batch_size_config(self.polish_batch_config, config_name="polish_batch_config")
 
         # Ensure directories exist and configure logging
         ensure_dirs(self)
