@@ -8,7 +8,15 @@ from typing import Any
 
 import httpx
 
-from context_aware_translation.config import TranslatorBatchConfig, TranslatorConfig
+from context_aware_translation.config import (
+    PolishBatchConfig,
+    PolishConfig,
+    TranslatorBatchConfig,
+    TranslatorConfig,
+    infer_polish_batch_provider,
+    infer_translator_batch_provider,
+    resolve_polish_config,
+)
 from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.core.progress import ProgressCallback
 from context_aware_translation.llm.batch_jobs import GeminiBatchJobGateway
@@ -262,21 +270,23 @@ class BatchTranslationExecutor:
 
         payload = self._decode_payload(task)
         cleanup_warnings: list[str] = []
-        batch_names, file_names = self._collect_remote_cleanup_targets(payload)
-
+        loop: asyncio.AbstractEventLoop | None
         try:
-            batch_config = self.batch_config()
-        except ValueError as exc:
-            if batch_names or file_names:
-                cleanup_warnings.append(
-                    f"Skipped remote cleanup because translator_batch_config is unavailable: {type(exc).__name__}: {exc}"
-                )
-        else:
-            loop: asyncio.AbstractEventLoop | None
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        for stage in ("translation", "polish"):
+            batch_names, file_names = self._collect_remote_cleanup_targets(payload, stage)
+            if not batch_names and not file_names:
+                continue
             try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                loop = None
+                batch_config = self.batch_config_for_stage(stage)
+            except ValueError as exc:
+                cleanup_warnings.append(
+                    f"Skipped {stage} remote cleanup because batch config is unavailable: {type(exc).__name__}: {exc}"
+                )
+                continue
 
             if loop is None:
                 cleanup_warnings.extend(
@@ -292,6 +302,7 @@ class BatchTranslationExecutor:
                 cleanup_warnings.append(
                     "Skipped remote cleanup because cleanup_remote_artifacts was called from a running event loop."
                 )
+                break
 
         return {
             "task_id": task_id,
@@ -307,129 +318,135 @@ class BatchTranslationExecutor:
 
         task = self.task_store.mark_cancel_requested(task_id)
         payload = self._decode_payload(task)
-        collected_names, _ = self._collect_remote_cleanup_targets(payload)
-        batch_names = list(collected_names)
-        display_names = []
-        for stage in ("translation", "polish"):
-            stage_meta = payload.get(stage)
-            if isinstance(stage_meta, dict):
-                dn = stage_meta.get("batch_display_name")
-                if isinstance(dn, str) and dn:
-                    display_names.append(dn)
-        try:
-            batch_config = self.batch_config()
-        except ValueError as exc:
-            local_cancel_note = None
-            if batch_names or display_names:
-                local_cancel_note = (
-                    "Skipped provider batch cancellation because translator_batch_config is unavailable: "
-                    f"{type(exc).__name__}: {exc}"
-                )
-                logger.warning("Task %s marked cancelled locally without provider cancellation: %s", task_id, exc)
-            return self._persist(
-                task_id,
-                status=STATUS_CANCELLED,
-                phase=PHASE_DONE,
-                last_error=local_cancel_note,
-            )
-
-        model = str(payload.get("model") or batch_config.model or "")
-        batch_hashes = self._collect_batch_request_hashes(payload)
-        for display_name in display_names:
-            try:
-                resolved_names = await self.gateway.find_batch_names(
-                    batch_config=batch_config,
-                    display_name=display_name,
-                    model=model or None,
-                )
-            except Exception as exc:
-                logger.warning("Failed to resolve batch names by display_name=%s: %s", display_name, exc)
-                continue
-            for resolved_name in resolved_names:
-                if resolved_name not in batch_names:
-                    batch_names.append(resolved_name)
-
-        if not batch_names:
-            return self._persist(
-                task_id,
-                status=STATUS_CANCELLED,
-                phase=PHASE_DONE,
-            )
-
-        task = self._persist(task_id, status=STATUS_CANCELLING)
         has_active_batches = False
         last_error: str | None = None
-        for batch_name in batch_names:
-            request_hashes = batch_hashes.get(batch_name, set())
-            if request_hashes:
+        saw_stage_batches = False
+        for stage in ("translation", "polish"):
+            stage_batch_names, _ = self._collect_remote_cleanup_targets(payload, stage)
+            display_names: list[str] = []
+            stage_meta = payload.get(stage)
+            if isinstance(stage_meta, dict):
+                display_name = stage_meta.get("batch_display_name")
+                if isinstance(display_name, str) and display_name:
+                    display_names.append(display_name)
+            if not stage_batch_names and not display_names:
+                continue
+
+            saw_stage_batches = True
+            try:
+                batch_config = self.batch_config_for_stage(stage)
+            except ValueError as exc:
+                logger.warning(
+                    "Task %s marked cancelled locally without %s batch cancellation: %s", task_id, stage, exc
+                )
+                if last_error is None:
+                    last_error = f"{type(exc).__name__}: {exc}"
+                continue
+
+            batch_names = list(stage_batch_names)
+            model = str(payload.get(f"{stage}_model") or batch_config.model or "")
+            batch_hashes = self._collect_batch_request_hashes(payload, stage)
+            for display_name in display_names:
                 try:
-                    poll_result = await self.gateway.poll_once(
+                    resolved_names = await self.gateway.find_batch_names(
+                        batch_config=batch_config,
+                        display_name=display_name,
+                        model=model or None,
+                    )
+                except Exception as exc:
+                    logger.warning("Failed to resolve %s batch names by display_name=%s: %s", stage, display_name, exc)
+                    continue
+                for resolved_name in resolved_names:
+                    if resolved_name not in batch_names:
+                        batch_names.append(resolved_name)
+
+            if not batch_names:
+                continue
+
+            task = self._persist(task_id, status=STATUS_CANCELLING)
+            for batch_name in batch_names:
+                request_hashes = batch_hashes.get(batch_name, set())
+                if request_hashes:
+                    try:
+                        poll_result = await self.gateway.poll_once(
+                            batch_config=batch_config,
+                            batch_name=batch_name,
+                            request_hashes=set(request_hashes),
+                            batch_store=self.llm_batch_store,
+                        )
+                        if poll_result.status == POLL_STATUS_COMPLETED:
+                            logger.info(
+                                "Recovered %d cached responses from %s provider batch %s before cancellation.",
+                                len(request_hashes),
+                                stage,
+                                batch_name,
+                            )
+                    except Exception as exc:
+                        logger.warning(
+                            "Failed to recover responses for %s provider batch %s before cancel of task %s: %s",
+                            stage,
+                            batch_name,
+                            task_id,
+                            exc,
+                        )
+
+                try:
+                    pre_state = await self.gateway.get_batch_state(
                         batch_config=batch_config,
                         batch_name=batch_name,
-                        request_hashes=set(request_hashes),
-                        batch_store=self.llm_batch_store,
                     )
-                    if poll_result.status == POLL_STATUS_COMPLETED:
-                        logger.info(
-                            "Recovered %d cached responses from provider batch %s before cancellation.",
-                            len(request_hashes),
-                            batch_name,
-                        )
                 except Exception as exc:
                     logger.warning(
-                        "Failed to recover responses for provider batch %s before cancel of task %s: %s",
+                        "Failed to inspect %s batch %s before cancel for task %s: %s",
+                        stage,
                         batch_name,
                         task_id,
                         exc,
                     )
+                    has_active_batches = True
+                    if last_error is None:
+                        last_error = f"{type(exc).__name__}: {exc}"
+                    continue
 
-            try:
-                pre_state = await self.gateway.get_batch_state(
-                    batch_config=batch_config,
-                    batch_name=batch_name,
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Failed to inspect Gemini batch %s before cancel for task %s: %s",
-                    batch_name,
-                    task_id,
-                    exc,
-                )
-                has_active_batches = True
-                if last_error is None:
-                    last_error = f"{type(exc).__name__}: {exc}"
-                continue
+                if pre_state not in _ACTIVE_PROVIDER_BATCH_STATES:
+                    continue
 
-            # Never issue cancel for terminal provider states. Some providers
-            # surface terminal-completed jobs as cancelled when cancel is sent
-            # late; that is noisy and can confuse users.
-            if pre_state not in _ACTIVE_PROVIDER_BATCH_STATES:
-                continue
+                try:
+                    await self.gateway.cancel_batch(
+                        batch_config=batch_config,
+                        batch_name=batch_name,
+                    )
+                except Exception as exc:
+                    logger.warning("Failed to cancel %s batch %s for task %s: %s", stage, batch_name, task_id, exc)
+                    if last_error is None:
+                        last_error = f"{type(exc).__name__}: {exc}"
+                try:
+                    state_name = await self.gateway.get_batch_state(
+                        batch_config=batch_config,
+                        batch_name=batch_name,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to inspect %s batch %s after cancel for task %s: %s",
+                        stage,
+                        batch_name,
+                        task_id,
+                        exc,
+                    )
+                    has_active_batches = True
+                    if last_error is None:
+                        last_error = f"{type(exc).__name__}: {exc}"
+                    continue
+                if state_name in _ACTIVE_PROVIDER_BATCH_STATES:
+                    has_active_batches = True
 
-            try:
-                await self.gateway.cancel_batch(
-                    batch_config=batch_config,
-                    batch_name=batch_name,
-                )
-            except Exception as exc:
-                logger.warning("Failed to cancel Gemini batch %s for task %s: %s", batch_name, task_id, exc)
-                if last_error is None:
-                    last_error = f"{type(exc).__name__}: {exc}"
-            try:
-                state_name = await self.gateway.get_batch_state(
-                    batch_config=batch_config,
-                    batch_name=batch_name,
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Failed to inspect Gemini batch %s after cancel for task %s: %s", batch_name, task_id, exc
-                )
-                has_active_batches = True
-                if last_error is None:
-                    last_error = f"{type(exc).__name__}: {exc}"
-                continue
-            if state_name in _ACTIVE_PROVIDER_BATCH_STATES:
-                has_active_batches = True
+        if not saw_stage_batches:
+            return self._persist(
+                task_id,
+                status=STATUS_CANCELLED,
+                phase=PHASE_DONE,
+                last_error=last_error,
+            )
 
         if has_active_batches:
             return self._persist(
@@ -658,10 +675,11 @@ class BatchTranslationExecutor:
         )
 
     @staticmethod
-    def _collect_batch_request_hashes(payload: dict[str, Any]) -> dict[str, set[str]]:
+    def _collect_batch_request_hashes(payload: dict[str, Any], stage: str | None = None) -> dict[str, set[str]]:
         batch_hashes: dict[str, set[str]] = {}
-        for stage in ("translation", "polish"):
-            stage_meta = payload.get(stage)
+        stages = (stage,) if stage is not None else ("translation", "polish")
+        for current_stage in stages:
+            stage_meta = payload.get(current_stage)
             if not isinstance(stage_meta, dict):
                 continue
             jobs = stage_meta.get("jobs")
@@ -683,12 +701,16 @@ class BatchTranslationExecutor:
         return batch_hashes
 
     @staticmethod
-    def _collect_remote_cleanup_targets(payload: dict[str, Any]) -> tuple[list[str], list[str]]:
+    def _collect_remote_cleanup_targets(
+        payload: dict[str, Any],
+        stage: str | None = None,
+    ) -> tuple[list[str], list[str]]:
         batch_names: set[str] = set()
         file_names: set[str] = set()
 
-        for stage in ("translation", "polish"):
-            stage_meta = payload.get(stage)
+        stages = (stage,) if stage is not None else ("translation", "polish")
+        for current_stage in stages:
+            stage_meta = payload.get(current_stage)
             if not isinstance(stage_meta, dict):
                 continue
             value = stage_meta.get("batch_name")
@@ -758,16 +780,60 @@ class BatchTranslationExecutor:
         )
 
     def batch_config(self) -> TranslatorBatchConfig:
-        batch_config = self.workflow.config.translator_batch_config
-        if not isinstance(batch_config, TranslatorBatchConfig):
-            raise ValueError("translator_batch_config is required.")
-        return batch_config
+        return self.translator_batch_config()
+
+    def batch_config_for_stage(self, stage: str) -> TranslatorBatchConfig:
+        if stage == "polish":
+            return self.polish_batch_config()
+        return self.translator_batch_config()
+
+    def translator_batch_config(self) -> TranslatorBatchConfig:
+        translator_config = self.translator_config()
+        provider = infer_translator_batch_provider(translator_config)
+        if provider is None:
+            raise ValueError("Async batch translation requires a batch-capable translator connection.")
+
+        persisted = self.workflow.config.translator_batch_config
+        batch_size = persisted.batch_size if isinstance(persisted, TranslatorBatchConfig) else 100
+        return TranslatorBatchConfig(
+            provider=provider,
+            api_key=str(translator_config.api_key or ""),
+            model=str(translator_config.model or ""),
+            batch_size=batch_size,
+        )
+
+    def polish_batch_config(self) -> TranslatorBatchConfig:
+        polish_config = self.polish_config()
+        provider = infer_polish_batch_provider(polish_config)
+        if provider is None:
+            raise ValueError("Async batch translation requires a batch-capable polish connection.")
+
+        persisted = getattr(self.workflow.config, "polish_batch_config", None)
+        if not isinstance(persisted, PolishBatchConfig):
+            persisted = getattr(self.workflow.config, "translator_batch_config", None)
+        batch_size = persisted.batch_size if isinstance(persisted, (TranslatorBatchConfig, PolishBatchConfig)) else 100
+        return PolishBatchConfig(
+            provider=provider,
+            api_key=str(polish_config.api_key or ""),
+            model=str(polish_config.model or ""),
+            batch_size=batch_size,
+        )
 
     def translator_config(self) -> TranslatorConfig:
         translator_config = self.workflow.config.translator_config
         if translator_config is None:
             raise ValueError("translator_config is required.")
         return translator_config
+
+    def polish_config(self) -> PolishConfig:
+        raw_polish_config = getattr(self.workflow.config, "polish_config", None)
+        if not isinstance(raw_polish_config, PolishConfig):
+            raw_polish_config = None
+        translator_config = getattr(self.workflow.config, "translator_config", None)
+        polish_config = resolve_polish_config(raw_polish_config, translator_config)
+        if polish_config is None:
+            raise ValueError("polish_config is required.")
+        return polish_config
 
     def document_ids_for_task(self, task: TaskRecord) -> list[int] | None:
         if task.document_ids_json is None or task.document_ids_json == "":

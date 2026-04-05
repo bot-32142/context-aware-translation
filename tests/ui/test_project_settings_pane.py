@@ -334,7 +334,7 @@ def test_project_settings_pane_preserves_custom_draft_across_profile_switches():
         view.cleanup()
 
 
-def test_project_settings_pane_blocks_invalid_custom_batch_route_save():
+def test_project_settings_pane_hides_legacy_batch_route_from_custom_editor():
     from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
 
     base_state = _make_state(project_specific=True)
@@ -349,14 +349,9 @@ def test_project_settings_pane_blocks_invalid_custom_batch_route_save():
                             step_id=WorkflowStepId.TRANSLATOR_BATCH,
                             step_label="Translator batch",
                             connection_id=None,
-                            connection_label="Gemini AI Studio",
-                            model="",
-                            step_config={
-                                "provider": "gemini_ai_studio",
-                                "api_key": "secret",
-                                "batch_size": 100,
-                                "thinking_mode": "auto",
-                            },
+                            connection_label=None,
+                            model=None,
+                            step_config={"batch_size": 100},
                         ),
                     ]
                 }
@@ -368,11 +363,9 @@ def test_project_settings_pane_blocks_invalid_custom_batch_route_save():
     view = ProjectSettingsPane("proj-1", service, bus)
     try:
         assert view.viewmodel.show_custom_profile is True
-        view._save()
-
-        assert service.calls == [("get_state", "proj-1")]
-        assert view.viewmodel.message_text == "Translator batch requires a model when enabled."
-        assert view.viewmodel.message_kind == "error"
+        assert view.routes_editor.rowCount() == len(base_state.project_profile.routes)
+        translator_row = next(row for row in view.routes_editor.rows if row.route.step_id is WorkflowStepId.TRANSLATOR)
+        assert translator_row.route.step_config["batch_size"] == 100
     finally:
         view.cleanup()
 

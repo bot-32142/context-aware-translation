@@ -251,24 +251,24 @@ class TranslatorConfig(LLMConfig):
 
 
 @dataclass
+class PolishConfig(LLMConfig):
+    """Configuration for standalone translation polish step."""
+
+    pass
+
+
+@dataclass
 class TranslatorBatchConfig:
     """Dedicated configuration for async translator batch jobs."""
 
-    provider: str
-    api_key: str
-    model: str
+    provider: str = ""
+    api_key: str = ""
+    model: str = ""
     batch_size: int = 100
-    thinking_mode: str = "auto"
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary for JSON storage."""
-        return {
-            "provider": self.provider,
-            "api_key": self.api_key,
-            "model": self.model,
-            "batch_size": self.batch_size,
-            "thinking_mode": self.thinking_mode,
-        }
+        return {"batch_size": self.batch_size}
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> TranslatorBatchConfig:
@@ -278,40 +278,74 @@ class TranslatorBatchConfig:
             api_key=str(data.get("api_key") or ""),
             model=str(data.get("model") or ""),
             batch_size=int(data.get("batch_size", 100)),
-            thinking_mode=str(data.get("thinking_mode", "auto")),
+        )
+
+
+@dataclass
+class PolishBatchConfig(TranslatorBatchConfig):
+    """Dedicated configuration for async polish batch jobs."""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> PolishBatchConfig:
+        """Create from dictionary."""
+        return cls(
+            provider=str(data.get("provider") or ""),
+            api_key=str(data.get("api_key") or ""),
+            model=str(data.get("model") or ""),
+            batch_size=int(data.get("batch_size", 100)),
         )
 
 
 _SUPPORTED_BATCH_PROVIDERS = {"gemini_ai_studio"}
-_SUPPORTED_THINKING_MODES = {"auto", "off", "low", "medium", "high"}
 
 
-def _validate_translator_batch_config(config: TranslatorBatchConfig, *, config_name: str) -> None:
-    provider = str(config.provider or "").strip().lower()
-    if not provider:
-        raise ValueError(f"{config_name}.provider is required")
-    if provider not in _SUPPORTED_BATCH_PROVIDERS:
-        raise ValueError(
-            f"{config_name}.provider '{config.provider}' is unsupported; supported values: "
-            + ", ".join(sorted(_SUPPORTED_BATCH_PROVIDERS))
-        )
+def _infer_batch_provider(*, base_url: str | None) -> str | None:
+    base_url = str(base_url or "").strip().lower()
+    if "generativelanguage.googleapis.com" in base_url:
+        return "gemini_ai_studio"
+    return None
 
-    if not str(config.api_key or "").strip():
-        raise ValueError(f"{config_name}.api_key is required")
-    if not str(config.model or "").strip():
-        raise ValueError(f"{config_name}.model is required")
 
+def infer_batch_provider_from_base_url(base_url: str | None) -> str | None:
+    """Return the provider batch adapter implied by a concrete base URL."""
+    return _infer_batch_provider(base_url=base_url)
+
+
+def infer_translator_batch_provider(config: TranslatorConfig | None) -> str | None:
+    """Return the provider batch adapter for a translator config, if supported."""
+    if config is None:
+        return None
+    return infer_batch_provider_from_base_url(config.base_url)
+
+
+def infer_polish_batch_provider(config: PolishConfig | None) -> str | None:
+    """Return the provider batch adapter for a polish config, if supported."""
+    if config is None:
+        return None
+    return infer_batch_provider_from_base_url(config.base_url)
+
+
+def resolve_polish_config(
+    polish_config: PolishConfig | None,
+    translator_config: TranslatorConfig | None,
+) -> PolishConfig | None:
+    """Return the effective polish config, falling back to translator settings."""
+    if polish_config is not None:
+        return polish_config
+    if translator_config is None:
+        return None
+    return PolishConfig.from_dict(translator_config.to_dict())
+
+
+def _validate_batch_config_size(
+    config: TranslatorBatchConfig | PolishBatchConfig,
+    *,
+    config_name: str,
+) -> None:
     if int(config.batch_size) <= 0:
         raise ValueError(f"{config_name}.batch_size must be greater than 0")
     if int(config.batch_size) > 5000:
         raise ValueError(f"{config_name}.batch_size must not exceed 5000")
-
-    thinking_mode = str(config.thinking_mode or "").strip().lower()
-    if thinking_mode not in _SUPPORTED_THINKING_MODES:
-        raise ValueError(
-            f"{config_name}.thinking_mode '{config.thinking_mode}' is invalid; allowed values: "
-            + ", ".join(sorted(_SUPPORTED_THINKING_MODES))
-        )
 
 
 @dataclass
@@ -433,6 +467,7 @@ STEP_CONFIG_REGISTRY: dict[str, type[LLMConfig]] = {
     "extractor_config": ExtractorConfig,
     "summarizor_config": SummarizorConfig,
     "translator_config": TranslatorConfig,
+    "polish_config": PolishConfig,
     "glossary_config": GlossaryTranslationConfig,
     "review_config": ReviewConfig,
     "ocr_config": OCRConfig,
@@ -450,6 +485,7 @@ REQUIRED_STEP_CONFIGS = (
 
 # Step configs that are only resolved if provided
 OPTIONAL_STEP_CONFIGS = (
+    "polish_config",
     "review_config",
     "ocr_config",
     "image_reembedding_config",
@@ -474,7 +510,9 @@ class WorkflowRuntimeConfig:
     extractor_config: ExtractorConfig
     summarizor_config: SummarizorConfig
     translator_config: TranslatorConfig
+    polish_config: PolishConfig
     translator_batch_config: TranslatorBatchConfig | None
+    polish_batch_config: PolishBatchConfig | None
     glossary_config: GlossaryTranslationConfig
     review_config: ReviewConfig | None
     ocr_config: OCRConfig | None
@@ -679,7 +717,9 @@ class Config:
     glossary_config: GlossaryTranslationConfig | None = None
     summarizor_config: SummarizorConfig | None = None
     translator_config: TranslatorConfig | None = None
+    polish_config: PolishConfig | None = None
     translator_batch_config: TranslatorBatchConfig | None = None
+    polish_batch_config: PolishBatchConfig | None = None
     review_config: ReviewConfig | None = None
     ocr_config: OCRConfig | None = None
     image_reembedding_config: ImageReembeddingConfig | None = None
@@ -713,8 +753,12 @@ class Config:
             result["summarizor_config"] = self.summarizor_config.to_dict()
         if self.translator_config:
             result["translator_config"] = self.translator_config.to_dict()
+        if self.polish_config:
+            result["polish_config"] = self.polish_config.to_dict()
         if self.translator_batch_config:
             result["translator_batch_config"] = self.translator_batch_config.to_dict()
+        if self.polish_batch_config:
+            result["polish_batch_config"] = self.polish_batch_config.to_dict()
         if self.review_config:
             result["review_config"] = self.review_config.to_dict()
         if self.ocr_config:
@@ -762,9 +806,17 @@ class Config:
         if "translator_config" in data and data["translator_config"]:
             translator_config = TranslatorConfig.from_dict(data["translator_config"])
 
+        polish_config = None
+        if "polish_config" in data and data["polish_config"]:
+            polish_config = PolishConfig.from_dict(data["polish_config"])
+
         translator_batch_config = None
         if "translator_batch_config" in data and data["translator_batch_config"]:
             translator_batch_config = TranslatorBatchConfig.from_dict(data["translator_batch_config"])
+
+        polish_batch_config = None
+        if "polish_batch_config" in data and data["polish_batch_config"]:
+            polish_batch_config = PolishBatchConfig.from_dict(data["polish_batch_config"])
 
         review_config = None
         if "review_config" in data and data["review_config"]:
@@ -795,7 +847,9 @@ class Config:
             glossary_config=glossary_config,
             summarizor_config=summarizor_config,
             translator_config=translator_config,
+            polish_config=polish_config,
             translator_batch_config=translator_batch_config,
+            polish_batch_config=polish_batch_config,
             review_config=review_config,
             ocr_config=ocr_config,
             image_reembedding_config=image_reembedding_config,
@@ -868,7 +922,9 @@ class Config:
             extractor_config=self.extractor_config,  # type: ignore[arg-type]
             summarizor_config=self.summarizor_config,  # type: ignore[arg-type]
             translator_config=self.translator_config,  # type: ignore[arg-type]
+            polish_config=resolve_polish_config(self.polish_config, self.translator_config),  # type: ignore[arg-type]
             translator_batch_config=self.translator_batch_config,
+            polish_batch_config=self.polish_batch_config,
             glossary_config=self.glossary_config,  # type: ignore[arg-type]
             review_config=self.review_config,
             ocr_config=self.ocr_config,
@@ -909,9 +965,11 @@ class Config:
                 setattr(self, config_name, resolved)
 
         if self.translator_batch_config is not None:
-            _validate_translator_batch_config(self.translator_batch_config, config_name="translator_batch_config")
+            _validate_batch_config_size(self.translator_batch_config, config_name="translator_batch_config")
             self.translator_batch_config.provider = self.translator_batch_config.provider.strip().lower()
-            self.translator_batch_config.thinking_mode = self.translator_batch_config.thinking_mode.strip().lower()
+        if self.polish_batch_config is not None:
+            _validate_batch_config_size(self.polish_batch_config, config_name="polish_batch_config")
+            self.polish_batch_config.provider = self.polish_batch_config.provider.strip().lower()
 
         # Ensure directories exist and configure logging
         ensure_dirs(self)
@@ -970,6 +1028,11 @@ class Config:
         if isinstance(translator_batch_payload, dict):
             translator_batch_config = TranslatorBatchConfig.from_dict(translator_batch_payload)
 
+        polish_batch_payload = config_dict.get("polish_batch_config")
+        polish_batch_config = None
+        if isinstance(polish_batch_payload, dict):
+            polish_batch_config = PolishBatchConfig.from_dict(polish_batch_payload)
+
         # Build endpoint profiles from config_dict or by resolving profile IDs from registry.
         endpoint_profiles_dict = config_dict.get("endpoint_profiles", {})
         endpoint_profiles: dict[str, EndpointProfile] = {}
@@ -1015,7 +1078,9 @@ class Config:
             glossary_config=step_configs.get("glossary_config"),  # type: ignore[arg-type]
             summarizor_config=step_configs.get("summarizor_config"),  # type: ignore[arg-type]
             translator_config=step_configs.get("translator_config"),  # type: ignore[arg-type]
+            polish_config=step_configs.get("polish_config"),  # type: ignore[arg-type]
             translator_batch_config=translator_batch_config,
+            polish_batch_config=polish_batch_config,
             review_config=step_configs.get("review_config"),  # type: ignore[arg-type]
             ocr_config=step_configs.get("ocr_config"),  # type: ignore[arg-type]
             image_reembedding_config=step_configs.get("image_reembedding_config"),  # type: ignore[arg-type]
@@ -1070,19 +1135,6 @@ def validate_persisted_config_payload(
         if not isinstance(translator_batch_cfg, dict):
             errors.append("translator_batch_config must be a dictionary")
         else:
-            provider = str(translator_batch_cfg.get("provider") or "").strip().lower()
-            if not provider:
-                errors.append("translator_batch_config.provider is required")
-            elif provider not in _SUPPORTED_BATCH_PROVIDERS:
-                errors.append(
-                    "translator_batch_config.provider must be one of: " + ", ".join(sorted(_SUPPORTED_BATCH_PROVIDERS))
-                )
-
-            if not str(translator_batch_cfg.get("api_key") or "").strip():
-                errors.append("translator_batch_config.api_key is required")
-            if not str(translator_batch_cfg.get("model") or "").strip():
-                errors.append("translator_batch_config.model is required")
-
             batch_size_value = translator_batch_cfg.get("batch_size", 100)
             try:
                 batch_size = int(batch_size_value)
@@ -1094,12 +1146,21 @@ def validate_persisted_config_payload(
                 elif batch_size > 5000:
                     errors.append("translator_batch_config.batch_size must not exceed 5000")
 
-            thinking_mode = str(translator_batch_cfg.get("thinking_mode", "auto") or "").strip().lower()
-            if thinking_mode not in _SUPPORTED_THINKING_MODES:
-                errors.append(
-                    "translator_batch_config.thinking_mode must be one of: "
-                    + ", ".join(sorted(_SUPPORTED_THINKING_MODES))
-                )
+    polish_batch_cfg = config.get("polish_batch_config")
+    if polish_batch_cfg is not None:
+        if not isinstance(polish_batch_cfg, dict):
+            errors.append("polish_batch_config must be a dictionary")
+        else:
+            batch_size_value = polish_batch_cfg.get("batch_size", 100)
+            try:
+                batch_size = int(batch_size_value)
+            except (TypeError, ValueError):
+                errors.append("polish_batch_config.batch_size must be an integer greater than 0")
+            else:
+                if batch_size <= 0:
+                    errors.append("polish_batch_config.batch_size must be greater than 0")
+                elif batch_size > 5000:
+                    errors.append("polish_batch_config.batch_size must not exceed 5000")
 
     return errors
 
@@ -1180,6 +1241,7 @@ def load_config_from_yaml(
         "extractor_config": llm_data.pop("extractor_config", None),
         "summarizor_config": llm_data.pop("summarizor_config", None),
         "translator_config": llm_data.pop("translator_config", None),
+        "polish_config": llm_data.pop("polish_config", None),
         "glossary_config": llm_data.pop("glossary_config", None),
         "review_config": llm_data.pop("review_config", None),
         "ocr_config": llm_data.pop("ocr_config", None),
@@ -1187,6 +1249,7 @@ def load_config_from_yaml(
         "manga_translator_config": llm_data.pop("manga_translator_config", None),
     }
     translator_batch_payload = llm_data.pop("translator_batch_config", None)
+    polish_batch_payload = llm_data.pop("polish_batch_config", None)
 
     # Build step configs using registry
     step_configs: dict[str, LLMConfig | None] = {}
@@ -1201,6 +1264,9 @@ def load_config_from_yaml(
         TranslatorBatchConfig.from_dict(translator_batch_payload)
         if isinstance(translator_batch_payload, dict)
         else None
+    )
+    polish_batch_config = (
+        PolishBatchConfig.from_dict(polish_batch_payload) if isinstance(polish_batch_payload, dict) else None
     )
 
     # Convert path strings to Path objects
@@ -1217,7 +1283,9 @@ def load_config_from_yaml(
         glossary_config=step_configs.get("glossary_config"),  # type: ignore[arg-type]
         summarizor_config=step_configs.get("summarizor_config"),  # type: ignore[arg-type]
         translator_config=step_configs.get("translator_config"),  # type: ignore[arg-type]
+        polish_config=step_configs.get("polish_config"),  # type: ignore[arg-type]
         translator_batch_config=translator_batch_config,
+        polish_batch_config=polish_batch_config,
         review_config=step_configs.get("review_config"),  # type: ignore[arg-type]
         ocr_config=step_configs.get("ocr_config"),  # type: ignore[arg-type]
         image_reembedding_config=step_configs.get("image_reembedding_config"),  # type: ignore[arg-type]

@@ -261,6 +261,10 @@ def test_recommended_workflow_profile_uses_ranked_step_rules() -> None:
     assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
     assert route_map[WorkflowStepId.TRANSLATOR].model == "gemini-2.5-pro"
     assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config["batch_size"] == 100
+    assert route_map[WorkflowStepId.POLISH].model == "gemini-2.5-pro"
+    assert route_map[WorkflowStepId.POLISH].step_config["kwargs"] == {"reasoning_effort": "low"}
+    assert route_map[WorkflowStepId.POLISH].step_config["batch_size"] == 100
     assert route_map[WorkflowStepId.REVIEWER].model == "gemini-2.5-pro"
     assert route_map[WorkflowStepId.OCR].model == "gemini-3.1-flash"
     assert route_map[WorkflowStepId.OCR].step_config["kwargs"] == {"reasoning_effort": "none"}
@@ -269,8 +273,6 @@ def test_recommended_workflow_profile_uses_ranked_step_rules() -> None:
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].step_config == {"backend": "gemini"}
     assert route_map[WorkflowStepId.MANGA_TRANSLATOR].model == "gemini-2.5-pro"
     assert route_map[WorkflowStepId.MANGA_TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
-    assert route_map[WorkflowStepId.TRANSLATOR_BATCH].model == "gemini-2.5-pro"
-    assert route_map[WorkflowStepId.TRANSLATOR_BATCH].step_config["thinking_mode"] == "low"
 
 
 def test_recommended_workflow_profile_skips_unsupported_openai_ocr_reasoning_none() -> None:
@@ -286,6 +288,8 @@ def test_recommended_workflow_profile_skips_unsupported_openai_ocr_reasoning_non
     assert route_map[WorkflowStepId.OCR].model == "gpt-4.1-mini"
     assert route_map[WorkflowStepId.OCR].step_config == {}
     assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
+    assert route_map[WorkflowStepId.POLISH].model == "o4-mini"
+    assert route_map[WorkflowStepId.POLISH].step_config["kwargs"] == {"reasoning_effort": "low"}
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].step_config == {"backend": "openai"}
 
 
@@ -366,16 +370,21 @@ def test_workflow_profile_round_trips_step_advanced_config() -> None:
             "chunk_size": 1200,
             "kwargs": {"reasoning_effort": "low"},
         },
+        "polish_config": {
+            "endpoint_profile": "conn-gemini",
+            "temperature": 0.1,
+            "timeout": 240,
+            "kwargs": {"reasoning_effort": "medium"},
+        },
         "image_reembedding_config": {
             "endpoint_profile": "conn-gemini",
             "backend": "openai",
         },
         "translator_batch_config": {
-            "provider": "gemini_ai_studio",
-            "api_key": "secret",
-            "model": "gemini-2.5-flash",
             "batch_size": 50,
-            "thinking_mode": "medium",
+        },
+        "polish_batch_config": {
+            "batch_size": 25,
         },
     }
 
@@ -391,6 +400,10 @@ def test_workflow_profile_round_trips_step_advanced_config() -> None:
         connection_model_by_id={
             "conn-gemini": "gemini-3-flash-preview",
             "conn-openai": "gpt-4.1-mini",
+        },
+        connection_base_url_by_id={
+            "conn-gemini": "https://generativelanguage.googleapis.com/v1beta/openai/",
+            "conn-openai": "https://api.openai.com/v1",
         },
     )
 
@@ -410,14 +423,11 @@ def test_workflow_profile_round_trips_step_advanced_config() -> None:
         "chunk_size": 1200,
         "kwargs": {"reasoning_effort": "low"},
     }
-
-    batch_route = next(route for route in detail.routes if route.step_id is WorkflowStepId.TRANSLATOR_BATCH)
-    assert batch_route.model == "gemini-2.5-flash"
-    assert batch_route.step_config == {
-        "provider": "gemini_ai_studio",
-        "api_key": "secret",
-        "batch_size": 50,
-        "thinking_mode": "medium",
+    polish_route = next(route for route in detail.routes if route.step_id is WorkflowStepId.POLISH)
+    assert polish_route.step_config == {
+        "temperature": 0.1,
+        "timeout": 240,
+        "kwargs": {"reasoning_effort": "medium"},
     }
 
     payload = build_workflow_profile_payload(base_config=None, profile=detail)
@@ -429,6 +439,46 @@ def test_workflow_profile_round_trips_step_advanced_config() -> None:
     assert payload["translator_config"]["concurrency"] == 2
     assert payload["translator_config"]["chunk_size"] == 1200
     assert payload["translator_config"]["kwargs"] == {"reasoning_effort": "low"}
+    assert payload["polish_config"]["temperature"] == 0.1
+    assert payload["polish_config"]["timeout"] == 240
+    assert payload["polish_config"]["kwargs"] == {"reasoning_effort": "medium"}
     assert payload["image_reembedding_config"]["backend"] == "openai"
-    assert payload["translator_batch_config"]["model"] == "gemini-2.5-flash"
-    assert payload["translator_batch_config"]["thinking_mode"] == "medium"
+    assert "translator_batch_config" not in payload
+    assert "polish_batch_config" not in payload
+
+
+def test_build_workflow_profile_detail_does_not_surface_batch_size_for_gemini_named_custom_endpoint() -> None:
+    config = {
+        "translation_target_language": "English",
+        "translator_config": {
+            "endpoint_profile": "conn-openrouter",
+            "model": "gemini-2.5-pro",
+        },
+        "polish_config": {
+            "endpoint_profile": "conn-openrouter",
+            "model": "gemini-2.5-pro",
+        },
+        "translator_batch_config": {
+            "batch_size": 50,
+        },
+        "polish_batch_config": {
+            "batch_size": 25,
+        },
+    }
+
+    detail = build_workflow_profile_detail(
+        profile_id="profile:recommended",
+        name="Recommended",
+        kind=WorkflowProfileKind.SHARED,
+        config=config,
+        connection_name_by_id={"conn-openrouter": "OpenRouter"},
+        connection_model_by_id={"conn-openrouter": "gemini-2.5-pro"},
+        connection_base_url_by_id={"conn-openrouter": "https://openrouter.ai/api/v1"},
+    )
+
+    translator_route = next(route for route in detail.routes if route.step_id is WorkflowStepId.TRANSLATOR)
+    polish_route = next(route for route in detail.routes if route.step_id is WorkflowStepId.POLISH)
+
+    assert translator_route.connection_base_url == "https://openrouter.ai/api/v1"
+    assert "batch_size" not in translator_route.step_config
+    assert "batch_size" not in polish_route.step_config

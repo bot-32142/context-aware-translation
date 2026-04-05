@@ -11,12 +11,14 @@ from context_aware_translation.config import (
     ExtractorConfig,
     GlossaryTranslationConfig,
     LLMConfig,
+    PolishBatchConfig,
     ReviewConfig,
     SummarizorConfig,
     TranslatorBatchConfig,
     TranslatorConfig,
     _resolve_with_profile,
     ensure_valid_persisted_config_payload,
+    infer_translator_batch_provider,
     load_config_from_yaml,
     validate_persisted_config_payload,
 )
@@ -211,22 +213,29 @@ class TestResolveWithProfile:
         }
 
     def test_translator_batch_config_round_trip(self):
-        translator_batch = TranslatorBatchConfig(
-            provider="gemini_ai_studio",
-            api_key="k",
-            model="gemini-2.5-flash",
-            batch_size=321,
-            thinking_mode="high",
-        )
+        translator_batch = TranslatorBatchConfig(batch_size=321)
 
         payload = translator_batch.to_dict()
         restored = TranslatorBatchConfig.from_dict(payload)
 
-        assert restored.provider == "gemini_ai_studio"
-        assert restored.api_key == "k"
-        assert restored.model == "gemini-2.5-flash"
         assert restored.batch_size == 321
-        assert restored.thinking_mode == "high"
+
+    def test_polish_batch_config_round_trip(self):
+        polish_batch = PolishBatchConfig(batch_size=222)
+
+        payload = polish_batch.to_dict()
+        restored = PolishBatchConfig.from_dict(payload)
+
+        assert restored.batch_size == 222
+
+    def test_gemini_named_model_on_custom_endpoint_is_not_marked_batch_capable(self):
+        translator_config = TranslatorConfig(
+            api_key="key",
+            base_url="https://openrouter.ai/api/v1",
+            model="gemini-2.5-pro",
+        )
+
+        assert infer_translator_batch_provider(translator_config) is None
 
     def test_translator_config_strip_epub_ruby_defaults_true(self):
         restored = TranslatorConfig.from_dict({})
@@ -545,7 +554,7 @@ class TestPersistedPayloadValidation:
         with pytest.raises(ValueError, match="Invalid config payload"):
             ensure_valid_persisted_config_payload({"translation_target_language": "zh-CN"})
 
-    def test_validate_persisted_payload_accepts_translator_batch_without_base_url(self):
+    def test_validate_persisted_payload_accepts_translator_batch_with_batch_size_only(self):
         config_payload = {
             "translation_target_language": "zh-CN",
             "extractor_config": {"endpoint_profile": "shared"},
@@ -553,11 +562,10 @@ class TestPersistedPayloadValidation:
             "translator_config": {"endpoint_profile": "shared"},
             "glossary_config": {"endpoint_profile": "shared"},
             "translator_batch_config": {
-                "provider": "gemini_ai_studio",
-                "api_key": "k",
-                "model": "gemini-2.5-flash",
                 "batch_size": 500,
-                "thinking_mode": "auto",
+            },
+            "polish_batch_config": {
+                "batch_size": 250,
             },
         }
 

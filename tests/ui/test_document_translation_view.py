@@ -364,6 +364,40 @@ def test_document_translation_view_disables_editing_for_blocked_page():
         view.deleteLater()
 
 
+def test_document_translation_view_refreshes_batch_visibility_when_polish_toggle_changes():
+    from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
+
+    class _DynamicDocumentService(FakeDocumentService):
+        def get_translation(self, project_id: str, document_id: int, *, enable_polish: bool = True):
+            self.calls.append(("get_translation", (project_id, document_id, enable_polish)))
+            state = _make_state()
+            if enable_polish:
+                return state.model_copy(
+                    update={
+                        "supports_batch": False,
+                        "batch_action": ActionState(enabled=False),
+                    }
+                )
+            return state
+
+    service = _DynamicDocumentService(workspace=_make_state().workspace, translation=_make_state())
+    view = DocumentTranslationView(service, "proj-1", 4)
+    try:
+        view.refresh()
+        root = view.chrome_host.rootObject()
+        assert root is not None
+        assert root.property("supportsBatch") is False
+
+        _chrome_signal(view, "polishToggled").emit(False)
+        _QAPPLICATION.processEvents()
+
+        assert root.property("supportsBatch") is True
+        get_translation_calls = [payload for name, payload in service.calls if name == "get_translation"]
+        assert get_translation_calls[-2:] == [("proj-1", 4, True), ("proj-1", 4, False)]
+    finally:
+        view.deleteLater()
+
+
 def test_document_translation_view_find_next_uses_live_cursor_position_and_wraps():
     from context_aware_translation.ui.features.document_translation_view import DocumentTranslationView
 

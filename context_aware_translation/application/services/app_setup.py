@@ -17,6 +17,7 @@ from context_aware_translation.application.contracts.app_setup import (
     SetupWizardState,
     WorkflowProfileDetail,
     WorkflowProfileKind,
+    WorkflowStepId,
 )
 from context_aware_translation.application.contracts.common import ProviderKind, UserMessage, UserMessageSeverity
 from context_aware_translation.application.errors import ApplicationErrorCode
@@ -81,6 +82,8 @@ class DefaultAppSetupService:
 
     def get_wizard_state(self) -> SetupWizardState:
         target_language = "English"
+        translator_batch_size = 100
+        polish_batch_size = 100
         current_default = self._runtime.get_default_profile()
         if current_default is not None:
             current_detail = self._profile_detail_from_payload(
@@ -91,6 +94,17 @@ class DefaultAppSetupService:
                 is_default=current_default.is_default,
             )
             target_language = current_detail.target_language
+            translator_route = next(
+                (route for route in current_detail.routes if route.step_id is WorkflowStepId.TRANSLATOR),
+                None,
+            )
+            if translator_route is not None and isinstance(translator_route.step_config.get("batch_size"), int):
+                translator_batch_size = int(translator_route.step_config["batch_size"])
+            polish_route = next(
+                (route for route in current_detail.routes if route.step_id is WorkflowStepId.POLISH), None
+            )
+            if polish_route is not None and isinstance(polish_route.step_config.get("batch_size"), int):
+                polish_batch_size = int(polish_route.step_config["batch_size"])
         return SetupWizardState(
             available_providers=[
                 ProviderCard(
@@ -115,6 +129,8 @@ class DefaultAppSetupService:
                 ),
             ],
             target_language=target_language,
+            translator_batch_size=translator_batch_size,
+            polish_batch_size=polish_batch_size,
         )
 
     def preview_setup_wizard(self, request: SetupWizardRequest) -> SetupWizardState:
@@ -137,6 +153,8 @@ class DefaultAppSetupService:
             request.connections,
             name=profile_name or "Recommended",
             target_language=target_language,
+            translator_batch_size=request.translator_batch_size or 100,
+            polish_batch_size=request.polish_batch_size or 100,
         )
         return SetupWizardState(
             available_providers=self.get_wizard_state().available_providers,
@@ -146,6 +164,8 @@ class DefaultAppSetupService:
             recommendation=recommendation,
             profile_name=profile_name,
             target_language=target_language,
+            translator_batch_size=request.translator_batch_size or 100,
+            polish_batch_size=request.polish_batch_size or 100,
         )
 
     def save_connection(self, request: SaveConnectionRequest) -> AppSetupState:
@@ -357,6 +377,7 @@ class DefaultAppSetupService:
         endpoint_profiles = self._runtime.book_manager.list_endpoint_profiles()
         connection_name_by_id = {profile.profile_id: connection_display_name(profile) for profile in endpoint_profiles}
         connection_model_by_id = {profile.profile_id: (profile.model or None) for profile in endpoint_profiles}
+        connection_base_url_by_id = {profile.profile_id: (profile.base_url or None) for profile in endpoint_profiles}
         return build_workflow_profile_detail(
             profile_id=profile_id,
             name=name,
@@ -364,6 +385,7 @@ class DefaultAppSetupService:
             config=config,
             connection_name_by_id=connection_name_by_id,
             connection_model_by_id=connection_model_by_id,
+            connection_base_url_by_id=connection_base_url_by_id,
             is_default=is_default,
         )
 

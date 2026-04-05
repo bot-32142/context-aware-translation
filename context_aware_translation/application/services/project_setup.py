@@ -148,6 +148,7 @@ class DefaultProjectSetupService:
         endpoint_profiles = self._runtime.book_manager.list_endpoint_profiles()
         connection_name_by_id = {profile.profile_id: profile.name for profile in endpoint_profiles}
         connection_model_by_id = {profile.profile_id: (profile.model or None) for profile in endpoint_profiles}
+        connection_base_url_by_id = {profile.profile_id: (profile.base_url or None) for profile in endpoint_profiles}
         return build_workflow_profile_detail(
             profile_id=profile_id,
             name=name,
@@ -155,5 +156,6 @@ class DefaultProjectSetupService:
             config=config,
             connection_name_by_id=connection_name_by_id,
             connection_model_by_id=connection_model_by_id,
+            connection_base_url_by_id=connection_base_url_by_id,
             is_default=is_default,
         )

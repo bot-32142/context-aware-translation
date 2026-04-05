@@ -41,6 +41,7 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowStepId,
 )
 from context_aware_translation.application.contracts.common import CapabilityCode, ProviderKind, UserMessageSeverity
+from context_aware_translation.application.runtime import workflow_routes_allow_async_batch
 from context_aware_translation.application.services.app_setup import AppSetupService
 from context_aware_translation.ui.constants import LANGUAGES
 from context_aware_translation.ui.features.workflow_profile_editor import workflow_step_label_from_text
@@ -83,11 +84,11 @@ _NEW_PROFILE_ROUTE_SPECS: tuple[tuple[WorkflowStepId, str], ...] = (
     (WorkflowStepId.SUMMARIZER, "Summarizer"),
     (WorkflowStepId.GLOSSARY_TRANSLATOR, "Glossary translator"),
     (WorkflowStepId.TRANSLATOR, "Translator"),
+    (WorkflowStepId.POLISH, "Polish"),
     (WorkflowStepId.REVIEWER, "Reviewer"),
     (WorkflowStepId.OCR, "OCR"),
     (WorkflowStepId.IMAGE_REEMBEDDING, "Image reembedding"),
     (WorkflowStepId.MANGA_TRANSLATOR, "Manga translator"),
-    (WorkflowStepId.TRANSLATOR_BATCH, "Translator batch"),
 )
 
 
@@ -582,6 +583,8 @@ class SetupWizardDialog(QDialog):
         self._provider_inputs: dict[ProviderKind, tuple[QCheckBox, QLineEdit]] = {}
         self._profile_name_edit: QLineEdit | None = None
         self._target_language_combo: QSearchableComboBox | None = None
+        self._translator_batch_size_spin: QSpinBox | None = None
+        self._polish_batch_size_spin: QSpinBox | None = None
 
     def _translate_provider_helper_text(self, text: str | None) -> str:
         if not text:
@@ -602,6 +605,8 @@ class SetupWizardDialog(QDialog):
         self._clear_page_layout()
         self._profile_name_edit = None
         self._target_language_combo = None
+        self._translator_batch_size_spin = None
+        self._polish_batch_size_spin = None
 
         if self._page_index == 0:
             self.step_title.setText(self.tr("Choose providers"))
@@ -692,6 +697,24 @@ class SetupWizardDialog(QDialog):
                 table.resizeRowsToContents()
                 fit_table_height_to_rows(table, padding=4)
                 profile_layout.addWidget(table)
+                if workflow_routes_allow_async_batch(recommendation.routes):
+                    batch_form = QFormLayout()
+                    self._translator_batch_size_spin = QSpinBox()
+                    self._translator_batch_size_spin.setRange(1, 5000)
+                    self._translator_batch_size_spin.setValue(int(self._wizard_state.translator_batch_size or 100))
+                    self._polish_batch_size_spin = QSpinBox()
+                    self._polish_batch_size_spin.setRange(1, 5000)
+                    self._polish_batch_size_spin.setValue(int(self._wizard_state.polish_batch_size or 100))
+                    batch_form.addRow(self.tr("Translator batch size"), self._translator_batch_size_spin)
+                    batch_form.addRow(self.tr("Polish batch size"), self._polish_batch_size_spin)
+                    batch_form.addRow(
+                        create_tip_label(
+                            self.tr(
+                                "Async batch inherits connection, model, and most request settings from the regular Translator and Polish steps. Custom parameters might not work as expected. Not all models are supported. Please check your provider's documentation."
+                            )
+                        )
+                    )
+                    profile_layout.addLayout(batch_form)
             self.page_layout.addWidget(profile_group)
             self.page_layout.addStretch()
         self._update_buttons()
@@ -729,13 +752,17 @@ class SetupWizardDialog(QDialog):
         self._wizard_state = self._wizard_state.model_copy(update={"drafts": drafts})
 
     def _persist_review_inputs(self) -> None:
-        updates: dict[str, str | None] = {}
+        updates: dict[str, str | int | None] = {}
         if self._profile_name_edit is not None:
             updates["profile_name"] = self._profile_name_edit.text().strip() or None
         if self._target_language_combo is not None:
             updates["target_language"] = (
                 self._target_language_combo.currentText().strip() or _DEFAULT_SETUP_WIZARD_TARGET_LANGUAGE
             )
+        if self._translator_batch_size_spin is not None:
+            updates["translator_batch_size"] = int(self._translator_batch_size_spin.value())
+        if self._polish_batch_size_spin is not None:
+            updates["polish_batch_size"] = int(self._polish_batch_size_spin.value())
         if updates:
             self._wizard_state = self._wizard_state.model_copy(update=updates)
 
@@ -748,6 +775,8 @@ class SetupWizardDialog(QDialog):
             connections=list(self._wizard_state.drafts),
             profile_name=self._wizard_state.profile_name,
             target_language=self._wizard_state.target_language,
+            translator_batch_size=int(self._wizard_state.translator_batch_size or 100),
+            polish_batch_size=int(self._wizard_state.polish_batch_size or 100),
         )
 
     def _go_back(self) -> None:
@@ -815,6 +844,8 @@ class SetupWizardDialog(QDialog):
                 connections=list(self._wizard_state.drafts),
                 profile_name=self._wizard_state.profile_name,
                 target_language=self._wizard_state.target_language,
+                translator_batch_size=int(self._wizard_state.translator_batch_size or 100),
+                polish_batch_size=int(self._wizard_state.polish_batch_size or 100),
             )
         )
 

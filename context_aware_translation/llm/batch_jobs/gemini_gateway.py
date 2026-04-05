@@ -39,6 +39,11 @@ _RESP_TEXT = "text"
 _RESP_CANDIDATES = "candidates"
 _RESP_CONTENT = "content"
 _RESP_PARTS = "parts"
+_REASONING_LEVELS = {
+    "low": "LOW",
+    "medium": "MEDIUM",
+    "high": "HIGH",
+}
 
 
 def _normalized_job_state(state: Any) -> str:
@@ -124,29 +129,6 @@ def _message_content_to_text(content: Any) -> str:
     return str(content)
 
 
-def _model_supports_explicit_thinking(model: str) -> bool:
-    return "gemini-2.5" in model.lower()
-
-
-def _resolve_thinking_config(*, model: str, thinking_mode: str) -> tuple[dict[str, Any] | None, str | None]:
-    mode = thinking_mode.strip().lower()
-    if mode == "auto":
-        return None, None
-
-    if not _model_supports_explicit_thinking(model):
-        return None, f"Thinking mode '{mode}' is not supported for model '{model}'. Falling back to auto."
-
-    if mode == "off":
-        return {"thinking_budget": 0}, None
-    if mode == "low":
-        return {"thinking_budget": 256}, None
-    if mode == "medium":
-        return {"thinking_budget": 1024}, None
-    if mode == "high":
-        return {"thinking_budget": 2048}, None
-    return None, f"Unknown thinking mode '{thinking_mode}'. Falling back to auto."
-
-
 def _extract_response_text(response: Any) -> str:
     text = response.get(_RESP_TEXT)
     if isinstance(text, str) and text:
@@ -197,6 +179,8 @@ def _sdk_request_to_api_format(request: dict[str, Any]) -> dict[str, Any]:
             api_tc["thinkingBudget"] = tc["thinking_budget"]
         if "include_thoughts" in tc:
             api_tc["includeThoughts"] = tc["include_thoughts"]
+        if "thinking_level" in tc:
+            api_tc["thinkingLevel"] = tc["thinking_level"]
         if api_tc:
             generation_config["thinkingConfig"] = api_tc
     if generation_config:
@@ -226,6 +210,66 @@ def _extract_output_row(payload: dict[str, Any]) -> tuple[str, Any, Any]:
             error = status
 
     return request_hash, response, error
+
+
+def _normalize_thinking_config(payload: Any) -> dict[str, Any] | None:
+    if not isinstance(payload, dict):
+        return None
+
+    normalized: dict[str, Any] = {}
+
+    raw_budget = payload.get("thinking_budget", payload.get("thinkingBudget"))
+    if raw_budget is not None and not isinstance(raw_budget, bool):
+        with contextlib.suppress(TypeError, ValueError):
+            normalized["thinking_budget"] = int(raw_budget)
+
+    raw_include = payload.get("include_thoughts", payload.get("includeThoughts"))
+    if isinstance(raw_include, bool):
+        normalized["include_thoughts"] = raw_include
+
+    raw_level = payload.get("thinking_level", payload.get("thinkingLevel"))
+    if isinstance(raw_level, str) and raw_level.strip():
+        normalized["thinking_level"] = raw_level.strip().upper()
+
+    return normalized or None
+
+
+def _thinking_config_from_reasoning_effort(reasoning_effort: Any) -> dict[str, Any] | None:
+    normalized = str(reasoning_effort or "").strip().lower()
+    if normalized == "none":
+        return {"thinking_budget": 0}
+    thinking_level = _REASONING_LEVELS.get(normalized)
+    if thinking_level is None:
+        return None
+    return {"thinking_level": thinking_level}
+
+
+def _extract_explicit_thinking_config(request_kwargs: dict[str, Any]) -> dict[str, Any] | None:
+    explicit = _normalize_thinking_config(request_kwargs.pop("thinking_config", None))
+
+    extra_body = request_kwargs.get("extra_body")
+    extra_thinking: dict[str, Any] | None = None
+    if isinstance(extra_body, dict):
+        remaining_extra = dict(extra_body)
+        google_payload = remaining_extra.get("google")
+        if isinstance(google_payload, dict):
+            remaining_google = dict(google_payload)
+            extra_thinking = _normalize_thinking_config(remaining_google.pop("thinking_config", None))
+            if remaining_google:
+                remaining_extra["google"] = remaining_google
+            else:
+                remaining_extra.pop("google", None)
+        if remaining_extra:
+            request_kwargs["extra_body"] = remaining_extra
+        else:
+            request_kwargs.pop("extra_body", None)
+
+    derived = _thinking_config_from_reasoning_effort(request_kwargs.pop("reasoning_effort", None))
+    merged: dict[str, Any] = {}
+    for payload in (derived, extra_thinking, explicit):
+        if payload:
+            merged.update(payload)
+    return merged or None
 
 
 def _to_bytes(payload: Any) -> bytes:
@@ -339,20 +383,21 @@ class GeminiBatchJobGateway(BatchJobGateway):
         if not contents:
             raise ValueError("Gemini batch request requires at least one non-system message.")
 
-        config_kwargs: dict[str, Any] = {"temperature": 0.0}
+        requested_temperature = request_kwargs.pop("temperature", 0.0)
+        try:
+            temperature = float(requested_temperature)
+        except (TypeError, ValueError):
+            temperature = 0.0
+        config_kwargs: dict[str, Any] = {"temperature": temperature}
+        thinking_config = _extract_explicit_thinking_config(request_kwargs)
+        if thinking_config is not None:
+            config_kwargs["thinking_config"] = thinking_config
         if system_parts:
             config_kwargs["system_instruction"] = "\n\n".join(system_parts)
 
         response_format = request_kwargs.pop("response_format", None)
         if isinstance(response_format, dict) and response_format.get("type") == "json_object":
             config_kwargs["response_mime_type"] = "application/json"
-
-        thinking_mode = str(request_kwargs.pop("thinking_mode", "auto") or "auto")
-        thinking_config, thinking_warning = _resolve_thinking_config(model=model, thinking_mode=thinking_mode)
-        if thinking_config is not None:
-            config_kwargs["thinking_config"] = thinking_config
-        if thinking_warning:
-            logger.warning(thinking_warning)
 
         if request_kwargs:
             logger.debug(
@@ -376,9 +421,6 @@ class GeminiBatchJobGateway(BatchJobGateway):
                 "config": config_kwargs,
             }
         )
-
-        if thinking_warning:
-            self._request_warnings.setdefault(request_hash, []).append(thinking_warning)
 
         return request_hash, inlined_request
 

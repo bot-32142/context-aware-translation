@@ -138,7 +138,38 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
                 message=UserMessage(severity=UserMessageSeverity.INFO, text="Connection accepted."),
             )
         ],
-        recommendation=_profile(profile_id="recommended", name="Recommended"),
+        recommendation=_profile(profile_id="recommended", name="Recommended").model_copy(
+            update={
+                "routes": [
+                    WorkflowStepRoute(
+                        step_id=WorkflowStepId.TRANSLATOR,
+                        step_label="Translator",
+                        connection_id="conn-gemini",
+                        connection_label="Gemini",
+                        connection_base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                        model="gemini-3-flash-preview",
+                        step_config={"batch_size": 100},
+                    ),
+                    WorkflowStepRoute(
+                        step_id=WorkflowStepId.POLISH,
+                        step_label="Polish",
+                        connection_id="conn-gemini",
+                        connection_label="Gemini",
+                        connection_base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                        model="gemini-3-flash-preview",
+                        step_config={"batch_size": 80},
+                    ),
+                    WorkflowStepRoute(
+                        step_id=WorkflowStepId.OCR,
+                        step_label="OCR",
+                        connection_id="conn-gemini",
+                        connection_label="Gemini",
+                        connection_base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                        model="gemini-3-flash-preview",
+                    ),
+                ]
+            }
+        ),
         target_language="English",
     )
     service = FakeAppSetupService(state=_make_state(), wizard_state=wizard_state, preview_state=preview_state)
@@ -152,8 +183,12 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
     assert any(call[0] == "preview_setup_wizard" for call in service.calls)
     assert dialog._profile_name_edit is not None
     assert dialog._target_language_combo is not None
+    assert dialog._translator_batch_size_spin is not None
+    assert dialog._polish_batch_size_spin is not None
     dialog._profile_name_edit.setText("Team Default")
     dialog._target_language_combo.setEditText("Japanese")
+    dialog._translator_batch_size_spin.setValue(250)
+    dialog._polish_batch_size_spin.setValue(125)
 
     dialog._finish()
 
@@ -161,6 +196,169 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
     run_request = next(call[1] for call in service.calls if call[0] == "run_setup_wizard")
     assert run_request.profile_name == "Team Default"
     assert run_request.target_language == "Japanese"
+    assert run_request.translator_batch_size == 250
+    assert run_request.polish_batch_size == 125
+
+
+def test_setup_wizard_dialog_hides_batch_size_when_recommendation_is_not_batch_capable():
+    from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
+
+    wizard_state = SetupWizardState(
+        available_providers=[
+            ProviderCard(
+                provider=ProviderKind.OPENAI,
+                label="OpenAI",
+                helper_text="General-purpose text and image-capable provider.",
+            )
+        ],
+    )
+    preview_state = SetupWizardState(
+        available_providers=wizard_state.available_providers,
+        selected_providers=[ProviderKind.OPENAI],
+        drafts=[
+            ConnectionDraft(
+                display_name="OpenAI",
+                provider=ProviderKind.OPENAI,
+                api_key="secret",
+                base_url="https://api.openai.com/v1",
+                default_model="gpt-4.1-mini",
+            )
+        ],
+        recommendation=WorkflowProfileDetail(
+            profile_id="recommended",
+            name="Recommended",
+            kind=WorkflowProfileKind.SHARED,
+            target_language="English",
+            routes=[
+                WorkflowStepRoute(
+                    step_id=WorkflowStepId.TRANSLATOR,
+                    step_label="Translator",
+                    connection_id="conn-openai",
+                    connection_label="OpenAI",
+                    model="gpt-4.1-mini",
+                )
+            ],
+        ),
+    )
+    service = FakeAppSetupService(state=_make_state(), wizard_state=wizard_state, preview_state=preview_state)
+    dialog = SetupWizardDialog(service, wizard_state)
+
+    _provider_checkbox(dialog, ProviderKind.OPENAI).setChecked(True)
+    _provider_api_key_edit(dialog, ProviderKind.OPENAI).setText("secret")
+    dialog._go_next()
+
+    assert dialog._translator_batch_size_spin is None
+
+
+def test_setup_wizard_dialog_hides_batch_size_for_gemini_named_custom_endpoint():
+    from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
+
+    wizard_state = SetupWizardState(
+        available_providers=[
+            ProviderCard(
+                provider=ProviderKind.GEMINI,
+                label="Gemini",
+                helper_text="Good for image text reading and image editing.",
+            )
+        ],
+    )
+    preview_state = SetupWizardState(
+        available_providers=wizard_state.available_providers,
+        selected_providers=[ProviderKind.GEMINI],
+        drafts=[
+            ConnectionDraft(
+                display_name="OpenRouter",
+                provider=ProviderKind.GEMINI,
+                api_key="secret",
+                base_url="https://openrouter.ai/api/v1",
+                default_model="gemini-2.5-pro",
+            )
+        ],
+        recommendation=WorkflowProfileDetail(
+            profile_id="recommended",
+            name="Recommended",
+            kind=WorkflowProfileKind.SHARED,
+            target_language="English",
+            routes=[
+                WorkflowStepRoute(
+                    step_id=WorkflowStepId.TRANSLATOR,
+                    step_label="Translator",
+                    connection_id="conn-openrouter",
+                    connection_label="OpenRouter",
+                    connection_base_url="https://openrouter.ai/api/v1",
+                    model="gemini-2.5-pro",
+                ),
+                WorkflowStepRoute(
+                    step_id=WorkflowStepId.POLISH,
+                    step_label="Polish",
+                    connection_id="conn-openrouter",
+                    connection_label="OpenRouter",
+                    connection_base_url="https://openrouter.ai/api/v1",
+                    model="gemini-2.5-pro",
+                ),
+            ],
+        ),
+    )
+    service = FakeAppSetupService(state=_make_state(), wizard_state=wizard_state, preview_state=preview_state)
+    dialog = SetupWizardDialog(service, wizard_state)
+
+    _provider_checkbox(dialog, ProviderKind.GEMINI).setChecked(True)
+    _provider_api_key_edit(dialog, ProviderKind.GEMINI).setText("secret")
+    dialog._go_next()
+
+    assert dialog._translator_batch_size_spin is None
+    assert dialog._polish_batch_size_spin is None
+
+
+def test_setup_wizard_dialog_hides_batch_size_when_polish_route_is_missing():
+    from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
+
+    wizard_state = SetupWizardState(
+        available_providers=[
+            ProviderCard(
+                provider=ProviderKind.GEMINI,
+                label="Gemini",
+                helper_text="Good for image text reading and image editing.",
+            )
+        ],
+    )
+    preview_state = SetupWizardState(
+        available_providers=wizard_state.available_providers,
+        selected_providers=[ProviderKind.GEMINI],
+        drafts=[
+            ConnectionDraft(
+                display_name="Gemini",
+                provider=ProviderKind.GEMINI,
+                api_key="secret",
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                default_model="gemini-3-flash-preview",
+            )
+        ],
+        recommendation=WorkflowProfileDetail(
+            profile_id="recommended",
+            name="Recommended",
+            kind=WorkflowProfileKind.SHARED,
+            target_language="English",
+            routes=[
+                WorkflowStepRoute(
+                    step_id=WorkflowStepId.TRANSLATOR,
+                    step_label="Translator",
+                    connection_id="conn-gemini",
+                    connection_label="Gemini",
+                    model="gemini-3-flash-preview",
+                )
+            ],
+        ),
+    )
+    service = FakeAppSetupService(state=_make_state(), wizard_state=wizard_state, preview_state=preview_state)
+    dialog = SetupWizardDialog(service, wizard_state)
+
+    _provider_checkbox(dialog, ProviderKind.GEMINI).setChecked(True)
+    _provider_api_key_edit(dialog, ProviderKind.GEMINI).setText("secret")
+    dialog._go_next()
+
+    assert dialog._translator_batch_size_spin is None
+    assert dialog._polish_batch_size_spin is None
 
 
 def test_setup_wizard_dialog_renders_provider_cards_on_first_page():

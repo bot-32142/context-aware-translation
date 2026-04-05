@@ -169,7 +169,6 @@ def test_workflow_profile_editor_normalizes_initial_routes_height_and_collapsed_
                 WorkflowStepId.OCR,
                 WorkflowStepId.IMAGE_REEMBEDDING,
                 WorkflowStepId.MANGA_TRANSLATOR,
-                WorkflowStepId.TRANSLATOR_BATCH,
             )
         ],
     )
@@ -223,7 +222,6 @@ def test_workflow_profile_editor_keeps_last_route_row_fully_visible():
                 WorkflowStepId.OCR,
                 WorkflowStepId.IMAGE_REEMBEDDING,
                 WorkflowStepId.MANGA_TRANSLATOR,
-                WorkflowStepId.TRANSLATOR_BATCH,
             )
         ],
     )
@@ -266,7 +264,6 @@ def test_workflow_routes_editor_leaves_bottom_clearance_for_last_visible_row():
             WorkflowStepId.OCR,
             WorkflowStepId.IMAGE_REEMBEDDING,
             WorkflowStepId.MANGA_TRANSLATOR,
-            WorkflowStepId.TRANSLATOR_BATCH,
         )
     ]
     editor = WorkflowRoutesEditor(
@@ -412,24 +409,89 @@ def test_step_advanced_config_dialog_updates_translator_ruby_flag():
         step_label="Translator",
         connection_id="conn-gemini",
         connection_label="Gemini",
+        connection_base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
         model="gemini-3-flash-preview",
         step_config={
             "strip_epub_ruby": False,
             "max_tokens_per_llm_call": 4000,
             "chunk_size": 1000,
+            "batch_size": 100,
         },
     )
+    polish_route = WorkflowStepRoute(
+        step_id=WorkflowStepId.POLISH,
+        step_label="Polish",
+        connection_id="conn-gemini",
+        connection_label="Gemini",
+        connection_base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        model="gemini-3-flash-preview",
+    )
 
-    dialog = StepAdvancedConfigDialog(route)
+    dialog = StepAdvancedConfigDialog(route, all_routes=[route, polish_route])
     assert dialog.strip_epub_ruby_check.isChecked() is False
     dialog.strip_epub_ruby_check.setChecked(True)
     dialog.max_tokens_spin.setValue(5000)
     dialog.chunk_size_spin.setValue(1200)
+    dialog.batch_size_spin.setValue(250)
 
     updated = dialog.route()
     assert updated.step_config["strip_epub_ruby"] is True
     assert updated.step_config["max_tokens_per_llm_call"] == 5000
     assert updated.step_config["chunk_size"] == 1200
+    assert updated.step_config["batch_size"] == 250
+
+
+def test_step_advanced_config_dialog_hides_batch_size_without_polish_route():
+    from context_aware_translation.ui.features.workflow_profile_editor import StepAdvancedConfigDialog
+
+    route = WorkflowStepRoute(
+        step_id=WorkflowStepId.TRANSLATOR,
+        step_label="Translator",
+        connection_id="conn-gemini",
+        connection_label="Gemini",
+        model="gemini-3-flash-preview",
+        step_config={
+            "strip_epub_ruby": False,
+            "max_tokens_per_llm_call": 4000,
+            "chunk_size": 1000,
+            "batch_size": 100,
+        },
+    )
+
+    dialog = StepAdvancedConfigDialog(route)
+
+    assert not hasattr(dialog, "batch_size_spin")
+
+
+def test_step_advanced_config_dialog_hides_batch_size_for_gemini_named_custom_endpoint():
+    from context_aware_translation.ui.features.workflow_profile_editor import StepAdvancedConfigDialog
+
+    route = WorkflowStepRoute(
+        step_id=WorkflowStepId.TRANSLATOR,
+        step_label="Translator",
+        connection_id="conn-openrouter",
+        connection_label="OpenRouter",
+        connection_base_url="https://openrouter.ai/api/v1",
+        model="gemini-2.5-pro",
+        step_config={
+            "strip_epub_ruby": False,
+            "max_tokens_per_llm_call": 4000,
+            "chunk_size": 1000,
+            "batch_size": 100,
+        },
+    )
+    polish_route = WorkflowStepRoute(
+        step_id=WorkflowStepId.POLISH,
+        step_label="Polish",
+        connection_id="conn-openrouter",
+        connection_label="OpenRouter",
+        connection_base_url="https://openrouter.ai/api/v1",
+        model="gemini-2.5-pro",
+    )
+
+    dialog = StepAdvancedConfigDialog(route, all_routes=[route, polish_route])
+
+    assert not hasattr(dialog, "batch_size_spin")
 
 
 def test_step_advanced_config_dialog_uses_extractor_default_gleaning():
@@ -556,7 +618,7 @@ def test_image_reembedding_backend_is_inferred_when_profile_payload_is_built():
     assert advanced_cell.findChild(QPushButton) is not None
 
 
-def test_translator_batch_model_is_edited_from_main_model_column():
+def test_translator_batch_size_round_trips_through_translator_route():
     profile = WorkflowProfileDetail(
         profile_id="profile:recommended",
         name="Recommended",
@@ -564,65 +626,62 @@ def test_translator_batch_model_is_edited_from_main_model_column():
         target_language="English",
         routes=[
             WorkflowStepRoute(
-                step_id=WorkflowStepId.TRANSLATOR_BATCH,
-                step_label="Translator batch",
-                connection_id=None,
-                connection_label="Gemini AI Studio",
+                step_id=WorkflowStepId.TRANSLATOR,
+                step_label="Translator",
+                connection_id="conn-gemini",
+                connection_label="Gemini",
                 model="gemini-2.5-pro",
-                step_config={
-                    "provider": "gemini_ai_studio",
-                    "api_key": "secret",
-                    "batch_size": 100,
-                    "thinking_mode": "auto",
-                },
+                step_config={"batch_size": 100},
             )
         ],
     )
-    dialog = WorkflowProfileEditorDialog(profile=profile, connection_choices=[], allow_name_edit=True)
+    dialog = WorkflowProfileEditorDialog(
+        profile=profile,
+        connection_choices=[
+            ConnectionChoice(
+                connection_id="conn-gemini",
+                label="Gemini",
+                default_model="gemini-2.5-pro",
+            )
+        ],
+        allow_name_edit=True,
+    )
 
-    batch_row = dialog._rows[0]
-    assert batch_row.connection_combo is None
-    assert batch_row.model_edit.isReadOnly() is False
-    batch_row.model_edit.setText("gemini-2.5-flash")
-
+    translator_row = dialog._rows[0]
+    translator_row.route = translator_row.route.model_copy(update={"step_config": {"batch_size": 250}})
     built = dialog.profile()
     payload = build_workflow_profile_payload(base_config={}, profile=built)
 
-    assert dialog.routes_table.item(0, 0).text() == "Translator batch"
-    assert dialog.routes_table.item(0, 1).text() == "Gemini AI Studio"
-    assert payload["translator_batch_config"]["provider"] == "gemini_ai_studio"
-    assert payload["translator_batch_config"]["model"] == "gemini-2.5-flash"
+    assert dialog.routes_table.item(0, 0).text() == "Translator"
+    assert payload["translator_batch_config"]["batch_size"] == 250
 
 
-def test_workflow_routes_editor_requires_batch_api_key_and_model_when_enabled():
+def test_workflow_routes_editor_hides_legacy_batch_route_and_preserves_batch_size():
     routes = [
+        WorkflowStepRoute(
+            step_id=WorkflowStepId.TRANSLATOR,
+            step_label="Translator",
+            connection_id="conn-gemini",
+            connection_label="Gemini",
+            model="gemini-2.5-pro",
+        ),
         WorkflowStepRoute(
             step_id=WorkflowStepId.TRANSLATOR_BATCH,
             step_label="Translator batch",
             connection_id=None,
-            connection_label="Gemini AI Studio",
-            model="",
+            connection_label=None,
+            model=None,
             step_config={
-                "provider": "gemini_ai_studio",
-                "api_key": "secret",
                 "batch_size": 100,
-                "thinking_mode": "auto",
             },
-        )
+        ),
     ]
-    editor = WorkflowRoutesEditor(routes, [], hint_text="hint")
-
-    assert editor.validate_routes() == "Translator batch requires a model when enabled."
-
-    editor.rows[0].route = editor.rows[0].route.model_copy(
-        update={
-            "model": "gemini-2.5-flash",
-            "step_config": {
-                "provider": "gemini_ai_studio",
-                "api_key": "",
-                "batch_size": 100,
-                "thinking_mode": "auto",
-            },
-        }
+    editor = WorkflowRoutesEditor(
+        routes,
+        [ConnectionChoice(connection_id="conn-gemini", label="Gemini", default_model="gemini-2.5-pro")],
+        hint_text="hint",
     )
-    assert editor.validate_routes() == "Translator batch requires an API key when enabled."
+
+    assert editor.rowCount() == 1
+    assert editor.rows[0].route.step_id is WorkflowStepId.TRANSLATOR
+    assert editor.rows[0].route.step_config["batch_size"] == 100

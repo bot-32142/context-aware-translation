@@ -312,7 +312,7 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
             "backend": "gemini",
         }
         assert created_profile.config["manga_translator_config"]["kwargs"] == {"reasoning_effort": "low"}
-        assert created_profile.config["translator_batch_config"]["thinking_mode"] == "low"
+        assert created_profile.config["translator_batch_config"]["batch_size"] == 100
         assert (
             next(profile for profile in endpoint_profiles if profile.name == "recommended-Gemini 2.5 Pro").api_key
             == "gkey"

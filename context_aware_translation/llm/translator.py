@@ -6,7 +6,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from context_aware_translation.config import TranslatorConfig
+from context_aware_translation.config import LLMConfig, PolishConfig, TranslatorConfig, resolve_polish_config
 from context_aware_translation.core.cancellation import OperationCancelledError, raise_if_cancelled
 from context_aware_translation.documents.epub_support.inline_markers import (
     extract_inline_markers,
@@ -494,7 +494,7 @@ async def validated_chat(
     expected_count: int,
     source_blocks: list[str],
     llm_client: LLMClient,
-    config: TranslatorConfig,
+    config: LLMConfig,
     cancel_check: Callable[[], bool] | None,
     max_corrections: int = 2,
     label: str = "translation",
@@ -587,6 +587,7 @@ async def translate_chunk(
     source_language: str,
     target_language: str,
     cancel_check: Callable[[], bool] | None = None,
+    polish_config: PolishConfig | None = None,
 ) -> list[str]:
     """Translate multiple chunks with term context."""
     with llm_session_scope() as session_id:
@@ -605,6 +606,7 @@ async def translate_chunk(
             attempts,
             translator_config.enable_polish,
         )
+        effective_polish_config = resolve_polish_config(polish_config, translator_config)
 
         for attempt in range(attempts):
             try:
@@ -632,7 +634,7 @@ async def translate_chunk(
                             expected,
                             prepared.all_blocks,
                             llm_client,
-                            translator_config,
+                            effective_polish_config or translator_config,
                             cancel_check,
                             label="polish",
                         )

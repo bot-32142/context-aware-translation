@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
 import json
 import logging
@@ -46,6 +47,7 @@ from context_aware_translation.workflow.tasks.models import (
 
 logger = logging.getLogger(__name__)
 _PROVIDER_NAME = "gemini_ai_studio"
+_INTERNAL_BATCH_REQUEST_KWARG_KEYS = frozenset({"provider", "_ui_display_name", "_wizard_template_key"})
 
 
 def decode_task_payload(record: TaskRecord) -> dict[str, Any]:
@@ -268,12 +270,77 @@ def compute_phase_progress(items: list[dict[str, Any]], phase: str) -> tuple[int
     return (all_count, completed, failed)
 
 
-def _stage_request_kwargs(payload: dict[str, Any]) -> dict[str, Any]:
+def _stage_model(payload: dict[str, Any], spec: _StageSpec) -> str:
+    return str(payload.get(f"{spec.stage}_model") or payload.get("model") or "")
+
+
+def _stage_request_kwargs(payload: dict[str, Any], spec: _StageSpec) -> dict[str, Any]:
     """Return per-request batch options with enforced JSON response format."""
-    resolved = dict(payload["batch_request_kwargs"])
+    raw = payload.get(f"{spec.stage}_batch_request_kwargs")
+    if not isinstance(raw, dict):
+        raw = payload.get("batch_request_kwargs")
+    resolved = dict(raw or {})
     # Validation expects a JSON object payload for both translation and polish stages.
     resolved["response_format"] = {"type": "json_object"}
     return resolved
+
+
+def _batch_request_kwargs_for_config(step_config: Any) -> dict[str, Any]:
+    request_kwargs: dict[str, Any] = {}
+    raw_kwargs = getattr(step_config, "kwargs", None)
+    if isinstance(raw_kwargs, dict):
+        request_kwargs.update(
+            {
+                str(key): copy.deepcopy(value)
+                for key, value in raw_kwargs.items()
+                if str(key) not in _INTERNAL_BATCH_REQUEST_KWARG_KEYS
+            }
+        )
+    request_kwargs["temperature"] = float(getattr(step_config, "temperature", 0.0) or 0.0)
+    return request_kwargs
+
+
+def _is_batch_config_like(config: Any) -> bool:
+    batch_size = getattr(config, "batch_size", None)
+    return isinstance(batch_size, int) and batch_size > 0
+
+
+def _translator_batch_config(service: Any) -> Any:
+    resolver = getattr(service, "translator_batch_config", None)
+    if callable(resolver):
+        resolved = resolver()
+        if _is_batch_config_like(resolved):
+            return resolved
+    return service.batch_config()
+
+
+def _polish_batch_config(service: Any) -> Any:
+    resolver = getattr(service, "polish_batch_config", None)
+    if callable(resolver):
+        resolved = resolver()
+        if _is_batch_config_like(resolved):
+            return resolved
+    return service.batch_config()
+
+
+def _stage_batch_config(service: Any, spec: _StageSpec | str) -> Any:
+    stage = spec.stage if isinstance(spec, _StageSpec) else str(spec)
+    if stage == "polish":
+        return _polish_batch_config(service)
+    return _translator_batch_config(service)
+
+
+def _polish_llm_config(service: Any) -> Any:
+    resolver = getattr(service, "polish_config", None)
+    if callable(resolver):
+        return resolver()
+    return service.translator_config()
+
+
+def _stage_llm_config(service: Any, spec: _StageSpec) -> Any:
+    if spec.stage == "polish":
+        return _polish_llm_config(service)
+    return service.translator_config()
 
 
 def _resolve_preflight_document_ids(workflow: Any, document_ids: list[int] | None) -> list[int] | None:
@@ -347,11 +414,21 @@ async def ensure_payload_prepared(
     )
 
     translator_config = service.translator_config()
-    batch_config = service.batch_config()
-    batch_model = batch_config.model or translator_config.model
-    if not batch_model:
+    translation_batch_config = _translator_batch_config(service)
+    translation_batch_model = translation_batch_config.model or translator_config.model
+    if not translation_batch_model:
         raise ValueError("translator_batch_config.model is required for async batch tasks.")
-    batch_request_kwargs = {"thinking_mode": str(batch_config.thinking_mode or "auto")}
+    translation_batch_request_kwargs = _batch_request_kwargs_for_config(translator_config)
+    if translator_config.enable_polish:
+        polish_config = _polish_llm_config(service)
+        polish_batch_config = _polish_batch_config(service)
+        polish_batch_model = polish_batch_config.model or polish_config.model
+        if not polish_batch_model:
+            raise ValueError("polish_batch_config.model is required for async batch tasks.")
+        polish_batch_request_kwargs = _batch_request_kwargs_for_config(polish_config)
+    else:
+        polish_batch_model = ""
+        polish_batch_request_kwargs = {}
     source_language = service.workflow.manager.term_repo.get_source_language()
     if not source_language:
         raise ValueError("Source language not found in database.")
@@ -372,8 +449,12 @@ async def ensure_payload_prepared(
         return {
             "source_language": source_language,
             "target_language": service.workflow.config.translation_target_language,
-            "model": batch_model,
-            "batch_request_kwargs": batch_request_kwargs,
+            "translation_model": translation_batch_model,
+            "translation_batch_request_kwargs": translation_batch_request_kwargs,
+            "polish_model": polish_batch_model,
+            "polish_batch_request_kwargs": polish_batch_request_kwargs,
+            "model": translation_batch_model,
+            "batch_request_kwargs": translation_batch_request_kwargs,
             "items": [],
             "translation": new_payload_stage(),
             "polish": new_payload_stage(),
@@ -408,8 +489,12 @@ async def ensure_payload_prepared(
     return {
         "source_language": inputs.source_language,
         "target_language": service.workflow.config.translation_target_language,
-        "model": batch_model,
-        "batch_request_kwargs": batch_request_kwargs,
+        "translation_model": translation_batch_model,
+        "translation_batch_request_kwargs": translation_batch_request_kwargs,
+        "polish_model": polish_batch_model,
+        "polish_batch_request_kwargs": polish_batch_request_kwargs,
+        "model": translation_batch_model,
+        "batch_request_kwargs": translation_batch_request_kwargs,
         "items": items,
         "translation": new_payload_stage(),
         "polish": new_payload_stage(),
@@ -439,8 +524,8 @@ async def run_translation_stage(
             continue
         request_hash, inlined_request = service.gateway.build_inlined_request(
             messages=list(sd["messages"] or []),
-            model=str(payload["model"]),
-            request_kwargs=_stage_request_kwargs(payload),
+            model=_stage_model(payload, _TRANSLATION_STAGE),
+            request_kwargs=_stage_request_kwargs(payload, _TRANSLATION_STAGE),
             metadata={"request_hash": "pending"},
         )
         inlined_request["metadata"] = {"request_hash": request_hash}
@@ -502,8 +587,8 @@ async def run_polish_stage(
         ]
         request_hash, inlined_request = service.gateway.build_inlined_request(
             messages=polish_messages,
-            model=str(payload["model"]),
-            request_kwargs=_stage_request_kwargs(payload),
+            model=_stage_model(payload, _POLISH_STAGE),
+            request_kwargs=_stage_request_kwargs(payload, _POLISH_STAGE),
             metadata={"request_hash": "pending"},
         )
         inlined_request["metadata"] = {"request_hash": request_hash}
@@ -537,10 +622,11 @@ async def _execute_stage(
     progress_callback: ProgressCallback | None,
 ) -> dict[str, Any]:
     """Run submit/poll/validate/fallback for one stage (translation or polish)."""
-    translator_config = service.translator_config()
-    batch_config = service.batch_config()
+    stage_config = _stage_llm_config(service, spec)
+    batch_config = _stage_batch_config(service, spec)
+    stage_model = _stage_model(payload, spec)
     batch_size = max(1, int(batch_config.batch_size))
-    stage_concurrency = _resolve_stage_concurrency(translator_config)
+    stage_concurrency = _resolve_stage_concurrency(stage_config)
 
     task = service.persist_payload(task_id, payload, phase=spec.phase_submit, status=STATUS_RUNNING)
     stage_meta: PayloadStage = payload[spec.stage]
@@ -591,7 +677,7 @@ async def _execute_stage(
                 display_name = _build_batch_display_name(
                     task_id=task_id,
                     stage=spec.stage,
-                    model=str(payload["model"]),
+                    model=stage_model,
                     request_hashes=slice_hashes,
                 )
                 job_entry: dict[str, Any] = {
@@ -618,12 +704,12 @@ async def _execute_stage(
                 display_name = _build_batch_display_name(
                     task_id=task_id,
                     stage=spec.stage,
-                    model=str(payload["model"]),
+                    model=stage_model,
                     request_hashes=slice_hashes,
                 )
                 submit_result = await service.gateway.submit_batch(
                     batch_config=batch_config,
-                    model=str(payload["model"]),
+                    model=stage_model,
                     inlined_requests=to_submit,
                     display_name=display_name,
                 )
@@ -702,7 +788,7 @@ async def _execute_stage(
                 len(item["all_blocks"]),
                 list(item["all_blocks"]),
                 service.workflow.llm_client,
-                translator_config,
+                stage_config,
                 cancel_check,
                 label=spec.stage,
                 initial_raw=raw,
@@ -746,7 +832,7 @@ async def _execute_stage(
                 len(item["all_blocks"]),
                 list(item["all_blocks"]),
                 service.workflow.llm_client,
-                translator_config,
+                stage_config,
                 cancel_check,
                 label=spec.stage,
                 initial_raw=None,
@@ -850,7 +936,7 @@ async def poll_until_terminal(
     """Poll one provider batch until terminal status, handling cancellation and state persistence."""
     task_id = task.task_id
 
-    batch_config = service.batch_config()
+    batch_config = _stage_batch_config(service, stage)
 
     cancel_sent = False
     while True:

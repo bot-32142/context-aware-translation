@@ -24,7 +24,6 @@ from context_aware_translation.application.contracts.app_setup import (
     SaveWorkflowProfileRequest,
     WorkflowProfileDetail,
     WorkflowProfileKind,
-    WorkflowStepId,
     WorkflowStepRoute,
 )
 from context_aware_translation.application.errors import ApplicationError
@@ -512,6 +511,7 @@ class AppSettingsPane(QWidget):
                 connection_id=connection.connection_id,
                 label=connection.display_name,
                 default_model=connection.default_model,
+                base_url=connection.base_url,
             )
             for connection in self._state.connections
         ]
@@ -536,13 +536,10 @@ class AppSettingsPane(QWidget):
             WorkflowStepRoute(
                 step_id=step_id,
                 step_label=workflow_step_label(step_id, tr=self.tr),
-                connection_id=(
-                    first_connection.connection_id if step_id is not WorkflowStepId.TRANSLATOR_BATCH else None
-                ),
-                connection_label=(
-                    first_connection.display_name if step_id is not WorkflowStepId.TRANSLATOR_BATCH else None
-                ),
-                model=(first_connection.default_model if step_id is not WorkflowStepId.TRANSLATOR_BATCH else None),
+                connection_id=first_connection.connection_id,
+                connection_label=first_connection.display_name,
+                connection_base_url=first_connection.base_url,
+                model=first_connection.default_model,
                 step_config={},
             )
             for step_id, label in _NEW_PROFILE_ROUTE_SPECS

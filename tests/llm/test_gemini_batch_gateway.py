@@ -49,27 +49,34 @@ def _batch_config() -> TranslatorBatchConfig:
     )
 
 
-def test_build_inlined_request_applies_explicit_thinking_mode() -> None:
+def test_build_inlined_request_applies_explicit_temperature() -> None:
     gateway = GeminiBatchJobGateway()
     _, request = gateway.build_inlined_request(
         messages=_messages(),
         model="gemini-2.5-flash",
-        request_kwargs={"thinking_mode": "off"},
+        request_kwargs={"temperature": 0.3},
     )
 
-    assert request["config"]["thinking_config"] == {"thinking_budget": 0}
+    assert request["config"]["temperature"] == 0.3
 
 
-def test_build_inlined_request_unsupported_thinking_mode_emits_warning(caplog) -> None:
+def test_build_inlined_request_maps_reasoning_and_google_thinking_config() -> None:
     gateway = GeminiBatchJobGateway()
     _, request = gateway.build_inlined_request(
         messages=_messages(),
-        model="gemini-1.5-flash",
-        request_kwargs={"thinking_mode": "high"},
+        model="gemini-2.5-flash",
+        request_kwargs={
+            "temperature": 0.3,
+            "reasoning_effort": "low",
+            "extra_body": {"google": {"thinking_config": {"include_thoughts": True}}},
+        },
     )
 
-    assert "thinking_config" not in request["config"]
-    assert any("Falling back to auto" in rec.message for rec in caplog.records)
+    assert request["config"]["temperature"] == 0.3
+    assert request["config"]["thinking_config"] == {
+        "thinking_level": "LOW",
+        "include_thoughts": True,
+    }
 
 
 @pytest.mark.asyncio
@@ -94,7 +101,7 @@ async def test_submit_batch_uploads_jsonl_and_uses_file_source() -> None:
     request_hash, inlined_request = gateway.build_inlined_request(
         messages=_messages(),
         model=model,
-        request_kwargs={"thinking_mode": "auto"},
+        request_kwargs={"temperature": 0.0},
     )
     inlined_request["metadata"] = {"request_hash": request_hash}
 
@@ -115,6 +122,51 @@ async def test_submit_batch_uploads_jsonl_and_uses_file_source() -> None:
     row = json.loads(captured_lines[0])
     assert row["key"] == request_hash
     assert isinstance(row["request"], dict)
+
+
+@pytest.mark.asyncio
+async def test_submit_batch_writes_thinking_config_into_jsonl_request() -> None:
+    gateway = GeminiBatchJobGateway()
+    client = MagicMock()
+    display_name = "cat-translation-thinking"
+    model = "models/gemini-2.5-pro"
+    captured_lines: list[str] = []
+
+    client.batches.list.return_value = []
+
+    def _upload_side_effect(*, file, config):  # noqa: ANN001
+        with open(file, encoding="utf-8") as fp:
+            captured_lines.extend([line.strip() for line in fp.readlines() if line.strip()])
+        assert config["mime_type"] == "application/jsonl"
+        return SimpleNamespace(name="files/src-2")
+
+    client.files.upload.side_effect = _upload_side_effect
+    client.batches.create.return_value = _batch_job(name="batches/new", display_name=display_name, model=model)
+
+    request_hash, inlined_request = gateway.build_inlined_request(
+        messages=_messages(),
+        model=model,
+        request_kwargs={
+            "reasoning_effort": "none",
+            "extra_body": {"google": {"thinking_config": {"include_thoughts": True}}},
+        },
+    )
+    inlined_request["metadata"] = {"request_hash": request_hash}
+
+    with patch.object(gateway, "_get_client", return_value=client):
+        await gateway.submit_batch(
+            batch_config=_batch_config(),
+            model=model,
+            inlined_requests=[inlined_request],
+            display_name=display_name,
+        )
+
+    assert len(captured_lines) == 1
+    row = json.loads(captured_lines[0])
+    assert row["request"]["generationConfig"]["thinkingConfig"] == {
+        "thinkingBudget": 0,
+        "includeThoughts": True,
+    }
 
 
 @pytest.mark.asyncio

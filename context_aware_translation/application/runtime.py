@@ -50,7 +50,7 @@ from context_aware_translation.application.events import (
     TermsInvalidatedEvent,
     WorkboardInvalidatedEvent,
 )
-from context_aware_translation.config import Config
+from context_aware_translation.config import Config, infer_batch_provider_from_base_url
 from context_aware_translation.storage.library.book_manager import BookManager
 from context_aware_translation.storage.models.book import Book
 from context_aware_translation.storage.models.config_profile import ConfigProfile
@@ -83,6 +83,7 @@ _HIDDEN_CONNECTION_KWARG_KEYS = frozenset(
 _WIZARD_REASONING_EFFORT_BY_STEP: dict[WorkflowStepId, str] = {
     WorkflowStepId.GLOSSARY_TRANSLATOR: "low",
     WorkflowStepId.TRANSLATOR: "low",
+    WorkflowStepId.POLISH: "low",
     WorkflowStepId.OCR: "none",
     WorkflowStepId.MANGA_TRANSLATOR: "low",
 }
@@ -113,11 +114,11 @@ _WORKFLOW_STEP_LAYOUT: tuple[tuple[WorkflowStepId, str, str | None], ...] = (
     (WorkflowStepId.SUMMARIZER, "Summarizer", "summarizor_config"),
     (WorkflowStepId.GLOSSARY_TRANSLATOR, "Glossary translator", "glossary_config"),
     (WorkflowStepId.TRANSLATOR, "Translator", "translator_config"),
+    (WorkflowStepId.POLISH, "Polish", "polish_config"),
     (WorkflowStepId.REVIEWER, "Reviewer", "review_config"),
     (WorkflowStepId.OCR, "OCR", "ocr_config"),
     (WorkflowStepId.IMAGE_REEMBEDDING, "Image reembedding", "image_reembedding_config"),
     (WorkflowStepId.MANGA_TRANSLATOR, "Manga translator", "manga_translator_config"),
-    (WorkflowStepId.TRANSLATOR_BATCH, "Translator batch", None),
 )
 
 
@@ -231,6 +232,12 @@ _STEP_RECOMMENDATION_ORDER: dict[WorkflowStepId, tuple[StepModelPreference, ...]
         StepModelPreference(ProviderKind.OPENAI, "gpt-4.1"),
         StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
         StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-chat"),
+    ),
+    WorkflowStepId.POLISH: (
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-pro"),
+        StepModelPreference(ProviderKind.OPENAI, "o4-mini"),
+        StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
+        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-reasoner"),
     ),
     WorkflowStepId.REVIEWER: (
         StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-pro"),
@@ -561,6 +568,7 @@ def _build_standard_route(
     step_payload: dict[str, Any],
     connection_name_by_id: dict[str, str],
     connection_model_by_id: dict[str, str | None],
+    connection_base_url_by_id: dict[str, str | None] | None = None,
 ) -> WorkflowStepRoute:
     connection_id = (
         step_payload.get("endpoint_profile") if isinstance(step_payload.get("endpoint_profile"), str) else None
@@ -575,21 +583,11 @@ def _build_standard_route(
         step_label=step_label,
         connection_id=connection_id,
         connection_label=(connection_name_by_id.get(connection_id, connection_id) if connection_id else None),
+        connection_base_url=(
+            connection_base_url_by_id.get(connection_id) if connection_id and connection_base_url_by_id is not None else None
+        ),
         model=model,
         step_config=_step_payload_without_routing(step_payload),
-    )
-
-
-def _build_batch_route(step_label: str, config: dict[str, Any]) -> WorkflowStepRoute:
-    batch_payload = config.get("translator_batch_config")
-    batch_config = batch_payload if isinstance(batch_payload, dict) else {}
-    return WorkflowStepRoute(
-        step_id=WorkflowStepId.TRANSLATOR_BATCH,
-        step_label=step_label,
-        connection_id=None,
-        connection_label=(str(batch_config.get("provider") or "Direct batch config") if batch_config else None),
-        model=(str(batch_config.get("model") or "") or None),
-        step_config={str(key): value for key, value in batch_config.items() if key != "model" and value is not None},
     )
 
 
@@ -606,11 +604,173 @@ def _build_standard_step_payload(route: WorkflowStepRoute) -> dict[str, Any]:
     return payload
 
 
-def _build_batch_step_payload(route: WorkflowStepRoute) -> dict[str, Any]:
-    payload: dict[str, Any] = {str(key): value for key, value in route.step_config.items() if value is not None}
-    if route.model:
-        payload["model"] = route.model
-    return payload
+def _read_batch_size_value(value: object) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if not isinstance(value, (int, float, str)):
+        return None
+    try:
+        batch_size = int(value)
+    except (TypeError, ValueError):
+        return None
+    if batch_size <= 0:
+        return None
+    return batch_size
+
+
+def _route_batch_provider(route: WorkflowStepRoute | None) -> str | None:
+    if route is None:
+        return None
+    route_base_url = route.step_config.get("base_url")
+    if isinstance(route_base_url, str) and route_base_url.strip():
+        return infer_batch_provider_from_base_url(route_base_url)
+    return infer_batch_provider_from_base_url(route.connection_base_url)
+
+
+def _route_supports_async_batch(route: WorkflowStepRoute | None) -> bool:
+    return _route_batch_provider(route) == "gemini_ai_studio"
+
+
+def workflow_routes_allow_async_batch(
+    routes: list[WorkflowStepRoute],
+    *,
+    include_polish: bool = True,
+) -> bool:
+    route_map = {route.step_id: route for route in routes}
+    translator_route = route_map.get(WorkflowStepId.TRANSLATOR)
+    if not _route_supports_async_batch(translator_route):
+        return False
+    if not include_polish:
+        return True
+    polish_route = route_map.get(WorkflowStepId.POLISH)
+    if not _route_supports_async_batch(polish_route):
+        return False
+    return _route_batch_provider(translator_route) == _route_batch_provider(polish_route)
+
+
+def _resolve_stage_batch_size(
+    *,
+    profile: WorkflowProfileDetail,
+    step_id: WorkflowStepId,
+    batch_config_key: str,
+    base_config: dict[str, Any] | None = None,
+    legacy_translator_route: bool = False,
+    fallback_batch_config_key: str | None = None,
+) -> int | None:
+    route_map = {route.step_id: route for route in profile.routes}
+    route = route_map.get(step_id)
+    if route is not None:
+        batch_size = _read_batch_size_value(route.step_config.get("batch_size"))
+        if batch_size is not None:
+            return batch_size
+
+    if legacy_translator_route:
+        legacy_batch_route = route_map.get(WorkflowStepId.TRANSLATOR_BATCH)
+        if legacy_batch_route is not None:
+            batch_size = _read_batch_size_value(legacy_batch_route.step_config.get("batch_size"))
+            if batch_size is not None:
+                return batch_size
+
+    if isinstance(base_config, dict):
+        batch_payload = base_config.get(batch_config_key)
+        if isinstance(batch_payload, dict):
+            batch_size = _read_batch_size_value(batch_payload.get("batch_size"))
+            if batch_size is not None:
+                return batch_size
+        if fallback_batch_config_key is not None:
+            fallback_payload = base_config.get(fallback_batch_config_key)
+            if isinstance(fallback_payload, dict):
+                batch_size = _read_batch_size_value(fallback_payload.get("batch_size"))
+                if batch_size is not None:
+                    return batch_size
+    return None
+
+
+def _polish_route_payload(step_config_map: dict[WorkflowStepId, dict[str, Any]]) -> dict[str, Any]:
+    explicit = step_config_map.get(WorkflowStepId.POLISH, {})
+    if explicit:
+        return explicit
+    translator_payload = step_config_map.get(WorkflowStepId.TRANSLATOR, {})
+    if not translator_payload:
+        return {}
+    allowed_keys = {
+        "api_key",
+        "base_url",
+        "api_version",
+        "timeout",
+        "max_retries",
+        "model",
+        "temperature",
+        "concurrency",
+        "endpoint_profile",
+        "kwargs",
+    }
+    return {
+        str(key): value for key, value in translator_payload.items() if str(key) in allowed_keys and value is not None
+    }
+
+
+def _apply_batch_sizes_to_routes(
+    routes: list[WorkflowStepRoute],
+    *,
+    translator_batch_size: int | None,
+    polish_batch_size: int | None,
+) -> list[WorkflowStepRoute]:
+    updated: list[WorkflowStepRoute] = []
+    for route in routes:
+        batch_size: int | None = None
+        if route.step_id is WorkflowStepId.TRANSLATOR:
+            batch_size = translator_batch_size
+        elif route.step_id is WorkflowStepId.POLISH:
+            batch_size = polish_batch_size
+        if batch_size is not None:
+            updated.append(route.model_copy(update={"step_config": {**route.step_config, "batch_size": batch_size}}))
+        else:
+            updated.append(route)
+    return updated
+
+
+def _apply_recommended_batch_sizes(
+    routes: list[WorkflowStepRoute],
+    *,
+    translator_batch_size: int,
+    polish_batch_size: int,
+) -> list[WorkflowStepRoute]:
+    if not workflow_routes_allow_async_batch(routes):
+        return routes
+    return _apply_batch_sizes_to_routes(
+        routes,
+        translator_batch_size=translator_batch_size,
+        polish_batch_size=polish_batch_size,
+    )
+
+
+def _resolve_translator_batch_size(
+    *,
+    profile: WorkflowProfileDetail,
+    base_config: dict[str, Any] | None = None,
+) -> int | None:
+    return _resolve_stage_batch_size(
+        profile=profile,
+        step_id=WorkflowStepId.TRANSLATOR,
+        batch_config_key="translator_batch_config",
+        base_config=base_config,
+        legacy_translator_route=True,
+    )
+
+
+def _resolve_polish_batch_size(
+    *,
+    profile: WorkflowProfileDetail,
+    base_config: dict[str, Any] | None = None,
+) -> int | None:
+    return _resolve_stage_batch_size(
+        profile=profile,
+        step_id=WorkflowStepId.POLISH,
+        batch_config_key="polish_batch_config",
+        base_config=base_config,
+        fallback_batch_config_key="translator_batch_config",
+    )
 
 
 def _infer_image_backend(route: WorkflowStepRoute) -> str | None:
@@ -636,21 +796,43 @@ def build_workflow_profile_detail(
     config: dict[str, Any],
     connection_name_by_id: dict[str, str],
     connection_model_by_id: dict[str, str | None],
+    connection_base_url_by_id: dict[str, str | None] | None = None,
     is_default: bool = False,
 ) -> WorkflowProfileDetail:
     step_config_map = _workflow_step_config_map(config)
+    translator_batch_size = _read_batch_size_value(
+        config.get("translator_batch_config", {}).get("batch_size")
+        if isinstance(config.get("translator_batch_config"), dict)
+        else None
+    )
+    polish_batch_size = _read_batch_size_value(
+        config.get("polish_batch_config", {}).get("batch_size")
+        if isinstance(config.get("polish_batch_config"), dict)
+        else None
+    )
+    if polish_batch_size is None:
+        polish_batch_size = translator_batch_size
     routes = [
-        _build_batch_route(label, config)
-        if step_id is WorkflowStepId.TRANSLATOR_BATCH
-        else _build_standard_route(
+        _build_standard_route(
             step_id=step_id,
             step_label=label,
-            step_payload=step_config_map.get(step_id, {}),
+            step_payload=(
+                _polish_route_payload(step_config_map)
+                if step_id is WorkflowStepId.POLISH
+                else step_config_map.get(step_id, {})
+            ),
             connection_name_by_id=connection_name_by_id,
             connection_model_by_id=connection_model_by_id,
+            connection_base_url_by_id=connection_base_url_by_id,
         )
         for step_id, label, _config_key in _WORKFLOW_STEP_LAYOUT
     ]
+    if workflow_routes_allow_async_batch(routes):
+        routes = _apply_batch_sizes_to_routes(
+            routes,
+            translator_batch_size=translator_batch_size,
+            polish_batch_size=polish_batch_size,
+        )
 
     target_language = str(config.get("translation_target_language") or "English")
     return WorkflowProfileDetail(
@@ -679,20 +861,25 @@ def build_workflow_profile_payload(
     route_map = {route.step_id: route for route in profile.routes}
     for step_id, _label, config_key in _WORKFLOW_STEP_LAYOUT:
         route = route_map.get(step_id)
-        if step_id is WorkflowStepId.TRANSLATOR_BATCH:
-            batch_payload = _build_batch_step_payload(route) if route is not None else {}
-            if batch_payload:
-                payload["translator_batch_config"] = batch_payload
-            else:
-                payload.pop("translator_batch_config", None)
-            continue
         if config_key is None:
             continue
         next_step_payload = _build_standard_step_payload(route) if route is not None else {}
+        if step_id in {WorkflowStepId.TRANSLATOR, WorkflowStepId.POLISH}:
+            next_step_payload.pop("batch_size", None)
         if next_step_payload:
             payload[config_key] = next_step_payload
         else:
             payload.pop(config_key, None)
+    translator_batch_size = _resolve_translator_batch_size(profile=profile, base_config=base_config)
+    if translator_batch_size is not None:
+        payload["translator_batch_config"] = {"batch_size": translator_batch_size}
+    else:
+        payload.pop("translator_batch_config", None)
+    polish_batch_size = _resolve_polish_batch_size(profile=profile, base_config=base_config)
+    if polish_batch_size is not None:
+        payload["polish_batch_config"] = {"batch_size": polish_batch_size}
+    else:
+        payload.pop("polish_batch_config", None)
     return payload
 
 
@@ -744,31 +931,6 @@ def _recommended_step_route(
     label: str,
     drafts: list[ConnectionDraft],
 ) -> WorkflowStepRoute:
-    if step_id is WorkflowStepId.TRANSLATOR_BATCH:
-        gemini_batch = (
-            _recommended_connection_by_model(drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-pro"))
-            or _recommended_connection_by_model(drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash"))
-            or _recommended_connection_by_model(drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-flash"))
-            or _recommended_connection_by_model(
-                drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash-lite")
-            )
-        )
-        if gemini_batch is None:
-            return WorkflowStepRoute(step_id=step_id, step_label=label)
-        return WorkflowStepRoute(
-            step_id=step_id,
-            step_label=label,
-            connection_id=None,
-            connection_label="Gemini AI Studio",
-            model=gemini_batch.default_model,
-            step_config={
-                "provider": "gemini_ai_studio",
-                "api_key": gemini_batch.api_key or "",
-                "batch_size": 100,
-                "thinking_mode": "low",
-            },
-        )
-
     selected = None
     for preference in _STEP_RECOMMENDATION_ORDER.get(step_id, ()):
         selected = _recommended_connection_by_model(drafts, preference)
@@ -786,12 +948,12 @@ def _recommended_step_route(
             step_config["backend"] = "gemini"
         elif selected.provider is ProviderKind.OPENAI:
             step_config["backend"] = "openai"
-
     return WorkflowStepRoute(
         step_id=step_id,
         step_label=label,
         connection_id=selected.display_name if selected is not None else None,
         connection_label=public_connection_name(selected.display_name) if selected is not None else None,
+        connection_base_url=selected.base_url if selected is not None else None,
         model=selected.default_model if selected is not None else None,
         step_config=step_config,
     )
@@ -803,11 +965,23 @@ def recommended_workflow_profile_from_drafts(
     profile_id: str = "recommended",
     name: str = "Recommended",
     target_language: str = "English",
+    translator_batch_size: int = 100,
+    polish_batch_size: int = 100,
 ) -> WorkflowProfileDetail:
     curated_drafts = expand_wizard_connection_drafts(drafts)
     routes = [
-        _recommended_step_route(step_id, label, curated_drafts) for step_id, label, _config_key in _WORKFLOW_STEP_LAYOUT
+        _recommended_step_route(
+            step_id,
+            label,
+            curated_drafts,
+        )
+        for step_id, label, _config_key in _WORKFLOW_STEP_LAYOUT
     ]
+    routes = _apply_recommended_batch_sizes(
+        routes,
+        translator_batch_size=translator_batch_size,
+        polish_batch_size=polish_batch_size,
+    )
     return WorkflowProfileDetail(
         profile_id=profile_id,
         name=name,

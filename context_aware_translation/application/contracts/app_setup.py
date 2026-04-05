@@ -30,6 +30,7 @@ class WorkflowStepId(StrEnum):
     SUMMARIZER = "summarizer"
     GLOSSARY_TRANSLATOR = "glossary_translator"
     TRANSLATOR = "translator"
+    POLISH = "polish"
     REVIEWER = "reviewer"
     OCR = "ocr"
     IMAGE_REEMBEDDING = "image_reembedding"
@@ -89,6 +90,7 @@ class WorkflowStepRoute(ContractModel):
     step_label: str
     connection_id: str | None = None
     connection_label: str | None = None
+    connection_base_url: str | None = None
     model: str | None = None
     step_config: dict[str, Any] = Field(default_factory=dict)
 
@@ -127,6 +129,8 @@ class SetupWizardRequest(ContractModel):
     connections: list[ConnectionDraft]
     profile_name: str | None = None
     target_language: str | None = None
+    translator_batch_size: int | None = None
+    polish_batch_size: int | None = None
 
 
 class SetupWizardState(ContractModel):
@@ -137,6 +141,8 @@ class SetupWizardState(ContractModel):
     recommendation: WorkflowProfileDetail | None = None
     profile_name: str | None = None
     target_language: str = "English"
+    translator_batch_size: int = 100
+    polish_batch_size: int = 100
 
 
 class AppSetupState(ContractModel):

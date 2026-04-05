@@ -7,6 +7,7 @@ from context_aware_translation.config import (
     GlossaryTranslationConfig,
     LLMConfig,
     MangaTranslatorConfig,
+    PolishConfig,
     ReviewConfig,
     SummarizorConfig,
     TranslatorConfig,
@@ -93,10 +94,12 @@ class LLMChunkTranslator:
         self,
         llm_client: LLMClient,
         translator_config: TranslatorConfig,
+        polish_config: PolishConfig | None,
         target_language: str,
     ) -> None:
         self.llm_client: LLMClient = llm_client
         self.translator_config: TranslatorConfig = translator_config
+        self.polish_config: PolishConfig | None = polish_config
         self.target_language: str = target_language
 
     async def translate(
@@ -114,6 +117,7 @@ class LLMChunkTranslator:
             source_language,
             self.target_language,
             cancel_check=cancel_check,
+            polish_config=self.polish_config,
         )
 
 
