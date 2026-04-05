@@ -10,6 +10,7 @@ from context_aware_translation.application.contracts.app_setup import (
     ConnectionDraft,
     ConnectionStatus,
     ConnectionSummary,
+    WizardRecommendationMode,
     WorkflowProfileDetail,
     WorkflowProfileKind,
     WorkflowStepId,
@@ -80,24 +81,42 @@ _HIDDEN_CONNECTION_KWARG_KEYS = frozenset(
     }
 )
 
-_WIZARD_REASONING_EFFORT_BY_STEP: dict[WorkflowStepId, str] = {
-    WorkflowStepId.GLOSSARY_TRANSLATOR: "low",
-    WorkflowStepId.TRANSLATOR: "low",
-    WorkflowStepId.POLISH: "low",
-    WorkflowStepId.OCR: "none",
-    WorkflowStepId.MANGA_TRANSLATOR: "low",
-}
-
-
 def _openai_supports_reasoning_effort_none(model: str | None) -> bool:
     normalized = str(model or "").strip().lower()
     return normalized.startswith("o") or normalized.startswith("gpt-5")
 
 
-def _wizard_reasoning_kwargs(step_id: WorkflowStepId, selected: ConnectionDraft | None) -> dict[str, str] | None:
+def _wizard_reasoning_effort(
+    step_id: WorkflowStepId,
+    provider: ProviderKind,
+    recommendation_mode: WizardRecommendationMode,
+) -> str | None:
+    if provider is ProviderKind.DEEPSEEK:
+        return None
+    if step_id is WorkflowStepId.GLOSSARY_TRANSLATOR:
+        return "low"
+    if step_id is WorkflowStepId.OCR:
+        return "none"
+    if step_id not in {WorkflowStepId.TRANSLATOR, WorkflowStepId.POLISH, WorkflowStepId.MANGA_TRANSLATOR}:
+        return None
+    if recommendation_mode is WizardRecommendationMode.BUDGET:
+        return "low"
+    if recommendation_mode is WizardRecommendationMode.QUALITY:
+        return "high"
+    if step_id is WorkflowStepId.POLISH:
+        return "medium"
+    return "none"
+
+
+def _wizard_reasoning_kwargs(
+    step_id: WorkflowStepId,
+    selected: ConnectionDraft | None,
+    *,
+    recommendation_mode: WizardRecommendationMode,
+) -> dict[str, str] | None:
     if selected is None:
         return None
-    reasoning_effort = _WIZARD_REASONING_EFFORT_BY_STEP.get(step_id)
+    reasoning_effort = _wizard_reasoning_effort(step_id, selected.provider, recommendation_mode)
     if reasoning_effort is None:
         return None
     if (
@@ -145,6 +164,13 @@ _WIZARD_MODEL_CATALOG: dict[ProviderKind, tuple[WizardModelTemplate, ...]] = {
             ProviderKind.GEMINI,
             "Gemini 2.5 Pro",
             "gemini-2.5-pro",
+            "https://generativelanguage.googleapis.com/v1beta/openai/",
+            timeout=300,
+        ),
+        WizardModelTemplate(
+            ProviderKind.GEMINI,
+            "Gemini 3.1 Pro",
+            "gemini-3.1-pro",
             "https://generativelanguage.googleapis.com/v1beta/openai/",
             timeout=300,
         ),
@@ -260,6 +286,69 @@ _STEP_RECOMMENDATION_ORDER: dict[WorkflowStepId, tuple[StepModelPreference, ...]
         StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
     ),
 }
+
+def _wizard_translator_preferences(
+    recommendation_mode: WizardRecommendationMode,
+) -> tuple[StepModelPreference, ...]:
+    anthropic_model = (
+        "claude-3-5-haiku-latest"
+        if recommendation_mode is WizardRecommendationMode.BUDGET
+        else "claude-3-5-sonnet-latest"
+    )
+    gemini_model = "gemini-3.1-pro" if recommendation_mode is WizardRecommendationMode.QUALITY else "gemini-3.1-flash"
+    openai_model = "o4-mini" if recommendation_mode is WizardRecommendationMode.QUALITY else "gpt-4.1"
+    deepseek_model = (
+        "deepseek-reasoner" if recommendation_mode is WizardRecommendationMode.QUALITY else "deepseek-chat"
+    )
+    return (
+        StepModelPreference(ProviderKind.GEMINI, gemini_model),
+        StepModelPreference(ProviderKind.OPENAI, openai_model),
+        StepModelPreference(ProviderKind.ANTHROPIC, anthropic_model),
+        StepModelPreference(ProviderKind.DEEPSEEK, deepseek_model),
+    )
+
+
+def _wizard_polish_preferences(
+    recommendation_mode: WizardRecommendationMode,
+) -> tuple[StepModelPreference, ...]:
+    del recommendation_mode
+    return (
+        StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-pro"),
+        StepModelPreference(ProviderKind.OPENAI, "o4-mini"),
+        StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
+        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-reasoner"),
+    )
+
+
+def _wizard_manga_translator_preferences(
+    recommendation_mode: WizardRecommendationMode,
+) -> tuple[StepModelPreference, ...]:
+    anthropic_model = (
+        "claude-3-5-haiku-latest"
+        if recommendation_mode is WizardRecommendationMode.BUDGET
+        else "claude-3-5-sonnet-latest"
+    )
+    gemini_model = "gemini-3.1-pro" if recommendation_mode is WizardRecommendationMode.QUALITY else "gemini-3.1-flash"
+    openai_model = "o4-mini" if recommendation_mode is WizardRecommendationMode.QUALITY else "gpt-4.1"
+    return (
+        StepModelPreference(ProviderKind.GEMINI, gemini_model),
+        StepModelPreference(ProviderKind.OPENAI, openai_model),
+        StepModelPreference(ProviderKind.ANTHROPIC, anthropic_model),
+    )
+
+
+def _step_recommendation_order(
+    step_id: WorkflowStepId,
+    *,
+    recommendation_mode: WizardRecommendationMode,
+) -> tuple[StepModelPreference, ...]:
+    if step_id is WorkflowStepId.TRANSLATOR:
+        return _wizard_translator_preferences(recommendation_mode)
+    if step_id is WorkflowStepId.POLISH:
+        return _wizard_polish_preferences(recommendation_mode)
+    if step_id is WorkflowStepId.MANGA_TRANSLATOR:
+        return _wizard_manga_translator_preferences(recommendation_mode)
+    return _STEP_RECOMMENDATION_ORDER.get(step_id, ())
 
 
 @dataclass(frozen=True)
@@ -584,7 +673,9 @@ def _build_standard_route(
         connection_id=connection_id,
         connection_label=(connection_name_by_id.get(connection_id, connection_id) if connection_id else None),
         connection_base_url=(
-            connection_base_url_by_id.get(connection_id) if connection_id and connection_base_url_by_id is not None else None
+            connection_base_url_by_id.get(connection_id)
+            if connection_id and connection_base_url_by_id is not None
+            else None
         ),
         model=model,
         step_config=_step_payload_without_routing(step_payload),
@@ -654,8 +745,6 @@ def _resolve_stage_batch_size(
     step_id: WorkflowStepId,
     batch_config_key: str,
     base_config: dict[str, Any] | None = None,
-    legacy_translator_route: bool = False,
-    fallback_batch_config_key: str | None = None,
 ) -> int | None:
     route_map = {route.step_id: route for route in profile.routes}
     route = route_map.get(step_id)
@@ -664,25 +753,12 @@ def _resolve_stage_batch_size(
         if batch_size is not None:
             return batch_size
 
-    if legacy_translator_route:
-        legacy_batch_route = route_map.get(WorkflowStepId.TRANSLATOR_BATCH)
-        if legacy_batch_route is not None:
-            batch_size = _read_batch_size_value(legacy_batch_route.step_config.get("batch_size"))
-            if batch_size is not None:
-                return batch_size
-
     if isinstance(base_config, dict):
         batch_payload = base_config.get(batch_config_key)
         if isinstance(batch_payload, dict):
             batch_size = _read_batch_size_value(batch_payload.get("batch_size"))
             if batch_size is not None:
                 return batch_size
-        if fallback_batch_config_key is not None:
-            fallback_payload = base_config.get(fallback_batch_config_key)
-            if isinstance(fallback_payload, dict):
-                batch_size = _read_batch_size_value(fallback_payload.get("batch_size"))
-                if batch_size is not None:
-                    return batch_size
     return None
 
 
@@ -755,7 +831,6 @@ def _resolve_translator_batch_size(
         step_id=WorkflowStepId.TRANSLATOR,
         batch_config_key="translator_batch_config",
         base_config=base_config,
-        legacy_translator_route=True,
     )
 
 
@@ -769,7 +844,6 @@ def _resolve_polish_batch_size(
         step_id=WorkflowStepId.POLISH,
         batch_config_key="polish_batch_config",
         base_config=base_config,
-        fallback_batch_config_key="translator_batch_config",
     )
 
 
@@ -810,8 +884,6 @@ def build_workflow_profile_detail(
         if isinstance(config.get("polish_batch_config"), dict)
         else None
     )
-    if polish_batch_size is None:
-        polish_batch_size = translator_batch_size
     routes = [
         _build_standard_route(
             step_id=step_id,
@@ -930,15 +1002,21 @@ def _recommended_step_route(
     step_id: WorkflowStepId,
     label: str,
     drafts: list[ConnectionDraft],
+    *,
+    recommendation_mode: WizardRecommendationMode,
 ) -> WorkflowStepRoute:
     selected = None
-    for preference in _STEP_RECOMMENDATION_ORDER.get(step_id, ()):
+    for preference in _step_recommendation_order(step_id, recommendation_mode=recommendation_mode):
         selected = _recommended_connection_by_model(drafts, preference)
         if selected is not None:
             break
 
     step_config: dict[str, Any] = {}
-    reasoning_kwargs = _wizard_reasoning_kwargs(step_id, selected)
+    reasoning_kwargs = _wizard_reasoning_kwargs(
+        step_id,
+        selected,
+        recommendation_mode=recommendation_mode,
+    )
     if step_id is WorkflowStepId.EXTRACTOR:
         step_config["max_gleaning"] = 1
     if reasoning_kwargs is not None:
@@ -965,6 +1043,7 @@ def recommended_workflow_profile_from_drafts(
     profile_id: str = "recommended",
     name: str = "Recommended",
     target_language: str = "English",
+    recommendation_mode: WizardRecommendationMode = WizardRecommendationMode.BALANCED,
     translator_batch_size: int = 100,
     polish_batch_size: int = 100,
 ) -> WorkflowProfileDetail:
@@ -974,6 +1053,7 @@ def recommended_workflow_profile_from_drafts(
             step_id,
             label,
             curated_drafts,
+            recommendation_mode=recommendation_mode,
         )
         for step_id, label, _config_key in _WORKFLOW_STEP_LAYOUT
     ]

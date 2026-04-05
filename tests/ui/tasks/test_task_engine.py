@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import time
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -177,14 +178,31 @@ def test_preflight_creation_returns_decision_for_batch_handler(engine, tmp_path)
     db = SQLiteBookDB(book_db_path)
     db.close()
     engine._core._deps.book_manager.get_book_db_path.return_value = book_db_path
+    engine._core._deps.book_manager.get_book.return_value = object()
+    engine._core._deps.book_manager.library_root = tmp_path
+    engine._core._deps.book_manager.registry = object()
+
+    config = SimpleNamespace(
+        translator_config=SimpleNamespace(
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            model="gemini-2.5-pro",
+        ),
+        polish_config=SimpleNamespace(
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            model="gemini-2.5-pro",
+        ),
+    )
 
     engine.register_handler(BatchTranslationHandler())
-    decision = engine.preflight(
-        "batch_translation",
-        "book-preflight",
-        {"document_ids": [1, 2], "force": False},
-        TaskAction.RUN,
-    )
+    with patch(
+        "context_aware_translation.workflow.tasks.handlers.batch_translation.Config.from_book", return_value=config
+    ):
+        decision = engine.preflight(
+            "batch_translation",
+            "book-preflight",
+            {"document_ids": [1, 2], "force": False},
+            TaskAction.RUN,
+        )
     assert decision.allowed is True
 
 

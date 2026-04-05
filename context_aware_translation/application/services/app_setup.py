@@ -15,6 +15,7 @@ from context_aware_translation.application.contracts.app_setup import (
     SaveWorkflowProfileRequest,
     SetupWizardRequest,
     SetupWizardState,
+    WizardRecommendationMode,
     WorkflowProfileDetail,
     WorkflowProfileKind,
     WorkflowStepId,
@@ -129,6 +130,7 @@ class DefaultAppSetupService:
                 ),
             ],
             target_language=target_language,
+            recommendation_mode=WizardRecommendationMode.BALANCED,
             translator_batch_size=translator_batch_size,
             polish_batch_size=polish_batch_size,
         )
@@ -153,6 +155,7 @@ class DefaultAppSetupService:
             request.connections,
             name=profile_name or "Recommended",
             target_language=target_language,
+            recommendation_mode=request.recommendation_mode,
             translator_batch_size=request.translator_batch_size or 100,
             polish_batch_size=request.polish_batch_size or 100,
         )
@@ -164,6 +167,7 @@ class DefaultAppSetupService:
             recommendation=recommendation,
             profile_name=profile_name,
             target_language=target_language,
+            recommendation_mode=request.recommendation_mode,
             translator_batch_size=request.translator_batch_size or 100,
             polish_batch_size=request.polish_batch_size or 100,
         )

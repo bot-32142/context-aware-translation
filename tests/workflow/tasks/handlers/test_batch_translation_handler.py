@@ -265,7 +265,9 @@ def test_validate_submit_rejects_non_batch_capable_translator(tmp_path):
             "context_aware_translation.storage.repositories.document_repository.DocumentRepository",
             return_value=fake_repo,
         ),
-        patch("context_aware_translation.workflow.tasks.handlers.batch_translation.Config.from_book", return_value=config),
+        patch(
+            "context_aware_translation.workflow.tasks.handlers.batch_translation.Config.from_book", return_value=config
+        ),
     ):
         result = handler.validate_submit("book-1", {}, deps)
 
@@ -297,7 +299,9 @@ def test_validate_submit_rejects_mismatched_polish_provider(tmp_path):
             "context_aware_translation.storage.repositories.document_repository.DocumentRepository",
             return_value=fake_repo,
         ),
-        patch("context_aware_translation.workflow.tasks.handlers.batch_translation.Config.from_book", return_value=config),
+        patch(
+            "context_aware_translation.workflow.tasks.handlers.batch_translation.Config.from_book", return_value=config
+        ),
     ):
         result = handler.validate_submit("book-1", {"enable_polish": True}, deps)
 
@@ -329,7 +333,9 @@ def test_validate_submit_allows_mismatched_polish_provider_when_polish_disabled(
             "context_aware_translation.storage.repositories.document_repository.DocumentRepository",
             return_value=fake_repo,
         ),
-        patch("context_aware_translation.workflow.tasks.handlers.batch_translation.Config.from_book", return_value=config),
+        patch(
+            "context_aware_translation.workflow.tasks.handlers.batch_translation.Config.from_book", return_value=config
+        ),
     ):
         result = handler.validate_submit("book-1", {"enable_polish": False}, deps)
 

@@ -163,8 +163,7 @@ class BatchTranslationHandler:
                 return Decision(
                     allowed=False,
                     reason=(
-                        "Async batch translation requires Translator and Polish to use the same "
-                        "batch-capable provider."
+                        "Async batch translation requires Translator and Polish to use the same batch-capable provider."
                     ),
                 )
         return Decision(allowed=True)

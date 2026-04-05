@@ -113,6 +113,24 @@ def test_cleanup_remote_artifacts_returns_warnings_on_remote_failure(tmp_path):
         executor.close()
 
 
+def test_polish_batch_config_does_not_fallback_to_translator_batch_size(tmp_path):
+    executor = _build_executor(tmp_path)
+    try:
+        executor.workflow.config.translator_batch_config = TranslatorBatchConfig(batch_size=250)
+        executor.workflow.config.polish_config = PolishConfig(
+            api_key="k",
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            model="gemini-2.5-pro",
+        )
+        executor.workflow.config.polish_batch_config = None
+
+        batch_config = executor.polish_batch_config()
+
+        assert batch_config.batch_size == 100
+    finally:
+        executor.close()
+
+
 def test_persist_poll_progress_uses_cached_polish_responses(tmp_path):
     executor = _build_executor(tmp_path)
     try:

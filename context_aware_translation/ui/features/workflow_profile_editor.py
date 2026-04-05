@@ -168,8 +168,6 @@ def validate_workflow_routes(
     tr: Callable[[str], str],
 ) -> str | None:
     for route in routes:
-        if route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
-            continue
         if not str(route.connection_id or "").strip() or not str(route.model or "").strip():
             return tr("Every workflow step must use a connection and model.")
     return None
@@ -196,20 +194,7 @@ def _step_shows_batch_config(step_id: WorkflowStepId, routes: list[WorkflowStepR
 
 
 def _normalize_workflow_routes(routes: list[WorkflowStepRoute]) -> list[WorkflowStepRoute]:
-    legacy_batch_route = next((route for route in routes if route.step_id is WorkflowStepId.TRANSLATOR_BATCH), None)
-    legacy_batch_size = legacy_batch_route.step_config.get("batch_size") if legacy_batch_route is not None else None
-
-    normalized: list[WorkflowStepRoute] = []
-    for route in routes:
-        if route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
-            continue
-        if route.step_id is WorkflowStepId.TRANSLATOR and isinstance(legacy_batch_size, int):
-            merged_config = dict(route.step_config)
-            merged_config.setdefault("batch_size", legacy_batch_size)
-            normalized.append(route.model_copy(update={"step_config": merged_config}))
-            continue
-        normalized.append(route)
-    return normalized
+    return [route for route in routes if route.step_id is not WorkflowStepId.TRANSLATOR_BATCH]
 
 
 class StepAdvancedConfigDialog(QDialog):

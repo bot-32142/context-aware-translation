@@ -656,7 +656,7 @@ def test_translator_batch_size_round_trips_through_translator_route():
     assert payload["translator_batch_config"]["batch_size"] == 250
 
 
-def test_workflow_routes_editor_hides_legacy_batch_route_and_preserves_batch_size():
+def test_workflow_routes_editor_hides_legacy_batch_route_without_promoting_batch_size():
     routes = [
         WorkflowStepRoute(
             step_id=WorkflowStepId.TRANSLATOR,
@@ -684,4 +684,4 @@ def test_workflow_routes_editor_hides_legacy_batch_route_and_preserves_batch_siz
 
     assert editor.rowCount() == 1
     assert editor.rows[0].route.step_id is WorkflowStepId.TRANSLATOR
-    assert editor.rows[0].route.step_config["batch_size"] == 100
+    assert "batch_size" not in editor.rows[0].route.step_config

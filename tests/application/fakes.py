@@ -152,7 +152,19 @@ class FakeAppSetupService:
 
     def preview_setup_wizard(self, request: SetupWizardRequest) -> SetupWizardState:
         self.calls.append(("preview_setup_wizard", request))
-        return self.preview_state if self.preview_state is not None else self.get_wizard_state()
+        if self.preview_state is None:
+            return self.get_wizard_state()
+        return self.preview_state.model_copy(
+            update={
+                "selected_providers": list(request.providers),
+                "drafts": list(request.connections),
+                "profile_name": request.profile_name,
+                "target_language": request.target_language or self.preview_state.target_language,
+                "recommendation_mode": request.recommendation_mode,
+                "translator_batch_size": request.translator_batch_size or self.preview_state.translator_batch_size,
+                "polish_batch_size": request.polish_batch_size or self.preview_state.polish_batch_size,
+            }
+        )
 
     def save_connection(self, request: SaveConnectionRequest) -> AppSetupState:
         self.calls.append(("save_connection", request))

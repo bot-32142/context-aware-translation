@@ -338,25 +338,27 @@ class DefaultDocumentService:
             has_work=bool(translatable_units),
             active_task=active_task,
         )
-        effective_config = self._runtime.get_effective_config(project_id)
-        translator_batch_provider = infer_translator_batch_provider(effective_config.translator_config)
-        supports_batch = document_type != "manga" and translator_batch_provider is not None
-        if supports_batch and enable_polish:
-            polish_config = resolve_polish_config(effective_config.polish_config, effective_config.translator_config)
-            polish_batch_provider = infer_polish_batch_provider(polish_config)
-            supports_batch = polish_batch_provider is not None and polish_batch_provider == translator_batch_provider
-        if supports_batch:
-            batch_allowed, batch_blocker = self._translation_run_action_state(
-                project_id,
-                document_id=document_id,
-                document_type=document_type,
-                enable_polish=enable_polish,
-                batch=True,
-                has_work=bool(translatable_units),
-                active_task=active_task,
-            )
-        else:
-            batch_allowed, batch_blocker = False, None
+        batch_allowed = False
+        batch_blocker = None
+        if document_type != "manga":
+            effective_config = self._runtime.get_effective_config(project_id)
+            translator_batch_provider = infer_translator_batch_provider(effective_config.translator_config)
+            batch_capable = translator_batch_provider is not None
+            if batch_capable and enable_polish:
+                polish_config = resolve_polish_config(effective_config.polish_config, effective_config.translator_config)
+                polish_batch_provider = infer_polish_batch_provider(polish_config)
+                batch_capable = polish_batch_provider == translator_batch_provider
+            if batch_capable:
+                batch_allowed, batch_blocker = self._translation_run_action_state(
+                    project_id,
+                    document_id=document_id,
+                    document_type=document_type,
+                    enable_polish=enable_polish,
+                    batch=True,
+                    has_work=bool(translatable_units),
+                    active_task=active_task,
+                )
+        supports_batch = batch_allowed
         return DocumentTranslationState(
             workspace=workspace,
             units=units,

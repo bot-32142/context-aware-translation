@@ -38,6 +38,7 @@ from context_aware_translation.application.contracts.app_setup import (
     SaveConnectionRequest,
     SetupWizardRequest,
     SetupWizardState,
+    WizardRecommendationMode,
     WorkflowStepId,
 )
 from context_aware_translation.application.contracts.common import CapabilityCode, ProviderKind, UserMessageSeverity
@@ -583,8 +584,10 @@ class SetupWizardDialog(QDialog):
         self._provider_inputs: dict[ProviderKind, tuple[QCheckBox, QLineEdit]] = {}
         self._profile_name_edit: QLineEdit | None = None
         self._target_language_combo: QSearchableComboBox | None = None
+        self._recommendation_mode_combo: QComboBox | None = None
         self._translator_batch_size_spin: QSpinBox | None = None
         self._polish_batch_size_spin: QSpinBox | None = None
+        self._review_refresh_pending = False
 
     def _translate_provider_helper_text(self, text: str | None) -> str:
         if not text:
@@ -605,6 +608,7 @@ class SetupWizardDialog(QDialog):
         self._clear_page_layout()
         self._profile_name_edit = None
         self._target_language_combo = None
+        self._recommendation_mode_combo = None
         self._translator_batch_size_spin = None
         self._polish_batch_size_spin = None
 
@@ -650,6 +654,14 @@ class SetupWizardDialog(QDialog):
             self._profile_name_edit = QLineEdit(suggested_name)
             self._target_language_combo = QSearchableComboBox()
             self._target_language_combo.setEditable(True)
+            self._recommendation_mode_combo = QComboBox()
+            self._recommendation_mode_combo.addItem(self.tr("Budget"), WizardRecommendationMode.BUDGET.value)
+            self._recommendation_mode_combo.addItem(self.tr("Balanced"), WizardRecommendationMode.BALANCED.value)
+            self._recommendation_mode_combo.addItem(self.tr("Quality"), WizardRecommendationMode.QUALITY.value)
+            recommendation_mode = preview.recommendation_mode or self._wizard_state.recommendation_mode
+            mode_index = self._recommendation_mode_combo.findData(recommendation_mode.value)
+            if mode_index >= 0:
+                self._recommendation_mode_combo.setCurrentIndex(mode_index)
             seen_languages: set[str] = set()
             for display_name, _internal_name in LANGUAGES:
                 if display_name in seen_languages:
@@ -666,8 +678,10 @@ class SetupWizardDialog(QDialog):
                 self._target_language_combo.setCurrentIndex(index)
             else:
                 self._target_language_combo.setEditText(target_language)
+            self._recommendation_mode_combo.currentIndexChanged.connect(self._on_recommendation_mode_changed)
             profile_name_layout.addRow(self.tr("Profile name"), self._profile_name_edit)
             profile_name_layout.addRow(self.tr("Target language"), self._target_language_combo)
+            profile_name_layout.addRow(self.tr("Mode"), self._recommendation_mode_combo)
             self.page_layout.addWidget(profile_name_group)
             profile_group = QGroupBox(self.tr("Recommended workflow profile"))
             profile_layout = QVBoxLayout(profile_group)
@@ -752,13 +766,15 @@ class SetupWizardDialog(QDialog):
         self._wizard_state = self._wizard_state.model_copy(update={"drafts": drafts})
 
     def _persist_review_inputs(self) -> None:
-        updates: dict[str, str | int | None] = {}
+        updates: dict[str, str | int | WizardRecommendationMode | None] = {}
         if self._profile_name_edit is not None:
             updates["profile_name"] = self._profile_name_edit.text().strip() or None
         if self._target_language_combo is not None:
             updates["target_language"] = (
                 self._target_language_combo.currentText().strip() or _DEFAULT_SETUP_WIZARD_TARGET_LANGUAGE
             )
+        if self._recommendation_mode_combo is not None:
+            updates["recommendation_mode"] = self._current_recommendation_mode()
         if self._translator_batch_size_spin is not None:
             updates["translator_batch_size"] = int(self._translator_batch_size_spin.value())
         if self._polish_batch_size_spin is not None:
@@ -775,6 +791,7 @@ class SetupWizardDialog(QDialog):
             connections=list(self._wizard_state.drafts),
             profile_name=self._wizard_state.profile_name,
             target_language=self._wizard_state.target_language,
+            recommendation_mode=self._wizard_state.recommendation_mode,
             translator_batch_size=int(self._wizard_state.translator_batch_size or 100),
             polish_batch_size=int(self._wizard_state.polish_batch_size or 100),
         )
@@ -844,10 +861,40 @@ class SetupWizardDialog(QDialog):
                 connections=list(self._wizard_state.drafts),
                 profile_name=self._wizard_state.profile_name,
                 target_language=self._wizard_state.target_language,
+                recommendation_mode=self._wizard_state.recommendation_mode,
                 translator_batch_size=int(self._wizard_state.translator_batch_size or 100),
                 polish_batch_size=int(self._wizard_state.polish_batch_size or 100),
             )
         )
+
+    def _on_recommendation_mode_changed(self, _index: int) -> None:
+        if self._page_index != 1:
+            return
+        self._persist_review_inputs()
+        self._preview_state = None
+        if self._review_refresh_pending:
+            return
+        self._review_refresh_pending = True
+        QTimer.singleShot(0, self._rebuild_review_page_after_mode_change)
+
+    def _rebuild_review_page_after_mode_change(self) -> None:
+        self._review_refresh_pending = False
+        if self._page_index != 1:
+            return
+        self._build_page()
+
+    def _current_recommendation_mode(self) -> WizardRecommendationMode:
+        if self._recommendation_mode_combo is None:
+            return self._wizard_state.recommendation_mode
+        raw_mode = self._recommendation_mode_combo.currentData()
+        if isinstance(raw_mode, WizardRecommendationMode):
+            return raw_mode
+        if isinstance(raw_mode, str):
+            try:
+                return WizardRecommendationMode(raw_mode)
+            except ValueError:
+                pass
+        return self._wizard_state.recommendation_mode
 
     def _update_buttons(self) -> None:
         self.back_button.setVisible(self._page_index > 0)

@@ -809,9 +809,7 @@ class BatchTranslationExecutor:
             raise ValueError("Async batch translation requires a batch-capable polish connection.")
 
         persisted = getattr(self.workflow.config, "polish_batch_config", None)
-        if not isinstance(persisted, PolishBatchConfig):
-            persisted = getattr(self.workflow.config, "translator_batch_config", None)
-        batch_size = persisted.batch_size if isinstance(persisted, (TranslatorBatchConfig, PolishBatchConfig)) else 100
+        batch_size = persisted.batch_size if isinstance(persisted, PolishBatchConfig) else 100
         return PolishBatchConfig(
             provider=provider,
             api_key=str(polish_config.api_key or ""),

@@ -288,6 +288,7 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
         endpoint_profiles = context.runtime.book_manager.list_endpoint_profiles()
         connection_names = {profile.name for profile in endpoint_profiles}
         assert "recommended-Gemini 2.5 Pro" in connection_names
+        assert "recommended-Gemini 3.1 Pro" in connection_names
         assert "recommended-Gemini 3 Pro Image Preview" in connection_names
         assert "recommended-DeepSeek Chat" in connection_names
         assert "recommended-DeepSeek Reasoner" in connection_names
@@ -300,7 +301,10 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
         assert created_profile.is_default is True
         assert created_profile.config["translation_target_language"] == "Japanese"
         assert created_profile.config["glossary_config"]["kwargs"] == {"reasoning_effort": "low"}
-        assert created_profile.config["translator_config"]["kwargs"] == {"reasoning_effort": "low"}
+        assert created_profile.config["translator_config"]["model"] == "gemini-3.1-flash"
+        assert created_profile.config["translator_config"]["kwargs"] == {"reasoning_effort": "none"}
+        assert created_profile.config["polish_config"]["model"] == "gemini-3.1-pro"
+        assert created_profile.config["polish_config"]["kwargs"] == {"reasoning_effort": "medium"}
         assert created_profile.config["ocr_config"]["kwargs"] == {"reasoning_effort": "none"}
         assert created_profile.config["image_reembedding_config"] == {
             "endpoint_profile": next(
@@ -311,10 +315,11 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
             "model": "gemini-3-pro-image-preview",
             "backend": "gemini",
         }
-        assert created_profile.config["manga_translator_config"]["kwargs"] == {"reasoning_effort": "low"}
+        assert created_profile.config["manga_translator_config"]["model"] == "gemini-3.1-flash"
+        assert created_profile.config["manga_translator_config"]["kwargs"] == {"reasoning_effort": "none"}
         assert created_profile.config["translator_batch_config"]["batch_size"] == 100
         assert (
-            next(profile for profile in endpoint_profiles if profile.name == "recommended-Gemini 2.5 Pro").api_key
+            next(profile for profile in endpoint_profiles if profile.name == "recommended-Gemini 3.1 Pro").api_key
             == "gkey"
         )
         assert (

@@ -4,14 +4,12 @@
 <context>
     <name></name>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="167"/>
         <source>Translator batch requires an API key when enabled.</source>
-        <translation>启用批量翻译器时必须提供 API 密钥。</translation>
+        <translation type="vanished">启用批量翻译器时必须提供 API 密钥。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="169"/>
         <source>Translator batch requires a model when enabled.</source>
-        <translation>启用批量翻译器时必须提供模型。</translation>
+        <translation type="vanished">启用批量翻译器时必须提供模型。</translation>
     </message>
     <message>
         <location filename="../features/workflow_profile_editor.py" line="172"/>
@@ -22,93 +20,93 @@
 <context>
     <name>AppSettingsPane</name>
     <message>
-        <location filename="../features/app_settings_pane.py" line="85"/>
-        <location filename="../features/app_settings_pane.py" line="112"/>
-        <location filename="../features/app_settings_pane.py" line="150"/>
-        <location filename="../features/app_settings_pane.py" line="152"/>
+        <location filename="../features/app_settings_pane.py" line="84"/>
+        <location filename="../features/app_settings_pane.py" line="111"/>
+        <location filename="../features/app_settings_pane.py" line="149"/>
+        <location filename="../features/app_settings_pane.py" line="151"/>
         <source>Name</source>
         <translation>名称</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="85"/>
-        <location filename="../features/app_settings_pane.py" line="150"/>
+        <location filename="../features/app_settings_pane.py" line="84"/>
+        <location filename="../features/app_settings_pane.py" line="149"/>
         <source>Provider</source>
         <translation>提供商</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="85"/>
-        <location filename="../features/app_settings_pane.py" line="150"/>
+        <location filename="../features/app_settings_pane.py" line="84"/>
+        <location filename="../features/app_settings_pane.py" line="149"/>
         <source>Status</source>
         <translation>状态</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="85"/>
-        <location filename="../features/app_settings_pane.py" line="150"/>
+        <location filename="../features/app_settings_pane.py" line="84"/>
+        <location filename="../features/app_settings_pane.py" line="149"/>
         <source>Model</source>
         <translation>模型</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="85"/>
-        <location filename="../features/app_settings_pane.py" line="150"/>
+        <location filename="../features/app_settings_pane.py" line="84"/>
+        <location filename="../features/app_settings_pane.py" line="149"/>
         <source>Base URL</source>
         <translation>基础 URL</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="112"/>
-        <location filename="../features/app_settings_pane.py" line="152"/>
+        <location filename="../features/app_settings_pane.py" line="111"/>
+        <location filename="../features/app_settings_pane.py" line="151"/>
         <source>Target language</source>
         <translation>目标语言</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="112"/>
-        <location filename="../features/app_settings_pane.py" line="152"/>
+        <location filename="../features/app_settings_pane.py" line="111"/>
+        <location filename="../features/app_settings_pane.py" line="151"/>
         <source>Default</source>
         <translation>默认</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="204"/>
+        <location filename="../features/app_settings_pane.py" line="203"/>
         <source>Add Profile</source>
         <translation>添加配置档案</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="207"/>
+        <location filename="../features/app_settings_pane.py" line="206"/>
         <source>Create a new reusable workflow profile from the current routes.</source>
         <translation>根据当前路由新建可复用的工作流配置档案。</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="211"/>
-        <location filename="../features/app_settings_pane.py" line="255"/>
+        <location filename="../features/app_settings_pane.py" line="210"/>
+        <location filename="../features/app_settings_pane.py" line="254"/>
         <source>Duplicate</source>
         <translation>复制</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="214"/>
+        <location filename="../features/app_settings_pane.py" line="213"/>
         <source>Copy the selected workflow profile so you can edit it safely.</source>
         <translation>复制所选工作流配置档案，以便安全编辑。</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="218"/>
+        <location filename="../features/app_settings_pane.py" line="217"/>
         <source>Set Default</source>
         <translation>设为默认</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="221"/>
+        <location filename="../features/app_settings_pane.py" line="220"/>
         <source>Make the selected workflow profile the default for new projects.</source>
         <translation>将所选工作流配置档案设为新项目的默认配置。</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="225"/>
-        <location filename="../features/app_settings_pane.py" line="262"/>
+        <location filename="../features/app_settings_pane.py" line="224"/>
+        <location filename="../features/app_settings_pane.py" line="261"/>
         <source>Delete</source>
         <translation>删除</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="228"/>
+        <location filename="../features/app_settings_pane.py" line="227"/>
         <source>Delete the selected workflow profiles.</source>
         <translation>删除所选工作流配置档案。</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="265"/>
+        <location filename="../features/app_settings_pane.py" line="264"/>
         <source>Delete the selected reusable connections.</source>
         <translation>删除所选可复用连接。</translation>
     </message>
@@ -117,32 +115,32 @@
         <translation type="vanished">删除所选工作流配置档案。</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="237"/>
+        <location filename="../features/app_settings_pane.py" line="236"/>
         <source>Run Setup Wizard</source>
         <translation>运行设置向导</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="239"/>
+        <location filename="../features/app_settings_pane.py" line="238"/>
         <source>Open Setup Wizard</source>
         <translation>打开设置向导</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="243"/>
+        <location filename="../features/app_settings_pane.py" line="242"/>
         <source>Open the setup wizard to configure reusable connections and shared workflow profiles.</source>
         <translation>打开设置向导，配置可复用连接和共享工作流配置档案。</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="248"/>
+        <location filename="../features/app_settings_pane.py" line="247"/>
         <source>Add Connection</source>
         <translation>添加连接</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="251"/>
+        <location filename="../features/app_settings_pane.py" line="250"/>
         <source>Create a reusable API connection for workflow steps.</source>
         <translation>为工作流步骤新建可复用的 API 连接。</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="258"/>
+        <location filename="../features/app_settings_pane.py" line="257"/>
         <source>Copy the selected connection so you can adjust it without changing the original.</source>
         <translation>复制所选连接，以便在不改动原连接的情况下进行调整。</translation>
     </message>
@@ -155,59 +153,59 @@
         <translation type="vanished">由设置向导管理。如需可编辑副本，请先复制。</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="308"/>
+        <location filename="../features/app_settings_pane.py" line="307"/>
         <source>Yes</source>
         <translation>是</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="403"/>
+        <location filename="../features/app_settings_pane.py" line="402"/>
         <source>Delete Connection</source>
         <translation>删除连接</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="403"/>
+        <location filename="../features/app_settings_pane.py" line="402"/>
         <source>Delete Connections</source>
         <translation>删除连接</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="406"/>
+        <location filename="../features/app_settings_pane.py" line="405"/>
         <source>Delete the selected connection? Existing profiles or projects may stop working until setup is fixed.</source>
         <translation>删除所选连接？现有配置档案或项目可能会停止工作，直到重新完成设置。</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="410"/>
+        <location filename="../features/app_settings_pane.py" line="409"/>
         <source>Delete the selected connections? Existing profiles or projects may stop working until setup is fixed.</source>
         <translation>删除所选连接？现有配置档案或项目可能会停止工作，直到修复设置为止。</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="455"/>
+        <location filename="../features/app_settings_pane.py" line="454"/>
         <source>Delete Workflow Profile</source>
         <translation>删除工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="455"/>
+        <location filename="../features/app_settings_pane.py" line="454"/>
         <source>Delete Workflow Profiles</source>
         <translation>删除工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="457"/>
+        <location filename="../features/app_settings_pane.py" line="456"/>
         <source>Delete the selected workflow profile? Projects using it will need setup first.</source>
         <translation>删除所选工作流配置档案？使用它的项目将需要先重新完成设置。</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="459"/>
+        <location filename="../features/app_settings_pane.py" line="458"/>
         <source>Delete the selected workflow profiles? Projects using them will need setup first.</source>
         <translation>删除所选工作流配置档案？使用它们的项目需要先重新设置。</translation>
     </message>
     <message>
-        <location filename="../features/app_settings_pane.py" line="466"/>
-        <location filename="../features/app_settings_pane.py" line="579"/>
+        <location filename="../features/app_settings_pane.py" line="465"/>
+        <location filename="../features/app_settings_pane.py" line="576"/>
         <source>App Setup</source>
         <translation>应用设置</translation>
     </message>
     <message>
         <location filename="../features/app_settings_pane.py" line="528"/>
-        <location filename="../features/app_settings_pane.py" line="552"/>
+        <location filename="../features/app_settings_pane.py" line="549"/>
         <source>New Workflow Profile</source>
         <translation>新建工作流配置档案</translation>
     </message>
@@ -231,114 +229,114 @@
 <context>
     <name>ConnectionDraftForm</name>
     <message>
-        <location filename="../features/app_setup_view.py" line="126"/>
+        <location filename="../features/app_setup_view.py" line="128"/>
         <source>Timeout</source>
         <translation>超时</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="127"/>
+        <location filename="../features/app_setup_view.py" line="129"/>
         <source>Max retries</source>
         <translation>最大重试次数</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="128"/>
+        <location filename="../features/app_setup_view.py" line="130"/>
         <source>Concurrency</source>
         <translation>并发数</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="133"/>
+        <location filename="../features/app_setup_view.py" line="135"/>
         <source>Total token limit</source>
         <translation>总令牌上限</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="138"/>
+        <location filename="../features/app_setup_view.py" line="140"/>
         <source>Input token limit</source>
         <translation>输入令牌上限</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="143"/>
+        <location filename="../features/app_setup_view.py" line="145"/>
         <source>Output token limit</source>
         <translation>输出令牌上限</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="158"/>
+        <location filename="../features/app_setup_view.py" line="160"/>
         <source>Enable</source>
         <translation>启用</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="188"/>
+        <location filename="../features/app_setup_view.py" line="190"/>
         <source>Paste API key</source>
         <translation>粘贴 API 密钥</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="190"/>
+        <location filename="../features/app_setup_view.py" line="192"/>
         <source>Connection name</source>
         <translation>连接名称</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="191"/>
+        <location filename="../features/app_setup_view.py" line="193"/>
         <source>Provider</source>
         <translation>提供商</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="192"/>
+        <location filename="../features/app_setup_view.py" line="194"/>
         <source>API key</source>
         <translation>API 密钥</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="195"/>
+        <location filename="../features/app_setup_view.py" line="197"/>
         <source>Advanced</source>
         <translation>高级</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="202"/>
-        <location filename="../features/app_setup_view.py" line="221"/>
+        <location filename="../features/app_setup_view.py" line="204"/>
+        <location filename="../features/app_setup_view.py" line="223"/>
         <source>Base URL</source>
         <translation>基础 URL</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="205"/>
-        <location filename="../features/app_setup_view.py" line="222"/>
+        <location filename="../features/app_setup_view.py" line="207"/>
+        <location filename="../features/app_setup_view.py" line="224"/>
         <source>Default model</source>
         <translation>默认模型</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="217"/>
+        <location filename="../features/app_setup_view.py" line="219"/>
         <source>Advanced matches the old endpoint-profile model: timeout, retries, concurrency, token limits, and custom JSON parameters.</source>
         <translation>高级设置沿用旧端点配置档案模型：超时、重试、并发、令牌限制以及自定义 JSON 参数。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="220"/>
+        <location filename="../features/app_setup_view.py" line="222"/>
         <source>Description</source>
         <translation>描述</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="223"/>
+        <location filename="../features/app_setup_view.py" line="225"/>
         <source>Temperature</source>
         <translation>温度</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="224"/>
+        <location filename="../features/app_setup_view.py" line="226"/>
         <source>Custom parameters</source>
         <translation>自定义参数</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="231"/>
+        <location filename="../features/app_setup_view.py" line="233"/>
         <source>Connection</source>
         <translation>连接</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="238"/>
+        <location filename="../features/app_setup_view.py" line="240"/>
         <source>Token limits and usage tracking apply to this connection profile only.</source>
         <translation>令牌限制和用量跟踪仅适用于此连接配置档案。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="243"/>
+        <location filename="../features/app_setup_view.py" line="245"/>
         <source>Token Meter</source>
         <translation>令牌计量</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="276"/>
+        <location filename="../features/app_setup_view.py" line="278"/>
         <source>Stored API key is hidden. Leave blank to keep it or paste a new key.</source>
         <translation>已保存的 API 密钥已隐藏。留空以保留现有密钥，或粘贴新的密钥。</translation>
     </message>
@@ -347,12 +345,12 @@
         <translation type="vanished">留空以保留当前密钥</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="332"/>
+        <location filename="../features/app_setup_view.py" line="334"/>
         <source>Connection name is required.</source>
         <translation>连接名称为必填项。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="334"/>
+        <location filename="../features/app_setup_view.py" line="336"/>
         <source>API key is required.</source>
         <translation>API 密钥为必填项。</translation>
     </message>
@@ -365,7 +363,7 @@
         <translation type="vanished">自定义参数必须是 JSON 对象。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="341"/>
+        <location filename="../features/app_setup_view.py" line="343"/>
         <source>Custom connections require base URL and default model.</source>
         <translation>自定义连接必须填写基础 URL 和默认模型。</translation>
     </message>
@@ -373,64 +371,64 @@
 <context>
     <name>ConnectionEditorDialog</name>
     <message>
-        <location filename="../features/app_setup_view.py" line="381"/>
+        <location filename="../features/app_setup_view.py" line="383"/>
         <source>Connection</source>
         <translation>连接</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="398"/>
+        <location filename="../features/app_setup_view.py" line="400"/>
         <source>Token usage</source>
         <translation>令牌用量</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="405"/>
+        <location filename="../features/app_setup_view.py" line="407"/>
         <source>Total</source>
         <translation>总计</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="406"/>
+        <location filename="../features/app_setup_view.py" line="408"/>
         <source>Input</source>
         <translation>输入</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="407"/>
+        <location filename="../features/app_setup_view.py" line="409"/>
         <source>  Cached input</source>
         <translation>  缓存输入</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="408"/>
+        <location filename="../features/app_setup_view.py" line="410"/>
         <source>  Uncached input</source>
         <translation>  未缓存输入</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="409"/>
+        <location filename="../features/app_setup_view.py" line="411"/>
         <source>Output</source>
         <translation>输出</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="410"/>
+        <location filename="../features/app_setup_view.py" line="412"/>
         <source>Reset Usage</source>
         <translation>重置用量</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="418"/>
+        <location filename="../features/app_setup_view.py" line="420"/>
         <source>Test</source>
         <translation>测试</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="437"/>
-        <location filename="../features/app_setup_view.py" line="446"/>
+        <location filename="../features/app_setup_view.py" line="439"/>
+        <location filename="../features/app_setup_view.py" line="448"/>
         <source>Missing Information</source>
         <translation>缺少信息</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="437"/>
-        <location filename="../features/app_setup_view.py" line="446"/>
+        <location filename="../features/app_setup_view.py" line="439"/>
+        <location filename="../features/app_setup_view.py" line="448"/>
         <source>Please complete the form.</source>
         <translation>请填写完整表单。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="503"/>
+        <location filename="../features/app_setup_view.py" line="505"/>
         <source>Connection Test</source>
         <translation>连接测试</translation>
     </message>
@@ -1158,13 +1156,13 @@
         <translation>这些工具仅适用于当前文档。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="551"/>
-        <location filename="../features/document_workspace_view.py" line="604"/>
+        <location filename="../features/document_workspace_view.py" line="695"/>
+        <location filename="../features/document_workspace_view.py" line="748"/>
         <source>Document</source>
         <translation>文档</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="559"/>
+        <location filename="../features/document_workspace_view.py" line="703"/>
         <source>%1</source>
         <translation>%1</translation>
     </message>
@@ -2143,126 +2141,161 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>SetupWizardDialog</name>
     <message>
-        <location filename="../features/app_setup_view.py" line="533"/>
+        <location filename="../features/app_setup_view.py" line="535"/>
         <source>Setup Wizard</source>
         <translation>设置向导</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="548"/>
+        <location filename="../features/app_setup_view.py" line="550"/>
         <source>Choose providers and paste API keys. The wizard will test capabilities and create a concrete shared workflow profile. Use Connections for custom providers and advanced connection settings.</source>
         <translation>选择提供商并粘贴 API 密钥。向导会测试能力并创建一个具体的共享工作流配置档案。自定义提供商和高级连接设置请在“连接”中完成。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="565"/>
+        <location filename="../features/app_setup_view.py" line="567"/>
         <source>Back</source>
         <translation>返回</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="566"/>
+        <location filename="../features/app_setup_view.py" line="568"/>
         <source>Next</source>
         <translation>下一个</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="567"/>
+        <location filename="../features/app_setup_view.py" line="569"/>
         <source>Save Setup</source>
         <translation>保存设置</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="590"/>
+        <location filename="../features/app_setup_view.py" line="596"/>
         <source>Good for image text reading and image editing.</source>
         <translation>适合图片文字识别和图片编辑。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="592"/>
+        <location filename="../features/app_setup_view.py" line="598"/>
         <source>General-purpose text and image-capable provider.</source>
         <translation>通用型提供商，支持文本处理和图像能力。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="595"/>
+        <location filename="../features/app_setup_view.py" line="601"/>
         <source>Low-cost text translation and context building.</source>
         <translation>适合低成本文本翻译和上下文构建。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="597"/>
+        <location filename="../features/app_setup_view.py" line="603"/>
         <source>Text translation and image understanding.</source>
         <translation>适合文本翻译和图像理解。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="607"/>
+        <location filename="../features/app_setup_view.py" line="616"/>
         <source>Choose providers</source>
         <translation>选择提供商</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="616"/>
+        <location filename="../features/app_setup_view.py" line="625"/>
         <source>Use this provider</source>
         <translation>使用此提供商</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="622"/>
+        <location filename="../features/app_setup_view.py" line="631"/>
         <source>Paste API key</source>
         <translation>粘贴 API 密钥</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="629"/>
+        <location filename="../features/app_setup_view.py" line="638"/>
         <source>API key</source>
         <translation>API 密钥</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="636"/>
+        <location filename="../features/app_setup_view.py" line="645"/>
         <source>Review workflow profile</source>
         <translation>检查工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="640"/>
+        <location filename="../features/app_setup_view.py" line="649"/>
         <source>Workflow profile</source>
         <translation>工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="664"/>
+        <location filename="../features/app_setup_view.py" line="658"/>
+        <source>Budget</source>
+        <translation>预算</translation>
+    </message>
+    <message>
+        <location filename="../features/app_setup_view.py" line="659"/>
+        <source>Balanced</source>
+        <translation>平衡</translation>
+    </message>
+    <message>
+        <location filename="../features/app_setup_view.py" line="660"/>
+        <source>Quality</source>
+        <translation>质量</translation>
+    </message>
+    <message>
+        <location filename="../features/app_setup_view.py" line="682"/>
         <source>Profile name</source>
         <translation>配置档案名称</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="665"/>
+        <location filename="../features/app_setup_view.py" line="683"/>
         <source>Target language</source>
         <translation>目标语言</translation>
+    </message>
+    <message>
+        <location filename="../features/app_setup_view.py" line="684"/>
+        <source>Mode</source>
+        <translation>模式</translation>
     </message>
     <message>
         <source>No supported workflow capabilities detected.</source>
         <translation type="vanished">未检测到受支持的工作流能力。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="667"/>
+        <location filename="../features/app_setup_view.py" line="686"/>
         <source>Recommended workflow profile</source>
         <translation>推荐工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="673"/>
+        <location filename="../features/app_setup_view.py" line="692"/>
         <source>This will be saved as a shared workflow profile and can be reused across projects.</source>
         <translation>这将保存为共享工作流配置档案，可在多个项目中复用。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="775"/>
+        <location filename="../features/app_setup_view.py" line="722"/>
+        <source>Translator batch size</source>
+        <translation>翻译批量大小</translation>
+    </message>
+    <message>
+        <location filename="../features/app_setup_view.py" line="723"/>
+        <source>Polish batch size</source>
+        <translation>润色批量大小</translation>
+    </message>
+    <message>
+        <location filename="../features/app_setup_view.py" line="727"/>
+        <source>Async batch inherits connection, model, and most request settings from the regular Translator and Polish steps. Custom parameters might not work as expected. Not all models are supported. Please check your provider&apos;s documentation.</source>
+        <translation>异步批处理会继承常规“翻译”和“润色”步骤的连接、模型以及大多数请求设置。自定义参数可能无法按预期工作。并非所有模型都受支持。请查阅提供商文档。</translation>
+    </message>
+    <message>
+        <location filename="../features/app_setup_view.py" line="821"/>
         <source>API key is required for every selected provider.</source>
         <translation>每个已选提供商都必须填写 API 密钥。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="788"/>
+        <location filename="../features/app_setup_view.py" line="834"/>
         <source>Review the recommended workflow profile before saving setup.</source>
         <translation>请先检查推荐的工作流配置档案再保存设置。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="795"/>
+        <location filename="../features/app_setup_view.py" line="841"/>
         <source>Workflow profile name is required.</source>
         <translation>工作流配置档案名称为必填项。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="802"/>
+        <location filename="../features/app_setup_view.py" line="848"/>
         <source>Target language is required.</source>
         <translation>目标语言为必填项。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="677"/>
+        <location filename="../features/app_setup_view.py" line="696"/>
         <source>Connection</source>
         <translation>连接</translation>
     </message>
@@ -2271,34 +2304,34 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation type="obsolete">翻译</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="677"/>
+        <location filename="../features/app_setup_view.py" line="696"/>
         <source>Step</source>
         <translation>步骤</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="677"/>
+        <location filename="../features/app_setup_view.py" line="696"/>
         <source>Model</source>
         <translation>模型</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="765"/>
+        <location filename="../features/app_setup_view.py" line="811"/>
         <source>No Providers Selected</source>
         <translation>未选择提供商</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="765"/>
+        <location filename="../features/app_setup_view.py" line="811"/>
         <source>Select at least one provider to continue.</source>
         <translation>请至少选择一个提供商后再继续。</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="774"/>
-        <location filename="../features/app_setup_view.py" line="794"/>
-        <location filename="../features/app_setup_view.py" line="801"/>
+        <location filename="../features/app_setup_view.py" line="820"/>
+        <location filename="../features/app_setup_view.py" line="840"/>
+        <location filename="../features/app_setup_view.py" line="847"/>
         <source>Missing Information</source>
         <translation>缺少信息</translation>
     </message>
     <message>
-        <location filename="../features/app_setup_view.py" line="787"/>
+        <location filename="../features/app_setup_view.py" line="833"/>
         <source>Wizard Incomplete</source>
         <translation>向导未完成</translation>
     </message>
@@ -2306,150 +2339,155 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>StepAdvancedConfigDialog</name>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="108"/>
+        <location filename="../features/workflow_profile_editor.py" line="114"/>
         <source>Extraction settings control how aggressively terms are discovered.</source>
         <translation>提取设置控制术语发现的积极程度。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="111"/>
+        <location filename="../features/workflow_profile_editor.py" line="117"/>
         <source>Translator settings tune chunk sizing and request budget.</source>
         <translation>翻译器设置用于调整分块大小和请求预算。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="114"/>
+        <location filename="../features/workflow_profile_editor.py" line="120"/>
+        <source>Polish settings control the separate refinement pass after translation.</source>
+        <translation>润色设置控制翻译后的独立精修步骤。</translation>
+    </message>
+    <message>
+        <location filename="../features/workflow_profile_editor.py" line="123"/>
         <source>OCR settings control image compression and artifact cleanup.</source>
         <translation>OCR 设置控制图像压缩和伪影清理。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="117"/>
+        <location filename="../features/workflow_profile_editor.py" line="126"/>
         <source>Batch settings configure optional async translation jobs.</source>
         <translation>批处理设置用于配置可选的异步翻译任务。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="122"/>
+        <location filename="../features/workflow_profile_editor.py" line="131"/>
         <source>Edit advanced settings for this workflow step.</source>
         <translation>编辑此工作流步骤的高级设置。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="197"/>
+        <location filename="../features/workflow_profile_editor.py" line="205"/>
         <source>Max gleaning</source>
         <translation>最大补提取次数</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="205"/>
+        <location filename="../features/workflow_profile_editor.py" line="213"/>
         <source>Max term name length</source>
         <translation>术语名称最大长度</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="215"/>
+        <location filename="../features/workflow_profile_editor.py" line="223"/>
         <source>Strip EPUB ruby annotations</source>
         <translation>移除 EPUB 注音标注</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="221"/>
+        <location filename="../features/workflow_profile_editor.py" line="229"/>
         <source>Max tokens per call</source>
         <translation>每次调用的最大令牌数</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="229"/>
+        <location filename="../features/workflow_profile_editor.py" line="237"/>
         <source>Chunk size</source>
         <translation>分块大小</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="239"/>
+        <location filename="../features/workflow_profile_editor.py" line="247"/>
         <source>OCR DPI</source>
         <translation>OCR DPI</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="247"/>
+        <location filename="../features/workflow_profile_editor.py" line="255"/>
         <source>Strip artifacts</source>
         <translation>移除伪影</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="294"/>
         <source>Auto</source>
-        <translation>自动</translation>
+        <translation type="vanished">自动</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="295"/>
         <source>Off</source>
-        <translation>关闭</translation>
+        <translation type="vanished">关闭</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="296"/>
-        <location filename="../features/workflow_profile_editor.py" line="303"/>
+        <location filename="../features/workflow_profile_editor.py" line="304"/>
         <source>Low</source>
         <translation>低</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="297"/>
-        <location filename="../features/workflow_profile_editor.py" line="304"/>
+        <location filename="../features/workflow_profile_editor.py" line="305"/>
         <source>Medium</source>
         <translation>中</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="298"/>
-        <location filename="../features/workflow_profile_editor.py" line="305"/>
+        <location filename="../features/workflow_profile_editor.py" line="306"/>
         <source>High</source>
         <translation>高</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="301"/>
+        <location filename="../features/workflow_profile_editor.py" line="302"/>
         <source>Inherit from connection</source>
         <translation>沿用连接设置</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="302"/>
+        <location filename="../features/workflow_profile_editor.py" line="303"/>
         <source>None</source>
         <translation>无</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="314"/>
+        <location filename="../features/workflow_profile_editor.py" line="321"/>
         <source>Step Settings</source>
         <translation>步骤设置</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="359"/>
+        <location filename="../features/workflow_profile_editor.py" line="363"/>
         <source>Invalid Settings</source>
         <translation>设置无效</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="392"/>
+        <location filename="../features/workflow_profile_editor.py" line="396"/>
         <source>Override</source>
         <translation>覆盖</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="452"/>
+        <location filename="../features/workflow_profile_editor.py" line="463"/>
+        <source>Async batch inherits connection, model, and most request settings from the regular Translator and Polish steps. Custom parameters might not work as expected. Not all models are supported. Please check your provider&apos;s documentation.</source>
+        <translation>异步批处理会继承常规“翻译”和“润色”步骤的连接、模型以及大多数请求设置。自定义参数可能无法按预期工作。并非所有模型都受支持。请查阅提供商文档。</translation>
+    </message>
+    <message>
+        <location filename="../features/workflow_profile_editor.py" line="470"/>
         <source>Connection overrides apply only to this workflow step and override the selected connection.</source>
         <translation>连接覆盖项仅对当前工作流步骤生效，并会覆盖所选连接的设置。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="255"/>
+        <location filename="../features/workflow_profile_editor.py" line="263"/>
         <source>Temperature</source>
         <translation>温度</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="265"/>
+        <location filename="../features/workflow_profile_editor.py" line="273"/>
         <source>Timeout</source>
         <translation>超时</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="275"/>
+        <location filename="../features/workflow_profile_editor.py" line="283"/>
         <source>Max retries</source>
         <translation>最大重试次数</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="284"/>
+        <location filename="../features/workflow_profile_editor.py" line="292"/>
         <source>Concurrency</source>
         <translation>并发数</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="486"/>
+        <location filename="../features/workflow_profile_editor.py" line="504"/>
         <source>Reasoning effort</source>
         <translation>推理强度</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="493"/>
+        <location filename="../features/workflow_profile_editor.py" line="511"/>
         <source>Custom parameters</source>
         <translation>自定义参数</translation>
     </message>
@@ -2466,34 +2504,29 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation type="vanished">此步骤除连接和模型外没有其他附加设置。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="515"/>
         <source>Disabled</source>
-        <translation>禁用</translation>
+        <translation type="vanished">禁用</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="516"/>
         <source>Gemini AI Studio</source>
-        <translation>Gemini AI Studio</translation>
+        <translation type="vanished">Gemini AI Studio</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="527"/>
         <source>Provider</source>
-        <translation>提供商</translation>
+        <translation type="vanished">提供商</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="528"/>
         <source>API key</source>
-        <translation>API 密钥</translation>
+        <translation type="vanished">API 密钥</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="529"/>
+        <location filename="../features/workflow_profile_editor.py" line="459"/>
         <source>Batch size</source>
         <translation>批次大小</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="530"/>
         <source>Thinking mode</source>
-        <translation>思考模式</translation>
+        <translation type="vanished">思考模式</translation>
     </message>
 </context>
 <context>
@@ -3465,30 +3498,56 @@ All completed results are already saved and won&apos;t be lost.</source>
     </message>
 </context>
 <context>
+    <name>TranslateAndExportDialog</name>
+    <message>
+        <location filename="../features/document_workspace_view.py" line="412"/>
+        <location filename="../features/document_workspace_view.py" line="470"/>
+        <location filename="../features/document_workspace_view.py" line="501"/>
+        <location filename="../features/document_workspace_view.py" line="504"/>
+        <source>Translate and Export</source>
+        <translation>翻译并导出</translation>
+    </message>
+    <message>
+        <location filename="../features/document_workspace_view.py" line="418"/>
+        <source>Translate and export %1</source>
+        <translation>翻译并导出 %1</translation>
+    </message>
+    <message>
+        <location filename="../features/document_workspace_view.py" line="434"/>
+        <source>Use async batch translation</source>
+        <translation>使用异步批量翻译</translation>
+    </message>
+    <message>
+        <location filename="../features/document_workspace_view.py" line="442"/>
+        <source>Use reembedding</source>
+        <translation>使用重嵌入</translation>
+    </message>
+</context>
+<context>
     <name>WorkExportDialog</name>
     <message>
-        <location filename="../features/document_workspace_view.py" line="314"/>
-        <location filename="../features/document_workspace_view.py" line="335"/>
+        <location filename="../features/document_workspace_view.py" line="340"/>
+        <location filename="../features/document_workspace_view.py" line="361"/>
         <source>Export</source>
         <translation>导出</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="321"/>
+        <location filename="../features/document_workspace_view.py" line="347"/>
         <source>Export %1</source>
         <translation>导出 %1</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="323"/>
+        <location filename="../features/document_workspace_view.py" line="349"/>
         <source>Export selected documents</source>
         <translation>导出所选文档</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="362"/>
+        <location filename="../features/document_workspace_view.py" line="388"/>
         <source>Export Failed</source>
         <translation>导出失败</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="366"/>
+        <location filename="../features/document_workspace_view.py" line="392"/>
         <source>Export Complete</source>
         <translation>导出完成</translation>
     </message>
@@ -3699,48 +3758,48 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>WorkflowProfileEditorDialog</name>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1060"/>
+        <location filename="../features/workflow_profile_editor.py" line="998"/>
         <source>Workflow Profile</source>
         <translation>工作流配置档案</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1084"/>
+        <location filename="../features/workflow_profile_editor.py" line="1022"/>
         <source>A workflow profile is a user-facing wrapper over the existing step-based config. Edit connection and model choices here.</source>
         <translation>工作流配置档案是对现有分步骤配置的用户界面封装。可在此编辑连接和模型选择。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1089"/>
+        <location filename="../features/workflow_profile_editor.py" line="1027"/>
         <source>General</source>
         <translation>常规</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1111"/>
+        <location filename="../features/workflow_profile_editor.py" line="1049"/>
         <source>Profile name</source>
         <translation>配置档案名称</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1112"/>
+        <location filename="../features/workflow_profile_editor.py" line="1050"/>
         <source>Target language</source>
         <translation>目标语言</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1118"/>
+        <location filename="../features/workflow_profile_editor.py" line="1056"/>
         <source>Workflow Routing</source>
         <translation>工作流路由</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1122"/>
+        <location filename="../features/workflow_profile_editor.py" line="1060"/>
         <source>Use the Advanced column to edit step-specific settings.</source>
         <translation>使用“高级”列编辑步骤专用设置。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1162"/>
-        <location filename="../features/workflow_profile_editor.py" line="1168"/>
+        <location filename="../features/workflow_profile_editor.py" line="1100"/>
+        <location filename="../features/workflow_profile_editor.py" line="1106"/>
         <source>Missing Information</source>
         <translation>缺少信息</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="1162"/>
+        <location filename="../features/workflow_profile_editor.py" line="1100"/>
         <source>Target language is required.</source>
         <translation>目标语言为必填项。</translation>
     </message>
@@ -3756,129 +3815,137 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>WorkflowRoutesEditor</name>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="625"/>
+        <location filename="../features/workflow_profile_editor.py" line="606"/>
         <source>Step</source>
         <translation>步骤</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="626"/>
+        <location filename="../features/workflow_profile_editor.py" line="607"/>
         <source>Connection</source>
         <translation>连接</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="627"/>
+        <location filename="../features/workflow_profile_editor.py" line="608"/>
         <source>Model</source>
         <translation>模型</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="628"/>
-        <location filename="../features/workflow_profile_editor.py" line="837"/>
+        <location filename="../features/workflow_profile_editor.py" line="609"/>
+        <location filename="../features/workflow_profile_editor.py" line="756"/>
         <source>Advanced</source>
         <translation>高级</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="670"/>
-        <location filename="../features/workflow_profile_editor.py" line="856"/>
         <source>Direct batch config</source>
-        <translation>直接批处理配置</translation>
+        <translation type="vanished">直接批处理配置</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="781"/>
+        <location filename="../features/workflow_profile_editor.py" line="700"/>
         <source>Select connection</source>
         <translation>选择连接</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="103"/>
+        <location filename="../features/workflow_profile_editor.py" line="109"/>
         <source>Connection and model settings for this workflow step.</source>
         <translation>此工作流步骤的连接和模型设置。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="62"/>
+        <location filename="../features/workflow_profile_editor.py" line="64"/>
         <source>Find candidate glossary terms from source text.</source>
         <translation>从源文本中查找候选术语。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="65"/>
+        <location filename="../features/workflow_profile_editor.py" line="67"/>
         <source>Summarize nearby context so later steps can work with less text.</source>
         <translation>总结邻近上下文，以便后续步骤用更少文本工作。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="68"/>
+        <location filename="../features/workflow_profile_editor.py" line="70"/>
         <source>Translate glossary terms before full document translation.</source>
         <translation>在全文翻译之前先翻译术语。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="71"/>
+        <location filename="../features/workflow_profile_editor.py" line="73"/>
         <source>Translate the main document text into the target language.</source>
         <translation>将文档正文翻译为目标语言。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="74"/>
+        <location filename="../features/workflow_profile_editor.py" line="76"/>
+        <source>Polish translated text in a separate refinement pass.</source>
+        <translation>在独立的精修步骤中润色译文。</translation>
+    </message>
+    <message>
+        <location filename="../features/workflow_profile_editor.py" line="79"/>
         <source>Review glossary candidates and mark likely noise or confirmed terms.</source>
         <translation>审校术语候选，并标记可能的噪声项或已确认术语。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="77"/>
+        <location filename="../features/workflow_profile_editor.py" line="82"/>
         <source>Extract editable text from scanned or image-based pages.</source>
         <translation>从扫描页或图片页中提取可编辑文本。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="80"/>
+        <location filename="../features/workflow_profile_editor.py" line="85"/>
         <source>Put translated text back into document images.</source>
         <translation>将翻译后的文本回填到文档图片中。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="83"/>
+        <location filename="../features/workflow_profile_editor.py" line="88"/>
         <source>Translate manga pages with image-aware text handling.</source>
         <translation>使用图像感知文本处理来翻译漫画页面。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="86"/>
+        <location filename="../features/workflow_profile_editor.py" line="91"/>
         <source>Submit document translation through the provider&apos;s asynchronous batch API.</source>
         <translation>通过提供商的异步批处理 API 提交文档翻译。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="92"/>
+        <location filename="../features/workflow_profile_editor.py" line="97"/>
         <source>Extractor</source>
         <translation>提取器</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="93"/>
+        <location filename="../features/workflow_profile_editor.py" line="98"/>
         <source>Summarizer</source>
         <translation>摘要器</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="94"/>
+        <location filename="../features/workflow_profile_editor.py" line="99"/>
         <source>Glossary translator</source>
         <translation>术语翻译器</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="95"/>
+        <location filename="../features/workflow_profile_editor.py" line="100"/>
         <source>Translator</source>
         <translation>翻译器</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="96"/>
+        <location filename="../features/workflow_profile_editor.py" line="101"/>
+        <source>Polish</source>
+        <translation>润色</translation>
+    </message>
+    <message>
+        <location filename="../features/workflow_profile_editor.py" line="102"/>
         <source>Reviewer</source>
         <translation>审校器</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="97"/>
+        <location filename="../features/workflow_profile_editor.py" line="103"/>
         <source>OCR</source>
         <translation>OCR</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="98"/>
+        <location filename="../features/workflow_profile_editor.py" line="104"/>
         <source>Image reembedding</source>
         <translation>图片重嵌入</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="99"/>
+        <location filename="../features/workflow_profile_editor.py" line="105"/>
         <source>Manga translator</source>
         <translation>漫画翻译器</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="100"/>
+        <location filename="../features/workflow_profile_editor.py" line="106"/>
         <source>Translator batch</source>
         <translation>批量翻译器</translation>
     </message>
@@ -3951,22 +4018,22 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation type="vanished">导出此文档</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="431"/>
+        <location filename="../features/document_workspace_view.py" line="575"/>
         <source>Export</source>
         <translation>导出</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="463"/>
+        <location filename="../features/document_workspace_view.py" line="607"/>
         <source>Export Failed</source>
         <translation>导出失败</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="483"/>
+        <location filename="../features/document_workspace_view.py" line="627"/>
         <source>Export this document using the selected format and options.</source>
         <translation>使用所选格式和选项导出此文档。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="487"/>
+        <location filename="../features/document_workspace_view.py" line="631"/>
         <source>Choose a valid format and output path before exporting this document.</source>
         <translation>导出此文档前，请先选择有效的格式和输出路径。</translation>
     </message>
@@ -3974,85 +4041,85 @@ All completed results are already saved and won&apos;t be lost.</source>
 <context>
     <name>_ExportControls</name>
     <message>
-        <location filename="../features/document_workspace_view.py" line="87"/>
+        <location filename="../features/document_workspace_view.py" line="99"/>
         <source>Format</source>
         <translation>格式</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="95"/>
+        <location filename="../features/document_workspace_view.py" line="107"/>
         <source>Browse...</source>
         <translation>浏览...</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="98"/>
+        <location filename="../features/document_workspace_view.py" line="110"/>
         <source>Output path</source>
         <translation>输出路径</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="101"/>
+        <location filename="../features/document_workspace_view.py" line="113"/>
         <source>Preserve folder structure</source>
         <translation>保留文件夹结构</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="106"/>
+        <location filename="../features/document_workspace_view.py" line="118"/>
         <source>Allow fallback to original content for untranslated chunks</source>
         <translation>允许未翻译分块回退为原始内容</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="111"/>
+        <location filename="../features/document_workspace_view.py" line="123"/>
         <source>Use original image</source>
         <translation>使用原始图片</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="117"/>
+        <location filename="../features/document_workspace_view.py" line="129"/>
         <source>Convert vertical Japanese EPUB to horizontal left-to-right</source>
         <translation>将纵排日文 EPUB 转为横排从左到右</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="121"/>
+        <location filename="../features/document_workspace_view.py" line="133"/>
         <source>EPUB only. Forces horizontal left-to-right layout and scrollbar direction in the exported file.</source>
         <translation>仅适用于 EPUB。会在导出的文件中强制使用横排从左到右布局，并同步调整滚动方向。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="153"/>
+        <location filename="../features/document_workspace_view.py" line="168"/>
         <source>Preserve folder structure is not supported for this export.</source>
         <translation>此导出不支持保留文件夹结构。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="162"/>
+        <location filename="../features/document_workspace_view.py" line="179"/>
         <source>Fallback to original content is only needed when translation is incomplete.</source>
         <translation>仅在翻译不完整时才需要回退到原始内容。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="204"/>
+        <location filename="../features/document_workspace_view.py" line="226"/>
         <source>Output path is required.</source>
         <translation>输出路径为必填项。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="277"/>
+        <location filename="../features/document_workspace_view.py" line="303"/>
         <source>Select Output Folder</source>
         <translation>选择输出文件夹</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="204"/>
-        <location filename="../features/document_workspace_view.py" line="208"/>
-        <location filename="../features/document_workspace_view.py" line="283"/>
+        <location filename="../features/document_workspace_view.py" line="226"/>
+        <location filename="../features/document_workspace_view.py" line="230"/>
+        <location filename="../features/document_workspace_view.py" line="309"/>
         <source>Missing Information</source>
         <translation>缺少信息</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="208"/>
-        <location filename="../features/document_workspace_view.py" line="283"/>
+        <location filename="../features/document_workspace_view.py" line="230"/>
+        <location filename="../features/document_workspace_view.py" line="309"/>
         <source>Export format is required.</source>
         <translation>导出格式为必填项。</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="288"/>
+        <location filename="../features/document_workspace_view.py" line="314"/>
         <source>Save Export File</source>
         <translation>保存导出文件</translation>
     </message>
     <message>
-        <location filename="../features/document_workspace_view.py" line="290"/>
+        <location filename="../features/document_workspace_view.py" line="316"/>
         <source>%1 Files (*.%2)</source>
         <translation>%1 文件 (*.%2)</translation>
     </message>

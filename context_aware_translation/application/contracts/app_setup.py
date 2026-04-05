@@ -25,6 +25,12 @@ class WorkflowProfileKind(StrEnum):
     PROJECT_SPECIFIC = "project_specific"
 
 
+class WizardRecommendationMode(StrEnum):
+    BUDGET = "budget"
+    BALANCED = "balanced"
+    QUALITY = "quality"
+
+
 class WorkflowStepId(StrEnum):
     EXTRACTOR = "extractor"
     SUMMARIZER = "summarizer"
@@ -129,6 +135,7 @@ class SetupWizardRequest(ContractModel):
     connections: list[ConnectionDraft]
     profile_name: str | None = None
     target_language: str | None = None
+    recommendation_mode: WizardRecommendationMode = WizardRecommendationMode.BALANCED
     translator_batch_size: int | None = None
     polish_batch_size: int | None = None
 
@@ -141,6 +148,7 @@ class SetupWizardState(ContractModel):
     recommendation: WorkflowProfileDetail | None = None
     profile_name: str | None = None
     target_language: str = "English"
+    recommendation_mode: WizardRecommendationMode = WizardRecommendationMode.BALANCED
     translator_batch_size: int = 100
     polish_batch_size: int = 100
 

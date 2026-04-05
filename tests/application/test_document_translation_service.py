@@ -214,6 +214,37 @@ def test_get_translation_hides_batch_for_non_batch_capable_translator(tmp_path) 
         context.close()
 
 
+def test_get_translation_hides_batch_when_batch_preflight_rejects_submission(tmp_path) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path, provider=ProviderKind.GEMINI)
+    try:
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Text Doc", target_language="English")
+        )
+        project_id = created.project.project_id
+        document_id = _create_text_document(context, project_id)
+
+        service = context.services.document
+        service.get_terms = MagicMock(return_value=_empty_terms(project_id))  # type: ignore[method-assign]
+        context.runtime.task_engine.has_active_claims = MagicMock(return_value=False)
+
+        def _preflight(task_type: str, *_args, **_kwargs):
+            if task_type == "batch_translation":
+                return Decision(allowed=False, reason="Batch settings are incomplete.")
+            return Decision(allowed=True)
+
+        context.runtime.task_engine.preflight = MagicMock(side_effect=_preflight)
+
+        state = service.get_translation(project_id, document_id)
+
+        assert state.supports_batch is False
+        assert state.batch_action.enabled is False
+        assert state.batch_action.blocker is not None
+        assert "Batch settings are incomplete." in state.batch_action.blocker.message
+    finally:
+        context.close()
+
+
 def test_get_translation_hides_batch_when_polish_provider_differs_and_polish_is_enabled(tmp_path) -> None:
     _ensure_qt_app()
     context = _build_configured_context(tmp_path, provider=ProviderKind.GEMINI)

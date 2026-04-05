@@ -334,7 +334,7 @@ def test_project_settings_pane_preserves_custom_draft_across_profile_switches():
         view.cleanup()
 
 
-def test_project_settings_pane_hides_legacy_batch_route_from_custom_editor():
+def test_project_settings_pane_hides_legacy_batch_route_without_promoting_batch_size():
     from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
 
     base_state = _make_state(project_specific=True)
@@ -365,7 +365,7 @@ def test_project_settings_pane_hides_legacy_batch_route_from_custom_editor():
         assert view.viewmodel.show_custom_profile is True
         assert view.routes_editor.rowCount() == len(base_state.project_profile.routes)
         translator_row = next(row for row in view.routes_editor.rows if row.route.step_id is WorkflowStepId.TRANSLATOR)
-        assert translator_row.route.step_config["batch_size"] == 100
+        assert "batch_size" not in translator_row.route.step_config
     finally:
         view.cleanup()
 

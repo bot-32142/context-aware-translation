@@ -14,6 +14,7 @@ from context_aware_translation.application.contracts.app_setup import (
     ConnectionTestResult,
     ProviderCard,
     SetupWizardState,
+    WizardRecommendationMode,
     WorkflowProfileDetail,
     WorkflowProfileKind,
     WorkflowStepId,
@@ -183,8 +184,14 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
     assert any(call[0] == "preview_setup_wizard" for call in service.calls)
     assert dialog._profile_name_edit is not None
     assert dialog._target_language_combo is not None
+    assert dialog._recommendation_mode_combo is not None
     assert dialog._translator_batch_size_spin is not None
     assert dialog._polish_batch_size_spin is not None
+    dialog._recommendation_mode_combo.setCurrentIndex(
+        dialog._recommendation_mode_combo.findData(WizardRecommendationMode.QUALITY.value)
+    )
+    QApplication.processEvents()
+    assert dialog._recommendation_mode_combo is not None
     dialog._profile_name_edit.setText("Team Default")
     dialog._target_language_combo.setEditText("Japanese")
     dialog._translator_batch_size_spin.setValue(250)
@@ -193,9 +200,12 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
     dialog._finish()
 
     assert any(call[0] == "run_setup_wizard" for call in service.calls)
+    preview_request = [call[1] for call in service.calls if call[0] == "preview_setup_wizard"][-1]
     run_request = next(call[1] for call in service.calls if call[0] == "run_setup_wizard")
+    assert preview_request.recommendation_mode == WizardRecommendationMode.QUALITY
     assert run_request.profile_name == "Team Default"
     assert run_request.target_language == "Japanese"
+    assert run_request.recommendation_mode == WizardRecommendationMode.QUALITY
     assert run_request.translator_batch_size == 250
     assert run_request.polish_batch_size == 125
 

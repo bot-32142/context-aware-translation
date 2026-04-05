@@ -5,6 +5,7 @@ from context_aware_translation.application.contracts.app_setup import (
     ConnectionSummary,
     ProviderCard,
     SetupWizardState,
+    WizardRecommendationMode,
     WorkflowProfileDetail,
     WorkflowProfileKind,
     WorkflowStepId,
@@ -251,6 +252,7 @@ def test_recommended_workflow_profile_uses_ranked_step_rules() -> None:
         ],
         name="Wizard Profile",
         target_language="English",
+        recommendation_mode=WizardRecommendationMode.BALANCED,
     )
 
     route_map = {route.step_id: route for route in detail.routes}
@@ -259,11 +261,11 @@ def test_recommended_workflow_profile_uses_ranked_step_rules() -> None:
     assert route_map[WorkflowStepId.SUMMARIZER].model == "deepseek-chat"
     assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].model == "gemini-2.5-flash"
     assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
-    assert route_map[WorkflowStepId.TRANSLATOR].model == "gemini-2.5-pro"
-    assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
+    assert route_map[WorkflowStepId.TRANSLATOR].model == "gemini-3.1-flash"
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "none"}
     assert route_map[WorkflowStepId.TRANSLATOR].step_config["batch_size"] == 100
-    assert route_map[WorkflowStepId.POLISH].model == "gemini-2.5-pro"
-    assert route_map[WorkflowStepId.POLISH].step_config["kwargs"] == {"reasoning_effort": "low"}
+    assert route_map[WorkflowStepId.POLISH].model == "gemini-3.1-pro"
+    assert route_map[WorkflowStepId.POLISH].step_config["kwargs"] == {"reasoning_effort": "medium"}
     assert route_map[WorkflowStepId.POLISH].step_config["batch_size"] == 100
     assert route_map[WorkflowStepId.REVIEWER].model == "gemini-2.5-pro"
     assert route_map[WorkflowStepId.OCR].model == "gemini-3.1-flash"
@@ -271,8 +273,8 @@ def test_recommended_workflow_profile_uses_ranked_step_rules() -> None:
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].model == "gemini-3-pro-image-preview"
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].step_config["backend"] == "gemini"
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].step_config == {"backend": "gemini"}
-    assert route_map[WorkflowStepId.MANGA_TRANSLATOR].model == "gemini-2.5-pro"
-    assert route_map[WorkflowStepId.MANGA_TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
+    assert route_map[WorkflowStepId.MANGA_TRANSLATOR].model == "gemini-3.1-flash"
+    assert route_map[WorkflowStepId.MANGA_TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "none"}
 
 
 def test_recommended_workflow_profile_skips_unsupported_openai_ocr_reasoning_none() -> None:
@@ -280,6 +282,7 @@ def test_recommended_workflow_profile_skips_unsupported_openai_ocr_reasoning_non
         [ConnectionDraft(display_name="OpenAI", provider=ProviderKind.OPENAI, api_key="okey")],
         name="Wizard Profile",
         target_language="English",
+        recommendation_mode=WizardRecommendationMode.BALANCED,
     )
 
     route_map = {route.step_id: route for route in detail.routes}
@@ -287,10 +290,66 @@ def test_recommended_workflow_profile_skips_unsupported_openai_ocr_reasoning_non
     assert route_map[WorkflowStepId.EXTRACTOR].step_config == {"max_gleaning": 1}
     assert route_map[WorkflowStepId.OCR].model == "gpt-4.1-mini"
     assert route_map[WorkflowStepId.OCR].step_config == {}
-    assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
+    assert route_map[WorkflowStepId.TRANSLATOR].model == "gpt-4.1"
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config == {}
     assert route_map[WorkflowStepId.POLISH].model == "o4-mini"
-    assert route_map[WorkflowStepId.POLISH].step_config["kwargs"] == {"reasoning_effort": "low"}
+    assert route_map[WorkflowStepId.POLISH].step_config["kwargs"] == {"reasoning_effort": "medium"}
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].step_config == {"backend": "openai"}
+
+
+def test_recommended_workflow_profile_quality_mode_prefers_best_models_and_high_reasoning() -> None:
+    detail = recommended_workflow_profile_from_drafts(
+        [
+            ConnectionDraft(display_name="Gemini", provider=ProviderKind.GEMINI, api_key="gkey"),
+            ConnectionDraft(display_name="OpenAI", provider=ProviderKind.OPENAI, api_key="okey"),
+            ConnectionDraft(display_name="DeepSeek", provider=ProviderKind.DEEPSEEK, api_key="dkey"),
+        ],
+        name="Wizard Profile",
+        target_language="English",
+        recommendation_mode=WizardRecommendationMode.QUALITY,
+    )
+
+    route_map = {route.step_id: route for route in detail.routes}
+    assert route_map[WorkflowStepId.TRANSLATOR].model == "gemini-3.1-pro"
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "high"}
+    assert route_map[WorkflowStepId.POLISH].model == "gemini-3.1-pro"
+    assert route_map[WorkflowStepId.POLISH].step_config["kwargs"] == {"reasoning_effort": "high"}
+    assert route_map[WorkflowStepId.MANGA_TRANSLATOR].model == "gemini-3.1-pro"
+    assert route_map[WorkflowStepId.MANGA_TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "high"}
+
+
+def test_recommended_workflow_profile_does_not_force_deepseek_reasoning_effort() -> None:
+    detail = recommended_workflow_profile_from_drafts(
+        [ConnectionDraft(display_name="DeepSeek", provider=ProviderKind.DEEPSEEK, api_key="dkey")],
+        name="Wizard Profile",
+        target_language="English",
+        recommendation_mode=WizardRecommendationMode.QUALITY,
+    )
+
+    route_map = {route.step_id: route for route in detail.routes}
+    assert route_map[WorkflowStepId.EXTRACTOR].model == "deepseek-reasoner"
+    assert route_map[WorkflowStepId.EXTRACTOR].step_config == {"max_gleaning": 1}
+    assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].model == "deepseek-chat"
+    assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].step_config == {}
+    assert route_map[WorkflowStepId.TRANSLATOR].model == "deepseek-reasoner"
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config == {}
+    assert route_map[WorkflowStepId.POLISH].model == "deepseek-reasoner"
+    assert route_map[WorkflowStepId.POLISH].step_config == {}
+
+
+def test_recommended_workflow_profile_budget_mode_uses_cheaper_anthropic_translator() -> None:
+    detail = recommended_workflow_profile_from_drafts(
+        [ConnectionDraft(display_name="Anthropic", provider=ProviderKind.ANTHROPIC, api_key="akey")],
+        name="Wizard Profile",
+        target_language="English",
+        recommendation_mode=WizardRecommendationMode.BUDGET,
+    )
+
+    route_map = {route.step_id: route for route in detail.routes}
+    assert route_map[WorkflowStepId.TRANSLATOR].model == "claude-3-5-haiku-latest"
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
+    assert route_map[WorkflowStepId.POLISH].model == "claude-3-5-sonnet-latest"
+    assert route_map[WorkflowStepId.POLISH].step_config["kwargs"] == {"reasoning_effort": "low"}
 
 
 def test_terms_queue_and_errors_expose_ui_safe_contracts() -> None:
@@ -481,4 +540,37 @@ def test_build_workflow_profile_detail_does_not_surface_batch_size_for_gemini_na
 
     assert translator_route.connection_base_url == "https://openrouter.ai/api/v1"
     assert "batch_size" not in translator_route.step_config
+    assert "batch_size" not in polish_route.step_config
+
+
+def test_build_workflow_profile_detail_does_not_fallback_polish_batch_size_to_translator_batch_size() -> None:
+    config = {
+        "translation_target_language": "English",
+        "translator_config": {
+            "endpoint_profile": "conn-gemini",
+            "model": "gemini-2.5-pro",
+        },
+        "polish_config": {
+            "endpoint_profile": "conn-gemini",
+            "model": "gemini-2.5-pro",
+        },
+        "translator_batch_config": {
+            "batch_size": 50,
+        },
+    }
+
+    detail = build_workflow_profile_detail(
+        profile_id="profile:recommended",
+        name="Recommended",
+        kind=WorkflowProfileKind.SHARED,
+        config=config,
+        connection_name_by_id={"conn-gemini": "Gemini"},
+        connection_model_by_id={"conn-gemini": "gemini-2.5-pro"},
+        connection_base_url_by_id={"conn-gemini": "https://generativelanguage.googleapis.com/v1beta/openai/"},
+    )
+
+    translator_route = next(route for route in detail.routes if route.step_id is WorkflowStepId.TRANSLATOR)
+    polish_route = next(route for route in detail.routes if route.step_id is WorkflowStepId.POLISH)
+
+    assert translator_route.step_config["batch_size"] == 50
     assert "batch_size" not in polish_route.step_config
