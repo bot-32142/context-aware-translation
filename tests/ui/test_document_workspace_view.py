@@ -5,7 +5,10 @@ from unittest.mock import patch
 import pytest
 
 from context_aware_translation.application.contracts.common import (
+    AcceptedCommand,
     ActionState,
+    BlockerCode,
+    BlockerInfo,
     DocumentRef,
     DocumentSection,
     ExportOption,
@@ -24,6 +27,7 @@ from context_aware_translation.application.contracts.document import (
     DocumentWorkspaceState,
     ImageAssetState,
     OCRPageState,
+    TranslateAndExportState,
     TranslationUnitActionState,
     TranslationUnitKind,
     TranslationUnitState,
@@ -202,6 +206,35 @@ def _make_view():
     work_service = FakeWorkService(state_by_project={"proj-1": object()})
     view = DocumentWorkspaceView("proj-1", 4, document_service, terms_service, work_service, bus)
     return view, bus, document_service, terms_service
+
+
+def _make_translate_and_export_state(
+    *,
+    can_start: bool = True,
+    batch_available: bool = True,
+    reembedding_available: bool = True,
+    batch_blocker: str | None = None,
+    reembedding_blocker: str | None = None,
+) -> TranslateAndExportState:
+    return TranslateAndExportState(
+        workspace=_make_workspace_state(),
+        can_start=can_start,
+        available_formats=[ExportOption(format_id="epub", label="EPUB", is_default=True)],
+        default_output_path="/tmp/book.epub",
+        supports_preserve_structure=True,
+        supports_original_image_export=True,
+        supports_epub_layout_conversion=True,
+        batch_available=batch_available,
+        batch_blocker=(
+            BlockerInfo(code=BlockerCode.NEEDS_SETUP, message=batch_blocker) if batch_blocker is not None else None
+        ),
+        reembedding_available=reembedding_available,
+        reembedding_blocker=(
+            BlockerInfo(code=BlockerCode.NEEDS_SETUP, message=reembedding_blocker)
+            if reembedding_blocker is not None
+            else None
+        ),
+    )
 
 
 def _cleanup_view(view) -> None:  # noqa: ANN001
@@ -565,6 +598,66 @@ def test_document_workspace_export_tab_exposes_original_image_toggle():
         assert request.options["use_original_images"] is True
     finally:
         _cleanup_view(view)
+
+
+def test_translate_and_export_dialog_runs_document_service_with_default_one_shot_options():
+    from context_aware_translation.ui.features.document_workspace_view import TranslateAndExportDialog
+
+    state = _make_translate_and_export_state()
+    document_service = FakeDocumentService(
+        workspace=_make_workspace_state(),
+        translate_and_export=state,
+        command_result=AcceptedCommand(
+            command_name="run_translate_and_export",
+            message=UserMessage(severity=UserMessageSeverity.SUCCESS, text="Translate and Export queued."),
+        ),
+    )
+    dialog = TranslateAndExportDialog(document_service, state)
+    try:
+        dialog.batch_cb.setChecked(True)
+        dialog.reembedding_cb.setChecked(True)
+        assert dialog.controls.use_original_images_cb.isHidden() is True
+        assert dialog.controls.epub_force_horizontal_ltr_cb.isChecked() is True
+        dialog.controls.output_path_edit.setText("/tmp/out-dir")
+        with patch.object(QMessageBox, "information") as mock_information:
+            dialog.start_button.click()
+
+        assert (document_service.calls[-1][0],) == ("run_translate_and_export",)
+        request = document_service.calls[-1][1]
+        assert request.project_id == "proj-1"
+        assert request.document_id == 4
+        assert request.use_batch is True
+        assert request.use_reembedding is True
+        assert request.enable_polish is True
+        assert request.output_path == "/tmp/out-dir"
+        assert request.options["preserve_structure"] is False
+        assert request.options["use_original_images"] is False
+        assert request.options["epub_force_horizontal_ltr"] is True
+        mock_information.assert_called_once()
+    finally:
+        dialog.close()
+
+
+def test_translate_and_export_dialog_disables_unsupported_toggles():
+    from context_aware_translation.ui.features.document_workspace_view import TranslateAndExportDialog
+
+    state = _make_translate_and_export_state(
+        batch_available=False,
+        reembedding_available=False,
+        batch_blocker="Async batch translation is unavailable.",
+        reembedding_blocker="Image reembedding is unavailable.",
+    )
+    dialog = TranslateAndExportDialog(
+        FakeDocumentService(workspace=_make_workspace_state(), translate_and_export=state), state
+    )
+    try:
+        assert dialog.batch_cb.isEnabled() is False
+        assert dialog.reembedding_cb.isEnabled() is False
+        assert "Async batch translation is unavailable." in dialog.batch_hint.text()
+        assert "Image reembedding is unavailable." in dialog.reembedding_hint.text()
+        assert dialog.start_button.isEnabled() is True
+    finally:
+        dialog.close()
 
 
 def test_document_workspace_images_tab_refits_when_activated():
