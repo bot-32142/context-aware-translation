@@ -116,8 +116,8 @@ class LLMChunkTranslator:
             self.translator_config,
             source_language,
             self.target_language,
-            cancel_check=cancel_check,
             polish_config=self.polish_config,
+            cancel_check=cancel_check,
         )
 
 

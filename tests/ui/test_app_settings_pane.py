@@ -178,10 +178,9 @@ def test_app_settings_pane_renders_backend_state():
     assert view.connections_table.rowCount() == 1
     assert view.profiles_table.rowCount() == 1
     assert view.viewmodel.current_tab == "connections"
-    assert view.viewmodel.action_buttons[0]["label"] == "Open Setup Wizard"
-    assert view.viewmodel.action_buttons[0]["tooltip"] == (
-        "Open the setup wizard to configure reusable connections and shared workflow profiles."
-    )
+    assert view.viewmodel.action_buttons[0]["action"] == "add_connection"
+    assert view.viewmodel.action_buttons[0]["label"] == "Add Connection"
+    assert view.viewmodel.action_buttons[0]["primary"] is True
     assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))
 
 
@@ -347,7 +346,7 @@ def test_app_settings_pane_refreshes_wizard_prompt_state():
 
     assert view.connections_table.rowCount() == 0
     assert view.profiles_table.rowCount() == 0
-    assert view.viewmodel.action_buttons[0]["label"] == "Run Setup Wizard"
+    assert view.viewmodel.action_buttons[0]["label"] == "Add Connection"
 
 
 def test_app_settings_pane_runs_wizard_through_service():

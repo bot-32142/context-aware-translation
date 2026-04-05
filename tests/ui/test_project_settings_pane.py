@@ -334,7 +334,7 @@ def test_project_settings_pane_preserves_custom_draft_across_profile_switches():
         view.cleanup()
 
 
-def test_project_settings_pane_hides_legacy_batch_route_without_promoting_batch_size():
+def test_project_settings_pane_saves_derived_custom_batch_route():
     from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
 
     base_state = _make_state(project_specific=True)
@@ -346,12 +346,19 @@ def test_project_settings_pane_hides_legacy_batch_route_without_promoting_batch_
                     "routes": [
                         *base_state.project_profile.routes,
                         WorkflowStepRoute(
+                            step_id=WorkflowStepId.POLISH,
+                            step_label="Polish",
+                            connection_id="conn-gemini",
+                            connection_label="Gemini Shared",
+                            model="gemini-3-flash-preview",
+                        ),
+                        WorkflowStepRoute(
                             step_id=WorkflowStepId.TRANSLATOR_BATCH,
                             step_label="Translator batch",
-                            connection_id=None,
-                            connection_label=None,
-                            model=None,
-                            step_config={"batch_size": 100},
+                            step_config={
+                                "translator_batch_size": 100,
+                                "polish_batch_size": 140,
+                            },
                         ),
                     ]
                 }
@@ -363,9 +370,17 @@ def test_project_settings_pane_hides_legacy_batch_route_without_promoting_batch_
     view = ProjectSettingsPane("proj-1", service, bus)
     try:
         assert view.viewmodel.show_custom_profile is True
-        assert view.routes_editor.rowCount() == len(base_state.project_profile.routes)
-        translator_row = next(row for row in view.routes_editor.rows if row.route.step_id is WorkflowStepId.TRANSLATOR)
-        assert "batch_size" not in translator_row.route.step_config
+        view._save()
+
+        save_calls = [call for call in service.calls if call[0] == "save"]
+        assert len(save_calls) == 1
+        request = save_calls[0][1]
+        assert request.project_profile is not None
+        payload_route = next(
+            route for route in request.project_profile.routes if route.step_id is WorkflowStepId.TRANSLATOR_BATCH
+        )
+        assert payload_route.step_config == {"translator_batch_size": 100, "polish_batch_size": 140}
+        assert view.viewmodel.message_kind != "error"
     finally:
         view.cleanup()
 

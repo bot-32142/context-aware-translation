@@ -61,8 +61,9 @@ async def test_mark_noise_terms_auto_marks_extracted_zero_occurrence_terms() -> 
 async def test_review_terms_runs_noise_filter_before_loading_pending_terms() -> None:
     events: list[str] = []
 
-    async def _mark_noise_terms(*, cancel_check=None) -> int:  # noqa: ANN001
+    async def _mark_noise_terms(*, cancel_check=None, term_keys=None) -> int:  # noqa: ANN001
         _ = cancel_check
+        _ = term_keys
         events.append("noise")
         return 1
 
@@ -79,3 +80,19 @@ async def test_review_terms_runs_noise_filter_before_loading_pending_terms() -> 
 
     assert events == ["noise", "pending"]
     manager.mark_noise_terms.assert_awaited_once()
+
+
+def test_get_term_keys_for_documents_only_returns_terms_linked_to_selected_chunks() -> None:
+    term_repo = MagicMock()
+    term_repo.list_chunks.return_value = [SimpleNamespace(chunk_id=12), SimpleNamespace(chunk_id=13)]
+    term_repo.list_term_records.return_value = [
+        TermRecord(key="selected", descriptions={"12": "desc"}, occurrence={}, votes=1, total_api_calls=1),
+        TermRecord(key="occurs-here", descriptions={"99": "desc"}, occurrence={"13": 2}, votes=1, total_api_calls=1),
+        TermRecord(key="other-doc", descriptions={"44": "desc"}, occurrence={"44": 1}, votes=1, total_api_calls=1),
+    ]
+
+    manager = SimpleNamespace(term_repo=term_repo)
+
+    result = TranslationContextManager.get_term_keys_for_documents(manager, [7])
+
+    assert result == {"selected", "occurs-here"}

@@ -29,8 +29,10 @@ from context_aware_translation.application.contracts.document import (
     RunDocumentTranslationRequest,
     RunImageReinsertionRequest,
     RunOCRRequest,
+    RunTranslateAndExportRequest,
     SaveOCRPageRequest,
     SaveTranslationRequest,
+    TranslateAndExportState,
 )
 from context_aware_translation.application.contracts.project_setup import ProjectSetupState, SaveProjectSetupRequest
 from context_aware_translation.application.contracts.projects import (
@@ -161,8 +163,6 @@ class FakeAppSetupService:
                 "profile_name": request.profile_name,
                 "target_language": request.target_language or self.preview_state.target_language,
                 "recommendation_mode": request.recommendation_mode,
-                "translator_batch_size": request.translator_batch_size or self.preview_state.translator_batch_size,
-                "polish_batch_size": request.polish_batch_size or self.preview_state.polish_batch_size,
             }
         )
 
@@ -441,6 +441,7 @@ class FakeDocumentService:
     translation: DocumentTranslationState | None = None
     images: DocumentImagesState | None = None
     export: DocumentExportState | None = None
+    translate_and_export: TranslateAndExportState | None = None
     export_result: DocumentExportResult | None = None
     command_result: AcceptedCommand | None = None
     ocr_page_images: dict[int, bytes | None] = field(default_factory=dict)
@@ -527,6 +528,16 @@ class FakeDocumentService:
         if self.export_result is None:
             raise NotImplementedError
         return self.export_result
+
+    def prepare_translate_and_export(self, project_id: str, document_id: int) -> TranslateAndExportState:
+        self.calls.append(("prepare_translate_and_export", (project_id, document_id)))
+        if self.translate_and_export is None:
+            raise NotImplementedError
+        return self.translate_and_export
+
+    def run_translate_and_export(self, request: RunTranslateAndExportRequest) -> AcceptedCommand:
+        self.calls.append(("run_translate_and_export", request))
+        return self.command_result or AcceptedCommand(command_name="run_translate_and_export")
 
 
 @dataclass

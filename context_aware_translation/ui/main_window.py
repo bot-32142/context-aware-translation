@@ -26,6 +26,7 @@ from context_aware_translation.ui.constants import (
     MIN_WINDOW_WIDTH,
 )
 from context_aware_translation.ui.features.app_settings_pane import AppSettingsPane
+from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
 from context_aware_translation.ui.features.library_view import LibraryView
 from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
 from context_aware_translation.ui.features.queue_drawer_view import QueueDrawerView
@@ -100,6 +101,7 @@ class MainWindow(QMainWindow):
         self._app_shell = AppShellHost(self)
         self._app_shell.projects_requested.connect(self._show_projects_surface)
         self._app_shell.close_project_requested.connect(self._show_projects_surface)
+        self._app_shell.setup_wizard_requested.connect(self._open_setup_wizard)
         self._app_shell.app_settings_requested.connect(self._open_app_setup)
         self._app_shell.queue_requested.connect(self._on_queue_requested)
         self.setCentralWidget(self._app_shell)
@@ -404,6 +406,15 @@ class MainWindow(QMainWindow):
 
     def _refresh_app_setup_view(self, _event: object) -> None:
         self.app_setup_view.refresh()
+
+    def _open_setup_wizard(self) -> None:
+        dialog = SetupWizardDialog(
+            self._app_context.services.app_setup,
+            self._app_context.services.app_setup.get_wizard_state(),
+            parent=self,
+        )
+        if dialog.exec() == dialog.DialogCode.Accepted:
+            self.app_setup_view.refresh()
 
     def _open_app_setup(self) -> None:
         self._app_shell.present_app_settings()

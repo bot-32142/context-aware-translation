@@ -340,10 +340,7 @@ def _extract_id_based_translation_blocks(
 
 
 def _build_retry_correction_message(exc: Exception) -> str:
-    return (
-        f"错误：{exc}\n"
-        "请只修正输出，不要添加任何解释。\n"
-    )
+    return f"错误：{exc}\n请只修正输出，不要添加任何解释。\n"
 
 
 def _build_translation_prompt_examples() -> str:

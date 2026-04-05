@@ -24,6 +24,7 @@ from context_aware_translation.application.contracts.app_setup import (
     SaveWorkflowProfileRequest,
     WorkflowProfileDetail,
     WorkflowProfileKind,
+    WorkflowStepId,
     WorkflowStepRoute,
 )
 from context_aware_translation.application.errors import ApplicationError
@@ -232,21 +233,10 @@ class AppSettingsPane(QWidget):
         selected_count = len(selected_connections)
         return [
             {
-                "action": "run_wizard",
-                "label": self.tr("Run Setup Wizard")
-                if self._state is not None and not self._state.connections
-                else self.tr("Open Setup Wizard"),
-                "enabled": True,
-                "primary": True,
-                "tooltip": self.tr(
-                    "Open the setup wizard to configure reusable connections and shared workflow profiles."
-                ),
-            },
-            {
                 "action": "add_connection",
                 "label": self.tr("Add Connection"),
                 "enabled": True,
-                "primary": False,
+                "primary": True,
                 "tooltip": self.tr("Create a reusable API connection for workflow steps."),
             },
             {
@@ -267,7 +257,6 @@ class AppSettingsPane(QWidget):
 
     def _on_action_requested(self, action_name: str) -> None:
         actions: dict[str, Callable[[], None]] = {
-            "run_wizard": self._on_run_wizard,
             "add_connection": self._on_add_connection,
             "duplicate_connection": self._on_duplicate_connection,
             "delete_connection": self._on_delete_connection,
@@ -536,10 +525,13 @@ class AppSettingsPane(QWidget):
             WorkflowStepRoute(
                 step_id=step_id,
                 step_label=workflow_step_label(step_id, tr=self.tr),
-                connection_id=first_connection.connection_id,
-                connection_label=first_connection.display_name,
-                connection_base_url=first_connection.base_url,
-                model=first_connection.default_model,
+                connection_id=(
+                    first_connection.connection_id if step_id is not WorkflowStepId.TRANSLATOR_BATCH else None
+                ),
+                connection_label=(
+                    first_connection.display_name if step_id is not WorkflowStepId.TRANSLATOR_BATCH else None
+                ),
+                model=(first_connection.default_model if step_id is not WorkflowStepId.TRANSLATOR_BATCH else None),
                 step_config={},
             )
             for step_id, label in _NEW_PROFILE_ROUTE_SPECS

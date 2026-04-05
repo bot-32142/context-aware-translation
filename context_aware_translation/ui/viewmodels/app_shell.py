@@ -44,6 +44,10 @@ class AppShellViewModel(RouteStateViewModel):
         return QCoreApplication.translate("MainWindow", "App Settings")
 
     @Property(str, notify=labels_changed)
+    def setup_wizard_label(self) -> str:
+        return QCoreApplication.translate("SetupWizardDialog", "Setup Wizard")
+
+    @Property(str, notify=labels_changed)
     def back_to_projects_label(self) -> str:
         return QCoreApplication.translate("ProjectShellView", "Back to Projects")
 

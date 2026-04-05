@@ -8,12 +8,6 @@ from typing import TYPE_CHECKING, Any
 import context_aware_translation.storage.repositories.document_repository as document_repository
 import context_aware_translation.storage.schema.book_db as book_db
 from context_aware_translation.adapters.qt.workers.batch_translation_task_worker import BatchTranslationTaskWorker
-from context_aware_translation.config import (
-    Config,
-    infer_polish_batch_provider,
-    infer_translator_batch_provider,
-    resolve_polish_config,
-)
 from context_aware_translation.workflow.session import WorkflowSession
 from context_aware_translation.workflow.tasks.claims import (
     AllDocuments,
@@ -145,27 +139,6 @@ class BatchTranslationHandler:
                 return Decision(allowed=False, reason="Batch translation does not support manga documents.")
         finally:
             db.close()
-        book = deps.book_manager.get_book(book_id)
-        if book is None:
-            return Decision(allowed=False, reason=f"Book not found: {book_id}")
-        config = Config.from_book(book, deps.book_manager.library_root, deps.book_manager.registry)
-        translator_batch_provider = infer_translator_batch_provider(config.translator_config)
-        if translator_batch_provider is None:
-            return Decision(
-                allowed=False,
-                reason="Async batch translation requires a batch-capable Translator connection.",
-            )
-        enable_polish = bool(params.get("enable_polish", True))
-        if enable_polish:
-            polish_config = resolve_polish_config(config.polish_config, config.translator_config)
-            polish_batch_provider = infer_polish_batch_provider(polish_config)
-            if polish_batch_provider is None or polish_batch_provider != translator_batch_provider:
-                return Decision(
-                    allowed=False,
-                    reason=(
-                        "Async batch translation requires Translator and Polish to use the same batch-capable provider."
-                    ),
-                )
         return Decision(allowed=True)
 
     def pre_delete(self, record: TaskRecord, payload: Any, deps: WorkerDeps) -> list[str]:

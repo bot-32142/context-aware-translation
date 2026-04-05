@@ -13,8 +13,8 @@ from context_aware_translation.application.contracts.app_setup import (
     ConnectionSummary,
     ConnectionTestResult,
     ProviderCard,
+    SetupWizardMode,
     SetupWizardState,
-    WizardRecommendationMode,
     WorkflowProfileDetail,
     WorkflowProfileKind,
     WorkflowStepId,
@@ -30,7 +30,7 @@ from context_aware_translation.ui.constants import LANGUAGES
 from tests.application.fakes import FakeAppSetupService
 
 try:
-    from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
+    from PySide6.QtWidgets import QApplication, QDialog, QMessageBox, QTableWidget
 
     HAS_PYSIDE6 = True
 except ImportError:  # pragma: no cover - environment dependent
@@ -47,7 +47,12 @@ def _qapp():
     yield app
 
 
-def _profile(*, profile_id: str = "profile:recommended", name: str = "Recommended") -> WorkflowProfileDetail:
+def _profile(
+    *,
+    profile_id: str = "profile:recommended",
+    name: str = "Recommended",
+    translator_model: str = "gemini-3-flash-preview",
+) -> WorkflowProfileDetail:
     return WorkflowProfileDetail(
         profile_id=profile_id,
         name=name,
@@ -59,7 +64,7 @@ def _profile(*, profile_id: str = "profile:recommended", name: str = "Recommende
                 step_label="Translator",
                 connection_id="conn-gemini",
                 connection_label="Gemini",
-                model="gemini-3-flash-preview",
+                model=translator_model,
             ),
             WorkflowStepRoute(
                 step_id=WorkflowStepId.OCR,
@@ -139,38 +144,7 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
                 message=UserMessage(severity=UserMessageSeverity.INFO, text="Connection accepted."),
             )
         ],
-        recommendation=_profile(profile_id="recommended", name="Recommended").model_copy(
-            update={
-                "routes": [
-                    WorkflowStepRoute(
-                        step_id=WorkflowStepId.TRANSLATOR,
-                        step_label="Translator",
-                        connection_id="conn-gemini",
-                        connection_label="Gemini",
-                        connection_base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-                        model="gemini-3-flash-preview",
-                        step_config={"batch_size": 100},
-                    ),
-                    WorkflowStepRoute(
-                        step_id=WorkflowStepId.POLISH,
-                        step_label="Polish",
-                        connection_id="conn-gemini",
-                        connection_label="Gemini",
-                        connection_base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-                        model="gemini-3-flash-preview",
-                        step_config={"batch_size": 80},
-                    ),
-                    WorkflowStepRoute(
-                        step_id=WorkflowStepId.OCR,
-                        step_label="OCR",
-                        connection_id="conn-gemini",
-                        connection_label="Gemini",
-                        connection_base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-                        model="gemini-3-flash-preview",
-                    ),
-                ]
-            }
-        ),
+        recommendation=_profile(profile_id="recommended", name="Recommended"),
         target_language="English",
     )
     service = FakeAppSetupService(state=_make_state(), wizard_state=wizard_state, preview_state=preview_state)
@@ -182,36 +156,70 @@ def test_setup_wizard_dialog_previews_and_saves_through_service():
 
     assert dialog._page_index == 1
     assert any(call[0] == "preview_setup_wizard" for call in service.calls)
+    preview_request = next(call[1] for call in service.calls if call[0] == "preview_setup_wizard")
+    assert preview_request.recommendation_mode is SetupWizardMode.BALANCED
+    assert dialog._quality_mode_radio is not None
+    assert dialog._balanced_mode_radio is not None
+    assert dialog._budget_mode_radio is not None
+    dialog._quality_mode_radio.setChecked(True)
+    QApplication.processEvents()
     assert dialog._profile_name_edit is not None
     assert dialog._target_language_combo is not None
-    assert dialog._recommendation_mode_combo is not None
-    assert dialog._translator_batch_size_spin is not None
-    assert dialog._polish_batch_size_spin is not None
-    dialog._recommendation_mode_combo.setCurrentIndex(
-        dialog._recommendation_mode_combo.findData(WizardRecommendationMode.QUALITY.value)
-    )
-    QApplication.processEvents()
-    assert dialog._recommendation_mode_combo is not None
     dialog._profile_name_edit.setText("Team Default")
     dialog._target_language_combo.setEditText("Japanese")
-    dialog._translator_batch_size_spin.setValue(250)
-    dialog._polish_batch_size_spin.setValue(125)
 
     dialog._finish()
 
+    preview_requests = [call[1] for call in service.calls if call[0] == "preview_setup_wizard"]
+    assert preview_requests[-1].recommendation_mode is SetupWizardMode.QUALITY
     assert any(call[0] == "run_setup_wizard" for call in service.calls)
-    preview_request = [call[1] for call in service.calls if call[0] == "preview_setup_wizard"][-1]
     run_request = next(call[1] for call in service.calls if call[0] == "run_setup_wizard")
-    assert preview_request.recommendation_mode == WizardRecommendationMode.QUALITY
     assert run_request.profile_name == "Team Default"
     assert run_request.target_language == "Japanese"
-    assert run_request.recommendation_mode == WizardRecommendationMode.QUALITY
-    assert run_request.translator_batch_size == 250
-    assert run_request.polish_batch_size == 125
+    assert run_request.recommendation_mode is SetupWizardMode.QUALITY
 
 
-def test_setup_wizard_dialog_hides_batch_size_when_recommendation_is_not_batch_capable():
+def test_setup_wizard_dialog_switches_recommended_model_when_mode_changes():
     from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
+
+    @dataclass
+    class _ModePreviewService(FakeAppSetupService):
+        def preview_setup_wizard(self, request):  # noqa: ANN001
+            self.calls.append(("preview_setup_wizard", request))
+            translator_model = "gpt-5.4"
+            polish_model = "gpt-5.4"
+            recommendation = WorkflowProfileDetail(
+                profile_id="recommended",
+                name=request.profile_name or "Recommended",
+                kind=WorkflowProfileKind.SHARED,
+                target_language=request.target_language or "English",
+                routes=[
+                    WorkflowStepRoute(
+                        step_id=WorkflowStepId.TRANSLATOR,
+                        step_label="Translator",
+                        connection_id="conn-openai",
+                        connection_label="OpenAI",
+                        model=translator_model,
+                    ),
+                    WorkflowStepRoute(
+                        step_id=WorkflowStepId.POLISH,
+                        step_label="Polish",
+                        connection_id="conn-openai",
+                        connection_label="OpenAI",
+                        model=polish_model,
+                    ),
+                ],
+                is_default=True,
+            )
+            return SetupWizardState(
+                available_providers=self.wizard_state.available_providers if self.wizard_state is not None else [],
+                selected_providers=request.providers,
+                drafts=request.connections,
+                recommendation=recommendation,
+                profile_name=request.profile_name,
+                target_language=request.target_language or "English",
+                recommendation_mode=request.recommendation_mode,
+            )
 
     wizard_state = SetupWizardState(
         available_providers=[
@@ -220,155 +228,78 @@ def test_setup_wizard_dialog_hides_batch_size_when_recommendation_is_not_batch_c
                 label="OpenAI",
                 helper_text="General-purpose text and image-capable provider.",
             )
-        ],
+        ]
     )
-    preview_state = SetupWizardState(
-        available_providers=wizard_state.available_providers,
-        selected_providers=[ProviderKind.OPENAI],
-        drafts=[
-            ConnectionDraft(
-                display_name="OpenAI",
-                provider=ProviderKind.OPENAI,
-                api_key="secret",
-                base_url="https://api.openai.com/v1",
-                default_model="gpt-4.1-mini",
-            )
-        ],
-        recommendation=WorkflowProfileDetail(
-            profile_id="recommended",
-            name="Recommended",
-            kind=WorkflowProfileKind.SHARED,
-            target_language="English",
-            routes=[
-                WorkflowStepRoute(
-                    step_id=WorkflowStepId.TRANSLATOR,
-                    step_label="Translator",
-                    connection_id="conn-openai",
-                    connection_label="OpenAI",
-                    model="gpt-4.1-mini",
-                )
-            ],
-        ),
-    )
-    service = FakeAppSetupService(state=_make_state(), wizard_state=wizard_state, preview_state=preview_state)
+    service = _ModePreviewService(state=_make_state(needs_wizard=True), wizard_state=wizard_state)
     dialog = SetupWizardDialog(service, wizard_state)
 
-    _provider_checkbox(dialog, ProviderKind.OPENAI).setChecked(True)
-    _provider_api_key_edit(dialog, ProviderKind.OPENAI).setText("secret")
+    dialog._provider_inputs[ProviderKind.OPENAI][0].setChecked(True)
+    dialog._provider_inputs[ProviderKind.OPENAI][1].setText("secret")
     dialog._go_next()
 
-    assert dialog._translator_batch_size_spin is None
+    assert dialog._provider_inputs == {}
+    table = dialog.findChild(QTableWidget)
+    assert table is not None
+    assert table.item(0, 2).text() == "gpt-5.4"
+    assert table.item(1, 2).text() == "gpt-5.4"
+
+    assert dialog._quality_mode_radio is not None
+    dialog._quality_mode_radio.setChecked(True)
+    QApplication.processEvents()
+
+    table = dialog.findChild(QTableWidget)
+    assert table is not None
+    assert table.item(0, 2).text() == "gpt-5.4"
+    assert table.item(1, 2).text() == "gpt-5.4"
+
+    assert dialog._balanced_mode_radio is not None
+    dialog._balanced_mode_radio.setChecked(True)
+    QApplication.processEvents()
+
+    table = dialog.findChild(QTableWidget)
+    assert table is not None
+    assert table.item(0, 2).text() == "gpt-5.4"
+    assert table.item(1, 2).text() == "gpt-5.4"
+
+    assert dialog._budget_mode_radio is not None
+    dialog._budget_mode_radio.setChecked(True)
+    QApplication.processEvents()
+
+    assert dialog._profile_name_edit is not None
+    table = dialog.findChild(QTableWidget)
+    assert table is not None
+    assert table.item(0, 2).text() == "gpt-5.4"
+    assert table.item(1, 2).text() == "gpt-5.4"
+    preview_requests = [call[1] for call in service.calls if call[0] == "preview_setup_wizard"]
+    assert [request.recommendation_mode for request in preview_requests] == [
+        SetupWizardMode.BALANCED,
+        SetupWizardMode.QUALITY,
+        SetupWizardMode.BALANCED,
+        SetupWizardMode.BUDGET,
+    ]
 
 
-def test_setup_wizard_dialog_hides_batch_size_for_gemini_named_custom_endpoint():
-    from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
+def test_connection_draft_form_prefills_curated_defaults_for_supported_providers():
+    from context_aware_translation.ui.features.app_setup_view import ConnectionDraftForm
 
-    wizard_state = SetupWizardState(
-        available_providers=[
-            ProviderCard(
-                provider=ProviderKind.GEMINI,
-                label="Gemini",
-                helper_text="Good for image text reading and image editing.",
-            )
-        ],
-    )
-    preview_state = SetupWizardState(
-        available_providers=wizard_state.available_providers,
-        selected_providers=[ProviderKind.GEMINI],
-        drafts=[
-            ConnectionDraft(
-                display_name="OpenRouter",
-                provider=ProviderKind.GEMINI,
-                api_key="secret",
-                base_url="https://openrouter.ai/api/v1",
-                default_model="gemini-2.5-pro",
-            )
-        ],
-        recommendation=WorkflowProfileDetail(
-            profile_id="recommended",
-            name="Recommended",
-            kind=WorkflowProfileKind.SHARED,
-            target_language="English",
-            routes=[
-                WorkflowStepRoute(
-                    step_id=WorkflowStepId.TRANSLATOR,
-                    step_label="Translator",
-                    connection_id="conn-openrouter",
-                    connection_label="OpenRouter",
-                    connection_base_url="https://openrouter.ai/api/v1",
-                    model="gemini-2.5-pro",
-                ),
-                WorkflowStepRoute(
-                    step_id=WorkflowStepId.POLISH,
-                    step_label="Polish",
-                    connection_id="conn-openrouter",
-                    connection_label="OpenRouter",
-                    connection_base_url="https://openrouter.ai/api/v1",
-                    model="gemini-2.5-pro",
-                ),
-            ],
-        ),
-    )
-    service = FakeAppSetupService(state=_make_state(), wizard_state=wizard_state, preview_state=preview_state)
-    dialog = SetupWizardDialog(service, wizard_state)
+    form = ConnectionDraftForm()
 
-    _provider_checkbox(dialog, ProviderKind.GEMINI).setChecked(True)
-    _provider_api_key_edit(dialog, ProviderKind.GEMINI).setText("secret")
-    dialog._go_next()
+    def _select_provider(provider: ProviderKind) -> None:
+        index = form.provider_combo.findData(provider.value)
+        assert index >= 0
+        form.provider_combo.setCurrentIndex(index)
 
-    assert dialog._translator_batch_size_spin is None
-    assert dialog._polish_batch_size_spin is None
+    _select_provider(ProviderKind.GEMINI)
+    assert form.base_url_edit.text() == "https://generativelanguage.googleapis.com/v1beta/openai/"
+    assert form.default_model_edit.text() == "gemini-3.1-pro"
 
+    _select_provider(ProviderKind.OPENAI)
+    assert form.base_url_edit.text() == "https://api.openai.com/v1"
+    assert form.default_model_edit.text() == "gpt-5.4"
 
-def test_setup_wizard_dialog_hides_batch_size_when_polish_route_is_missing():
-    from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
-
-    wizard_state = SetupWizardState(
-        available_providers=[
-            ProviderCard(
-                provider=ProviderKind.GEMINI,
-                label="Gemini",
-                helper_text="Good for image text reading and image editing.",
-            )
-        ],
-    )
-    preview_state = SetupWizardState(
-        available_providers=wizard_state.available_providers,
-        selected_providers=[ProviderKind.GEMINI],
-        drafts=[
-            ConnectionDraft(
-                display_name="Gemini",
-                provider=ProviderKind.GEMINI,
-                api_key="secret",
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-                default_model="gemini-3-flash-preview",
-            )
-        ],
-        recommendation=WorkflowProfileDetail(
-            profile_id="recommended",
-            name="Recommended",
-            kind=WorkflowProfileKind.SHARED,
-            target_language="English",
-            routes=[
-                WorkflowStepRoute(
-                    step_id=WorkflowStepId.TRANSLATOR,
-                    step_label="Translator",
-                    connection_id="conn-gemini",
-                    connection_label="Gemini",
-                    model="gemini-3-flash-preview",
-                )
-            ],
-        ),
-    )
-    service = FakeAppSetupService(state=_make_state(), wizard_state=wizard_state, preview_state=preview_state)
-    dialog = SetupWizardDialog(service, wizard_state)
-
-    _provider_checkbox(dialog, ProviderKind.GEMINI).setChecked(True)
-    _provider_api_key_edit(dialog, ProviderKind.GEMINI).setText("secret")
-    dialog._go_next()
-
-    assert dialog._translator_batch_size_spin is None
-    assert dialog._polish_batch_size_spin is None
+    _select_provider(ProviderKind.ANTHROPIC)
+    assert form.base_url_edit.text() == "https://api.anthropic.com/v1"
+    assert form.default_model_edit.text() == "claude-opus-4-6"
 
 
 def test_setup_wizard_dialog_renders_provider_cards_on_first_page():

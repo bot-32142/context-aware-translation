@@ -210,8 +210,8 @@ class TranslatorConfig(LLMConfig):
     enable_polish: bool = True
     strip_epub_ruby: bool = True
     num_of_chunks_per_llm_call: int = 3
-    max_tokens_per_llm_call: int = 4000
-    chunk_size: int = 1000  # Max token size per chunk for text processing
+    max_tokens_per_llm_call: int = 2000
+    chunk_size: int = 500  # Max token size per chunk for text processing
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary for JSON storage."""
@@ -245,26 +245,28 @@ class TranslatorConfig(LLMConfig):
             enable_polish=data.get("enable_polish", True),
             strip_epub_ruby=data.get("strip_epub_ruby", True),
             num_of_chunks_per_llm_call=data.get("num_of_chunks_per_llm_call", 3),
-            max_tokens_per_llm_call=data.get("max_tokens_per_llm_call", 4000),
-            chunk_size=data.get("chunk_size", 1000),
+            max_tokens_per_llm_call=data.get("max_tokens_per_llm_call", 2000),
+            chunk_size=data.get("chunk_size", 500),
         )
 
 
 @dataclass
 class PolishConfig(LLMConfig):
-    """Configuration for standalone translation polish step."""
+    """Configuration for the optional translation polish step."""
 
     pass
 
 
 @dataclass
 class TranslatorBatchConfig:
-    """Dedicated configuration for async translator batch jobs."""
+    """Dedicated persisted settings for async translator batch jobs."""
 
-    provider: str = ""
-    api_key: str = ""
-    model: str = ""
     batch_size: int = 100
+    # The remaining fields are runtime-only and are derived from the regular
+    # Translator / Polish step configs instead of being persisted directly.
+    provider: str | None = None
+    api_key: str | None = None
+    model: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary for JSON storage."""
@@ -274,78 +276,97 @@ class TranslatorBatchConfig:
     def from_dict(cls, data: dict[str, Any]) -> TranslatorBatchConfig:
         """Create from dictionary."""
         return cls(
-            provider=str(data.get("provider") or ""),
-            api_key=str(data.get("api_key") or ""),
-            model=str(data.get("model") or ""),
             batch_size=int(data.get("batch_size", 100)),
-        )
-
-
-@dataclass
-class PolishBatchConfig(TranslatorBatchConfig):
-    """Dedicated configuration for async polish batch jobs."""
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> PolishBatchConfig:
-        """Create from dictionary."""
-        return cls(
-            provider=str(data.get("provider") or ""),
-            api_key=str(data.get("api_key") or ""),
-            model=str(data.get("model") or ""),
-            batch_size=int(data.get("batch_size", 100)),
+            provider=(str(data.get("provider") or "") or None),
+            api_key=(str(data.get("api_key") or "") or None),
+            model=(str(data.get("model") or "") or None),
         )
 
 
 _SUPPORTED_BATCH_PROVIDERS = {"gemini_ai_studio"}
 
 
-def _infer_batch_provider(*, base_url: str | None) -> str | None:
-    base_url = str(base_url or "").strip().lower()
-    if "generativelanguage.googleapis.com" in base_url:
-        return "gemini_ai_studio"
-    return None
-
-
-def infer_batch_provider_from_base_url(base_url: str | None) -> str | None:
-    """Return the provider batch adapter implied by a concrete base URL."""
-    return _infer_batch_provider(base_url=base_url)
-
-
-def infer_translator_batch_provider(config: TranslatorConfig | None) -> str | None:
-    """Return the provider batch adapter for a translator config, if supported."""
-    if config is None:
-        return None
-    return infer_batch_provider_from_base_url(config.base_url)
-
-
-def infer_polish_batch_provider(config: PolishConfig | None) -> str | None:
-    """Return the provider batch adapter for a polish config, if supported."""
-    if config is None:
-        return None
-    return infer_batch_provider_from_base_url(config.base_url)
-
-
-def resolve_polish_config(
-    polish_config: PolishConfig | None,
-    translator_config: TranslatorConfig | None,
-) -> PolishConfig | None:
-    """Return the effective polish config, falling back to translator settings."""
-    if polish_config is not None:
-        return polish_config
-    if translator_config is None:
-        return None
-    return PolishConfig.from_dict(translator_config.to_dict())
-
-
-def _validate_batch_config_size(
-    config: TranslatorBatchConfig | PolishBatchConfig,
-    *,
-    config_name: str,
-) -> None:
+def _validate_translator_batch_config(config: TranslatorBatchConfig, *, config_name: str) -> None:
     if int(config.batch_size) <= 0:
         raise ValueError(f"{config_name}.batch_size must be greater than 0")
     if int(config.batch_size) > 5000:
         raise ValueError(f"{config_name}.batch_size must not exceed 5000")
+
+
+@dataclass
+class PolishBatchConfig:
+    """Dedicated persisted settings for async polish batch jobs."""
+
+    batch_size: int = 100
+    provider: str | None = None
+    api_key: str | None = None
+    model: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to dictionary for JSON storage."""
+        return {"batch_size": self.batch_size}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> PolishBatchConfig:
+        """Create from dictionary."""
+        return cls(
+            batch_size=int(data.get("batch_size", 100)),
+            provider=(str(data.get("provider") or "") or None),
+            api_key=(str(data.get("api_key") or "") or None),
+            model=(str(data.get("model") or "") or None),
+        )
+
+
+@dataclass(frozen=True)
+class BatchGatewayConfig:
+    """Resolved provider credentials for remote batch APIs."""
+
+    provider: str
+    api_key: str
+
+
+def infer_async_batch_provider(base_url: str | None) -> str | None:
+    base = (base_url or "").strip().lower()
+    if "generativelanguage.googleapis.com" in base:
+        return "gemini_ai_studio"
+    return None
+
+
+def resolve_batch_gateway_config(step_config: LLMConfig | None) -> BatchGatewayConfig | None:
+    if step_config is None:
+        return None
+    provider = infer_async_batch_provider(step_config.base_url)
+    api_key = str(step_config.api_key or "").strip()
+    if provider is None or not api_key:
+        return None
+    return BatchGatewayConfig(provider=provider, api_key=api_key)
+
+
+def effective_polish_step_config(
+    translator_config: TranslatorConfig | None,
+    polish_config: PolishConfig | None,
+) -> LLMConfig | None:
+    return polish_config or translator_config
+
+
+def resolve_pipeline_batch_provider(
+    translator_config: TranslatorConfig | None,
+    polish_config: PolishConfig | None,
+    *,
+    enable_polish: bool,
+) -> str | None:
+    translator_provider = infer_async_batch_provider(
+        translator_config.base_url if translator_config is not None else None
+    )
+    if translator_provider is None:
+        return None
+    if not enable_polish:
+        return translator_provider
+    effective_polish = effective_polish_step_config(translator_config, polish_config)
+    polish_provider = infer_async_batch_provider(effective_polish.base_url if effective_polish is not None else None)
+    if polish_provider != translator_provider:
+        return None
+    return translator_provider
 
 
 @dataclass
@@ -510,7 +531,7 @@ class WorkflowRuntimeConfig:
     extractor_config: ExtractorConfig
     summarizor_config: SummarizorConfig
     translator_config: TranslatorConfig
-    polish_config: PolishConfig
+    polish_config: PolishConfig | None
     translator_batch_config: TranslatorBatchConfig | None
     polish_batch_config: PolishBatchConfig | None
     glossary_config: GlossaryTranslationConfig
@@ -922,7 +943,7 @@ class Config:
             extractor_config=self.extractor_config,  # type: ignore[arg-type]
             summarizor_config=self.summarizor_config,  # type: ignore[arg-type]
             translator_config=self.translator_config,  # type: ignore[arg-type]
-            polish_config=resolve_polish_config(self.polish_config, self.translator_config),  # type: ignore[arg-type]
+            polish_config=self.polish_config,
             translator_batch_config=self.translator_batch_config,
             polish_batch_config=self.polish_batch_config,
             glossary_config=self.glossary_config,  # type: ignore[arg-type]
@@ -965,11 +986,9 @@ class Config:
                 setattr(self, config_name, resolved)
 
         if self.translator_batch_config is not None:
-            _validate_batch_config_size(self.translator_batch_config, config_name="translator_batch_config")
-            self.translator_batch_config.provider = self.translator_batch_config.provider.strip().lower()
+            _validate_translator_batch_config(self.translator_batch_config, config_name="translator_batch_config")
         if self.polish_batch_config is not None:
-            _validate_batch_config_size(self.polish_batch_config, config_name="polish_batch_config")
-            self.polish_batch_config.provider = self.polish_batch_config.provider.strip().lower()
+            _validate_translator_batch_config(self.polish_batch_config, config_name="polish_batch_config")
 
         # Ensure directories exist and configure logging
         ensure_dirs(self)

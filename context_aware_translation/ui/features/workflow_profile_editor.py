@@ -35,7 +35,7 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowStepId,
     WorkflowStepRoute,
 )
-from context_aware_translation.application.runtime import workflow_routes_allow_async_batch
+from context_aware_translation.config import infer_async_batch_provider
 from context_aware_translation.ui.constants import LANGUAGES
 from context_aware_translation.ui.json_utils import parse_json_object_text
 from context_aware_translation.ui.tips import create_tip_label
@@ -74,7 +74,7 @@ _STEP_TOOLTIP_TEXTS = {
         "WorkflowRoutesEditor", "Translate the main document text into the target language."
     ),
     WorkflowStepId.POLISH: QT_TRANSLATE_NOOP(
-        "WorkflowRoutesEditor", "Polish translated text in a separate refinement pass."
+        "WorkflowRoutesEditor", "Polish translated text so it reads naturally without changing the meaning."
     ),
     WorkflowStepId.REVIEWER: QT_TRANSLATE_NOOP(
         "WorkflowRoutesEditor", "Review glossary candidates and mark likely noise or confirmed terms."
@@ -118,13 +118,14 @@ _ADVANCED_TIP_TEXTS = {
         "StepAdvancedConfigDialog", "Translator settings tune chunk sizing and request budget."
     ),
     WorkflowStepId.POLISH: QT_TRANSLATE_NOOP(
-        "StepAdvancedConfigDialog", "Polish settings control the separate refinement pass after translation."
+        "StepAdvancedConfigDialog", "Polish settings control the optional editor pass after translation."
     ),
     WorkflowStepId.OCR: QT_TRANSLATE_NOOP(
         "StepAdvancedConfigDialog", "OCR settings control image compression and artifact cleanup."
     ),
     WorkflowStepId.TRANSLATOR_BATCH: QT_TRANSLATE_NOOP(
-        "StepAdvancedConfigDialog", "Batch settings configure optional async translation jobs."
+        "StepAdvancedConfigDialog",
+        "Batch inherits provider, model, and most request settings from the regular Translator and Polish steps. Custom kwargs might not work as expected. Not all models are supported. Please check your provider's documentation.",
     ),
 }
 
@@ -168,6 +169,8 @@ def validate_workflow_routes(
     tr: Callable[[str], str],
 ) -> str | None:
     for route in routes:
+        if route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
+            continue
         if not str(route.connection_id or "").strip() or not str(route.model or "").strip():
             return tr("Every workflow step must use a connection and model.")
     return None
@@ -189,12 +192,10 @@ def workflow_step_label_from_text(step_label: str, *, tr: Callable[[str], str]) 
     return tr(step_label)
 
 
-def _step_shows_batch_config(step_id: WorkflowStepId, routes: list[WorkflowStepRoute]) -> bool:
-    return step_id in {WorkflowStepId.TRANSLATOR, WorkflowStepId.POLISH} and workflow_routes_allow_async_batch(routes)
-
-
-def _normalize_workflow_routes(routes: list[WorkflowStepRoute]) -> list[WorkflowStepRoute]:
-    return [route for route in routes if route.step_id is not WorkflowStepId.TRANSLATOR_BATCH]
+def _batch_provider_label(provider: str, *, tr: Callable[[str], str]) -> str:
+    if provider == "gemini_ai_studio":
+        return tr("Gemini AI Studio")
+    return provider
 
 
 class StepAdvancedConfigDialog(QDialog):
@@ -230,7 +231,7 @@ class StepAdvancedConfigDialog(QDialog):
                 "max_tokens_per_llm_call",
                 100,
                 100000,
-                4000,
+                2000,
             ),
             _SpinFieldSpec(
                 "chunk_size_spin",
@@ -238,7 +239,7 @@ class StepAdvancedConfigDialog(QDialog):
                 "chunk_size",
                 100,
                 5000,
-                1000,
+                500,
             ),
         ),
         WorkflowStepId.OCR: (
@@ -298,6 +299,13 @@ class StepAdvancedConfigDialog(QDialog):
             5,
         ),
     )
+    _BATCH_THINKING_OPTIONS = (
+        (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Auto"), "auto"),
+        (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Off"), "off"),
+        (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Low"), "low"),
+        (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Medium"), "medium"),
+        (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "High"), "high"),
+    )
     _REASONING_EFFORT_OPTIONS = (
         (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Inherit from connection"), ""),
         (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "None"), "none"),
@@ -306,17 +314,11 @@ class StepAdvancedConfigDialog(QDialog):
         (QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "High"), "high"),
     )
 
-    def __init__(
-        self,
-        route: WorkflowStepRoute,
-        all_routes: list[WorkflowStepRoute] | None = None,
-        parent: QWidget | None = None,
-    ) -> None:
+    def __init__(self, route: WorkflowStepRoute, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         if parent is not None:
             self.setWindowModality(Qt.WindowModality.WindowModal)
         self._route = route
-        self._all_routes = [candidate.model_copy() for candidate in (all_routes or [route])]
         self._serialize: Callable[[], WorkflowStepRoute] = lambda: self._route
         self.setWindowTitle(self.tr("Step Settings"))
         self.setMinimumWidth(420)
@@ -336,8 +338,11 @@ class StepAdvancedConfigDialog(QDialog):
         self._form_layout.setHorizontalSpacing(12)
 
         config = dict(self._route.step_config)
-        simple_specs = self._SIMPLE_STEP_SPECS.get(self._route.step_id, ())
-        self._serialize = self._build_standard_step(config, simple_specs)
+        if self._route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
+            self._serialize = self._build_translator_batch(config)
+        else:
+            simple_specs = self._SIMPLE_STEP_SPECS.get(self._route.step_id, ())
+            self._serialize = self._build_standard_step(config, simple_specs)
 
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -451,20 +456,6 @@ class StepAdvancedConfigDialog(QDialog):
             setattr(self, spec.attr_name, check_widget)
             self._form_layout.addRow(self.tr(str(spec.label)), check_widget)
 
-        if _step_shows_batch_config(self._route.step_id, self._all_routes):
-            raw_batch_size = config.get("batch_size", 100)
-            batch_size_spin = self._spin(1, 5000, int(raw_batch_size) if isinstance(raw_batch_size, int) else 100)
-            readers["batch_size"] = batch_size_spin.value
-            self.batch_size_spin = batch_size_spin
-            self._form_layout.addRow(self.tr("Batch size"), batch_size_spin)
-            self._form_layout.addRow(
-                create_tip_label(
-                    self.tr(
-                        "Async batch inherits connection, model, and most request settings from the regular Translator and Polish steps. Custom parameters might not work as expected. Not all models are supported. Please check your provider's documentation."
-                    )
-                )
-            )
-
         self._form_layout.addRow(
             create_tip_label(
                 self.tr("Connection overrides apply only to this workflow step and override the selected connection.")
@@ -528,6 +519,35 @@ class StepAdvancedConfigDialog(QDialog):
 
         return _serialize_standard_step
 
+    def _build_translator_batch(self, config: Mapping[str, object]) -> Callable[[], WorkflowStepRoute]:
+        raw_translator_batch_size = config.get("translator_batch_size", 100)
+        raw_polish_batch_size = config.get("polish_batch_size", raw_translator_batch_size)
+        translator_batch_size_spin = self._spin(
+            1,
+            5000,
+            int(raw_translator_batch_size) if isinstance(raw_translator_batch_size, int) else 100,
+        )
+        polish_batch_size_spin = self._spin(
+            1,
+            5000,
+            int(raw_polish_batch_size) if isinstance(raw_polish_batch_size, int) else 100,
+        )
+
+        self._form_layout.addRow(self.tr("Translator batch size"), translator_batch_size_spin)
+        self._form_layout.addRow(self.tr("Polish batch size"), polish_batch_size_spin)
+
+        def _serialize_batch() -> WorkflowStepRoute:
+            return self._route.model_copy(
+                update={
+                    "step_config": {
+                        "translator_batch_size": int(translator_batch_size_spin.value()),
+                        "polish_batch_size": int(polish_batch_size_spin.value()),
+                    },
+                }
+            )
+
+        return _serialize_batch
+
 
 class WorkflowRoutesEditor(QWidget):
     EditTrigger = QTableWidget.EditTrigger
@@ -584,6 +604,7 @@ class WorkflowRoutesEditor(QWidget):
         self._connection_choices = connection_choices
         self._connection_choice_by_id = {choice.connection_id: choice for choice in connection_choices}
         self._max_visible_rows = max_visible_rows
+        self._stored_batch_route: WorkflowStepRoute | None = None
         self.rows: list[RouteRow] = []
         self.table = self
         self._items: dict[tuple[int, int], QTableWidgetItem] = {}
@@ -626,7 +647,6 @@ class WorkflowRoutesEditor(QWidget):
         self.set_routes(routes)
 
     def set_routes(self, routes: list[WorkflowStepRoute]) -> None:
-        routes = _normalize_workflow_routes(routes)
         while self._rows_layout.count():
             item = self._rows_layout.takeAt(0)
             if item is None:
@@ -641,41 +661,25 @@ class WorkflowRoutesEditor(QWidget):
         self._cell_widgets.clear()
         self._row_columns.clear()
 
-        for row_index, route in enumerate(routes):
-            row_frame = self._build_frame("workflowRouteRow")
-            step_text = workflow_step_label(route.step_id, tr=self.tr)
-            step_label = self._body_label(step_text)
-            step_tooltip = workflow_step_tooltip(route.step_id, tr=self.tr)
-            step_label.setToolTip(step_tooltip)
-
-            combo = self._build_connection_combo(route.connection_id)
-            model_edit = self._build_model_edit(route.model or "")
-            combo.currentIndexChanged.connect(lambda _i, c=combo, e=model_edit: self._sync_model_from_connection(c, e))
-            advanced_widget = self._build_advanced_cell(row_index)
-            columns = self._build_columns(
-                row_frame,
-                [
-                    step_label,
-                    self._wrap_cell_widget(combo),
-                    self._wrap_cell_widget(model_edit),
-                    advanced_widget,
-                ],
+        incoming_batch_route = next(
+            (route for route in routes if route.step_id is WorkflowStepId.TRANSLATOR_BATCH),
+            None,
+        )
+        if incoming_batch_route is not None:
+            self._stored_batch_route = incoming_batch_route
+        elif self._stored_batch_route is None:
+            self._stored_batch_route = WorkflowStepRoute(
+                step_id=WorkflowStepId.TRANSLATOR_BATCH,
+                step_label=workflow_step_label(WorkflowStepId.TRANSLATOR_BATCH, tr=self.tr),
+                step_config={},
             )
-            route_row = RouteRow(
-                route=route,
-                connection_combo=combo,
-                model_edit=model_edit,
-                row_widget=row_frame,
-                step_label_widget=step_label,
-            )
-            self._items[(row_index, 0)] = self._step_item(step_text, tooltip=step_tooltip)
 
-            self.rows.append(route_row)
-            self._row_columns.append(columns)
-            self._cell_widgets[(row_index, 1)] = columns[1]
-            self._cell_widgets[(row_index, 2)] = columns[2]
-            self._cell_widgets[(row_index, 3)] = columns[3]
-            self._rows_layout.addWidget(row_frame)
+        standard_routes = [route for route in routes if route.step_id is not WorkflowStepId.TRANSLATOR_BATCH]
+        derived_batch_route = self._derived_batch_route(standard_routes)
+        render_routes = [*standard_routes, *([derived_batch_route] if derived_batch_route is not None else [])]
+
+        for row_index, route in enumerate(render_routes):
+            self._append_route_row(row_index, route)
 
         self._rows_layout.addStretch()
         self._update_layout_geometry()
@@ -683,9 +687,20 @@ class WorkflowRoutesEditor(QWidget):
     def set_connection_choices(self, connection_choices: list[ConnectionChoice]) -> None:
         self._connection_choices = connection_choices
         self._connection_choice_by_id = {choice.connection_id: choice for choice in connection_choices}
+        self.set_routes(self.build_routes())
 
     def build_routes(self) -> list[WorkflowStepRoute]:
-        return [self._current_route_for_row(row) for row in self.rows]
+        current_batch_route = next(
+            (row.route for row in self.rows if row.route.step_id is WorkflowStepId.TRANSLATOR_BATCH),
+            None,
+        )
+        if current_batch_route is not None:
+            self._stored_batch_route = current_batch_route
+        routes = self._current_standard_routes()
+        derived_batch_route = self._derived_batch_route(routes)
+        if derived_batch_route is not None:
+            routes.append(derived_batch_route)
+        return routes
 
     def validate_routes(self) -> str | None:
         return validate_workflow_routes(self.build_routes(), tr=self.tr)
@@ -739,6 +754,131 @@ class WorkflowRoutesEditor(QWidget):
         if default_model:
             model_edit.setText(default_model)
 
+    def _on_standard_route_changed(self, combo: QComboBox, model_edit: QLineEdit) -> None:
+        self._sync_model_from_connection(combo, model_edit)
+        self.set_routes(self._current_standard_routes())
+
+    def _append_route_row(self, row_index: int, route: WorkflowStepRoute) -> None:
+        row_frame = self._build_frame("workflowRouteRow")
+        step_text = workflow_step_label(route.step_id, tr=self.tr)
+        step_label = self._body_label(step_text)
+        step_tooltip = workflow_step_tooltip(route.step_id, tr=self.tr)
+        step_label.setToolTip(step_tooltip)
+
+        if route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
+            connection_label = self._body_label(route.connection_label or self.tr("Unavailable"))
+            model_edit = self._build_model_edit(self.tr("Inherited"), readonly=True)
+            advanced_widget = self._build_advanced_cell(row_index)
+            columns = self._build_columns(
+                row_frame,
+                [
+                    step_label,
+                    connection_label,
+                    self._wrap_cell_widget(model_edit),
+                    advanced_widget,
+                ],
+            )
+            route_row = RouteRow(
+                route=route,
+                connection_combo=None,
+                model_edit=model_edit,
+                connection_label_widget=connection_label,
+                row_widget=row_frame,
+                step_label_widget=step_label,
+            )
+            self._items[(row_index, 0)] = self._step_item(step_text, tooltip=step_tooltip)
+            self._items[(row_index, 1)] = self._item(connection_label.text())
+        else:
+            combo = self._build_connection_combo(route.connection_id)
+            model_edit = self._build_model_edit(route.model or "")
+            combo.currentIndexChanged.connect(lambda _i, c=combo, e=model_edit: self._on_standard_route_changed(c, e))
+            advanced_widget = self._build_advanced_cell(row_index)
+            columns = self._build_columns(
+                row_frame,
+                [
+                    step_label,
+                    self._wrap_cell_widget(combo),
+                    self._wrap_cell_widget(model_edit),
+                    advanced_widget,
+                ],
+            )
+            route_row = RouteRow(
+                route=route,
+                connection_combo=combo,
+                model_edit=model_edit,
+                row_widget=row_frame,
+                step_label_widget=step_label,
+            )
+            self._items[(row_index, 0)] = self._step_item(step_text, tooltip=step_tooltip)
+
+        self.rows.append(route_row)
+        self._row_columns.append(columns)
+        self._cell_widgets[(row_index, 1)] = columns[1]
+        self._cell_widgets[(row_index, 2)] = columns[2]
+        self._cell_widgets[(row_index, 3)] = columns[3]
+        self._rows_layout.addWidget(row_frame)
+
+    def _current_standard_routes(self) -> list[WorkflowStepRoute]:
+        routes: list[WorkflowStepRoute] = []
+        for row in self.rows:
+            if row.route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
+                continue
+            connection_id = row.connection_combo.currentData() if row.connection_combo is not None else None
+            connection_id_str = str(connection_id) if isinstance(connection_id, str) and connection_id else None
+            connection_label = None
+            if row.connection_combo is not None and connection_id_str is not None:
+                connection_label = row.connection_combo.currentText().strip() or None
+            routes.append(
+                row.route.model_copy(
+                    update={
+                        "connection_id": connection_id_str,
+                        "connection_label": connection_label,
+                        "model": row.model_edit.text().strip() or None,
+                        "step_config": dict(row.route.step_config),
+                    }
+                )
+            )
+        return routes
+
+    def _derived_batch_route(self, routes: list[WorkflowStepRoute]) -> WorkflowStepRoute | None:
+        translator_route = next((route for route in routes if route.step_id is WorkflowStepId.TRANSLATOR), None)
+        polish_route = next((route for route in routes if route.step_id is WorkflowStepId.POLISH), None)
+        translator_provider = self._route_batch_provider(translator_route)
+        polish_provider = self._route_batch_provider(polish_route)
+        if translator_provider is None or polish_provider != translator_provider:
+            return None
+
+        template = self._stored_batch_route or WorkflowStepRoute(
+            step_id=WorkflowStepId.TRANSLATOR_BATCH,
+            step_label=workflow_step_label(WorkflowStepId.TRANSLATOR_BATCH, tr=self.tr),
+            step_config={},
+        )
+        raw_translator_batch_size = template.step_config.get("translator_batch_size", 100)
+        translator_batch_size = int(raw_translator_batch_size) if isinstance(raw_translator_batch_size, int) else 100
+        raw_polish_batch_size = template.step_config.get("polish_batch_size", translator_batch_size)
+        polish_batch_size = (
+            int(raw_polish_batch_size) if isinstance(raw_polish_batch_size, int) else translator_batch_size
+        )
+        return template.model_copy(
+            update={
+                "connection_id": None,
+                "connection_label": _batch_provider_label(translator_provider, tr=self.tr),
+                "model": None,
+                "step_config": {
+                    "translator_batch_size": translator_batch_size,
+                    "polish_batch_size": polish_batch_size,
+                },
+            }
+        )
+
+    def _route_batch_provider(self, route: WorkflowStepRoute | None) -> str | None:
+        if route is None or not route.connection_id:
+            return None
+        choice = self._connection_choice_by_id.get(route.connection_id)
+        if choice is None:
+            return None
+        return infer_async_batch_provider(choice.base_url)
+
     def _item(self, text: str, *, tooltip: str | None = None, centered: bool = False) -> QTableWidgetItem:
         item = QTableWidgetItem(text)
         if tooltip:
@@ -764,40 +904,20 @@ class WorkflowRoutesEditor(QWidget):
             return
         route_row = self.rows[row]
         parent = self.window()
-        current_route = self._current_route_for_row(route_row)
-        dialog_parent = parent if isinstance(parent, QWidget) else self
-        try:
-            dialog = StepAdvancedConfigDialog(
-                current_route,
-                all_routes=self.build_routes(),
-                parent=dialog_parent,
-            )
-        except TypeError:
-            dialog = StepAdvancedConfigDialog(current_route, dialog_parent)
+        dialog = StepAdvancedConfigDialog(route_row.route, parent if isinstance(parent, QWidget) else self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         updated_route = dialog.route()
         route_row.route = updated_route
-
-    def _current_route_for_row(self, row: RouteRow) -> WorkflowStepRoute:
-        connection_id = row.connection_combo.currentData() if row.connection_combo is not None else None
-        connection_id_str = str(connection_id) if isinstance(connection_id, str) and connection_id else None
-        connection_label = None
-        if row.connection_combo is not None and connection_id_str is not None:
-            connection_label = row.connection_combo.currentText().strip() or None
-        connection_base_url = None
-        if connection_id_str is not None:
-            choice = self._connection_choice_by_id.get(connection_id_str)
-            connection_base_url = choice.base_url if choice is not None else None
-        return row.route.model_copy(
-            update={
-                "connection_id": connection_id_str,
-                "connection_label": connection_label,
-                "connection_base_url": connection_base_url,
-                "model": row.model_edit.text().strip() or None,
-                "step_config": dict(row.route.step_config),
-            }
-        )
+        if updated_route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
+            self._stored_batch_route = updated_route
+            derived_batch_route = self._derived_batch_route(self._current_standard_routes())
+            if derived_batch_route is not None:
+                route_row.route = derived_batch_route
+            if route_row.connection_label_widget is not None:
+                route_row.connection_label_widget.setText(route_row.route.connection_label or self.tr("Unavailable"))
+            route_row.model_edit.setReadOnly(True)
+            route_row.model_edit.setText(self.tr("Inherited"))
 
     def _build_frame(self, object_name: str) -> QFrame:
         frame = QFrame()

@@ -5,9 +5,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from context_aware_translation.config import Config
+from context_aware_translation.config import Config, PolishConfig
 from context_aware_translation.llm.client import LLMClient
 from context_aware_translation.llm.translator import (
+    build_polish_prompt,
     build_translation_prompt,
     postprocess_translated_blocks,
     preprocess_chunk_text,
@@ -19,6 +20,14 @@ from context_aware_translation.utils.compression_marker import COMPRESSED_LINE_S
 def _make_term(key: str = "爱丽丝") -> tuple[str, str, str]:
     """Create a term tuple (name, translated_name, description)."""
     return (key, "Alice", "desc")
+
+
+def _indexed_text_entries(texts: list[str]) -> list[dict[str, int | str]]:
+    return [{"id": idx, "文本": text} for idx, text in enumerate(texts)]
+
+
+def _translation_response(texts: list[str]) -> str:
+    return json.dumps({"翻译文本": _indexed_text_entries(texts)}, ensure_ascii=False)
 
 
 def test_preprocess_and_postprocess_preserve_special_lines():
@@ -73,7 +82,7 @@ def test_postprocess_marks_compressed_placeholders_but_keeps_true_empty_lines():
 
 
 def test_build_translation_prompt_mentions_epub_inline_marker_preservation():
-    system_prompt, _ = build_translation_prompt(
+    system_prompt, user_prompt = build_translation_prompt(
         chunk_blocks=["示例文本"],
         terms=[],
         source_language="日语",
@@ -92,14 +101,38 @@ def test_build_translation_prompt_mentions_epub_inline_marker_preservation():
     assert "示例：" in system_prompt
     assert "他使出了「⟪RUBY:0⟫断罪飞踢(惩罚坠击)⟪/RUBY:0⟫」。" in system_prompt
     assert "她被称为「女主角」。" in system_prompt
-    assert '"意",' in system_prompt
-    assert '"味",' in system_prompt
-    assert '"が",' in system_prompt
-    assert '"分",' in system_prompt
-    assert '"义",' in system_prompt
-    assert '"不",' in system_prompt
-    assert '"明",' in system_prompt
-    assert '填 ""' in system_prompt
+    assert '"id": 0' in system_prompt
+    assert '"文本": "意"' in system_prompt
+    assert '"文本": "味"' in system_prompt
+    assert '"文本": "义"' in system_prompt
+    assert '"文本": "不"' in system_prompt
+    assert '"文本": "明"' in system_prompt
+    assert '相关 id 的文本填 ""' in system_prompt
+    assert json.loads(user_prompt) == {
+        "术语列表": [],
+        "原文": [{"id": 0, "文本": "示例文本"}],
+    }
+
+
+def test_build_polish_prompt_uses_language_placeholders_and_strict_output_contract():
+    system_prompt, user_prompt = build_polish_prompt(
+        translated_blocks=["原稿1", "原稿2"],
+        target_language="简体中文",
+        source_language="日语",
+    )
+
+    assert "你是简体中文母语的资深编辑。" in system_prompt
+    assert "找出每句话中的日语残留或有翻译腔的表达。" in system_prompt
+    assert "去除日语残留。更正标点。" in system_prompt
+    assert "挑选出最符合简体中文习惯的。" in system_prompt
+    assert "只输出一个JSON对象" in system_prompt
+    assert "每个 id 恰好出现一次" in system_prompt
+    assert json.loads(user_prompt) == {
+        "翻译文本": [
+            {"id": 0, "文本": "原稿1"},
+            {"id": 1, "文本": "原稿2"},
+        ]
+    }
 
 
 @pytest.mark.asyncio
@@ -110,7 +143,7 @@ async def test_translate_chunk_uses_block_lists_and_reconstructs(temp_config: Co
     llm_client = MagicMock(spec=LLMClient)
 
     async def mock_chat(*_args, **_kwargs):
-        return json.dumps({"翻译文本": ["A translated", "---", "B translated"]})
+        return _translation_response(["A translated", "---", "B translated"])
 
     llm_client.chat = AsyncMock(side_effect=mock_chat)
 
@@ -130,7 +163,11 @@ async def test_translate_chunk_uses_block_lists_and_reconstructs(temp_config: Co
     messages = translate_call[0][0]
     user_payload = json.loads(messages[1]["content"])
 
-    assert user_payload["原文"] == ["A", "---", "B"]
+    assert user_payload["原文"] == [
+        {"id": 0, "文本": "A"},
+        {"id": 1, "文本": "---"},
+        {"id": 2, "文本": "B"},
+    ]
     assert isinstance(user_payload["原文"], list)
     assert translate_call[1]["response_format"] == {"type": "json_object"}
 
@@ -146,8 +183,8 @@ async def test_translate_chunk_retries_when_inline_markers_are_removed(temp_conf
     llm_client = MagicMock(spec=LLMClient)
     llm_client.chat = AsyncMock(
         side_effect=[
-            json.dumps({"翻译文本": ["这是斜体文本"]}),
-            json.dumps({"翻译文本": ["这是 ⟪a:0⟫链接⟪/a:0⟫ 文本"]}),
+            _translation_response(["这是斜体文本"]),
+            _translation_response(["这是 ⟪a:0⟫链接⟪/a:0⟫ 文本"]),
         ]
     )
 
@@ -165,7 +202,48 @@ async def test_translate_chunk_retries_when_inline_markers_are_removed(temp_conf
     correction_messages = llm_client.chat.await_args_list[1].args[0]
     assert "内联标记" in correction_messages[-1]["content"]
     assert "把多条内容压成一条" in correction_messages[-1]["content"]
-    assert '其余索引填 ""' in correction_messages[-1]["content"]
+    assert '相关 id 的 文本 填 ""' in correction_messages[-1]["content"]
+    assert "每个 id 恰好出现一次" in correction_messages[-1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_translate_chunk_retries_when_ids_are_reordered(temp_config: Config):
+    chunks = ["甲", "乙"]
+    terms = [_make_term()]
+    assert temp_config.translator_config is not None
+    temp_config.translator_config.enable_polish = False
+    temp_config.translator_config.max_retries = 0
+
+    llm_client = MagicMock(spec=LLMClient)
+    llm_client.chat = AsyncMock(
+        side_effect=[
+            json.dumps(
+                {
+                    "翻译文本": [
+                        {"id": 1, "文本": "乙"},
+                        {"id": 0, "文本": "甲"},
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            _translation_response(["甲", "乙"]),
+        ]
+    )
+
+    result = await translate_chunk(
+        chunks=chunks,
+        terms=terms,
+        llm_client=llm_client,
+        translator_config=temp_config.translator_config,
+        source_language="日语",
+        target_language=temp_config.translation_target_language,
+    )
+
+    assert result == ["甲", "乙"]
+    assert llm_client.chat.await_count == 2
+    correction_messages = llm_client.chat.await_args_list[1].args[0]
+    assert "id mismatch" in correction_messages[-1]["content"]
+    assert "不得新增、删除、重复、改动、合并或重排任何 id" in correction_messages[-1]["content"]
 
 
 @pytest.mark.asyncio
@@ -177,7 +255,7 @@ async def test_translate_chunk_accepts_fullwidth_delimiters_for_strict_markers(t
     temp_config.translator_config.max_retries = 0
 
     llm_client = MagicMock(spec=LLMClient)
-    llm_client.chat = AsyncMock(side_effect=[json.dumps({"翻译文本": ["这是 《a:0》链接《/a:0》 文本"]})])
+    llm_client.chat = AsyncMock(side_effect=[_translation_response(["这是 《a:0》链接《/a:0》 文本"])])
 
     result = await translate_chunk(
         chunks=chunks,
@@ -201,7 +279,7 @@ async def test_translate_chunk_does_not_retry_when_lenient_style_marker_is_remov
     temp_config.translator_config.max_retries = 0
 
     llm_client = MagicMock(spec=LLMClient)
-    llm_client.chat = AsyncMock(side_effect=[json.dumps({"翻译文本": ["这是斜体文本"]})])
+    llm_client.chat = AsyncMock(side_effect=[_translation_response(["这是斜体文本"])])
 
     result = await translate_chunk(
         chunks=chunks,
@@ -225,7 +303,7 @@ async def test_translate_chunk_does_not_retry_when_only_ruby_marker_is_removed(t
     temp_config.translator_config.max_retries = 0
 
     llm_client = MagicMock(spec=LLMClient)
-    llm_client.chat = AsyncMock(side_effect=[json.dumps({"翻译文本": ["前文 汉字 后文"]})])
+    llm_client.chat = AsyncMock(side_effect=[_translation_response(["前文 汉字 后文"])])
 
     result = await translate_chunk(
         chunks=chunks,
@@ -251,8 +329,8 @@ async def test_translate_chunk_retries_when_ruby_marker_is_malformed(temp_config
     llm_client = MagicMock(spec=LLMClient)
     llm_client.chat = AsyncMock(
         side_effect=[
-            json.dumps({"翻译文本": ["前文 ⟪RUBY:0⟫汉字 后文"]}),
-            json.dumps({"翻译文本": ["前文 汉字 后文"]}),
+            _translation_response(["前文 ⟪RUBY:0⟫汉字 后文"]),
+            _translation_response(["前文 汉字 后文"]),
         ]
     )
 
@@ -283,8 +361,8 @@ async def test_translate_chunk_retries_when_unknown_inline_marker_is_present(tem
     llm_client = MagicMock(spec=LLMClient)
     llm_client.chat = AsyncMock(
         side_effect=[
-            json.dumps({"翻译文本": ["前文 ⟪UNKNOWN⟫汉字 后文"]}),
-            json.dumps({"翻译文本": ["前文 汉字 后文"]}),
+            _translation_response(["前文 ⟪UNKNOWN⟫汉字 后文"]),
+            _translation_response(["前文 汉字 后文"]),
         ]
     )
 
@@ -314,23 +392,19 @@ async def test_translate_chunk_retries_when_shifted_strict_markers_touch_compres
     llm_client = MagicMock(spec=LLMClient)
     llm_client.chat = AsyncMock(
         side_effect=[
-            json.dumps(
-                {
-                    "翻译文本": [
-                        "",
-                        "甲 ⟪a:0⟫壹⟪/a:0⟫",
-                        "丙",
-                    ]
-                }
+            _translation_response(
+                [
+                    "",
+                    "甲 ⟪a:0⟫壹⟪/a:0⟫",
+                    "丙",
+                ]
             ),
-            json.dumps(
-                {
-                    "翻译文本": [
-                        "甲 ⟪a:0⟫壹⟪/a:0⟫",
-                        "",
-                        "丙",
-                    ]
-                }
+            _translation_response(
+                [
+                    "甲 ⟪a:0⟫壹⟪/a:0⟫",
+                    "",
+                    "丙",
+                ]
             ),
         ]
     )
@@ -361,8 +435,8 @@ async def test_translate_chunk_retries_when_empty_placeholder_drops_strict_marke
     llm_client = MagicMock(spec=LLMClient)
     llm_client.chat = AsyncMock(
         side_effect=[
-            json.dumps({"翻译文本": ["", "乙"]}),
-            json.dumps({"翻译文本": ["甲 ⟪a:0⟫壹⟪/a:0⟫", "乙"]}),
+            _translation_response(["", "乙"]),
+            _translation_response(["甲 ⟪a:0⟫壹⟪/a:0⟫", "乙"]),
         ]
     )
 
@@ -391,7 +465,7 @@ async def test_translate_chunk_allows_empty_placeholder_for_plain_line(temp_conf
     temp_config.translator_config.max_retries = 0
 
     llm_client = MagicMock(spec=LLMClient)
-    llm_client.chat = AsyncMock(side_effect=[json.dumps({"翻译文本": ["", "乙"]})])
+    llm_client.chat = AsyncMock(side_effect=[_translation_response(["", "乙"])])
 
     result = await translate_chunk(
         chunks=chunks,
@@ -415,7 +489,7 @@ async def test_translate_chunk_allows_compressed_lines_with_lenient_markers_only
     temp_config.translator_config.max_retries = 0
 
     llm_client = MagicMock(spec=LLMClient)
-    llm_client.chat = AsyncMock(side_effect=[json.dumps({"翻译文本": ["甲", ""]})])
+    llm_client.chat = AsyncMock(side_effect=[_translation_response(["甲", ""])])
 
     result = await translate_chunk(
         chunks=chunks,
@@ -441,8 +515,8 @@ async def test_translate_chunk_retries_when_multiple_compressed_lines_drop_stric
     llm_client = MagicMock(spec=LLMClient)
     llm_client.chat = AsyncMock(
         side_effect=[
-            json.dumps({"翻译文本": ["前言", "", ""]}),
-            json.dumps({"翻译文本": ["前言", "甲 ⟪a:0⟫壹⟪/a:0⟫", "乙 ⟪abbr:1⟫贰⟪/abbr:1⟫"]}),
+            _translation_response(["前言", "", ""]),
+            _translation_response(["前言", "甲 ⟪a:0⟫壹⟪/a:0⟫", "乙 ⟪abbr:1⟫贰⟪/abbr:1⟫"]),
         ]
     )
 
@@ -473,9 +547,9 @@ async def test_translate_chunk_strict_mismatch_without_compression_still_raises(
     llm_client = MagicMock(spec=LLMClient)
     llm_client.chat = AsyncMock(
         side_effect=[
-            json.dumps({"翻译文本": ["甲 壹", "乙", "丙"]}),
-            json.dumps({"翻译文本": ["甲 壹", "乙", "丙"]}),
-            json.dumps({"翻译文本": ["甲 壹", "乙", "丙"]}),
+            _translation_response(["甲 壹", "乙", "丙"]),
+            _translation_response(["甲 壹", "乙", "丙"]),
+            _translation_response(["甲 壹", "乙", "丙"]),
         ]
     )
 
@@ -501,7 +575,7 @@ async def test_translate_chunk_allows_extra_ruby_markers_mixed_inline(temp_confi
     llm_client = MagicMock(spec=LLMClient)
     llm_client.chat = AsyncMock(
         side_effect=[
-            json.dumps({"翻译文本": ["A ⟪a:0⟫y⟪/a:0⟫ B ⟪RUBY:1⟫漢字(a)⟪/RUBY:1⟫ ⟪RUBY:9⟫追加(b)⟪/RUBY:9⟫ C"]}),
+            _translation_response(["A ⟪a:0⟫y⟪/a:0⟫ B ⟪RUBY:1⟫漢字(a)⟪/RUBY:1⟫ ⟪RUBY:9⟫追加(b)⟪/RUBY:9⟫ C"]),
         ]
     )
 
@@ -529,7 +603,7 @@ async def test_translate_chunk_allows_extra_ruby_markers_ruby_only(temp_config: 
     llm_client = MagicMock(spec=LLMClient)
     llm_client.chat = AsyncMock(
         side_effect=[
-            json.dumps({"翻译文本": ["前文 ⟪RUBY:0⟫汉字(a)⟪/RUBY:0⟫ ⟪RUBY:2⟫额外(b)⟪/RUBY:2⟫ 后文"]}),
+            _translation_response(["前文 ⟪RUBY:0⟫汉字(a)⟪/RUBY:0⟫ ⟪RUBY:2⟫额外(b)⟪/RUBY:2⟫ 后文"]),
         ]
     )
 
@@ -554,7 +628,7 @@ async def test_translate_chunk_raises_on_length_mismatch(temp_config: Config):
     llm_client = MagicMock(spec=LLMClient)
 
     async def mock_chat(*_args, **_kwargs):
-        return json.dumps({"翻译文本": ["only one"]})
+        return _translation_response(["only one"])
 
     llm_client.chat = AsyncMock(side_effect=mock_chat)
 
@@ -581,17 +655,15 @@ async def test_translate_chunk_multiple_chunks(temp_config: Config):
     llm_client = MagicMock(spec=LLMClient)
 
     async def mock_chat(*_args, **_kwargs):
-        return json.dumps(
-            {
-                "翻译文本": [
-                    "Chunk1 translated",
-                    "---",
-                    "Part1 translated",
-                    "Chunk2 translated",
-                    "***",
-                    "Part2 translated",
-                ]
-            }
+        return _translation_response(
+            [
+                "Chunk1 translated",
+                "---",
+                "Part1 translated",
+                "Chunk2 translated",
+                "***",
+                "Part2 translated",
+            ]
         )
 
     llm_client.chat = AsyncMock(side_effect=mock_chat)
@@ -614,7 +686,14 @@ async def test_translate_chunk_multiple_chunks(temp_config: Config):
     translate_call = llm_client.chat.call_args_list[0]
     messages = translate_call[0][0]
     user_payload = json.loads(messages[1]["content"])
-    assert user_payload["原文"] == ["Chunk1", "---", "Part1", "Chunk2", "***", "Part2"]
+    assert user_payload["原文"] == [
+        {"id": 0, "文本": "Chunk1"},
+        {"id": 1, "文本": "---"},
+        {"id": 2, "文本": "Part1"},
+        {"id": 3, "文本": "Chunk2"},
+        {"id": 4, "文本": "***"},
+        {"id": 5, "文本": "Part2"},
+    ]
 
 
 @pytest.mark.asyncio
@@ -626,7 +705,7 @@ async def test_translate_chunk_empty_chunks(temp_config: Config):
     llm_client = MagicMock(spec=LLMClient)
 
     async def mock_chat(*_args, **_kwargs):
-        return json.dumps({"翻译文本": ["Non-empty translated", "---", "Text translated"]})
+        return _translation_response(["Non-empty translated", "---", "Text translated"])
 
     llm_client.chat = AsyncMock(side_effect=mock_chat)
 
@@ -656,8 +735,8 @@ async def test_translate_chunk_uses_polished_response_when_enabled(temp_config: 
     llm_client = MagicMock(spec=LLMClient)
     llm_client.chat = AsyncMock(
         side_effect=[
-            json.dumps({"翻译文本": ["First pass"]}),
-            json.dumps({"翻译文本": ["Polished pass"]}),
+            _translation_response(["First pass"]),
+            _translation_response(["Polished pass"]),
         ]
     )
 
@@ -672,6 +751,44 @@ async def test_translate_chunk_uses_polished_response_when_enabled(temp_config: 
 
     assert result == ["Polished pass"]
     assert llm_client.chat.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_translate_chunk_uses_separate_polish_config_when_provided(temp_config: Config):
+    chunks = ["A"]
+    terms = [_make_term()]
+    assert temp_config.translator_config is not None
+    temp_config.translator_config.enable_polish = True
+    temp_config.translator_config.max_retries = 0
+    polish_config = PolishConfig(
+        api_key="POLISH_KEY",
+        base_url="https://polish.example/v1",
+        model="polish-reasoner",
+        max_retries=0,
+    )
+
+    llm_client = MagicMock(spec=LLMClient)
+    llm_client.chat = AsyncMock(
+        side_effect=[
+            _translation_response(["First pass"]),
+            _translation_response(["Polished pass"]),
+        ]
+    )
+
+    result = await translate_chunk(
+        chunks=chunks,
+        terms=terms,
+        llm_client=llm_client,
+        translator_config=temp_config.translator_config,
+        source_language="日语",
+        target_language=temp_config.translation_target_language,
+        polish_config=polish_config,
+    )
+
+    assert result == ["Polished pass"]
+    assert llm_client.chat.await_count == 2
+    assert llm_client.chat.await_args_list[0].args[1] is temp_config.translator_config
+    assert llm_client.chat.await_args_list[1].args[1] is polish_config
 
 
 @pytest.mark.asyncio
@@ -690,8 +807,8 @@ async def test_translate_chunk_reuses_same_llm_session_id_for_translate_and_poli
     async def _mock_chat(*_args, **_kwargs):
         seen_session_ids.append(get_llm_session_id())
         if len(seen_session_ids) == 1:
-            return json.dumps({"翻译文本": ["First pass"]})
-        return json.dumps({"翻译文本": ["Polished pass"]})
+            return _translation_response(["First pass"])
+        return _translation_response(["Polished pass"])
 
     llm_client.chat = AsyncMock(side_effect=_mock_chat)
 

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from context_aware_translation.config import PolishBatchConfig, PolishConfig, TranslatorBatchConfig, TranslatorConfig
+from context_aware_translation.config import TranslatorBatchConfig, TranslatorConfig
 from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.llm.batch_jobs.base import POLL_STATUS_COMPLETED, BatchPollResult, BatchSubmitResult
 from context_aware_translation.storage.repositories.llm_batch_store import LLMBatchStore
@@ -45,9 +45,13 @@ def _build_executor(tmp_path) -> BatchTranslationExecutor:
         base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
         model="gemini-2.5-flash",
     )
+    workflow.config.polish_config = None
     workflow.config.translator_batch_config = TranslatorBatchConfig(
-        batch_size=100,
+        provider="gemini_ai_studio",
+        api_key="k",
+        model="gemini-2.5-flash",
     )
+    workflow.config.polish_batch_config = None
 
     task_store = TaskStore(tmp_path / "task_store.db")
     llm_batch_store = LLMBatchStore(tmp_path / "llm_batch_cache.db")
@@ -113,24 +117,6 @@ def test_cleanup_remote_artifacts_returns_warnings_on_remote_failure(tmp_path):
         executor.close()
 
 
-def test_polish_batch_config_does_not_fallback_to_translator_batch_size(tmp_path):
-    executor = _build_executor(tmp_path)
-    try:
-        executor.workflow.config.translator_batch_config = TranslatorBatchConfig(batch_size=250)
-        executor.workflow.config.polish_config = PolishConfig(
-            api_key="k",
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            model="gemini-2.5-pro",
-        )
-        executor.workflow.config.polish_batch_config = None
-
-        batch_config = executor.polish_batch_config()
-
-        assert batch_config.batch_size == 100
-    finally:
-        executor.close()
-
-
 def test_persist_poll_progress_uses_cached_polish_responses(tmp_path):
     executor = _build_executor(tmp_path)
     try:
@@ -189,24 +175,24 @@ async def test_request_cancel_without_provider_batches_marks_task_cancelled(tmp_
 
 
 @pytest.mark.asyncio
-async def test_request_cancel_without_persisted_batch_config_uses_translator_route(tmp_path):
+async def test_request_cancel_without_batch_config_marks_task_cancelled_locally(tmp_path):
     executor = _build_executor(tmp_path)
     try:
         created = _create_task(
             executor,
             book_id="book-1",
-            payload_json='{"translation":{"batch_name":"batches/active"}}',
+            payload_json='{"translation":{"batch_name":"batches/active","batch_display_name":"cat-translation-task"}}',
         )
         executor.workflow.config.translator_batch_config = None
         executor.gateway.cancel_batch = AsyncMock()
-        executor.gateway.get_batch_state = AsyncMock(side_effect=["RUNNING", "CANCELLED"])
 
         result = await executor.request_cancel(created.task_id)
 
         assert result.status == STATUS_CANCELLED
         assert result.phase == PHASE_DONE
-        executor.gateway.cancel_batch.assert_awaited_once()
-        executor.gateway.get_batch_state.assert_awaited()
+        assert result.last_error is not None
+        assert "translator_batch_config" in result.last_error
+        executor.gateway.cancel_batch.assert_not_awaited()
     finally:
         executor.close()
 
@@ -771,7 +757,7 @@ async def test_run_task_marks_failed_on_non_transient_error(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_ensure_payload_prepared_uses_translator_temperature_for_batch_requests():
+async def test_ensure_payload_prepared_uses_batch_model_with_fixed_temperature():
     from context_aware_translation.storage.repositories.task_store import TaskRecord
 
     task = TaskRecord(
@@ -819,6 +805,7 @@ async def test_ensure_payload_prepared_uses_translator_temperature_for_batch_req
     service.raise_if_local_pause = MagicMock()
     service.document_ids_for_task.return_value = None
     service.translator_config.return_value = translator_config
+    service.polish_config.return_value = translator_config
     service.batch_config.return_value = batch_config
     service._get_force.return_value = False
     progress_callback = MagicMock()
@@ -837,243 +824,15 @@ async def test_ensure_payload_prepared_uses_translator_temperature_for_batch_req
     )
     manager.collect_chunk_translation_inputs.assert_called_once_with(
         batch_size=0,
-        max_tokens_per_batch=4000,
+        max_tokens_per_batch=2000,
         document_ids=None,
         force=False,
         cancel_check=None,
         source_language="Japanese",
     )
-    assert payload["model"] == "batch-model"
-    assert "temperature" not in payload
-    assert payload["batch_request_kwargs"] == {"temperature": 0.15}
-
-
-@pytest.mark.asyncio
-async def test_ensure_payload_prepared_tracks_separate_polish_batch_model_and_temperature():
-    from context_aware_translation.storage.repositories.task_store import TaskRecord
-
-    task = TaskRecord(
-        task_id="task-2",
-        book_id="book-1",
-        task_type="batch_translation",
-        status=STATUS_QUEUED,
-        phase=PHASE_PREPARE,
-        payload_json="{}",
-        document_ids_json=None,
-        config_snapshot_json=None,
-        cancel_requested=False,
-        total_items=0,
-        completed_items=0,
-        failed_items=0,
-        last_error=None,
-        created_at=0.0,
-        updated_at=0.0,
-    )
-
-    translator_config = TranslatorConfig(
-        model="translator-model",
-        temperature=0.15,
-        num_of_chunks_per_llm_call=7,
-    )
-    polish_config = PolishConfig(
-        model="polish-model",
-        temperature=0.45,
-    )
-
-    manager = MagicMock()
-    manager.term_repo.get_source_language.return_value = "Japanese"
-    manager.collect_chunk_translation_inputs.return_value = None
-
-    workflow = MagicMock()
-    workflow.resolve_preflight_document_ids.return_value = None
-    workflow.prepare_llm_prerequisites = AsyncMock()
-    workflow.check_cancel = MagicMock()
-    workflow.manager = manager
-    workflow.config = SimpleNamespace(translation_target_language="English")
-
-    service = MagicMock()
-    service.workflow = workflow
-    service.raise_if_local_pause = MagicMock()
-    service.document_ids_for_task.return_value = None
-    service.translator_config.return_value = translator_config
-    service.polish_config.return_value = polish_config
-    service.translator_batch_config.return_value = TranslatorBatchConfig(
-        provider="gemini_ai_studio",
-        model="batch-translate-model",
-        api_key="k",
-    )
-    service.polish_batch_config.return_value = PolishBatchConfig(
-        provider="gemini_ai_studio",
-        model="batch-polish-model",
-        api_key="k",
-    )
-    service._get_force.return_value = False
-
-    payload = await ensure_payload_prepared(
-        service,
-        task,
-        {},
-        cancel_check=None,
-        progress_callback=None,
-    )
-
-    assert payload["translation_model"] == "batch-translate-model"
-    assert payload["translation_batch_request_kwargs"] == {"temperature": 0.15}
-    assert payload["polish_model"] == "batch-polish-model"
-    assert payload["polish_batch_request_kwargs"] == {"temperature": 0.45}
-
-
-@pytest.mark.asyncio
-async def test_ensure_payload_prepared_inherits_stage_kwargs_for_batch_requests():
-    from context_aware_translation.storage.repositories.task_store import TaskRecord
-
-    task = TaskRecord(
-        task_id="task-3",
-        book_id="book-1",
-        task_type="batch_translation",
-        status=STATUS_QUEUED,
-        phase=PHASE_PREPARE,
-        payload_json="{}",
-        document_ids_json=None,
-        config_snapshot_json=None,
-        cancel_requested=False,
-        total_items=0,
-        completed_items=0,
-        failed_items=0,
-        last_error=None,
-        created_at=0.0,
-        updated_at=0.0,
-    )
-
-    translator_config = TranslatorConfig(
-        model="translator-model",
-        temperature=0.15,
-        kwargs={
-            "reasoning_effort": "low",
-            "extra_body": {"google": {"thinking_config": {"include_thoughts": True}}},
-            "provider": "gemini",
-        },
-    )
-    polish_config = PolishConfig(
-        model="polish-model",
-        temperature=0.45,
-        kwargs={"reasoning_effort": "none"},
-    )
-
-    manager = MagicMock()
-    manager.term_repo.get_source_language.return_value = "Japanese"
-    manager.collect_chunk_translation_inputs.return_value = None
-
-    workflow = MagicMock()
-    workflow.resolve_preflight_document_ids.return_value = None
-    workflow.prepare_llm_prerequisites = AsyncMock()
-    workflow.check_cancel = MagicMock()
-    workflow.manager = manager
-    workflow.config = SimpleNamespace(translation_target_language="English")
-
-    service = MagicMock()
-    service.workflow = workflow
-    service.raise_if_local_pause = MagicMock()
-    service.document_ids_for_task.return_value = None
-    service.translator_config.return_value = translator_config
-    service.polish_config.return_value = polish_config
-    service.translator_batch_config.return_value = TranslatorBatchConfig(
-        provider="gemini_ai_studio",
-        model="batch-translate-model",
-        api_key="k",
-    )
-    service.polish_batch_config.return_value = PolishBatchConfig(
-        provider="gemini_ai_studio",
-        model="batch-polish-model",
-        api_key="k",
-    )
-    service._get_force.return_value = False
-
-    payload = await ensure_payload_prepared(
-        service,
-        task,
-        {},
-        cancel_check=None,
-        progress_callback=None,
-    )
-
-    assert payload["translation_batch_request_kwargs"] == {
-        "reasoning_effort": "low",
-        "extra_body": {"google": {"thinking_config": {"include_thoughts": True}}},
-        "temperature": 0.15,
-    }
-    assert payload["polish_batch_request_kwargs"] == {
-        "reasoning_effort": "none",
-        "temperature": 0.45,
-    }
-
-
-@pytest.mark.asyncio
-async def test_ensure_payload_prepared_skips_polish_batch_config_when_polish_disabled():
-    from context_aware_translation.storage.repositories.task_store import TaskRecord
-
-    task = TaskRecord(
-        task_id="task-4",
-        book_id="book-1",
-        task_type="batch_translation",
-        status=STATUS_QUEUED,
-        phase=PHASE_PREPARE,
-        payload_json="{}",
-        document_ids_json=None,
-        config_snapshot_json=None,
-        cancel_requested=False,
-        total_items=0,
-        completed_items=0,
-        failed_items=0,
-        last_error=None,
-        created_at=0.0,
-        updated_at=0.0,
-    )
-
-    translator_config = TranslatorConfig(
-        model="translator-model",
-        temperature=0.15,
-        enable_polish=False,
-    )
-
-    manager = MagicMock()
-    manager.term_repo.get_source_language.return_value = "Japanese"
-    manager.collect_chunk_translation_inputs.return_value = None
-
-    workflow = MagicMock()
-    workflow.resolve_preflight_document_ids.return_value = None
-    workflow.prepare_llm_prerequisites = AsyncMock()
-    workflow.check_cancel = MagicMock()
-    workflow.manager = manager
-    workflow.config = SimpleNamespace(translation_target_language="English")
-
-    service = MagicMock()
-    service.workflow = workflow
-    service.raise_if_local_pause = MagicMock()
-    service.document_ids_for_task.return_value = None
-    service.translator_config.return_value = translator_config
-    service.translator_batch_config.return_value = TranslatorBatchConfig(
-        provider="gemini_ai_studio",
-        model="batch-translate-model",
-        api_key="k",
-    )
-    service.polish_config.side_effect = AssertionError("polish_config should not be resolved")
-    service.polish_batch_config.side_effect = AssertionError("polish_batch_config should not be resolved")
-    service._get_force.return_value = False
-
-    payload = await ensure_payload_prepared(
-        service,
-        task,
-        {},
-        cancel_check=None,
-        progress_callback=None,
-    )
-
-    assert payload["translation_model"] == "batch-translate-model"
-    assert payload["polish_model"] == ""
-    assert payload["polish_batch_request_kwargs"] == {}
-    service.polish_config.assert_not_called()
-    service.polish_batch_config.assert_not_called()
+    assert payload["translation_model"] == "translator-model"
+    assert payload["translation_request_kwargs"] == {"temperature": 0.15}
+    assert payload["translation_batch_size"] == 100
 
 
 @pytest.mark.asyncio
@@ -1115,7 +874,7 @@ async def test_execute_stage_reuses_cached_submitted_batch_without_resubmitting(
         llm_batch_store.upsert_completed(
             request_hash,
             "gemini_ai_studio",
-            '{"翻译文本":["ok"]}',
+            '{"翻译文本":[{"id":0,"文本":"ok"}]}',
             batch_name=existing_batch_name,
         )
         return BatchPollResult(status=POLL_STATUS_COMPLETED)
@@ -1199,7 +958,7 @@ async def test_execute_stage_deduplicates_duplicate_request_hashes(tmp_path):
         llm_batch_store.upsert_completed(
             request_hash,
             "gemini_ai_studio",
-            '{"翻译文本":["ok"]}',
+            '{"翻译文本":[{"id":0,"文本":"ok"}]}',
             batch_name="batch/jobs/dup",
         )
         return BatchPollResult(status=POLL_STATUS_COMPLETED)
@@ -1282,7 +1041,7 @@ async def test_execute_stage_resubmits_when_cached_failed_record_was_cancelled(t
         llm_batch_store.upsert_completed(
             request_hash,
             "gemini_ai_studio",
-            '{"翻译文本":["ok"]}',
+            '{"翻译文本":[{"id":0,"文本":"ok"}]}',
             batch_name="batch/jobs/new",
         )
         return BatchPollResult(status=POLL_STATUS_COMPLETED)
@@ -1368,7 +1127,7 @@ async def test_execute_stage_submits_sequential_slices_by_batch_size(tmp_path):
             llm_batch_store.upsert_completed(
                 request_hash,
                 "gemini_ai_studio",
-                '{"翻译文本":["ok"]}',
+                '{"翻译文本":[{"id":0,"文本":"ok"}]}',
                 batch_name=str(kwargs["batch_name"]),
             )
         return BatchPollResult(status=POLL_STATUS_COMPLETED, output_file_name="files/out")
@@ -1410,7 +1169,7 @@ async def test_execute_stage_persists_final_fallback_state_before_return(tmp_pat
     llm_batch_store.upsert_completed(
         request_hash,
         "gemini_ai_studio",
-        '{"翻译文本":["raw"]}',
+        '{"翻译文本":[{"id":0,"文本":"raw"}]}',
         batch_name="batch/jobs/existing",
     )
 
@@ -1497,7 +1256,7 @@ async def test_execute_stage_validation_respects_translator_concurrency(tmp_path
         llm_batch_store.upsert_completed(
             request_hash,
             "gemini_ai_studio",
-            '{"翻译文本":["ok"]}',
+            '{"翻译文本":[{"id":0,"文本":"ok"}]}',
             batch_name="batch/jobs/validate",
         )
         items.append(

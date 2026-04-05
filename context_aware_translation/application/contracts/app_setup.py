@@ -25,10 +25,10 @@ class WorkflowProfileKind(StrEnum):
     PROJECT_SPECIFIC = "project_specific"
 
 
-class WizardRecommendationMode(StrEnum):
-    BUDGET = "budget"
-    BALANCED = "balanced"
+class SetupWizardMode(StrEnum):
     QUALITY = "quality"
+    BALANCED = "balanced"
+    BUDGET = "budget"
 
 
 class WorkflowStepId(StrEnum):
@@ -96,7 +96,6 @@ class WorkflowStepRoute(ContractModel):
     step_label: str
     connection_id: str | None = None
     connection_label: str | None = None
-    connection_base_url: str | None = None
     model: str | None = None
     step_config: dict[str, Any] = Field(default_factory=dict)
 
@@ -135,9 +134,7 @@ class SetupWizardRequest(ContractModel):
     connections: list[ConnectionDraft]
     profile_name: str | None = None
     target_language: str | None = None
-    recommendation_mode: WizardRecommendationMode = WizardRecommendationMode.BALANCED
-    translator_batch_size: int | None = None
-    polish_batch_size: int | None = None
+    recommendation_mode: SetupWizardMode = SetupWizardMode.BALANCED
 
 
 class SetupWizardState(ContractModel):
@@ -148,9 +145,7 @@ class SetupWizardState(ContractModel):
     recommendation: WorkflowProfileDetail | None = None
     profile_name: str | None = None
     target_language: str = "English"
-    recommendation_mode: WizardRecommendationMode = WizardRecommendationMode.BALANCED
-    translator_batch_size: int = 100
-    polish_batch_size: int = 100
+    recommendation_mode: SetupWizardMode = SetupWizardMode.BALANCED
 
 
 class AppSetupState(ContractModel):

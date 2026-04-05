@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import time
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
 
 from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import (
@@ -242,104 +240,6 @@ def test_can_delete_allows_queued():
     record = _make_record(status=STATUS_QUEUED)
     decision = handler.can(TaskAction.DELETE, record, {}, _make_snapshot())
     assert decision.allowed is True
-
-
-def test_validate_submit_rejects_non_batch_capable_translator(tmp_path):
-    deps = MagicMock()
-    deps.book_manager.get_book_db_path.return_value = tmp_path / "book.db"
-    deps.book_manager.get_book.return_value = object()
-    deps.book_manager.library_root = tmp_path
-    deps.book_manager.registry = object()
-    fake_db = MagicMock()
-    fake_repo = MagicMock()
-    fake_repo.list_documents.return_value = [{"document_id": 1, "document_type": "text"}]
-
-    config = SimpleNamespace(
-        translator_config=SimpleNamespace(base_url="https://api.openai.com/v1", model="gpt-4.1-mini"),
-        polish_config=None,
-    )
-
-    with (
-        patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
-        patch(
-            "context_aware_translation.storage.repositories.document_repository.DocumentRepository",
-            return_value=fake_repo,
-        ),
-        patch(
-            "context_aware_translation.workflow.tasks.handlers.batch_translation.Config.from_book", return_value=config
-        ),
-    ):
-        result = handler.validate_submit("book-1", {}, deps)
-
-    assert result.allowed is False
-    assert "translator" in str(result.reason).lower()
-
-
-def test_validate_submit_rejects_mismatched_polish_provider(tmp_path):
-    deps = MagicMock()
-    deps.book_manager.get_book_db_path.return_value = tmp_path / "book.db"
-    deps.book_manager.get_book.return_value = object()
-    deps.book_manager.library_root = tmp_path
-    deps.book_manager.registry = object()
-    fake_db = MagicMock()
-    fake_repo = MagicMock()
-    fake_repo.list_documents.return_value = [{"document_id": 1, "document_type": "text"}]
-
-    config = SimpleNamespace(
-        translator_config=SimpleNamespace(
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            model="gemini-2.5-pro",
-        ),
-        polish_config=SimpleNamespace(base_url="https://api.openai.com/v1", model="gpt-4.1-mini"),
-    )
-
-    with (
-        patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
-        patch(
-            "context_aware_translation.storage.repositories.document_repository.DocumentRepository",
-            return_value=fake_repo,
-        ),
-        patch(
-            "context_aware_translation.workflow.tasks.handlers.batch_translation.Config.from_book", return_value=config
-        ),
-    ):
-        result = handler.validate_submit("book-1", {"enable_polish": True}, deps)
-
-    assert result.allowed is False
-    assert "translator and polish" in str(result.reason).lower()
-
-
-def test_validate_submit_allows_mismatched_polish_provider_when_polish_disabled(tmp_path):
-    deps = MagicMock()
-    deps.book_manager.get_book_db_path.return_value = tmp_path / "book.db"
-    deps.book_manager.get_book.return_value = object()
-    deps.book_manager.library_root = tmp_path
-    deps.book_manager.registry = object()
-    fake_db = MagicMock()
-    fake_repo = MagicMock()
-    fake_repo.list_documents.return_value = [{"document_id": 1, "document_type": "text"}]
-
-    config = SimpleNamespace(
-        translator_config=SimpleNamespace(
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            model="gemini-2.5-pro",
-        ),
-        polish_config=SimpleNamespace(base_url="https://api.openai.com/v1", model="gpt-4.1-mini"),
-    )
-
-    with (
-        patch("context_aware_translation.storage.schema.book_db.SQLiteBookDB", return_value=fake_db),
-        patch(
-            "context_aware_translation.storage.repositories.document_repository.DocumentRepository",
-            return_value=fake_repo,
-        ),
-        patch(
-            "context_aware_translation.workflow.tasks.handlers.batch_translation.Config.from_book", return_value=config
-        ),
-    ):
-        result = handler.validate_submit("book-1", {"enable_polish": False}, deps)
-
-    assert result.allowed is True
 
 
 def test_can_delete_denies_running():
