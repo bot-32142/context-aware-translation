@@ -37,7 +37,7 @@ async def review_batch(
 Your task is to review a list of extracted terms and identify which ones should be kept for the glossary and which should be ignored (noise).
 
 Criteria for 'ignore' (Invalid Terms):
-1.  **Common Words/Phrases**: Ordinary words that are not specific terminology (e.g., "suddenly", "next day", "beautiful").
+1.  **Common Words/Phrases**: Ordinary words that are not specific terminology (e.g., "suddenly", "next day", "beautiful"). Note that some common words is actually important terminology in certain contexts, so use judgment based on descriptions.
 2.  **Partial Extraction**: Fragments of sentences or phrases that are not complete terms (e.g., "of the king", "red and").
 3.  **Hallucinations**: Terms that clearly don't make sense or look like garbled text.
 4.  **Verbs/Adjectives**: Unless they are specific coined terms or jargon.
