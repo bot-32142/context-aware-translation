@@ -146,6 +146,54 @@ async def test_translate_chunk_retries_when_inline_markers_are_removed(temp_conf
 
 
 @pytest.mark.asyncio
+async def test_translate_chunk_accepts_source_markers_split_across_adjacent_lines(temp_config: Config):
+    chunks = ["前言\n⟪span:0⟫fragment\ncontinued⟪/span:0⟫"]
+    terms = [_make_term()]
+    assert temp_config.translator_config is not None
+    temp_config.translator_config.enable_polish = False
+    temp_config.translator_config.max_retries = 0
+
+    llm_client = MagicMock(spec=LLMClient)
+    llm_client.chat = AsyncMock(side_effect=[_translation_response(["前言", "⟪span:0⟫片段", "续上⟪/span:0⟫"])])
+
+    result = await translate_chunk(
+        chunks=chunks,
+        terms=terms,
+        llm_client=llm_client,
+        translator_config=temp_config.translator_config,
+        source_language="英语",
+        target_language=temp_config.translation_target_language,
+    )
+
+    assert result == ["前言\n⟪span:0⟫片段\n续上⟪/span:0⟫"]
+    assert llm_client.chat.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_translate_chunk_accepts_chunk_starting_inside_inline_span(temp_config: Config):
+    chunks = ["fin⟪/span:22⟫\n⟪span:24⟫suite⟪/span:24⟫"]
+    terms = [_make_term()]
+    assert temp_config.translator_config is not None
+    temp_config.translator_config.enable_polish = False
+    temp_config.translator_config.max_retries = 0
+
+    llm_client = MagicMock(spec=LLMClient)
+    llm_client.chat = AsyncMock(side_effect=[_translation_response(["结束⟪/span:22⟫", "⟪span:24⟫继续⟪/span:24⟫"])])
+
+    result = await translate_chunk(
+        chunks=chunks,
+        terms=terms,
+        llm_client=llm_client,
+        translator_config=temp_config.translator_config,
+        source_language="法语",
+        target_language=temp_config.translation_target_language,
+    )
+
+    assert result == ["结束⟪/span:22⟫\n⟪span:24⟫继续⟪/span:24⟫"]
+    assert llm_client.chat.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_translate_chunk_retries_when_ids_are_reordered(temp_config: Config):
     chunks = ["甲", "乙"]
     terms = [_make_term()]

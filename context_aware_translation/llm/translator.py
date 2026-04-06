@@ -11,6 +11,7 @@ from context_aware_translation.core.cancellation import OperationCancelledError,
 from context_aware_translation.documents.epub_support.inline_markers import (
     extract_inline_markers,
     strict_inline_markers,
+    validate_inline_marker_fragment_sanity,
     validate_inline_marker_sanity,
 )
 from context_aware_translation.llm.client import LLMClient
@@ -62,14 +63,23 @@ def _extract_line_inline_tokens(lines: list[str]) -> list[list[str]]:
 
 def _validate_source_marker_sanity(source_tokens: list[str], *, label: str, line_no: int) -> None:
     try:
-        validate_inline_marker_sanity(source_tokens)
+        validate_inline_marker_fragment_sanity(source_tokens)
     except ValueError as exc:  # pragma: no cover - defensive guard for extractor bugs
         raise ValueError(f"{label}: source line {line_no} malformed EPUB inline markers — {exc}.") from exc
 
 
-def _validate_translated_marker_sanity(translated_tokens: list[str], *, label: str, line_no: int) -> None:
+def _validate_translated_marker_sanity(
+    translated_tokens: list[str],
+    *,
+    source_tokens: list[str],
+    label: str,
+    line_no: int,
+) -> None:
     try:
-        validate_inline_marker_sanity(translated_tokens)
+        if _source_allows_fragment_markers(source_tokens):
+            validate_inline_marker_fragment_sanity(translated_tokens)
+        else:
+            validate_inline_marker_sanity(translated_tokens)
     except ValueError as exc:
         raise ValueError(
             f"{label}: line {line_no} malformed EPUB inline markers — {exc}. "
@@ -77,17 +87,32 @@ def _validate_translated_marker_sanity(translated_tokens: list[str], *, label: s
         ) from exc
 
 
+def _source_allows_fragment_markers(tokens: list[str]) -> bool:
+    try:
+        validate_inline_marker_sanity(tokens)
+    except ValueError:
+        return True
+    return False
+
+
 def _validate_marker_sanity_across_lines(
     tokens_by_line: list[list[str]],
     *,
+    source_tokens_by_line: list[list[str]],
     label: str,
     where: str,
 ) -> None:
     merged: list[str] = []
     for tokens in tokens_by_line:
         merged.extend(tokens)
+    merged_source: list[str] = []
+    for tokens in source_tokens_by_line:
+        merged_source.extend(tokens)
     try:
-        validate_inline_marker_sanity(merged)
+        if _source_allows_fragment_markers(merged_source):
+            validate_inline_marker_fragment_sanity(merged)
+        else:
+            validate_inline_marker_sanity(merged)
     except ValueError as exc:
         raise ValueError(f"{label}: {where} malformed EPUB inline markers — {exc}.") from exc
 
@@ -142,7 +167,12 @@ def _validate_inline_marker_preservation(
             zip(source_tokens_by_line, translated_tokens_by_line, strict=True),
             start=1,
         ):
-            _validate_translated_marker_sanity(translated_tokens, label=label, line_no=idx)
+            _validate_translated_marker_sanity(
+                translated_tokens,
+                source_tokens=source_tokens,
+                label=label,
+                line_no=idx,
+            )
             _assert_strict_marker_match(
                 source_tokens,
                 translated_tokens,
@@ -157,6 +187,7 @@ def _validate_inline_marker_preservation(
     prefix_translated_tokens = translated_tokens_by_line[: prefix_end + 1]
     _validate_marker_sanity_across_lines(
         prefix_translated_tokens,
+        source_tokens_by_line=prefix_source_tokens,
         label=label,
         where=f"line-prefix (lines 1-{prefix_end + 1})",
     )
@@ -179,7 +210,12 @@ def _validate_inline_marker_preservation(
         zip(source_tokens_by_line[prefix_end + 1 :], translated_tokens_by_line[prefix_end + 1 :], strict=True),
         start=prefix_end + 2,
     ):
-        _validate_translated_marker_sanity(translated_tokens, label=label, line_no=idx)
+        _validate_translated_marker_sanity(
+            translated_tokens,
+            source_tokens=source_tokens,
+            label=label,
+            line_no=idx,
+        )
         _assert_strict_marker_match(
             source_tokens,
             translated_tokens,

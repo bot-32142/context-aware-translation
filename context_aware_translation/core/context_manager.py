@@ -30,6 +30,10 @@ from context_aware_translation.core.translation_strategies import (
     TermMemoryUpdater,
     TermReviewer,
 )
+from context_aware_translation.documents.epub_support.inline_markers import (
+    extract_inline_markers,
+    validate_inline_marker_sanity,
+)
 from context_aware_translation.storage.repositories.term_repository import (
     BatchUpdate,
     TermRepository,
@@ -103,6 +107,17 @@ def _select_representative_chunk_texts(
         (sample_index * last_index) // (max_samples - 1) for sample_index in range(max_samples)
     }
     return [nonempty_chunks[position].text for position in sorted(selected_positions)]
+
+
+def _has_balanced_inline_markers(text: str) -> bool:
+    tokens = extract_inline_markers(text)
+    if not tokens:
+        return True
+    try:
+        validate_inline_marker_sanity(tokens)
+    except ValueError:
+        return False
+    return True
 
 
 class _TermLike(Protocol):
@@ -333,12 +348,31 @@ class ContextManager:
         )
         chunk_records = []
         chunk_id = self.term_repo.get_next_chunk_id()
+        pending_chunk_text = ""
         for chunk_text, _, _ in chunk_generator:
+            pending_chunk_text += chunk_text
+            # EPUB inline markers may span semantic chunk boundaries; carry the
+            # fragment forward until the marker stream closes cleanly again.
+            if not _has_balanced_inline_markers(pending_chunk_text):
+                continue
             chunk_records.append(
                 ChunkRecord(
                     chunk_id=chunk_id,
-                    hash=compute_chunk_hash(chunk_text, document_id=document_id),
-                    text=chunk_text,
+                    hash=compute_chunk_hash(pending_chunk_text, document_id=document_id),
+                    text=pending_chunk_text,
+                    document_id=document_id,
+                    is_extracted=False,
+                    is_summarized=False,
+                )
+            )
+            chunk_id += 1
+            pending_chunk_text = ""
+        if pending_chunk_text:
+            chunk_records.append(
+                ChunkRecord(
+                    chunk_id=chunk_id,
+                    hash=compute_chunk_hash(pending_chunk_text, document_id=document_id),
+                    text=pending_chunk_text,
                     document_id=document_id,
                     is_extracted=False,
                     is_summarized=False,

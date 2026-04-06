@@ -198,6 +198,63 @@ def validate_inline_marker_sanity(tokens: list[str] | tuple[str, ...]) -> None:
         raise ValueError(f"unclosed ruby marker(s): {ruby_stack!r}")
 
 
+def validate_inline_marker_fragment_sanity(tokens: list[str] | tuple[str, ...]) -> None:
+    """Validate a marker fragment that may start/end inside an inline span.
+
+    Unlike ``validate_inline_marker_sanity()``, this accepts leading close
+    markers and trailing open markers so translation chunks can begin or end
+    inside a valid EPUB inline wrapper. The interior ordering must still be
+    structurally valid.
+    """
+
+    strict_stack: list[tuple[str, str]] = []
+    ruby_stack: list[str] = []
+
+    for index, token in enumerate(tokens):
+        inline_open = parse_inline_open(token)
+        inline_close = parse_inline_close(token)
+        ruby_open = RUBY_OPEN_RE.match(token)
+        ruby_close = RUBY_CLOSE_RE.match(token)
+        br = BR_RE.match(token)
+
+        if inline_open:
+            strict_stack.append(inline_open)
+            continue
+
+        if inline_close:
+            close_tag, close_path = inline_close
+            if strict_stack:
+                if strict_stack[-1] != inline_close:
+                    expected = f"/{strict_stack[-1][0]}:{strict_stack[-1][1]}"
+                    raise ValueError(
+                        "mismatched strict marker at token index "
+                        f"{index}: expected {expected!r}, got {f'/{close_tag}:{close_path}'!r}"
+                    )
+                strict_stack.pop()
+            continue
+
+        if ruby_open:
+            ruby_stack.append(ruby_open.group(1))
+            continue
+
+        if ruby_close:
+            close_path = ruby_close.group(1)
+            if ruby_stack:
+                if ruby_stack[-1] != close_path:
+                    expected = ruby_stack[-1]
+                    raise ValueError(
+                        "mismatched ruby marker at token index "
+                        f"{index}: expected '/RUBY:{expected}', got '/RUBY:{close_path}'"
+                    )
+                ruby_stack.pop()
+            continue
+
+        if br:
+            continue
+
+        raise ValueError(f"unknown inline marker token at index {index}: {token!r}")
+
+
 def ruby_pair_count(tokens: list[str] | tuple[str, ...]) -> int:
     """Return the number of ruby marker pairs (counted by open markers)."""
     return sum(1 for token in tokens if RUBY_OPEN_RE.match(token))
