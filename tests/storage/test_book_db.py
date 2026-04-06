@@ -195,6 +195,60 @@ def test_write_lock_serializes_writers_across_connections(tmp_path: Path) -> Non
     assert second_finished.is_set()
 
 
+def test_close_skips_checkpoint_for_read_only_connection(tmp_path: Path) -> None:
+    db_path = tmp_path / "read-only-close.db"
+    SQLiteBookDB(db_path).close()
+
+    db = SQLiteBookDB(db_path)
+
+    class _RecordingConnection:
+        def __init__(self, conn: sqlite3.Connection) -> None:
+            self._conn = conn
+            self.statements: list[str] = []
+
+        def execute(self, sql: str, *args: object) -> sqlite3.Cursor:
+            self.statements.append(sql)
+            return self._conn.execute(sql, *args)
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self._conn, name)
+
+    recording = _RecordingConnection(db.conn)
+    db.conn = recording  # type: ignore[assignment]
+
+    db.list_chunks()
+    db.close()
+
+    assert "PRAGMA wal_checkpoint(PASSIVE);" not in recording.statements
+
+
+def test_close_runs_passive_checkpoint_after_committed_write(tmp_path: Path) -> None:
+    db_path = tmp_path / "write-close.db"
+    SQLiteBookDB(db_path).close()
+
+    db = SQLiteBookDB(db_path)
+
+    class _RecordingConnection:
+        def __init__(self, conn: sqlite3.Connection) -> None:
+            self._conn = conn
+            self.statements: list[str] = []
+
+        def execute(self, sql: str, *args: object) -> sqlite3.Cursor:
+            self.statements.append(sql)
+            return self._conn.execute(sql, *args)
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self._conn, name)
+
+    recording = _RecordingConnection(db.conn)
+    db.conn = recording  # type: ignore[assignment]
+
+    db.upsert_chunks([ChunkRecord(chunk_id=1, hash="chunk-1", text="hello")])
+    db.close()
+
+    assert "PRAGMA wal_checkpoint(PASSIVE);" in recording.statements
+
+
 def test_fresh_db_term_rows_default_term_type_to_other(temp_db: SQLiteBookDB):
     """Fresh DB term rows should default term_type to other."""
     now = time.time()
