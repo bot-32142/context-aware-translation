@@ -307,6 +307,8 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
         assert created_profile.config["translation_target_language"] == "Japanese"
         assert created_profile.config["glossary_config"]["kwargs"] == {"reasoning_effort": "low"}
         assert created_profile.config["translator_config"]["model"] == "gemini-3.1-pro"
+        assert created_profile.config["translator_config"]["max_tokens_per_llm_call"] == 3000
+        assert created_profile.config["translator_config"]["chunk_size"] == 1000
         assert created_profile.config["translator_config"]["kwargs"] == {"reasoning_effort": "none"}
         assert created_profile.config["polish_config"]["model"] == "gemini-3.1-pro"
         assert created_profile.config["polish_config"]["kwargs"] == {"reasoning_effort": "medium"}

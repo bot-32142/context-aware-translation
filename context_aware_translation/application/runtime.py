@@ -129,6 +129,16 @@ def _wizard_reasoning_kwargs(
     return {"reasoning_effort": reasoning_effort}
 
 
+def _wizard_translator_limits(selected: ConnectionDraft | None) -> dict[str, int]:
+    if selected is None:
+        return {}
+    if selected.provider in {ProviderKind.OPENAI, ProviderKind.ANTHROPIC}:
+        return {"max_tokens_per_llm_call": 4000, "chunk_size": 1000}
+    if selected.provider is ProviderKind.GEMINI:
+        return {"max_tokens_per_llm_call": 3000, "chunk_size": 1000}
+    return {}
+
+
 _WORKFLOW_STEP_LAYOUT: tuple[tuple[WorkflowStepId, str, str | None], ...] = (
     (WorkflowStepId.EXTRACTOR, "Extractor", "extractor_config"),
     (WorkflowStepId.SUMMARIZER, "Summarizer", "summarizor_config"),
@@ -975,6 +985,8 @@ def _recommended_step_route(
     reasoning_kwargs = _wizard_reasoning_kwargs(step_id, selected, recommendation_mode)
     if step_id is WorkflowStepId.EXTRACTOR:
         step_config["max_gleaning"] = 1
+    if step_id is WorkflowStepId.TRANSLATOR:
+        step_config.update(_wizard_translator_limits(selected))
     if reasoning_kwargs is not None:
         step_config["kwargs"] = reasoning_kwargs
     if step_id is WorkflowStepId.IMAGE_REEMBEDDING and selected is not None:

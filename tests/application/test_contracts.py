@@ -264,6 +264,8 @@ def test_recommended_workflow_profile_uses_ranked_step_rules() -> None:
     assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
     assert route_map[WorkflowStepId.TRANSLATOR].model == "gemini-3.1-pro"
     assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "high"}
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config["max_tokens_per_llm_call"] == 3000
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config["chunk_size"] == 1000
     assert route_map[WorkflowStepId.POLISH].model == "gemini-3.1-pro"
     assert route_map[WorkflowStepId.POLISH].connection_id == "recommended-Gemini 3.1 Pro"
     assert route_map[WorkflowStepId.POLISH].connection_label == "Gemini 3.1 Pro"
@@ -305,6 +307,8 @@ def test_recommended_workflow_profile_skips_unsupported_openai_ocr_reasoning_non
     assert route_map[WorkflowStepId.OCR].step_config == {}
     assert route_map[WorkflowStepId.TRANSLATOR].model == "gpt-5.4"
     assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "high"}
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config["max_tokens_per_llm_call"] == 4000
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config["chunk_size"] == 1000
     assert route_map[WorkflowStepId.POLISH].model == "gpt-5.4"
     assert route_map[WorkflowStepId.POLISH].step_config["kwargs"] == {"reasoning_effort": "high"}
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].step_config == {"backend": "openai"}
@@ -336,6 +340,8 @@ def test_recommended_workflow_profile_uses_budget_translator_rules() -> None:
     route_map = {route.step_id: route for route in detail.routes}
     assert route_map[WorkflowStepId.TRANSLATOR].model == "gpt-5.4"
     assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config["max_tokens_per_llm_call"] == 4000
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config["chunk_size"] == 1000
     assert route_map[WorkflowStepId.POLISH].model == "gpt-5.4"
     assert route_map[WorkflowStepId.POLISH].step_config["kwargs"] == {"reasoning_effort": "low"}
 
@@ -351,6 +357,8 @@ def test_recommended_workflow_profile_uses_balanced_mode_rules() -> None:
     route_map = {route.step_id: route for route in detail.routes}
     assert route_map[WorkflowStepId.TRANSLATOR].model == "gpt-5.4"
     assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "none"}
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config["max_tokens_per_llm_call"] == 4000
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config["chunk_size"] == 1000
     assert route_map[WorkflowStepId.POLISH].model == "gpt-5.4"
     assert route_map[WorkflowStepId.POLISH].step_config["kwargs"] == {"reasoning_effort": "medium"}
 
@@ -371,6 +379,8 @@ def test_recommended_workflow_profile_keeps_anthropic_translator_and_polish_on_o
         route_map = {route.step_id: route for route in detail.routes}
         assert route_map[WorkflowStepId.TRANSLATOR].model == "claude-opus-4-6"
         assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == expected_translator_kwargs
+        assert route_map[WorkflowStepId.TRANSLATOR].step_config["max_tokens_per_llm_call"] == 4000
+        assert route_map[WorkflowStepId.TRANSLATOR].step_config["chunk_size"] == 1000
         assert route_map[WorkflowStepId.POLISH].model == "claude-opus-4-6"
         assert route_map[WorkflowStepId.POLISH].step_config["kwargs"] == expected_polish_kwargs
 
