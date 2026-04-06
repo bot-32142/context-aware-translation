@@ -296,10 +296,17 @@ def test_connection_draft_form_prefills_curated_defaults_for_supported_providers
     _select_provider(ProviderKind.OPENAI)
     assert form.base_url_edit.text() == "https://api.openai.com/v1"
     assert form.default_model_edit.text() == "gpt-5.4"
+    assert form.concurrency_spin.value() == 5
+
+    _select_provider(ProviderKind.DEEPSEEK)
+    assert form.base_url_edit.text() == "https://api.deepseek.com"
+    assert form.default_model_edit.text() == "deepseek-chat"
+    assert form.concurrency_spin.value() == 15
 
     _select_provider(ProviderKind.ANTHROPIC)
     assert form.base_url_edit.text() == "https://api.anthropic.com/v1"
     assert form.default_model_edit.text() == "claude-opus-4-6"
+    assert form.concurrency_spin.value() == 5
 
 
 def test_setup_wizard_dialog_renders_provider_cards_on_first_page():

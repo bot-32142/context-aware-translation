@@ -137,6 +137,15 @@ _ADVANCED_TIP_TEXTS = {
 
 _ADVANCED_TIP_FALLBACK = QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Edit advanced settings for this workflow step.")
 
+_REQUIRED_ROUTE_STEP_IDS = frozenset(
+    {
+        WorkflowStepId.EXTRACTOR,
+        WorkflowStepId.SUMMARIZER,
+        WorkflowStepId.GLOSSARY_TRANSLATOR,
+        WorkflowStepId.TRANSLATOR,
+    }
+)
+
 
 @dataclass(frozen=True)
 class _SpinFieldSpec:
@@ -177,8 +186,14 @@ def validate_workflow_routes(
     for route in routes:
         if route.step_id is WorkflowStepId.TRANSLATOR_BATCH:
             continue
-        if not str(route.connection_id or "").strip() or not str(route.model or "").strip():
-            return tr("Every workflow step must use a connection and model.")
+        has_connection = bool(str(route.connection_id or "").strip())
+        has_model = bool(str(route.model or "").strip())
+        if route.step_id in _REQUIRED_ROUTE_STEP_IDS:
+            if not has_connection or not has_model:
+                return tr("Required workflow steps must use a connection and model.")
+            continue
+        if (has_connection or has_model or route.step_config) and (not has_connection or not has_model):
+            return tr("Optional workflow steps must use both a connection and model when enabled.")
     return None
 
 

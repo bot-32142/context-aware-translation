@@ -15,6 +15,7 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowProfileKind,
     WorkflowStepId,
     WorkflowStepRoute,
+    default_connection_concurrency,
 )
 from context_aware_translation.application.contracts.common import (
     AcceptedCommand,
@@ -233,9 +234,20 @@ _WIZARD_MODEL_CATALOG: dict[ProviderKind, tuple[WizardModelTemplate, ...]] = {
         ),
     ),
     ProviderKind.DEEPSEEK: (
-        WizardModelTemplate(ProviderKind.DEEPSEEK, "DeepSeek Chat", "deepseek-chat", "https://api.deepseek.com"),
         WizardModelTemplate(
-            ProviderKind.DEEPSEEK, "DeepSeek Reasoner", "deepseek-reasoner", "https://api.deepseek.com", timeout=300
+            ProviderKind.DEEPSEEK,
+            "DeepSeek Chat",
+            "deepseek-chat",
+            "https://api.deepseek.com",
+            concurrency=default_connection_concurrency(ProviderKind.DEEPSEEK),
+        ),
+        WizardModelTemplate(
+            ProviderKind.DEEPSEEK,
+            "DeepSeek Reasoner",
+            "deepseek-reasoner",
+            "https://api.deepseek.com",
+            timeout=300,
+            concurrency=default_connection_concurrency(ProviderKind.DEEPSEEK),
         ),
     ),
     ProviderKind.ANTHROPIC: (

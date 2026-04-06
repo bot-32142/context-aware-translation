@@ -13,6 +13,7 @@ from context_aware_translation.ui.features.workflow_profile_editor import (
     ConnectionChoice,
     WorkflowProfileEditorDialog,
     WorkflowRoutesEditor,
+    validate_workflow_routes,
     workflow_step_tooltip,
 )
 
@@ -45,6 +46,76 @@ def _close_workflow_top_levels():
             widget.close()
             widget.deleteLater()
     QApplication.processEvents()
+
+
+def _required_routes() -> list[WorkflowStepRoute]:
+    return [
+        WorkflowStepRoute(
+            step_id=WorkflowStepId.EXTRACTOR,
+            step_label="Extractor",
+            connection_id="conn-deepseek",
+            connection_label="DeepSeek",
+            model="deepseek-chat",
+        ),
+        WorkflowStepRoute(
+            step_id=WorkflowStepId.SUMMARIZER,
+            step_label="Summarizer",
+            connection_id="conn-deepseek",
+            connection_label="DeepSeek",
+            model="deepseek-chat",
+        ),
+        WorkflowStepRoute(
+            step_id=WorkflowStepId.GLOSSARY_TRANSLATOR,
+            step_label="Glossary translator",
+            connection_id="conn-deepseek",
+            connection_label="DeepSeek",
+            model="deepseek-chat",
+        ),
+        WorkflowStepRoute(
+            step_id=WorkflowStepId.TRANSLATOR,
+            step_label="Translator",
+            connection_id="conn-deepseek",
+            connection_label="DeepSeek",
+            model="deepseek-chat",
+        ),
+    ]
+
+
+def test_validate_workflow_routes_allows_blank_optional_steps() -> None:
+    routes = [
+        *_required_routes(),
+        WorkflowStepRoute(step_id=WorkflowStepId.OCR, step_label="OCR"),
+        WorkflowStepRoute(step_id=WorkflowStepId.IMAGE_REEMBEDDING, step_label="Image reembedding"),
+        WorkflowStepRoute(step_id=WorkflowStepId.MANGA_TRANSLATOR, step_label="Manga translator"),
+    ]
+
+    assert validate_workflow_routes(routes, tr=lambda text: text) is None
+
+
+def test_validate_workflow_routes_requires_connection_and_model_for_required_steps() -> None:
+    routes = _required_routes()
+    routes[-1] = routes[-1].model_copy(update={"model": None})
+
+    assert (
+        validate_workflow_routes(routes, tr=lambda text: text)
+        == "Required workflow steps must use a connection and model."
+    )
+
+
+def test_validate_workflow_routes_requires_complete_optional_steps_when_enabled() -> None:
+    routes = [
+        *_required_routes(),
+        WorkflowStepRoute(
+            step_id=WorkflowStepId.OCR,
+            step_label="OCR",
+            step_config={"ocr_dpi": 200},
+        ),
+    ]
+
+    assert (
+        validate_workflow_routes(routes, tr=lambda text: text)
+        == "Optional workflow steps must use both a connection and model when enabled."
+    )
 
 
 def test_workflow_profile_editor_uses_scrollable_dialog_layout():

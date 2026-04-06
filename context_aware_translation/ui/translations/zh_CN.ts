@@ -12,9 +12,14 @@
         <translation type="vanished">启用批量翻译器时必须提供模型。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="181"/>
-        <source>Every workflow step must use a connection and model.</source>
-        <translation>每个工作流步骤都必须使用连接和模型。</translation>
+        <location filename="../features/workflow_profile_editor.py" line="191"/>
+        <source>Required workflow steps must use a connection and model.</source>
+        <translation>必填的工作流步骤都必须使用连接和模型。</translation>
+    </message>
+    <message>
+        <location filename="../features/workflow_profile_editor.py" line="194"/>
+        <source>Optional workflow steps must use both a connection and model when enabled.</source>
+        <translation>启用可选工作流步骤时，必须同时设置连接和模型。</translation>
     </message>
     <message>
         <location filename="../features/workflow_profile_editor.py" line="203"/>
@@ -2337,17 +2342,17 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation>提取设置控制术语发现的积极程度。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="123"/>
+        <location filename="../features/workflow_profile_editor.py" line="126"/>
         <source>Translator settings tune chunk sizing and request budget.</source>
         <translation>翻译器设置用于调整分块大小和请求预算。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="126"/>
+        <location filename="../features/workflow_profile_editor.py" line="129"/>
         <source>Polish settings control the optional editor pass after translation.</source>
         <translation>润色设置控制翻译后的可选编辑润色步骤。</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="129"/>
+        <location filename="../features/workflow_profile_editor.py" line="132"/>
         <source>OCR settings control image compression and artifact cleanup.</source>
         <translation>OCR 设置控制图像压缩和伪影清理。</translation>
     </message>
@@ -2371,27 +2376,27 @@ All completed results are already saved and won&apos;t be lost.</source>
         <translation>术语名称最大长度</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="230"/>
+        <location filename="../features/workflow_profile_editor.py" line="239"/>
         <source>Strip EPUB ruby annotations</source>
         <translation>移除 EPUB 注音标注</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="236"/>
+        <location filename="../features/workflow_profile_editor.py" line="245"/>
         <source>Max tokens per call</source>
         <translation>每次调用的最大令牌数</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="244"/>
+        <location filename="../features/workflow_profile_editor.py" line="253"/>
         <source>Chunk size</source>
         <translation>分块大小</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="254"/>
+        <location filename="../features/workflow_profile_editor.py" line="263"/>
         <source>OCR DPI</source>
         <translation>OCR DPI</translation>
     </message>
     <message>
-        <location filename="../features/workflow_profile_editor.py" line="262"/>
+        <location filename="../features/workflow_profile_editor.py" line="271"/>
         <source>Strip artifacts</source>
         <translation>移除伪影</translation>
     </message>

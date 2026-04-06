@@ -284,6 +284,12 @@ def test_recommended_workflow_profile_uses_ranked_step_rules() -> None:
     }
 
 
+def test_connection_draft_defaults_deepseek_concurrency() -> None:
+    draft = ConnectionDraft(display_name="DeepSeek", provider=ProviderKind.DEEPSEEK, api_key="dkey")
+
+    assert draft.concurrency == 15
+
+
 def test_recommended_workflow_profile_skips_unsupported_openai_ocr_reasoning_none() -> None:
     detail = recommended_workflow_profile_from_drafts(
         [ConnectionDraft(display_name="OpenAI", provider=ProviderKind.OPENAI, api_key="okey")],
@@ -520,6 +526,68 @@ def test_workflow_profile_round_trips_step_advanced_config() -> None:
     assert payload["image_reembedding_config"]["backend"] == "openai"
     assert payload["translator_batch_config"]["batch_size"] == 50
     assert payload["polish_batch_config"]["batch_size"] == 75
+
+
+def test_workflow_profile_payload_clears_optional_step_config_when_route_is_blank() -> None:
+    detail = WorkflowProfileDetail(
+        profile_id="profile:recommended",
+        name="Recommended",
+        kind=WorkflowProfileKind.SHARED,
+        target_language="English",
+        routes=[
+            WorkflowStepRoute(
+                step_id=WorkflowStepId.EXTRACTOR,
+                step_label="Extractor",
+                connection_id="conn-deepseek",
+                connection_label="DeepSeek",
+                model="deepseek-chat",
+            ),
+            WorkflowStepRoute(
+                step_id=WorkflowStepId.SUMMARIZER,
+                step_label="Summarizer",
+                connection_id="conn-deepseek",
+                connection_label="DeepSeek",
+                model="deepseek-chat",
+            ),
+            WorkflowStepRoute(
+                step_id=WorkflowStepId.GLOSSARY_TRANSLATOR,
+                step_label="Glossary translator",
+                connection_id="conn-deepseek",
+                connection_label="DeepSeek",
+                model="deepseek-chat",
+            ),
+            WorkflowStepRoute(
+                step_id=WorkflowStepId.TRANSLATOR,
+                step_label="Translator",
+                connection_id="conn-deepseek",
+                connection_label="DeepSeek",
+                model="deepseek-chat",
+            ),
+            WorkflowStepRoute(
+                step_id=WorkflowStepId.OCR,
+                step_label="OCR",
+            ),
+        ],
+    )
+
+    payload = build_workflow_profile_payload(
+        base_config={
+            "translation_target_language": "English",
+            "extractor_config": {"endpoint_profile": "conn-deepseek", "model": "deepseek-chat"},
+            "summarizor_config": {"endpoint_profile": "conn-deepseek", "model": "deepseek-chat"},
+            "glossary_config": {"endpoint_profile": "conn-deepseek", "model": "deepseek-chat"},
+            "translator_config": {"endpoint_profile": "conn-deepseek", "model": "deepseek-chat"},
+            "ocr_config": {
+                "endpoint_profile": "conn-openai",
+                "model": "gpt-4.1-mini",
+                "ocr_dpi": 200,
+            },
+        },
+        profile=detail,
+    )
+
+    assert "ocr_config" not in payload
+    assert payload["translator_config"]["endpoint_profile"] == "conn-deepseek"
 
 
 def test_workflow_profile_detail_falls_back_to_translator_route_for_missing_polish_config() -> None:

@@ -42,6 +42,7 @@ from context_aware_translation.application.contracts.app_setup import (
     SetupWizardRequest,
     SetupWizardState,
     WorkflowStepId,
+    default_connection_concurrency,
 )
 from context_aware_translation.application.contracts.common import CapabilityCode, ProviderKind, UserMessageSeverity
 from context_aware_translation.application.services.app_setup import AppSetupService
@@ -154,6 +155,7 @@ _CONNECTION_TOKEN_LIMIT_FIELDS = (
 class ConnectionDraftForm(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._auto_concurrency_default: int | None = None
         self._init_ui()
         self._on_provider_changed(0)
 
@@ -287,6 +289,7 @@ class ConnectionDraftForm(QWidget):
         self.timeout_spin.setValue(draft.timeout)
         self.retries_spin.setValue(draft.max_retries)
         self.concurrency_spin.setValue(draft.concurrency)
+        self._auto_concurrency_default = default_connection_concurrency(draft.provider)
         self.total_limit_checkbox.setChecked(draft.token_limit is not None)
         if draft.token_limit is not None:
             self.total_limit_spin.setValue(draft.token_limit)
@@ -348,8 +351,12 @@ class ConnectionDraftForm(QWidget):
     def _on_provider_changed(self, _index: int) -> None:
         provider = self.current_provider()
         display_name, base_url, default_model = _provider_defaults(provider)
+        provider_concurrency = default_connection_concurrency(provider)
         self.base_url_edit.setText(base_url or "")
         self.default_model_edit.setText(default_model or "")
+        if self._auto_concurrency_default is None or self.concurrency_spin.value() == self._auto_concurrency_default:
+            self.concurrency_spin.setValue(provider_concurrency)
+        self._auto_concurrency_default = provider_concurrency
         if (
             not self.display_name_edit.text().strip()
             or self.display_name_edit.text().strip() in _PROVIDER_LABELS.values()
@@ -759,7 +766,7 @@ class SetupWizardDialog(QDialog):
             temperature=0.0,
             timeout=60,
             max_retries=3,
-            concurrency=5,
+            concurrency=default_connection_concurrency(provider),
         )
 
     def _persist_drafts(self) -> None:

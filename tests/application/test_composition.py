@@ -292,6 +292,11 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
         assert "recommended-Gemini 3 Pro Image Preview" in connection_names
         assert "recommended-DeepSeek Chat" in connection_names
         assert "recommended-DeepSeek Reasoner" in connection_names
+        assert next(profile for profile in endpoint_profiles if profile.name == "recommended-DeepSeek Chat").concurrency == 15
+        assert (
+            next(profile for profile in endpoint_profiles if profile.name == "recommended-DeepSeek Reasoner").concurrency
+            == 15
+        )
 
         created_profile = next(
             profile for profile in context.runtime.book_manager.list_profiles() if profile.name == "Team Default"
