@@ -579,8 +579,4 @@ class DefaultTermsService:
 
     @classmethod
     def _is_structurally_rare(cls, record: TermRecord) -> bool:
-        occurrence_chunk_count = cls._occurrence_chunk_count(record)
-        if occurrence_chunk_count <= 1:
-            return True
-        chunk_desc_count = sum(1 for key in (record.descriptions or {}) if str(key).lstrip("-").isdigit())
-        return chunk_desc_count <= 1
+        return cls._occurrence_chunk_count(record) <= 1

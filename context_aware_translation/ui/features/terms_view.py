@@ -687,9 +687,7 @@ class TermsView(QWidget):
             else (
                 self.tr("Ignore rare terms for this document.")
                 if self._is_document_scope
-                else self.tr(
-                    "Automatically ignore terms that occurred only once or were recognized by the LLM in only one chunk."
-                )
+                else self.tr("Automatically ignore terms that occurred in only one chunk.")
             )
         )
         add_terms_tooltip = (
@@ -791,9 +789,7 @@ class TermsView(QWidget):
             QMessageBox.question(
                 self,
                 self.tr("Filter Rare Terms"),
-                self.tr(
-                    "This will mark terms as ignored when they occurred only once or were recognized in only one chunk. Continue?"
-                ),
+                self.tr("This will mark terms as ignored when they occurred in only one chunk. Continue?"),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )

@@ -48,6 +48,18 @@ def test_is_structurally_rare_uses_chunk_count_instead_of_total_hits() -> None:
     assert DefaultTermsService._is_structurally_rare(record) is True
 
 
+def test_is_structurally_rare_ignores_recognized_chunk_votes() -> None:
+    record = TermRecord(
+        key="王位継承戦",
+        descriptions={"1": "desc", "2": "desc", "3": "desc"},
+        occurrence={"1": 1},
+        votes=99,
+        total_api_calls=99,
+    )
+
+    assert DefaultTermsService._is_structurally_rare(record) is True
+
+
 def test_upsert_project_term_creates_reviewed_unignored_term() -> None:
     runtime = MagicMock()
     runtime.task_engine.has_active_claims.return_value = False

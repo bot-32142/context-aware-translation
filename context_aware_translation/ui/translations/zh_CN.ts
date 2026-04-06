@@ -3469,8 +3469,8 @@ All completed results are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../features/terms_view.py" line="691"/>
-        <source>Automatically ignore terms that occurred only once or were recognized by the LLM in only one chunk.</source>
-        <translation>自动忽略仅出现一次或仅在一个分块中被 LLM 识别的术语。</translation>
+        <source>Automatically ignore terms that occurred in only one chunk.</source>
+        <translation>自动忽略仅在一个分块中出现的术语。</translation>
     </message>
     <message>
         <location filename="../features/terms_view.py" line="698"/>
@@ -3506,8 +3506,8 @@ All completed results are already saved and won&apos;t be lost.</source>
     </message>
     <message>
         <location filename="../features/terms_view.py" line="795"/>
-        <source>This will mark terms as ignored when they occurred only once or were recognized in only one chunk. Continue?</source>
-        <translation>这将把仅出现一次或仅在一个分块中被识别的术语标记为已忽略。是否继续？</translation>
+        <source>This will mark terms as ignored when they occurred in only one chunk. Continue?</source>
+        <translation>这将把仅在一个分块中出现的术语标记为已忽略。是否继续？</translation>
     </message>
     <message>
         <location filename="../features/terms_view.py" line="818"/>
