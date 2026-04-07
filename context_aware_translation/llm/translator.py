@@ -17,7 +17,7 @@ from context_aware_translation.documents.epub_support.inline_markers import (
 from context_aware_translation.llm.client import LLMClient
 from context_aware_translation.llm.session_trace import get_llm_session_id, llm_session_scope
 from context_aware_translation.utils.compression_marker import COMPRESSED_LINE_SENTINEL
-from context_aware_translation.utils.llm_json_cleaner import clean_llm_response
+from context_aware_translation.utils.llm_json_cleaner import clean_llm_response, parse_llm_json
 
 logger = logging.getLogger(__name__)
 
@@ -454,7 +454,7 @@ def _build_translation_prompt_examples() -> str:
 
 def _translation_result_distance(raw: str, expected_count: int) -> float:
     try:
-        parsed = json.loads(raw)
+        parsed, _repair_count = parse_llm_json(raw)
     except json.JSONDecodeError:
         return float("inf")
     result = parsed.get("翻译文本") if isinstance(parsed, dict) else None
@@ -621,7 +621,14 @@ async def validated_chat(
             )
         raw = clean_llm_response(raw)
         try:
-            parsed = json.loads(raw)
+            parsed, repaired_quotes = parse_llm_json(raw)
+            if repaired_quotes > 0:
+                logger.warning(
+                    "%sRecovered malformed %s JSON by escaping %s bare quote(s).",
+                    _session_prefix(),
+                    label,
+                    repaired_quotes,
+                )
             translated_blocks = _extract_id_based_translation_blocks(
                 parsed,
                 expected_count=expected_count,

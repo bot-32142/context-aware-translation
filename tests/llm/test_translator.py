@@ -255,6 +255,39 @@ async def test_translate_chunk_accepts_fullwidth_delimiters_for_strict_markers(t
 
 
 @pytest.mark.asyncio
+async def test_translate_chunk_repairs_bare_dialogue_quotes_without_retry(temp_config: Config):
+    chunks = ['"Yes," said Morrel.']
+    terms = [_make_term()]
+    assert temp_config.translator_config is not None
+    temp_config.translator_config.enable_polish = False
+    temp_config.translator_config.max_retries = 0
+
+    llm_client = MagicMock(spec=LLMClient)
+    llm_client.chat = AsyncMock(
+        return_value="""{
+  "翻译文本": [
+    {
+      "id": 0,
+      "文本": "\"Yes,\" said Morrel."
+    }
+  ]
+}""".replace('\\"', '"')
+    )
+
+    result = await translate_chunk(
+        chunks=chunks,
+        terms=terms,
+        llm_client=llm_client,
+        translator_config=temp_config.translator_config,
+        source_language="法语",
+        target_language=temp_config.translation_target_language,
+    )
+
+    assert result == ['"Yes," said Morrel.']
+    assert llm_client.chat.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_translate_chunk_does_not_retry_when_lenient_style_marker_is_removed(temp_config: Config):
     chunks = ["This is ⟪em:0⟫italic⟪/em:0⟫ text"]
     terms = [_make_term()]
