@@ -61,6 +61,10 @@ from context_aware_translation.storage.repositories.document_repository import D
 from context_aware_translation.storage.repositories.task_store import TaskRecord, TaskStore
 from context_aware_translation.storage.repositories.term_repository import TermRepository
 from context_aware_translation.storage.schema.book_db import SQLiteBookDB
+from context_aware_translation.ui.constants import (
+    display_target_language_name,
+    storage_target_language_name,
+)
 from context_aware_translation.workflow.tasks.models import TaskAction
 
 if TYPE_CHECKING:
@@ -860,7 +864,7 @@ def build_workflow_profile_detail(
             polish_route = route
         routes.append(route)
 
-    target_language = str(config.get("translation_target_language") or "English")
+    target_language = display_target_language_name(str(config.get("translation_target_language") or "English")) or "English"
     return WorkflowProfileDetail(
         profile_id=profile_id,
         name=name,
@@ -878,7 +882,7 @@ def build_workflow_profile_payload(
     source_profile_id: str | None = None,
 ) -> dict[str, Any]:
     payload = dict(base_config or {})
-    payload["translation_target_language"] = profile.target_language
+    payload["translation_target_language"] = storage_target_language_name(profile.target_language) or profile.target_language
     if source_profile_id:
         payload[_UI_SOURCE_PROFILE_ID_KEY] = source_profile_id
     else:
@@ -1074,7 +1078,7 @@ def build_project_summary(book_manager: BookManager, book: Book) -> ProjectSumma
     target_language: str | None = None
     config = book_manager.get_book_config(book.book_id)
     if config is not None and isinstance(config.get("translation_target_language"), str):
-        target_language = str(config["translation_target_language"])
+        target_language = display_target_language_name(str(config["translation_target_language"]))
     return ProjectSummary(
         project=ProjectRef(project_id=book.book_id, name=book.name),
         target_language=target_language,

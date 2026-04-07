@@ -178,6 +178,19 @@ def test_workflow_profile_editor_uses_scrollable_dialog_layout():
     assert "palette(base)" not in dialog.routes_table.styleSheet()
 
 
+def test_workflow_profile_editor_displays_internal_target_language_labels():
+    profile = WorkflowProfileDetail(
+        profile_id="profile:recommended",
+        name="Recommended",
+        kind=WorkflowProfileKind.SHARED,
+        target_language="英语",
+        routes=[],
+    )
+    dialog = WorkflowProfileEditorDialog(profile=profile, connection_choices=[], allow_name_edit=True)
+
+    assert dialog.target_language_combo.currentText() == "English"
+
+
 def test_workflow_routes_editor_exposes_step_specific_tooltips():
     routes = [
         WorkflowStepRoute(

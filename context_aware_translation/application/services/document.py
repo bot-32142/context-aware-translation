@@ -62,6 +62,7 @@ from context_aware_translation.application.runtime import (
 )
 from context_aware_translation.config import effective_polish_step_config, resolve_pipeline_batch_provider
 from context_aware_translation.documents.base import Document, is_ocr_required_for_type
+from context_aware_translation.documents.epub import CHAPTER_MIME_TYPES, METADATA_PATH
 from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
@@ -91,6 +92,24 @@ _TRANSLATE_AND_EXPORT_TRANSLATION_PHASES = frozenset(
     }
 )
 _TRANSLATE_AND_EXPORT_IMAGE_PHASES = frozenset({"reembed"})
+
+
+def _is_translate_and_export_relevant_source(document_type: str, source: dict[str, Any]) -> bool:
+    source_type = str(source.get("source_type") or "").strip().lower()
+    if source_type == "image":
+        return True
+    if source_type != "text":
+        return False
+    if document_type != "epub":
+        return True
+
+    relative_path = str(source.get("relative_path") or "").strip()
+    if relative_path == METADATA_PATH:
+        return False
+
+    mime_type = str(source.get("mime_type") or "").strip().lower()
+    lower_path = relative_path.lower()
+    return mime_type in CHAPTER_MIME_TYPES or lower_path.endswith((".xhtml", ".html", ".htm", ".svg"))
 
 
 class DocumentService(Protocol):
@@ -745,7 +764,12 @@ class DefaultDocumentService:
                 project_id=project_id,
                 document_id=document_id,
             )
-        if not self._document_is_untouched(project_id, document_repo, document_id):
+        if not self._document_is_untouched(
+            project_id,
+            document_repo,
+            document_id,
+            document_type=document_type,
+        ):
             return make_blocker(
                 BlockerCode.NOTHING_TO_DO,
                 "Translate and Export is available only before OCR, glossary, translation, or reembedding work has started for this document.",
@@ -920,8 +944,19 @@ class DefaultDocumentService:
             use_reembedding=True,
         )
 
-    def _document_is_untouched(self, project_id: str, document_repo: DocumentRepository, document_id: int) -> bool:
-        sources = document_repo.get_document_sources_metadata(document_id)
+    def _document_is_untouched(
+        self,
+        project_id: str,
+        document_repo: DocumentRepository,
+        document_id: int,
+        *,
+        document_type: str,
+    ) -> bool:
+        sources = [
+            source
+            for source in document_repo.get_document_sources_metadata(document_id)
+            if _is_translate_and_export_relevant_source(document_type, source)
+        ]
         if any(bool(source.get("is_ocr_completed")) for source in sources if source.get("source_type") == "image"):
             return False
         if any(bool(source.get("is_text_added")) for source in sources):

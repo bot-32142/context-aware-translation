@@ -130,6 +130,62 @@ def test_validate_submit_rejects_touched_document(tmp_path):
     assert result.code == "document_touched"
 
 
+def test_validate_submit_allows_fresh_epub_with_internal_sources_marked_added(tmp_path):
+    deps, fake_db, fake_repo = _make_deps(tmp_path, document_type="epub")
+    fake_repo.get_document_sources_metadata.return_value = [
+        {
+            "source_id": 1,
+            "source_type": "text",
+            "relative_path": "__epub_metadata__.json",
+            "mime_type": None,
+            "is_ocr_completed": True,
+            "is_text_added": True,
+        },
+        {
+            "source_id": 2,
+            "source_type": "asset",
+            "relative_path": "book.epub",
+            "mime_type": "application/epub+zip",
+            "is_ocr_completed": True,
+            "is_text_added": True,
+        },
+        {
+            "source_id": 3,
+            "source_type": "text",
+            "relative_path": "OEBPS/style.css",
+            "mime_type": "text/css",
+            "is_ocr_completed": True,
+            "is_text_added": True,
+        },
+        {
+            "source_id": 4,
+            "source_type": "text",
+            "relative_path": "OEBPS/chapter-1.xhtml",
+            "mime_type": "application/xhtml+xml",
+            "is_ocr_completed": True,
+            "is_text_added": False,
+        },
+    ]
+    params = {"document_ids": [4], "format_id": "txt", "output_path": "/tmp/out.txt", "options": {}}
+    with (
+        patch(
+            "context_aware_translation.workflow.tasks.translate_and_export_support.config_module.Config.from_book",
+            return_value=_make_config(),
+        ),
+        patch(
+            "context_aware_translation.workflow.tasks.translate_and_export_support.book_db.SQLiteBookDB",
+            return_value=fake_db,
+        ),
+        patch(
+            "context_aware_translation.workflow.tasks.translate_and_export_support.document_repository.DocumentRepository",
+            return_value=fake_repo,
+        ),
+    ):
+        result = handler.validate_submit("book-1", params, deps)
+
+    assert result.allowed is True
+
+
 def test_validate_submit_rejects_batch_for_manga(tmp_path):
     deps, fake_db, fake_repo = _make_deps(tmp_path, document_type="manga")
     params = {"document_ids": [4], "format_id": "cbz", "output_path": "/tmp/out.cbz", "use_batch": True, "options": {}}

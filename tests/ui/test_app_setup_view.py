@@ -488,6 +488,45 @@ def test_setup_wizard_dialog_preserves_target_language_when_going_back():
     assert dialog._target_language_combo.currentText() == "Japanese"
 
 
+def test_setup_wizard_dialog_displays_internal_target_language_labels():
+    from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
+
+    wizard_state = SetupWizardState(
+        available_providers=[
+            ProviderCard(
+                provider=ProviderKind.GEMINI,
+                label="Gemini",
+                helper_text="Good for image text reading and image editing.",
+            )
+        ],
+        target_language="英语",
+    )
+    preview_state = SetupWizardState(
+        available_providers=wizard_state.available_providers,
+        selected_providers=[ProviderKind.GEMINI],
+        drafts=[
+            ConnectionDraft(
+                display_name="Gemini",
+                provider=ProviderKind.GEMINI,
+                api_key="secret",
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                default_model="gemini-3-flash-preview",
+            )
+        ],
+        recommendation=_profile(profile_id="recommended", name="Recommended"),
+        target_language="英语",
+    )
+    service = FakeAppSetupService(state=_make_state(needs_wizard=True), wizard_state=wizard_state, preview_state=preview_state)
+    dialog = SetupWizardDialog(service, wizard_state)
+
+    _provider_checkbox(dialog, ProviderKind.GEMINI).setChecked(True)
+    _provider_api_key_edit(dialog, ProviderKind.GEMINI).setText("secret")
+    dialog._go_next()
+
+    assert dialog._target_language_combo is not None
+    assert dialog._target_language_combo.currentText() == "English"
+
+
 def test_setup_wizard_dialog_back_from_review_rebuilds_provider_page():
     from context_aware_translation.ui.features.app_setup_view import SetupWizardDialog
 

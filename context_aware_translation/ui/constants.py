@@ -59,6 +59,37 @@ LANGUAGES: Final[list[tuple[str, str]]] = [
     ("Eesti", "爱沙尼亚语"),
 ]
 
+
+def _normalize_language_label(value: str) -> str:
+    return " ".join(value.split()).casefold()
+
+
+_DISPLAY_LANGUAGE_BY_KEY: Final[dict[str, str]] = {}
+_STORAGE_LANGUAGE_BY_KEY: Final[dict[str, str]] = {}
+for _display_name, _internal_name in LANGUAGES:
+    _DISPLAY_LANGUAGE_BY_KEY[_normalize_language_label(_display_name)] = _display_name
+    _DISPLAY_LANGUAGE_BY_KEY[_normalize_language_label(_internal_name)] = _display_name
+    _STORAGE_LANGUAGE_BY_KEY[_normalize_language_label(_display_name)] = _internal_name
+    _STORAGE_LANGUAGE_BY_KEY[_normalize_language_label(_internal_name)] = _internal_name
+
+
+def display_target_language_name(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    return _DISPLAY_LANGUAGE_BY_KEY.get(_normalize_language_label(cleaned), cleaned)
+
+
+def storage_target_language_name(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    return _STORAGE_LANGUAGE_BY_KEY.get(_normalize_language_label(cleaned), cleaned)
+
 # Default window dimensions
 DEFAULT_WINDOW_WIDTH: Final[int] = 1120
 DEFAULT_WINDOW_HEIGHT: Final[int] = 760

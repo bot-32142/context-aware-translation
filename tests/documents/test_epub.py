@@ -165,6 +165,69 @@ def _make_epub_with_nav_sections(tmp_path: Path) -> Path:
     return epub_path
 
 
+def _make_epub_with_toc_document_titles(tmp_path: Path) -> Path:
+    """Create an EPUB with explicit TOC document titles in nav + NCX."""
+    epub_path = tmp_path / "toc_document_titles.epub"
+
+    container_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"""
+
+    opf_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>Original Book Name</dc:title>
+  </metadata>
+  <manifest>
+    <item id="ch1" href="ch1.xhtml" media-type="application/xhtml+xml"/>
+    <item id="navdoc" href="toc.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="ncxdoc" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+  </manifest>
+  <spine toc="ncxdoc">
+    <itemref idref="ch1"/>
+  </spine>
+</package>"""
+
+    toc_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+  <head><title>Original Book Name</title></head>
+  <body>
+    <nav epub:type="toc">
+      <ol><li><a href="ch1.xhtml">Chapter 1</a></li></ol>
+    </nav>
+  </body>
+</html>"""
+
+    ncx_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head></head>
+  <docTitle><text>Original Book Name</text></docTitle>
+  <navMap>
+    <navPoint id="navPoint-1" playOrder="1">
+      <navLabel><text>Chapter 1</text></navLabel>
+      <content src="ch1.xhtml"/>
+    </navPoint>
+  </navMap>
+</ncx>"""
+
+    chapter_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <body><h1>Chapter 1</h1><p>Hello</p></body>
+</html>"""
+
+    with zipfile.ZipFile(epub_path, "w") as zf:
+        zf.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+        zf.writestr("META-INF/container.xml", container_xml)
+        zf.writestr("OEBPS/content.opf", opf_xml)
+        zf.writestr("OEBPS/ch1.xhtml", chapter_xhtml)
+        zf.writestr("OEBPS/toc.xhtml", toc_xhtml)
+        zf.writestr("OEBPS/toc.ncx", ncx_xml)
+    return epub_path
+
+
 def _make_epub_with_inline_toc_nav_label(tmp_path: Path) -> Path:
     """Create an EPUB with inline markup inside TOC nav labels."""
     epub_path = tmp_path / "nav_inline_toc.epub"
@@ -1756,6 +1819,38 @@ class TestExport:
         assert read_back.metadata.title == "Libro Traducido"
 
     @pytest.mark.asyncio
+    async def test_export_epub_updates_toc_document_titles_from_translated_metadata_title(self, tmp_path: Path):
+        epub_path = _make_epub_with_toc_document_titles(tmp_path)
+        repo = _setup_repo(tmp_path)
+        EPUBDocument.do_import(repo, epub_path)
+
+        doc_row = repo.list_documents()[0]
+        doc = EPUBDocument(repo, doc_row["document_id"])
+        source_lines = doc.get_text().splitlines()
+        translations = [
+            "Libro Traducido"
+            if line == "Original Book Name"
+            else "Capitulo Uno"
+            if line == "Chapter 1"
+            else line
+            for line in source_lines
+        ]
+        consumed = await doc.set_text(translations)
+        assert consumed == len(translations)
+
+        output = tmp_path / "toc_document_titles_translated.epub"
+        EPUBDocument.export_merged([doc], "epub", output)
+
+        with zipfile.ZipFile(output, "r") as zf:
+            toc_xhtml = zf.read("OEBPS/toc.xhtml").decode("utf-8")
+            toc_ncx = zf.read("OEBPS/toc.ncx").decode("utf-8")
+
+        assert "<title>Libro Traducido</title>" in toc_xhtml
+        assert "Original Book Name" not in toc_xhtml
+        assert "Libro Traducido" in toc_ncx
+        assert "Original Book Name" not in toc_ncx
+
+    @pytest.mark.asyncio
     async def test_export_epub_strips_ruby_annotations_when_enabled(self, tmp_path: Path):
         chapters = [
             ("ch1.xhtml", "<html><body><p>Before <ruby>漢字<rt>かんじ</rt></ruby> after</p></body></html>"),
@@ -2504,9 +2599,9 @@ p {
         assert read_back.toc[0].children[0].href == "ch1.xhtml"
 
     @pytest.mark.asyncio
-    async def test_export_epub_syncs_toc_from_chapter_heading_when_matching(self, tmp_path: Path):
+    async def test_export_epub_syncs_chapter_heading_from_toc_when_matching(self, tmp_path: Path):
         """When original TOC title matches a chapter heading, export uses the
-        chapter heading translation for the TOC entry."""
+        TOC translation for the chapter heading."""
         book = EpubBook(
             metadata=EpubMetadata(title="Sync Book"),
             spine_items=[
@@ -2529,15 +2624,15 @@ p {
         doc = EPUBDocument(repo, doc_row["document_id"])
 
         source_lines = doc.get_text().splitlines()
-        # Lines: "Chapter One" (heading), "Hello world." (paragraph), "Chapter One" (TOC)
+        # Lines: "Chapter One" (heading), "Hello world." (paragraph), "Sync Book" (metadata title), "Chapter One" (TOC)
         assert source_lines[0] == "Chapter One"
         assert source_lines[-1] == "Chapter One"
 
-        # Provide *different* translations for heading vs TOC to prove sync works
+        # Provide *different* translations for heading vs TOC to prove TOC wins
         translations = list(source_lines)
         translations[0] = "Capitulo Uno"  # heading translation
         translations[1] = "Hola mundo."
-        translations[2] = "TOC Diferente"  # intentionally different TOC translation
+        translations[-1] = "TOC Diferente"  # intentionally different TOC translation
         consumed = await doc.set_text(translations)
         assert consumed == len(translations)
 
@@ -2546,12 +2641,14 @@ p {
 
         read_back = read_epub(output)
         assert len(read_back.toc) == 1
-        # TOC should use the chapter heading translation, NOT the separate TOC translation
-        assert read_back.toc[0].title == "Capitulo Uno"
+        assert read_back.toc[0].title == "TOC Diferente"
+        chapter_out = read_back.spine_items[0].content.decode("utf-8")
+        assert "TOC Diferente" in chapter_out
+        assert "Capitulo Uno" not in chapter_out
 
     @pytest.mark.asyncio
-    async def test_export_epub_syncs_nested_toc_children_from_headings(self, tmp_path: Path):
-        """Nested TOC children are also synced with chapter heading translations."""
+    async def test_export_epub_syncs_nested_chapter_headings_from_toc(self, tmp_path: Path):
+        """Nested chapter headings are also synced from the TOC translations."""
         book = EpubBook(
             metadata=EpubMetadata(title="Nested Sync"),
             spine_items=[
@@ -2602,11 +2699,15 @@ p {
 
         read_back = read_epub(output)
         assert len(read_back.toc) == 1
-        # Parent synced from heading
-        assert read_back.toc[0].title == "Primera Parte"
-        # Child synced from heading
+        assert read_back.toc[0].title == "TOC Part"
         assert read_back.toc[0].children is not None
-        assert read_back.toc[0].children[0].title == "Capitulo Alfa"
+        assert read_back.toc[0].children[0].title == "TOC Chapter"
+        part_out = read_back.spine_items[0].content.decode("utf-8")
+        chapter_out = read_back.spine_items[1].content.decode("utf-8")
+        assert "TOC Part" in part_out
+        assert "Primera Parte" not in part_out
+        assert "TOC Chapter" in chapter_out
+        assert "Capitulo Alfa" not in chapter_out
 
     @pytest.mark.asyncio
     async def test_export_epub_keeps_toc_translation_when_not_matching_heading(self, tmp_path: Path):
@@ -2800,7 +2901,7 @@ p {
         assert 'href="ch2.xhtml">Capitulo Dos<' in toc_xhtml
 
     @pytest.mark.asyncio
-    async def test_export_epub_syncs_visible_toc_links_from_image_backed_titles(self, tmp_path: Path):
+    async def test_export_epub_keeps_toc_translation_when_image_backed_title_differs(self, tmp_path: Path):
         book = EpubBook(
             metadata=EpubMetadata(title="Visible TOC Sync"),
             spine_items=[
@@ -2911,12 +3012,12 @@ p {
 
         read_back = read_epub(output)
         assert len(read_back.toc) == 3
-        assert read_back.toc[0].title == "序章 启程的季节！"
+        assert read_back.toc[0].title == "序章 错误的目录标题"
 
         with zipfile.ZipFile(output, "r") as zf:
             toc_xhtml = zf.read("OEBPS/toc.xhtml").decode("utf-8")
-        assert "错误的目录标题" not in toc_xhtml
-        assert "启程的季节！" in toc_xhtml
+        assert "错误的目录标题" in toc_xhtml
+        assert "启程的季节！" not in toc_xhtml
 
     @pytest.mark.asyncio
     async def test_export_epub_syncs_visible_toc_links_to_final_toc_titles_without_image_title_override(
@@ -3017,7 +3118,7 @@ p {
         assert "这次你绝对看不穿我的变装！" in toc_xhtml
 
     @pytest.mark.asyncio
-    async def test_export_epub_syncs_image_backed_titles_without_inter_word_spaces(self, tmp_path: Path):
+    async def test_export_epub_keeps_compact_toc_translation_when_image_backed_title_differs(self, tmp_path: Path):
         book = EpubBook(
             metadata=EpubMetadata(title="Compact Image Title Sync"),
             spine_items=[
@@ -3111,7 +3212,7 @@ p {
         compact_title_indices = [idx for idx, line in enumerate(source_lines) if line == "序章春は旅立ちの季節！"]
         assert len(compact_title_indices) == 2
         visible_toc_index = compact_title_indices[0]
-        metadata_toc_index = source_lines.index("序章春は旅立ちの季節！")
+        metadata_toc_index = compact_title_indices[-1]
         image_title_prefix_index = source_lines.index("序章")
         image_title_suffix_index = source_lines.index("春は旅立ちの季節！")
 
@@ -3131,12 +3232,12 @@ p {
 
         read_back = read_epub(output)
         assert len(read_back.toc) == 3
-        assert read_back.toc[0].title == "序章启程的季节！"
+        assert read_back.toc[0].title == "序章错误的目录标题"
 
         with zipfile.ZipFile(output, "r") as zf:
             toc_xhtml = zf.read("OEBPS/toc.xhtml").decode("utf-8")
-        assert "错误的目录标题" not in toc_xhtml
-        assert "序章启程的季节！" in toc_xhtml
+        assert "错误的目录标题" in toc_xhtml
+        assert "序章启程的季节！" not in toc_xhtml
 
     def test_export_epub_applies_persisted_reembedded_image(self, tmp_path: Path):
         original_png = _png_bytes((10, 10, 10), size=(8, 8))

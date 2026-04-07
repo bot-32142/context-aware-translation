@@ -35,7 +35,7 @@ from context_aware_translation.application.contracts.app_setup import (
     WorkflowStepId,
     WorkflowStepRoute,
 )
-from context_aware_translation.ui.constants import LANGUAGES
+from context_aware_translation.ui.constants import LANGUAGES, display_target_language_name
 from context_aware_translation.ui.json_utils import parse_json_object_text
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
@@ -1181,11 +1181,12 @@ class WorkflowProfileEditorDialog(QDialog):
                 continue
             seen_languages.add(display_name)
             self.target_language_combo.addItem(display_name)
-        index = self.target_language_combo.findText(self._original_profile.target_language)
+        display_target_language = display_target_language_name(self._original_profile.target_language)
+        index = self.target_language_combo.findText(display_target_language or self._original_profile.target_language)
         if index >= 0:
             self.target_language_combo.setCurrentIndex(index)
         else:
-            self.target_language_combo.setEditText(self._original_profile.target_language)
+            self.target_language_combo.setEditText(display_target_language or self._original_profile.target_language)
 
         basics_layout.addRow(self.tr("Profile name"), self.name_edit)
         basics_layout.addRow(self.tr("Target language"), self.target_language_combo)

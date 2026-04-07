@@ -536,6 +536,20 @@ def test_workflow_profile_round_trips_step_advanced_config() -> None:
     assert payload["image_reembedding_config"]["backend"] == "openai"
     assert payload["translator_batch_config"]["batch_size"] == 50
     assert payload["polish_batch_config"]["batch_size"] == 75
+    assert payload["translation_target_language"] == "英语"
+
+
+def test_workflow_profile_detail_displays_internal_language_names() -> None:
+    detail = build_workflow_profile_detail(
+        profile_id="profile:recommended",
+        name="Recommended",
+        kind=WorkflowProfileKind.SHARED,
+        config={"translation_target_language": "英语"},
+        connection_name_by_id={},
+        connection_model_by_id={},
+    )
+
+    assert detail.target_language == "English"
 
 
 def test_workflow_profile_payload_clears_optional_step_config_when_route_is_blank() -> None:

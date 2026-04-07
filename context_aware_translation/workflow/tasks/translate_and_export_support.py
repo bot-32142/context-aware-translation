@@ -14,6 +14,7 @@ from context_aware_translation.documents.base import (
     supports_original_image_export_for_type,
     supports_preserve_structure_for_type,
 )
+from context_aware_translation.documents.epub import CHAPTER_MIME_TYPES, METADATA_PATH
 from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.execution.batch_translation_ops import decode_task_payload
 from context_aware_translation.workflow.tasks.models import TERMINAL_TASK_STATUSES
@@ -36,6 +37,24 @@ _REMOTE_BATCH_PHASES = frozenset(
     }
 )
 _ACTIVE_REMOTE_BATCH_STATUSES = frozenset({"running", "cancel_requested", "cancelling"})
+
+
+def _is_translate_and_export_relevant_source(document_type: str, source: dict[str, Any]) -> bool:
+    source_type = str(source.get("source_type") or "").strip().lower()
+    if source_type == "image":
+        return True
+    if source_type != "text":
+        return False
+    if document_type != "epub":
+        return True
+
+    relative_path = str(source.get("relative_path") or "").strip()
+    if relative_path == METADATA_PATH:
+        return False
+
+    mime_type = str(source.get("mime_type") or "").strip().lower()
+    lower_path = relative_path.lower()
+    return mime_type in CHAPTER_MIME_TYPES or lower_path.endswith((".xhtml", ".html", ".htm", ".svg"))
 
 
 def decode_translate_and_export_payload(record: TaskRecord) -> dict[str, Any]:
@@ -239,7 +258,7 @@ def _validate_translate_and_export(
                     allowed=False,
                     reason="Translate and Export is already running or another task is active for this document.",
                 )
-            if not _document_is_untouched(doc_repo, document_id):
+            if not _document_is_untouched(doc_repo, document_id, document_type=document_type):
                 return Decision(
                     allowed=False,
                     code="document_touched",
@@ -342,8 +361,17 @@ def _validate_export_options(
     return Decision(allowed=True)
 
 
-def _document_is_untouched(doc_repo: document_repository.DocumentRepository, document_id: int) -> bool:
-    sources = doc_repo.get_document_sources_metadata(document_id)
+def _document_is_untouched(
+    doc_repo: document_repository.DocumentRepository,
+    document_id: int,
+    *,
+    document_type: str,
+) -> bool:
+    sources = [
+        source
+        for source in doc_repo.get_document_sources_metadata(document_id)
+        if _is_translate_and_export_relevant_source(document_type, source)
+    ]
     if any(bool(source.get("is_ocr_completed")) for source in sources if source.get("source_type") == "image"):
         return False
     if any(bool(source.get("is_text_added")) for source in sources):

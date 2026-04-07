@@ -10,7 +10,7 @@ from context_aware_translation.storage.schema.book_db import TermRecord
 
 
 @pytest.mark.asyncio
-async def test_mark_noise_terms_auto_marks_extracted_zero_occurrence_terms() -> None:
+async def test_mark_noise_terms_deletes_zero_occurrence_terms_and_marks_symbol_noise() -> None:
     term_repo = MagicMock()
     term_repo.get_last_noise_filtered_at.return_value = None
     term_repo.list_term_records.return_value = [
@@ -53,7 +53,8 @@ async def test_mark_noise_terms_auto_marks_extracted_zero_occurrence_terms() -> 
     count = await TranslationContextManager.mark_noise_terms(manager)
 
     assert count == 2
-    term_repo.update_terms_bulk.assert_called_once_with(["noise_term", "!!!"], ignored=True, is_reviewed=True)
+    term_repo.delete_terms.assert_called_once_with(["noise_term"])
+    term_repo.update_terms_bulk.assert_called_once_with(["!!!"], ignored=True, is_reviewed=True)
     term_repo.set_last_noise_filtered_at.assert_called_once_with(40.0)
 
 

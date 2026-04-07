@@ -103,9 +103,7 @@ def _select_representative_chunk_texts(
         return [nonempty_chunks[0].text]
 
     last_index = len(nonempty_chunks) - 1
-    selected_positions = {
-        (sample_index * last_index) // (max_samples - 1) for sample_index in range(max_samples)
-    }
+    selected_positions = {(sample_index * last_index) // (max_samples - 1) for sample_index in range(max_samples)}
     return [nonempty_chunks[position].text for position in sorted(selected_positions)]
 
 
@@ -813,20 +811,21 @@ class TranslationContextManager(ContextManager):
         term_keys: set[str] | None = None,
     ) -> int:
         """
-        Auto-mark obvious noise terms as ignored and reviewed before LLM review.
+        Auto-filter obvious noise terms before LLM review.
 
         Current deterministic rules:
-        - Symbol-only term key.
+        - Symbol-only term key -> keep record, mark ignored and reviewed.
         - Term extracted from chunk text (description key is a chunk id) but has
-          zero exact occurrence matches after occurrence mapping.
+          zero exact occurrence matches after occurrence mapping -> delete record.
 
         Returns:
-            Number of terms auto-marked as ignored+reviewed.
+            Number of terms auto-filtered.
         """
         raise_if_cancelled(cancel_check)
         required_methods = (
             "get_last_noise_filtered_at",
             "list_term_records",
+            "delete_terms",
             "update_terms_bulk",
             "set_last_noise_filtered_at",
         )
@@ -841,12 +840,13 @@ class TranslationContextManager(ContextManager):
         def _is_chunk_id_key(raw_key: object) -> bool:
             return str(raw_key).lstrip("-").isdigit()
 
-        def _is_noise_record(record: TermRecord) -> bool:
-            if symbol_only(record.key):
-                return True
+        def _should_delete_record(record: TermRecord) -> bool:
             has_extracted_description = any(_is_chunk_id_key(k) for k in record.descriptions)
             has_no_exact_occurrence = len(record.occurrence) == 0
             return has_extracted_description and has_no_exact_occurrence
+
+        def _should_ignore_record(record: TermRecord) -> bool:
+            return symbol_only(record.key)
 
         all_records = self.term_repo.list_term_records()
         records_to_check = [
@@ -861,14 +861,19 @@ class TranslationContextManager(ContextManager):
             return 0
 
         max_created_at = last_checkpoint or 0.0
+        keys_to_delete: list[str] = []
         keys_to_mark: list[str] = []
         for record in records_to_check:
             raise_if_cancelled(cancel_check)
-            if _is_noise_record(record):
+            if _should_delete_record(record):
+                keys_to_delete.append(record.key)
+            elif _should_ignore_record(record):
                 keys_to_mark.append(record.key)
             if record.created_at:
                 max_created_at = max(max_created_at, record.created_at)
 
+        if keys_to_delete:
+            self.term_repo.delete_terms(keys_to_delete)
         if keys_to_mark:
             self.term_repo.update_terms_bulk(keys_to_mark, ignored=True, is_reviewed=True)
 
@@ -876,7 +881,7 @@ class TranslationContextManager(ContextManager):
             self.term_repo.set_last_noise_filtered_at(max_created_at)
 
         raise_if_cancelled(cancel_check)
-        return len(keys_to_mark)
+        return len(keys_to_delete) + len(keys_to_mark)
 
     async def review_terms(
         self,
@@ -898,7 +903,7 @@ class TranslationContextManager(ContextManager):
         raise_if_cancelled(cancel_check)
         auto_marked_count = await self.mark_noise_terms(cancel_check=cancel_check, term_keys=term_keys)
         if auto_marked_count > 0:
-            logger.info("Auto-marked %s obvious noise term(s) as ignored+reviewed.", auto_marked_count)
+            logger.info("Auto-filtered %s obvious noise term(s) before review.", auto_marked_count)
 
         # Get pending review terms
         pending_terms = self.term_repo.get_terms_pending_review()

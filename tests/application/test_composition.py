@@ -98,6 +98,24 @@ def test_projects_service_can_create_and_list_projects(tmp_path: Path) -> None:
         context.close()
 
 
+def test_projects_service_persists_internal_language_names_but_displays_english(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="English Book", target_language="English")
+        )
+        project_id = created.project.project_id
+        config = context.runtime.get_effective_config_payload(project_id)
+        fetched = context.services.projects.get_project(project_id)
+
+        assert config["translation_target_language"] == "英语"
+        assert created.target_language == "English"
+        assert fetched.target_language == "English"
+    finally:
+        context.close()
+
+
 def test_projects_service_creates_project_with_selected_workflow_profile(tmp_path: Path) -> None:
     _ensure_qt_app()
     context = _build_configured_context(tmp_path)
@@ -146,6 +164,27 @@ def test_projects_service_preserves_selected_profile_when_overriding_target_lang
         assert config["translation_target_language"] == "Chinese"
         assert config["_ui_source_profile_id"] == shared_profile.profile_id
         assert project_setup.selected_shared_profile_id == shared_profile.profile_id
+    finally:
+        context.close()
+
+
+def test_projects_service_keeps_selected_profile_when_display_language_matches_internal_default(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        shared_profile = context.runtime.book_manager.list_profiles()[0]
+
+        created = context.services.projects.create_project(
+            CreateProjectRequest(
+                name="Profile Match",
+                workflow_profile_id=shared_profile.profile_id,
+                target_language="English",
+            )
+        )
+        book = context.runtime.get_book(created.project.project_id)
+
+        assert book.profile_id == shared_profile.profile_id
+        assert created.target_language == "English"
     finally:
         context.close()
 
@@ -292,9 +331,14 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
         assert "recommended-Gemini 3 Pro Image Preview" in connection_names
         assert "recommended-DeepSeek Chat" in connection_names
         assert "recommended-DeepSeek Reasoner" in connection_names
-        assert next(profile for profile in endpoint_profiles if profile.name == "recommended-DeepSeek Chat").concurrency == 15
         assert (
-            next(profile for profile in endpoint_profiles if profile.name == "recommended-DeepSeek Reasoner").concurrency
+            next(profile for profile in endpoint_profiles if profile.name == "recommended-DeepSeek Chat").concurrency
+            == 15
+        )
+        assert (
+            next(
+                profile for profile in endpoint_profiles if profile.name == "recommended-DeepSeek Reasoner"
+            ).concurrency
             == 15
         )
 

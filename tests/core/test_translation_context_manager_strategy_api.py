@@ -303,10 +303,7 @@ async def test_translation_context_manager_detect_language_uses_strategy_object(
 async def test_translation_context_manager_detect_language_samples_across_corpus():
     tokenizer = DummyTokenizer()
     context_tree = DummyContextTree()
-    chunks = [
-        TranslationChunkRecord(chunk_id=index, hash=f"hash{index}", text=f"chunk-{index}")
-        for index in range(9)
-    ]
+    chunks = [TranslationChunkRecord(chunk_id=index, hash=f"hash{index}", text=f"chunk-{index}") for index in range(9)]
     term_repo = DummyTermRepo(source_language=None, chunks=chunks)
     detector = DetectLanguageStrategy("French")
 

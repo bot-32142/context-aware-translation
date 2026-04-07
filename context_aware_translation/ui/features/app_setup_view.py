@@ -46,7 +46,7 @@ from context_aware_translation.application.contracts.app_setup import (
 )
 from context_aware_translation.application.contracts.common import CapabilityCode, ProviderKind, UserMessageSeverity
 from context_aware_translation.application.services.app_setup import AppSetupService
-from context_aware_translation.ui.constants import LANGUAGES
+from context_aware_translation.ui.constants import LANGUAGES, display_target_language_name
 from context_aware_translation.ui.features.workflow_profile_editor import workflow_step_label_from_text
 from context_aware_translation.ui.json_utils import parse_json_object_text
 from context_aware_translation.ui.tips import create_tip_label
@@ -671,11 +671,9 @@ class SetupWizardDialog(QDialog):
                     continue
                 seen_languages.add(display_name)
                 self._target_language_combo.addItem(display_name)
-            target_language = preview.target_language or (
-                preview.recommendation.target_language
-                if preview.recommendation is not None
-                else _DEFAULT_SETUP_WIZARD_TARGET_LANGUAGE
-            )
+            target_language = display_target_language_name(preview.target_language) or display_target_language_name(
+                preview.recommendation.target_language if preview.recommendation is not None else None
+            ) or _DEFAULT_SETUP_WIZARD_TARGET_LANGUAGE
             index = self._target_language_combo.findText(target_language)
             if index >= 0:
                 self._target_language_combo.setCurrentIndex(index)
