@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import shutil
+import tempfile
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -147,7 +150,13 @@ async def export(
 
     bootstrap_ops.check_cancel(cancel_check)
     doc_class = type(documents[0])
-    doc_class.export_merged(documents, export_format, file_path, use_original_images=use_original_images)
+    staged_root, staged_file = _prepare_staged_file(file_path)
+    try:
+        doc_class.export_merged(documents, export_format, staged_file, use_original_images=use_original_images)
+        bootstrap_ops.check_cancel(cancel_check)
+        _promote_staged_path(staged_file, file_path)
+    finally:
+        _cleanup_staged_path(staged_root)
 
 
 async def export_preserve_structure(
@@ -169,14 +178,57 @@ async def export_preserve_structure(
         if not document.supports_preserve_structure:
             raise NotImplementedError(f"{type(document).__name__} documents do not support structure-preserving export")
 
-    for document in documents:
+    staged_output = _prepare_staged_directory(output_folder)
+    try:
+        for document in documents:
+            bootstrap_ops.check_cancel(cancel_check)
+            await apply_export_text(
+                workflow,
+                document,
+                allow_original_fallback=allow_original_fallback,
+                epub_force_horizontal_ltr=False,
+                cancel_check=cancel_check,
+                progress_callback=progress_callback,
+            )
+            document.export_preserve_structure(staged_output / str(document.document_id))
         bootstrap_ops.check_cancel(cancel_check)
-        await apply_export_text(
-            workflow,
-            document,
-            allow_original_fallback=allow_original_fallback,
-            epub_force_horizontal_ltr=False,
-            cancel_check=cancel_check,
-            progress_callback=progress_callback,
-        )
-        document.export_preserve_structure(output_folder / str(document.document_id))
+        _promote_staged_path(staged_output, output_folder)
+    finally:
+        _cleanup_staged_path(staged_output)
+
+
+def _prepare_staged_file(final_path: Path) -> tuple[Path, Path]:
+    final_parent = final_path.parent
+    final_parent.mkdir(parents=True, exist_ok=True)
+    staged_root = Path(tempfile.mkdtemp(prefix=f".{final_path.stem or 'export'}-", dir=final_parent))
+    return staged_root, staged_root / final_path.name
+
+
+def _prepare_staged_directory(final_path: Path) -> Path:
+    final_parent = final_path.parent
+    final_parent.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix=f".{final_path.name or 'export'}-", dir=final_parent))
+
+
+def _promote_staged_path(staged_path: Path, final_path: Path) -> None:
+    backup_path: Path | None = None
+    if final_path.exists():
+        backup_path = final_path.with_name(f"{final_path.name}.bak-{uuid.uuid4().hex}")
+        final_path.replace(backup_path)
+    try:
+        staged_path.replace(final_path)
+    except Exception:
+        if backup_path is not None and backup_path.exists() and not final_path.exists():
+            backup_path.replace(final_path)
+        raise
+    if backup_path is not None:
+        _cleanup_staged_path(backup_path)
+
+
+def _cleanup_staged_path(path: Path) -> None:
+    if not path.exists():
+        return
+    if path.is_dir():
+        shutil.rmtree(path, ignore_errors=True)
+        return
+    path.unlink(missing_ok=True)

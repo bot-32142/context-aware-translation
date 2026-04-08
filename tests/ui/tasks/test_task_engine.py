@@ -425,6 +425,38 @@ def test_recover_interrupted_tasks_cancels_stale_local_cancel_requests(engine, t
     assert updated.cancel_requested is False
 
 
+def test_recover_interrupted_one_shot_backfills_resume_guard(engine, tmp_store, monkeypatch):
+    from context_aware_translation.workflow.tasks.models import Decision
+
+    handler = _make_handler("translate_and_export")
+    handler.can_autorun.return_value = Decision(allowed=False)
+    engine.register_handler(handler)
+    monkeypatch.setattr(
+        "context_aware_translation.workflow.tasks.translate_and_export_support.with_resume_guard",
+        lambda payload, _db_path, _document_id, *, required=False: {
+            **payload,
+            "resume_guard": "guard-after-recovery",
+            "resume_guard_required": required,
+        },
+    )
+    record = tmp_store.create(
+        book_id="book-one-shot",
+        task_type="translate_and_export",
+        status="running",
+        document_ids_json=json.dumps([4]),
+        payload_json=json.dumps({"format_id": "txt", "output_path": "/tmp/out.txt"}),
+    )
+
+    affected = engine.recover_interrupted_tasks()
+
+    updated = tmp_store.get(record.task_id)
+    assert affected == ["book-one-shot"]
+    assert updated is not None
+    assert updated.status == "failed"
+    assert json.loads(updated.payload_json)["resume_guard"] == "guard-after-recovery"
+    assert json.loads(updated.payload_json)["resume_guard_required"] is True
+
+
 def test_build_task_engine_recovers_interrupted_image_reembedding(tmp_path):
     from context_aware_translation.storage.repositories.task_store import TaskStore
     from context_aware_translation.workflow.task_runtime import build_task_engine

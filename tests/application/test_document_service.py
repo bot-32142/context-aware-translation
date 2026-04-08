@@ -1280,6 +1280,7 @@ def test_epub_asset_migration_hides_non_image_sources_from_ocr_and_workboard(tmp
 
         workboard = context.services.work.get_workboard(project_id)
         assert len(workboard.rows) == 1
+        assert workboard.rows[0].document.label == "nav.xhtml"
         assert workboard.rows[0].ocr_status == "N/A"
 
         db, repo = _open_repo(context, project_id)
@@ -1292,5 +1293,130 @@ def test_epub_asset_migration_hides_non_image_sources_from_ocr_and_workboard(tmp
         assert source_types["__epub_original__.epub"] == "asset"
         assert source_types["OEBPS/nav.xhtml"] == "asset"
         assert source_types["OEBPS/toc.ncx"] == "asset"
+    finally:
+        context.close()
+
+
+def test_workboard_uses_epub_archive_filename_for_label(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        project = context.services.projects.create_project(
+            CreateProjectRequest(name="EPUB Label", target_language="English")
+        )
+        project_id = project.project.project_id
+
+        db, repo = _open_repo(context, project_id)
+        try:
+            document_id = repo.insert_document("epub")
+            repo.insert_document_source(
+                document_id,
+                0,
+                "text",
+                relative_path="__epub_metadata__.json",
+                text_content=json.dumps({}, ensure_ascii=False),
+                is_text_added=True,
+                is_ocr_completed=True,
+            )
+            repo.insert_document_source(
+                document_id,
+                1,
+                "asset",
+                relative_path="my-book.epub",
+                binary_content=b"epub-bytes",
+                mime_type="application/epub+zip",
+                is_text_added=True,
+                is_ocr_completed=True,
+            )
+            repo.insert_document_source(
+                document_id,
+                2,
+                "text",
+                relative_path="OEBPS/chapter-1.xhtml",
+                text_content="<html></html>",
+                mime_type="application/xhtml+xml",
+                is_text_added=True,
+                is_ocr_completed=True,
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        workboard = context.services.work.get_workboard(project_id)
+        assert len(workboard.rows) == 1
+        assert workboard.rows[0].document.label == "my-book.epub"
+    finally:
+        context.close()
+
+
+def test_prepare_translate_and_export_allows_fresh_epub_with_internal_sources_marked_added(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        project = context.services.projects.create_project(
+            CreateProjectRequest(name="Fresh EPUB One Shot", target_language="English")
+        )
+        project_id = project.project.project_id
+
+        db, repo = _open_repo(context, project_id)
+        try:
+            document_id = repo.insert_document("epub")
+            repo.insert_document_source(
+                document_id,
+                0,
+                "text",
+                relative_path="__epub_metadata__.json",
+                text_content=json.dumps({}, ensure_ascii=False),
+                is_text_added=True,
+                is_ocr_completed=True,
+            )
+            repo.insert_document_source(
+                document_id,
+                1,
+                "asset",
+                relative_path="book.epub",
+                binary_content=b"epub-bytes",
+                mime_type="application/epub+zip",
+                is_text_added=True,
+                is_ocr_completed=True,
+            )
+            repo.insert_document_source(
+                document_id,
+                2,
+                "text",
+                relative_path="OEBPS/style.css",
+                text_content="body {}",
+                mime_type="text/css",
+                is_text_added=True,
+                is_ocr_completed=True,
+            )
+            repo.insert_document_source(
+                document_id,
+                3,
+                "asset",
+                relative_path="OEBPS/toc.xhtml",
+                binary_content=b"<html/>",
+                mime_type="application/xhtml+xml",
+                is_text_added=True,
+                is_ocr_completed=True,
+            )
+            repo.insert_document_source(
+                document_id,
+                4,
+                "text",
+                relative_path="OEBPS/chapter-1.xhtml",
+                text_content="<html><body><p>Hello</p></body></html>",
+                mime_type="application/xhtml+xml",
+                is_text_added=False,
+                is_ocr_completed=True,
+            )
+            db.commit()
+        finally:
+            db.close()
+
+        state = context.services.document.prepare_translate_and_export(project_id, document_id)
+
+        assert state.can_start is True
+        assert state.blocker is None
     finally:
         context.close()

@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from context_aware_translation.application.contracts.common import (
     CapabilityCode,
@@ -25,16 +25,33 @@ class WorkflowProfileKind(StrEnum):
     PROJECT_SPECIFIC = "project_specific"
 
 
+class SetupWizardMode(StrEnum):
+    QUALITY = "quality"
+    BALANCED = "balanced"
+    BUDGET = "budget"
+
+
 class WorkflowStepId(StrEnum):
     EXTRACTOR = "extractor"
     SUMMARIZER = "summarizer"
     GLOSSARY_TRANSLATOR = "glossary_translator"
     TRANSLATOR = "translator"
+    POLISH = "polish"
     REVIEWER = "reviewer"
     OCR = "ocr"
     IMAGE_REEMBEDDING = "image_reembedding"
     MANGA_TRANSLATOR = "manga_translator"
     TRANSLATOR_BATCH = "translator_batch"
+
+
+_DEFAULT_CONNECTION_CONCURRENCY = 5
+_DEEPSEEK_DEFAULT_CONNECTION_CONCURRENCY = 15
+
+
+def default_connection_concurrency(provider: ProviderKind | None) -> int:
+    if provider is ProviderKind.DEEPSEEK:
+        return _DEEPSEEK_DEFAULT_CONNECTION_CONCURRENCY
+    return _DEFAULT_CONNECTION_CONCURRENCY
 
 
 class ProviderCard(ContractModel):
@@ -54,7 +71,7 @@ class ConnectionSummary(ContractModel):
     temperature: float = 0.0
     timeout: int = 60
     max_retries: int = 3
-    concurrency: int = 5
+    concurrency: int = _DEFAULT_CONNECTION_CONCURRENCY
     token_limit: int | None = None
     input_token_limit: int | None = None
     output_token_limit: int | None = None
@@ -77,11 +94,36 @@ class ConnectionDraft(ContractModel):
     temperature: float = 0.0
     timeout: int = 60
     max_retries: int = 3
-    concurrency: int = 5
+    concurrency: int = _DEFAULT_CONNECTION_CONCURRENCY
     token_limit: int | None = None
     input_token_limit: int | None = None
     output_token_limit: int | None = None
     custom_parameters_json: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _apply_provider_specific_defaults(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        if "concurrency" in data and data.get("concurrency") is not None:
+            return data
+
+        provider_value = data.get("provider")
+        provider: ProviderKind | None = None
+        if isinstance(provider_value, ProviderKind):
+            provider = provider_value
+        elif isinstance(provider_value, str):
+            try:
+                provider = ProviderKind(provider_value)
+            except ValueError:
+                provider = None
+
+        if provider is None:
+            return data
+
+        payload = dict(data)
+        payload["concurrency"] = default_connection_concurrency(provider)
+        return payload
 
 
 class WorkflowStepRoute(ContractModel):
@@ -127,6 +169,7 @@ class SetupWizardRequest(ContractModel):
     connections: list[ConnectionDraft]
     profile_name: str | None = None
     target_language: str | None = None
+    recommendation_mode: SetupWizardMode = SetupWizardMode.BALANCED
 
 
 class SetupWizardState(ContractModel):
@@ -137,6 +180,7 @@ class SetupWizardState(ContractModel):
     recommendation: WorkflowProfileDetail | None = None
     profile_name: str | None = None
     target_language: str = "English"
+    recommendation_mode: SetupWizardMode = SetupWizardMode.BALANCED
 
 
 class AppSetupState(ContractModel):

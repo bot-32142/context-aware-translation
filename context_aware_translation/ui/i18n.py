@@ -314,6 +314,7 @@ _TASK_TYPE_LABELS: dict[str, object] = {
     "translation_manga": QT_TRANSLATE_NOOP("TaskLabels", "Manga Translation"),
     "ocr": QT_TRANSLATE_NOOP("TaskLabels", "OCR"),
     "image_reembedding": QT_TRANSLATE_NOOP("TaskLabels", "Image Reembedding"),
+    "translate_and_export": QT_TRANSLATE_NOOP("TaskLabels", "Translate and Export"),
 }
 
 # ---- Task phase labels ----
@@ -321,6 +322,7 @@ _TASK_PHASE_LABELS: dict[str, object] = {
     "ocr": QT_TRANSLATE_NOOP("TaskLabels", "OCR"),
     "extract_terms": QT_TRANSLATE_NOOP("TaskLabels", "Extracting terms"),
     "term_memory": QT_TRANSLATE_NOOP("TaskLabels", "Summarizing term memory"),
+    "rare_filter": QT_TRANSLATE_NOOP("TaskLabels", "Filtering rare terms"),
     "review": QT_TRANSLATE_NOOP("TaskLabels", "Reviewing terms"),
     "translate_glossary": QT_TRANSLATE_NOOP("TaskLabels", "Translating glossary"),
     "translate_chunks": QT_TRANSLATE_NOOP("TaskLabels", "Translating chunks"),
@@ -347,6 +349,7 @@ _RUNNING_STAGE_LABELS: dict[str, object] = {
     "chunk_retranslation": QT_TRANSLATE_NOOP("TaskLabels", "Chunk retranslation"),
     "ocr": QT_TRANSLATE_NOOP("TaskLabels", "OCR"),
     "image_reembedding": QT_TRANSLATE_NOOP("TaskLabels", "Image reembedding"),
+    "translate_and_export": QT_TRANSLATE_NOOP("TaskLabels", "Translate and export"),
 }
 
 # ---- Scope labels ----
@@ -440,6 +443,7 @@ _RUNTIME_STATIC: dict[str, object] = {
     "Target language is not configured for this project.": QT_TRANSLATE_NOOP(
         "RuntimeMessages", "Target language is not configured for this project."
     ),
+    "Translate and Export": QT_TRANSLATE_NOOP("RuntimeMessages", "Translate and Export"),
     "Translate manga": QT_TRANSLATE_NOOP("RuntimeMessages", "Translate manga"),
     "The selected image is no longer available.": QT_TRANSLATE_NOOP(
         "RuntimeMessages", "The selected image is no longer available."
@@ -637,6 +641,41 @@ _TASK_DECISION_REASON_STATIC: dict[str, object] = {
     "source_ids must contain only integers.": QT_TRANSLATE_NOOP(
         "TaskDecisionReason", "source_ids must contain only integers."
     ),
+    "Translate and Export requires exactly one document_id.": QT_TRANSLATE_NOOP(
+        "TaskDecisionReason", "Translate and Export requires exactly one document_id."
+    ),
+    "Translate and Export task document_ids_json is malformed.": QT_TRANSLATE_NOOP(
+        "TaskDecisionReason", "Translate and Export task document_ids_json is malformed."
+    ),
+    "This one-shot task cannot be retried because the document or glossary changed after it stopped.": QT_TRANSLATE_NOOP(
+        "TaskDecisionReason",
+        "This one-shot task cannot be retried because the document or glossary changed after it stopped.",
+    ),
+    "Translate and Export is already running or another task is active for this document.": QT_TRANSLATE_NOOP(
+        "TaskDecisionReason",
+        "Translate and Export is already running or another task is active for this document.",
+    ),
+    "Translate and Export is available only before OCR, glossary, translation, or reembedding work has started for this document.": QT_TRANSLATE_NOOP(
+        "TaskDecisionReason",
+        "Translate and Export is available only before OCR, glossary, translation, or reembedding work has started for this document.",
+    ),
+    "This document type does not support image reembedding.": QT_TRANSLATE_NOOP(
+        "TaskDecisionReason", "This document type does not support image reembedding."
+    ),
+    "Output path is required.": QT_TRANSLATE_NOOP("TaskDecisionReason", "Output path is required."),
+    "Export format is required.": QT_TRANSLATE_NOOP("TaskDecisionReason", "Export format is required."),
+    "This document type does not support preserve-structure export.": QT_TRANSLATE_NOOP(
+        "TaskDecisionReason", "This document type does not support preserve-structure export."
+    ),
+    "This document type does not support exporting original images.": QT_TRANSLATE_NOOP(
+        "TaskDecisionReason", "This document type does not support exporting original images."
+    ),
+    "EPUB layout conversion is only available for imported EPUB documents.": QT_TRANSLATE_NOOP(
+        "TaskDecisionReason", "EPUB layout conversion is only available for imported EPUB documents."
+    ),
+    "One or more async batch translation items failed.": QT_TRANSLATE_NOOP(
+        "TaskDecisionReason", "One or more async batch translation items failed."
+    ),
 }
 
 _TASK_DECISION_REASON_PATTERNS: list[tuple[re.Pattern[str], object]] = [
@@ -714,6 +753,14 @@ _TASK_DECISION_CODE_LABELS: dict[str, object] = {
     "no_pending_documents": QT_TRANSLATE_NOOP("TaskDecisionCode", "No documents are pending glossary build."),
     "blocked_ocr_pending": QT_TRANSLATE_NOOP("TaskDecisionCode", "Some selected documents still require OCR."),
     "no_untranslated_terms": QT_TRANSLATE_NOOP("TaskDecisionCode", "No untranslated terms found."),
+    "document_touched": QT_TRANSLATE_NOOP(
+        "TaskDecisionCode",
+        "Translate and Export is available only before work has started for this document.",
+    ),
+    "stale_resume_state": QT_TRANSLATE_NOOP(
+        "TaskDecisionCode",
+        "This one-shot task cannot be retried because the document or glossary changed after it stopped.",
+    ),
 }
 
 _TASK_DECISION_WRAPPED_REASON_PATTERNS: list[re.Pattern[str]] = [

@@ -10,10 +10,12 @@ from context_aware_translation.application.contracts.app_setup import (
     ConnectionDraft,
     ConnectionStatus,
     ConnectionSummary,
+    SetupWizardMode,
     WorkflowProfileDetail,
     WorkflowProfileKind,
     WorkflowStepId,
     WorkflowStepRoute,
+    default_connection_concurrency,
 )
 from context_aware_translation.application.contracts.common import (
     AcceptedCommand,
@@ -50,7 +52,7 @@ from context_aware_translation.application.events import (
     TermsInvalidatedEvent,
     WorkboardInvalidatedEvent,
 )
-from context_aware_translation.config import Config
+from context_aware_translation.config import Config, infer_async_batch_provider
 from context_aware_translation.storage.library.book_manager import BookManager
 from context_aware_translation.storage.models.book import Book
 from context_aware_translation.storage.models.config_profile import ConfigProfile
@@ -59,6 +61,10 @@ from context_aware_translation.storage.repositories.document_repository import D
 from context_aware_translation.storage.repositories.task_store import TaskRecord, TaskStore
 from context_aware_translation.storage.repositories.term_repository import TermRepository
 from context_aware_translation.storage.schema.book_db import SQLiteBookDB
+from context_aware_translation.ui.constants import (
+    display_target_language_name,
+    storage_target_language_name,
+)
 from context_aware_translation.workflow.tasks.models import TaskAction
 
 if TYPE_CHECKING:
@@ -80,23 +86,42 @@ _HIDDEN_CONNECTION_KWARG_KEYS = frozenset(
     }
 )
 
-_WIZARD_REASONING_EFFORT_BY_STEP: dict[WorkflowStepId, str] = {
-    WorkflowStepId.GLOSSARY_TRANSLATOR: "low",
-    WorkflowStepId.TRANSLATOR: "low",
-    WorkflowStepId.OCR: "none",
-    WorkflowStepId.MANGA_TRANSLATOR: "low",
-}
-
 
 def _openai_supports_reasoning_effort_none(model: str | None) -> bool:
     normalized = str(model or "").strip().lower()
     return normalized.startswith("o") or normalized.startswith("gpt-5")
 
 
-def _wizard_reasoning_kwargs(step_id: WorkflowStepId, selected: ConnectionDraft | None) -> dict[str, str] | None:
+def _wizard_reasoning_effort(
+    step_id: WorkflowStepId,
+    provider: ProviderKind,
+    recommendation_mode: SetupWizardMode,
+) -> str | None:
+    if provider is ProviderKind.DEEPSEEK:
+        return None
+    if step_id is WorkflowStepId.GLOSSARY_TRANSLATOR:
+        return "low"
+    if step_id is WorkflowStepId.OCR:
+        return "none"
+    if step_id not in {WorkflowStepId.TRANSLATOR, WorkflowStepId.POLISH, WorkflowStepId.MANGA_TRANSLATOR}:
+        return None
+    if recommendation_mode is SetupWizardMode.BUDGET:
+        return "low"
+    if recommendation_mode is SetupWizardMode.QUALITY:
+        return "high"
+    if step_id is WorkflowStepId.POLISH:
+        return "medium"
+    return "none"
+
+
+def _wizard_reasoning_kwargs(
+    step_id: WorkflowStepId,
+    selected: ConnectionDraft | None,
+    recommendation_mode: SetupWizardMode,
+) -> dict[str, str] | None:
     if selected is None:
         return None
-    reasoning_effort = _WIZARD_REASONING_EFFORT_BY_STEP.get(step_id)
+    reasoning_effort = _wizard_reasoning_effort(step_id, selected.provider, recommendation_mode)
     if reasoning_effort is None:
         return None
     if (
@@ -108,17 +133,44 @@ def _wizard_reasoning_kwargs(step_id: WorkflowStepId, selected: ConnectionDraft 
     return {"reasoning_effort": reasoning_effort}
 
 
+def _wizard_translator_limits(selected: ConnectionDraft | None) -> dict[str, int]:
+    if selected is None:
+        return {}
+    if selected.provider in {ProviderKind.OPENAI, ProviderKind.ANTHROPIC}:
+        return {"max_tokens_per_llm_call": 4000, "chunk_size": 1000}
+    if selected.provider is ProviderKind.GEMINI:
+        return {"max_tokens_per_llm_call": 3000, "chunk_size": 1000}
+    return {}
+
+
 _WORKFLOW_STEP_LAYOUT: tuple[tuple[WorkflowStepId, str, str | None], ...] = (
     (WorkflowStepId.EXTRACTOR, "Extractor", "extractor_config"),
     (WorkflowStepId.SUMMARIZER, "Summarizer", "summarizor_config"),
     (WorkflowStepId.GLOSSARY_TRANSLATOR, "Glossary translator", "glossary_config"),
     (WorkflowStepId.TRANSLATOR, "Translator", "translator_config"),
+    (WorkflowStepId.POLISH, "Polish", "polish_config"),
     (WorkflowStepId.REVIEWER, "Reviewer", "review_config"),
     (WorkflowStepId.OCR, "OCR", "ocr_config"),
     (WorkflowStepId.IMAGE_REEMBEDDING, "Image reembedding", "image_reembedding_config"),
     (WorkflowStepId.MANGA_TRANSLATOR, "Manga translator", "manga_translator_config"),
     (WorkflowStepId.TRANSLATOR_BATCH, "Translator batch", None),
 )
+
+_DEFAULT_BATCH_SIZE = 100
+_BATCH_PROVIDER_LABELS = {"gemini_ai_studio": "Gemini AI Studio"}
+
+
+def _coerce_batch_size(value: object, default: int) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return default
+    return default
 
 
 @dataclass(frozen=True)
@@ -144,6 +196,13 @@ _WIZARD_MODEL_CATALOG: dict[ProviderKind, tuple[WizardModelTemplate, ...]] = {
             ProviderKind.GEMINI,
             "Gemini 2.5 Pro",
             "gemini-2.5-pro",
+            "https://generativelanguage.googleapis.com/v1beta/openai/",
+            timeout=300,
+        ),
+        WizardModelTemplate(
+            ProviderKind.GEMINI,
+            "Gemini 3.1 Pro",
+            "gemini-3.1-pro",
             "https://generativelanguage.googleapis.com/v1beta/openai/",
             timeout=300,
         ),
@@ -177,6 +236,7 @@ _WIZARD_MODEL_CATALOG: dict[ProviderKind, tuple[WizardModelTemplate, ...]] = {
         ),
     ),
     ProviderKind.OPENAI: (
+        WizardModelTemplate(ProviderKind.OPENAI, "GPT-5.4", "gpt-5.4", "https://api.openai.com/v1", timeout=300),
         WizardModelTemplate(ProviderKind.OPENAI, "GPT-4.1", "gpt-4.1", "https://api.openai.com/v1"),
         WizardModelTemplate(ProviderKind.OPENAI, "GPT-4.1 Mini", "gpt-4.1-mini", "https://api.openai.com/v1"),
         WizardModelTemplate(
@@ -188,12 +248,30 @@ _WIZARD_MODEL_CATALOG: dict[ProviderKind, tuple[WizardModelTemplate, ...]] = {
         ),
     ),
     ProviderKind.DEEPSEEK: (
-        WizardModelTemplate(ProviderKind.DEEPSEEK, "DeepSeek Chat", "deepseek-chat", "https://api.deepseek.com"),
         WizardModelTemplate(
-            ProviderKind.DEEPSEEK, "DeepSeek Reasoner", "deepseek-reasoner", "https://api.deepseek.com", timeout=300
+            ProviderKind.DEEPSEEK,
+            "DeepSeek Chat",
+            "deepseek-chat",
+            "https://api.deepseek.com",
+            concurrency=default_connection_concurrency(ProviderKind.DEEPSEEK),
+        ),
+        WizardModelTemplate(
+            ProviderKind.DEEPSEEK,
+            "DeepSeek Reasoner",
+            "deepseek-reasoner",
+            "https://api.deepseek.com",
+            timeout=300,
+            concurrency=default_connection_concurrency(ProviderKind.DEEPSEEK),
         ),
     ),
     ProviderKind.ANTHROPIC: (
+        WizardModelTemplate(
+            ProviderKind.ANTHROPIC,
+            "Claude Opus 4.6",
+            "claude-opus-4-6",
+            "https://api.anthropic.com/v1",
+            timeout=300,
+        ),
         WizardModelTemplate(
             ProviderKind.ANTHROPIC,
             "Claude Sonnet 3.5",
@@ -226,12 +304,6 @@ _STEP_RECOMMENDATION_ORDER: dict[WorkflowStepId, tuple[StepModelPreference, ...]
         StepModelPreference(ProviderKind.OPENAI, "gpt-4.1-mini"),
         StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-haiku-latest"),
     ),
-    WorkflowStepId.TRANSLATOR: (
-        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-pro"),
-        StepModelPreference(ProviderKind.OPENAI, "gpt-4.1"),
-        StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
-        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-chat"),
-    ),
     WorkflowStepId.REVIEWER: (
         StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-pro"),
         StepModelPreference(ProviderKind.OPENAI, "o4-mini"),
@@ -253,6 +325,46 @@ _STEP_RECOMMENDATION_ORDER: dict[WorkflowStepId, tuple[StepModelPreference, ...]
         StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
     ),
 }
+
+
+def _translator_recommendations(recommendation_mode: SetupWizardMode) -> tuple[StepModelPreference, ...]:
+    if recommendation_mode is SetupWizardMode.QUALITY:
+        return (
+            StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-pro"),
+            StepModelPreference(ProviderKind.OPENAI, "gpt-5.4"),
+            StepModelPreference(ProviderKind.ANTHROPIC, "claude-opus-4-6"),
+            StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-reasoner"),
+        )
+    return (
+        StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-pro"),
+        StepModelPreference(ProviderKind.OPENAI, "gpt-5.4"),
+        StepModelPreference(ProviderKind.ANTHROPIC, "claude-opus-4-6"),
+        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-chat"),
+    )
+
+
+def _polish_recommendations(recommendation_mode: SetupWizardMode) -> tuple[StepModelPreference, ...]:
+    del recommendation_mode
+    return (
+        StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-pro"),
+        StepModelPreference(ProviderKind.OPENAI, "gpt-5.4"),
+        StepModelPreference(ProviderKind.ANTHROPIC, "claude-opus-4-6"),
+        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-reasoner"),
+    )
+
+
+def _manga_translator_recommendations(recommendation_mode: SetupWizardMode) -> tuple[StepModelPreference, ...]:
+    if recommendation_mode is SetupWizardMode.QUALITY:
+        return (
+            StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-pro"),
+            StepModelPreference(ProviderKind.OPENAI, "o4-mini"),
+            StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
+        )
+    return (
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-pro"),
+        StepModelPreference(ProviderKind.OPENAI, "gpt-4.1"),
+        StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
+    )
 
 
 @dataclass(frozen=True)
@@ -554,6 +666,42 @@ def _step_payload_without_routing(step_payload: dict[str, Any]) -> dict[str, Any
     }
 
 
+def _batch_provider_label(provider: str) -> str:
+    return _BATCH_PROVIDER_LABELS.get(provider, provider)
+
+
+def _resolved_route_batch_provider(
+    route: WorkflowStepRoute | None,
+    *,
+    connection_base_url_by_id: dict[str, str | None] | None,
+) -> str | None:
+    if route is None or not route.connection_id:
+        return None
+    base_url = (connection_base_url_by_id or {}).get(route.connection_id)
+    return infer_async_batch_provider(base_url)
+
+
+def _eligible_pipeline_batch_provider(
+    *,
+    translator_route: WorkflowStepRoute | None,
+    polish_route: WorkflowStepRoute | None,
+    connection_base_url_by_id: dict[str, str | None] | None,
+) -> str | None:
+    translator_provider = _resolved_route_batch_provider(
+        translator_route,
+        connection_base_url_by_id=connection_base_url_by_id,
+    )
+    if translator_provider is None:
+        return None
+    polish_provider = _resolved_route_batch_provider(
+        polish_route,
+        connection_base_url_by_id=connection_base_url_by_id,
+    )
+    if polish_provider != translator_provider:
+        return None
+    return translator_provider
+
+
 def _build_standard_route(
     *,
     step_id: WorkflowStepId,
@@ -580,16 +728,62 @@ def _build_standard_route(
     )
 
 
-def _build_batch_route(step_label: str, config: dict[str, Any]) -> WorkflowStepRoute:
-    batch_payload = config.get("translator_batch_config")
-    batch_config = batch_payload if isinstance(batch_payload, dict) else {}
+_POLISH_FALLBACK_STEP_CONFIG_KEYS = frozenset({"temperature", "timeout", "max_retries", "concurrency", "kwargs"})
+
+
+def _build_polish_fallback_route(
+    *,
+    step_label: str,
+    translator_route: WorkflowStepRoute | None,
+) -> WorkflowStepRoute:
+    if translator_route is None:
+        return WorkflowStepRoute(step_id=WorkflowStepId.POLISH, step_label=step_label)
+    step_config = {
+        str(key): value
+        for key, value in translator_route.step_config.items()
+        if key in _POLISH_FALLBACK_STEP_CONFIG_KEYS and value is not None
+    }
+    return WorkflowStepRoute(
+        step_id=WorkflowStepId.POLISH,
+        step_label=step_label,
+        connection_id=translator_route.connection_id,
+        connection_label=translator_route.connection_label,
+        model=translator_route.model,
+        step_config=step_config,
+    )
+
+
+def _build_batch_route(
+    *,
+    step_label: str,
+    translator_route: WorkflowStepRoute | None,
+    polish_route: WorkflowStepRoute | None,
+    config: dict[str, Any],
+    connection_base_url_by_id: dict[str, str | None] | None,
+) -> WorkflowStepRoute | None:
+    provider = _eligible_pipeline_batch_provider(
+        translator_route=translator_route,
+        polish_route=polish_route,
+        connection_base_url_by_id=connection_base_url_by_id,
+    )
+    if provider is None:
+        return None
+    translator_batch_payload = config.get("translator_batch_config")
+    polish_batch_payload = config.get("polish_batch_config")
+    translator_batch_config = translator_batch_payload if isinstance(translator_batch_payload, dict) else {}
+    polish_batch_config = polish_batch_payload if isinstance(polish_batch_payload, dict) else {}
+    translator_batch_size = _coerce_batch_size(translator_batch_config.get("batch_size"), _DEFAULT_BATCH_SIZE)
+    polish_batch_size = _coerce_batch_size(polish_batch_config.get("batch_size"), translator_batch_size)
     return WorkflowStepRoute(
         step_id=WorkflowStepId.TRANSLATOR_BATCH,
         step_label=step_label,
         connection_id=None,
-        connection_label=(str(batch_config.get("provider") or "Direct batch config") if batch_config else None),
-        model=(str(batch_config.get("model") or "") or None),
-        step_config={str(key): value for key, value in batch_config.items() if key != "model" and value is not None},
+        connection_label=_batch_provider_label(provider),
+        model=None,
+        step_config={
+            "translator_batch_size": translator_batch_size,
+            "polish_batch_size": polish_batch_size,
+        },
     )
 
 
@@ -607,10 +801,7 @@ def _build_standard_step_payload(route: WorkflowStepRoute) -> dict[str, Any]:
 
 
 def _build_batch_step_payload(route: WorkflowStepRoute) -> dict[str, Any]:
-    payload: dict[str, Any] = {str(key): value for key, value in route.step_config.items() if value is not None}
-    if route.model:
-        payload["model"] = route.model
-    return payload
+    return {str(key): value for key, value in route.step_config.items() if value is not None}
 
 
 def _infer_image_backend(route: WorkflowStepRoute) -> str | None:
@@ -636,23 +827,46 @@ def build_workflow_profile_detail(
     config: dict[str, Any],
     connection_name_by_id: dict[str, str],
     connection_model_by_id: dict[str, str | None],
+    connection_base_url_by_id: dict[str, str | None] | None = None,
     is_default: bool = False,
 ) -> WorkflowProfileDetail:
     step_config_map = _workflow_step_config_map(config)
-    routes = [
-        _build_batch_route(label, config)
-        if step_id is WorkflowStepId.TRANSLATOR_BATCH
-        else _build_standard_route(
+    routes: list[WorkflowStepRoute] = []
+    translator_route: WorkflowStepRoute | None = None
+    polish_route: WorkflowStepRoute | None = None
+    for step_id, label, _config_key in _WORKFLOW_STEP_LAYOUT:
+        if step_id is WorkflowStepId.TRANSLATOR_BATCH:
+            batch_route = _build_batch_route(
+                step_label=label,
+                translator_route=translator_route,
+                polish_route=polish_route,
+                config=config,
+                connection_base_url_by_id=connection_base_url_by_id,
+            )
+            if batch_route is not None:
+                routes.append(batch_route)
+            continue
+        if step_id is WorkflowStepId.POLISH and not step_config_map.get(step_id):
+            route = _build_polish_fallback_route(step_label=label, translator_route=translator_route)
+            polish_route = route
+            routes.append(route)
+            continue
+        route = _build_standard_route(
             step_id=step_id,
             step_label=label,
             step_payload=step_config_map.get(step_id, {}),
             connection_name_by_id=connection_name_by_id,
             connection_model_by_id=connection_model_by_id,
         )
-        for step_id, label, _config_key in _WORKFLOW_STEP_LAYOUT
-    ]
+        if step_id is WorkflowStepId.TRANSLATOR:
+            translator_route = route
+        elif step_id is WorkflowStepId.POLISH:
+            polish_route = route
+        routes.append(route)
 
-    target_language = str(config.get("translation_target_language") or "English")
+    target_language = (
+        display_target_language_name(str(config.get("translation_target_language") or "English")) or "English"
+    )
     return WorkflowProfileDetail(
         profile_id=profile_id,
         name=name,
@@ -670,7 +884,9 @@ def build_workflow_profile_payload(
     source_profile_id: str | None = None,
 ) -> dict[str, Any]:
     payload = dict(base_config or {})
-    payload["translation_target_language"] = profile.target_language
+    payload["translation_target_language"] = (
+        storage_target_language_name(profile.target_language) or profile.target_language
+    )
     if source_profile_id:
         payload[_UI_SOURCE_PROFILE_ID_KEY] = source_profile_id
     else:
@@ -681,10 +897,16 @@ def build_workflow_profile_payload(
         route = route_map.get(step_id)
         if step_id is WorkflowStepId.TRANSLATOR_BATCH:
             batch_payload = _build_batch_step_payload(route) if route is not None else {}
-            if batch_payload:
-                payload["translator_batch_config"] = batch_payload
+            translator_batch_size = batch_payload.get("translator_batch_size")
+            polish_batch_size = batch_payload.get("polish_batch_size")
+            if translator_batch_size is not None:
+                payload["translator_batch_config"] = {"batch_size": int(translator_batch_size)}
             else:
                 payload.pop("translator_batch_config", None)
+            if polish_batch_size is not None:
+                payload["polish_batch_config"] = {"batch_size": int(polish_batch_size)}
+            else:
+                payload.pop("polish_batch_config", None)
             continue
         if config_key is None:
             continue
@@ -739,46 +961,40 @@ def _recommended_connection_by_model(
     )
 
 
+def _recommendations_for_step(
+    step_id: WorkflowStepId,
+    recommendation_mode: SetupWizardMode,
+) -> tuple[StepModelPreference, ...]:
+    if step_id is WorkflowStepId.TRANSLATOR:
+        return _translator_recommendations(recommendation_mode)
+    if step_id is WorkflowStepId.POLISH:
+        return _polish_recommendations(recommendation_mode)
+    if step_id is WorkflowStepId.MANGA_TRANSLATOR:
+        return _manga_translator_recommendations(recommendation_mode)
+    return _STEP_RECOMMENDATION_ORDER.get(step_id, ())
+
+
 def _recommended_step_route(
     step_id: WorkflowStepId,
     label: str,
     drafts: list[ConnectionDraft],
+    recommendation_mode: SetupWizardMode,
 ) -> WorkflowStepRoute:
     if step_id is WorkflowStepId.TRANSLATOR_BATCH:
-        gemini_batch = (
-            _recommended_connection_by_model(drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-pro"))
-            or _recommended_connection_by_model(drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash"))
-            or _recommended_connection_by_model(drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-flash"))
-            or _recommended_connection_by_model(
-                drafts, StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash-lite")
-            )
-        )
-        if gemini_batch is None:
-            return WorkflowStepRoute(step_id=step_id, step_label=label)
-        return WorkflowStepRoute(
-            step_id=step_id,
-            step_label=label,
-            connection_id=None,
-            connection_label="Gemini AI Studio",
-            model=gemini_batch.default_model,
-            step_config={
-                "provider": "gemini_ai_studio",
-                "api_key": gemini_batch.api_key or "",
-                "batch_size": 100,
-                "thinking_mode": "low",
-            },
-        )
+        return WorkflowStepRoute(step_id=step_id, step_label=label)
 
     selected = None
-    for preference in _STEP_RECOMMENDATION_ORDER.get(step_id, ()):
+    for preference in _recommendations_for_step(step_id, recommendation_mode):
         selected = _recommended_connection_by_model(drafts, preference)
         if selected is not None:
             break
 
     step_config: dict[str, Any] = {}
-    reasoning_kwargs = _wizard_reasoning_kwargs(step_id, selected)
+    reasoning_kwargs = _wizard_reasoning_kwargs(step_id, selected, recommendation_mode)
     if step_id is WorkflowStepId.EXTRACTOR:
         step_config["max_gleaning"] = 1
+    if step_id is WorkflowStepId.TRANSLATOR:
+        step_config.update(_wizard_translator_limits(selected))
     if reasoning_kwargs is not None:
         step_config["kwargs"] = reasoning_kwargs
     if step_id is WorkflowStepId.IMAGE_REEMBEDDING and selected is not None:
@@ -797,17 +1013,53 @@ def _recommended_step_route(
     )
 
 
+def _recommended_batch_route(
+    *,
+    label: str,
+    curated_drafts: list[ConnectionDraft],
+    routes: list[WorkflowStepRoute],
+) -> WorkflowStepRoute | None:
+    route_map = {route.step_id: route for route in routes}
+    translator_route = route_map.get(WorkflowStepId.TRANSLATOR)
+    polish_route = route_map.get(WorkflowStepId.POLISH)
+    draft_base_urls = {draft.display_name: draft.base_url for draft in curated_drafts}
+    provider = _eligible_pipeline_batch_provider(
+        translator_route=translator_route,
+        polish_route=polish_route,
+        connection_base_url_by_id=draft_base_urls,
+    )
+    if provider is None:
+        return None
+    return WorkflowStepRoute(
+        step_id=WorkflowStepId.TRANSLATOR_BATCH,
+        step_label=label,
+        connection_id=None,
+        connection_label=_batch_provider_label(provider),
+        model=None,
+        step_config={
+            "translator_batch_size": _DEFAULT_BATCH_SIZE,
+            "polish_batch_size": _DEFAULT_BATCH_SIZE,
+        },
+    )
+
+
 def recommended_workflow_profile_from_drafts(
     drafts: list[ConnectionDraft],
     *,
     profile_id: str = "recommended",
     name: str = "Recommended",
     target_language: str = "English",
+    recommendation_mode: SetupWizardMode = SetupWizardMode.BALANCED,
 ) -> WorkflowProfileDetail:
     curated_drafts = expand_wizard_connection_drafts(drafts)
-    routes = [
-        _recommended_step_route(step_id, label, curated_drafts) for step_id, label, _config_key in _WORKFLOW_STEP_LAYOUT
-    ]
+    routes: list[WorkflowStepRoute] = []
+    for step_id, label, _config_key in _WORKFLOW_STEP_LAYOUT:
+        if step_id is WorkflowStepId.TRANSLATOR_BATCH:
+            batch_route = _recommended_batch_route(label=label, curated_drafts=curated_drafts, routes=routes)
+            if batch_route is not None:
+                routes.append(batch_route)
+            continue
+        routes.append(_recommended_step_route(step_id, label, curated_drafts, recommendation_mode))
     return WorkflowProfileDetail(
         profile_id=profile_id,
         name=name,
@@ -830,7 +1082,7 @@ def build_project_summary(book_manager: BookManager, book: Book) -> ProjectSumma
     target_language: str | None = None
     config = book_manager.get_book_config(book.book_id)
     if config is not None and isinstance(config.get("translation_target_language"), str):
-        target_language = str(config["translation_target_language"])
+        target_language = display_target_language_name(str(config["translation_target_language"]))
     return ProjectSummary(
         project=ProjectRef(project_id=book.book_id, name=book.name),
         target_language=target_language,
@@ -903,6 +1155,32 @@ def related_target_for_task(record: TaskRecord) -> NavigationTarget | None:
         kind = NavigationTargetKind.DOCUMENT_TRANSLATION if document_id is not None else NavigationTargetKind.WORK
     elif record.task_type == "image_reembedding":
         kind = NavigationTargetKind.DOCUMENT_IMAGES if document_id is not None else NavigationTargetKind.WORK
+    elif record.task_type == "translate_and_export":
+        phase = record.phase or ""
+        if phase == "ocr":
+            kind = NavigationTargetKind.DOCUMENT_OCR
+        elif phase in {"extract_terms", "term_memory", "rare_filter", "review", "translate_glossary"}:
+            kind = NavigationTargetKind.DOCUMENT_TERMS
+        elif phase in {
+            "translate_chunks",
+            "prepare",
+            "translation_submit",
+            "translation_poll",
+            "translation_validate",
+            "translation_fallback",
+            "polish_submit",
+            "polish_poll",
+            "polish_validate",
+            "polish_fallback",
+            "apply",
+        }:
+            kind = NavigationTargetKind.DOCUMENT_TRANSLATION
+        elif phase == "reembed":
+            kind = NavigationTargetKind.DOCUMENT_IMAGES
+        elif phase == "export":
+            kind = NavigationTargetKind.DOCUMENT_EXPORT
+        else:
+            kind = NavigationTargetKind.WORK
     else:
         kind = NavigationTargetKind.WORK
     return NavigationTarget(kind=kind, project_id=record.book_id, document_id=document_id)
@@ -920,6 +1198,7 @@ def title_for_task(task_type: str) -> str:
         "chunk_retranslation": "Retranslate chunk",
         "batch_translation": "Submit async batch",
         "image_reembedding": "Put text back into images",
+        "translate_and_export": "Translate and Export",
     }
     return mapping.get(task_type, task_type)
 

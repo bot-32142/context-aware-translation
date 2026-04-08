@@ -54,6 +54,7 @@ def _build_manager(
     chunk_translator = LLMChunkTranslator(
         llm_client,
         translator_config,
+        runtime_config.polish_config,
         runtime_config.translation_target_language,
     )
     term_memory_updater = LLMTermMemoryUpdater(

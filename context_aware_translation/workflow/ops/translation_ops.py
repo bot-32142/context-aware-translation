@@ -56,9 +56,9 @@ async def translate(
         if only_doc_type != "manga":
             raise ValueError("source_ids filtering is only supported for manga translation.")
         source_ids_by_document = {int(only_doc_id): [int(source_id) for source_id in source_ids]}
-    max_tokens_per_call = int(getattr(translator_config, "max_tokens_per_llm_call", 4000) or 4000)
+    max_tokens_per_call = int(getattr(translator_config, "max_tokens_per_llm_call", 2000) or 2000)
     if max_tokens_per_call <= 0:
-        max_tokens_per_call = 4000
+        max_tokens_per_call = 2000
 
     await workflow.manager.translate_chunks(
         doc_type_by_id=doc_type_by_id,

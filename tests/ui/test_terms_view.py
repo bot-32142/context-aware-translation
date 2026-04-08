@@ -175,9 +175,7 @@ def test_terms_view_loads_qml_project_chrome_and_routes_toolbar_actions():
         assert root.property("reviewTooltipText") == (
             "Run an LLM review pass on unreviewed glossary terms for the current scope."
         )
-        assert root.property("filterTooltipText") == (
-            "Automatically ignore terms that occurred only once or were recognized by the LLM in only one chunk."
-        )
+        assert root.property("filterTooltipText") == "Automatically ignore terms that occurred in only one chunk."
         assert view.import_button.isHidden()
         assert view.export_button.isHidden()
         assert view.chrome_host.minimumHeight() >= int(root.property("implicitHeight"))

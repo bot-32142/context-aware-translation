@@ -28,6 +28,8 @@ from context_aware_translation.application.contracts.document import (
     DocumentExportResult,
     DocumentExportState,
     RunDocumentExportRequest,
+    RunTranslateAndExportRequest,
+    TranslateAndExportState,
 )
 from context_aware_translation.application.contracts.work import ExportDialogState, RunExportRequest
 from context_aware_translation.application.errors import ApplicationError, ApplicationErrorCode
@@ -63,11 +65,21 @@ _DOCUMENT_SECTIONS: tuple[DocumentSection, ...] = tuple(_SECTION_LABELS)
 class _ExportControls(QWidget):
     changed = Signal()
 
-    def __init__(self, *, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        show_translation_completion_controls: bool = True,
+        show_original_image_option: bool = True,
+        default_epub_force_horizontal_ltr: bool = False,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._default_output_path = ""
         self._supports_original_image_export = False
         self._supports_epub_layout_conversion = False
+        self._show_translation_completion_controls = show_translation_completion_controls
+        self._show_original_image_option = show_original_image_option
+        self._default_epub_force_horizontal_ltr = default_epub_force_horizontal_ltr
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -122,17 +134,20 @@ class _ExportControls(QWidget):
         )
         self.epub_force_horizontal_ltr_cb.toggled.connect(self._on_options_changed)
         layout.addWidget(self.epub_force_horizontal_ltr_cb)
+        if self._default_epub_force_horizontal_ltr:
+            self.epub_force_horizontal_ltr_cb.setChecked(True)
         apply_hybrid_control_theme(self)
         set_button_tone(self.browse_button)
 
-    def apply_state(self, state: ExportDialogState | DocumentExportState) -> None:
+    def apply_state(self, state: object) -> None:
+        incomplete_message = getattr(state, "incomplete_translation_message", None)
         self._default_output_path = state.default_output_path or ""
         self._supports_original_image_export = state.supports_original_image_export
         self._supports_epub_layout_conversion = state.supports_epub_layout_conversion
         self.blocker_label.setVisible(state.blocker is not None)
         self.blocker_label.setText(translate_backend_text(state.blocker.message if state.blocker is not None else ""))
-        self.warning_label.setVisible(bool(state.incomplete_translation_message))
-        self.warning_label.setText(translate_backend_text(state.incomplete_translation_message or ""))
+        self.warning_label.setVisible(self._show_translation_completion_controls and bool(incomplete_message))
+        self.warning_label.setText(translate_backend_text(incomplete_message or ""))
 
         self.format_combo.blockSignals(True)
         self.format_combo.clear()
@@ -154,15 +169,17 @@ class _ExportControls(QWidget):
             )
         else:
             self.preserve_structure_cb.setToolTip("")
-        self.allow_original_fallback_cb.setVisible(True)
-        self.allow_original_fallback_cb.setEnabled(bool(state.incomplete_translation_message))
-        if not state.incomplete_translation_message:
+        self.allow_original_fallback_cb.setVisible(self._show_translation_completion_controls)
+        self.allow_original_fallback_cb.setEnabled(
+            self._show_translation_completion_controls and bool(incomplete_message)
+        )
+        if not incomplete_message:
             self.allow_original_fallback_cb.setChecked(False)
             self.allow_original_fallback_cb.setToolTip(
                 self.tr("Fallback to original content is only needed when translation is incomplete.")
             )
         else:
-            self.allow_original_fallback_cb.setToolTip(translate_backend_text(state.incomplete_translation_message))
+            self.allow_original_fallback_cb.setToolTip(translate_backend_text(incomplete_message))
         if not self._supports_original_image_export:
             self.use_original_images_cb.setChecked(False)
         if not self._supports_epub_layout_conversion:
@@ -177,11 +194,16 @@ class _ExportControls(QWidget):
         self._sync_epub_layout_controls()
         self.changed.emit()
 
-    def can_submit(self, state: ExportDialogState | DocumentExportState) -> bool:
+    def can_submit(self, state: object) -> bool:
+        incomplete_message = getattr(state, "incomplete_translation_message", None)
         return (
             state.blocker is None
             and bool(state.available_formats)
-            and (not state.incomplete_translation_message or self.allow_original_fallback_cb.isChecked())
+            and (
+                not self._show_translation_completion_controls
+                or not incomplete_message
+                or self.allow_original_fallback_cb.isChecked()
+            )
         )
 
     def format_id(self) -> str:
@@ -259,7 +281,11 @@ class _ExportControls(QWidget):
         )
 
     def _sync_original_image_controls(self) -> None:
-        visible = self._supports_original_image_export and not self.preserve_structure_cb.isChecked()
+        visible = (
+            self._show_original_image_option
+            and self._supports_original_image_export
+            and not self.preserve_structure_cb.isChecked()
+        )
         self.use_original_images_cb.setVisible(visible)
         self.use_original_images_cb.setEnabled(visible)
 
@@ -370,6 +396,125 @@ class WorkExportDialog(QDialog):
 
     def _update_export_enabled(self) -> None:
         self.export_button.setEnabled(self.controls.can_submit(self._state) and bool(self.controls.output_path()))
+
+
+class TranslateAndExportDialog(QDialog):
+    def __init__(
+        self,
+        service: DocumentService,
+        state: TranslateAndExportState,
+        *,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._service = service
+        self._state = state
+        self.setWindowTitle(self.tr("Translate and Export"))
+        self.resize(560, 320)
+        self._init_ui()
+
+    def _init_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        docs_label = QElidingLabel(qarg(self.tr("Translate and export %1"), self._state.workspace.document.label))
+        docs_label.setElideMode(Qt.TextElideMode.ElideMiddle)
+        docs_label.setToolTip(docs_label.text())
+        docs_label.setStyleSheet("font-weight: 600;")
+        layout.addWidget(docs_label)
+
+        self.controls = _ExportControls(
+            show_translation_completion_controls=False,
+            show_original_image_option=False,
+            default_epub_force_horizontal_ltr=True,
+            parent=self,
+        )
+        self.controls.apply_state(self._state)
+        self.controls.changed.connect(self._update_start_enabled)
+        layout.addWidget(self.controls)
+
+        self.batch_cb = QCheckBox(self.tr("Use async batch translation"))
+        self.batch_cb.setEnabled(self._state.batch_available)
+        self.batch_cb.setVisible(self._state.batch_available)
+        self.batch_cb.setToolTip(
+            translate_backend_text(self._state.batch_blocker.message) if self._state.batch_blocker is not None else ""
+        )
+        self.batch_cb.toggled.connect(self._update_start_enabled)
+        layout.addWidget(self.batch_cb)
+
+        self.reembedding_cb = QCheckBox(self.tr("Use reembedding"))
+        self.reembedding_cb.setEnabled(self._state.reembedding_available)
+        self.reembedding_cb.setToolTip(
+            translate_backend_text(self._state.reembedding_blocker.message)
+            if self._state.reembedding_blocker is not None
+            else ""
+        )
+        self.reembedding_cb.toggled.connect(self._update_start_enabled)
+        layout.addWidget(self.reembedding_cb)
+
+        self.batch_hint = create_tip_label("")
+        self.batch_hint.setVisible(False)
+        self.batch_hint.setText(
+            translate_backend_text(self._state.batch_blocker.message) if self._state.batch_blocker is not None else ""
+        )
+        layout.addWidget(self.batch_hint)
+
+        self.reembedding_hint = create_tip_label("")
+        self.reembedding_hint.setVisible(self._state.reembedding_blocker is not None)
+        self.reembedding_hint.setText(
+            translate_backend_text(self._state.reembedding_blocker.message)
+            if self._state.reembedding_blocker is not None
+            else ""
+        )
+        layout.addWidget(self.reembedding_hint)
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
+        self.start_button = self.button_box.addButton(
+            self.tr("Translate and Export"),
+            QDialogButtonBox.ButtonRole.AcceptRole,
+        )
+        self.start_button.clicked.connect(self._run_translate_and_export)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+        apply_hybrid_control_theme(self)
+        set_button_tone(self.start_button, "primary")
+        cancel_button = self.button_box.button(QDialogButtonBox.StandardButton.Cancel)
+        if cancel_button is not None:
+            set_button_tone(cancel_button, "ghost")
+        self._update_start_enabled()
+
+    def _run_translate_and_export(self) -> None:
+        submission = self.controls.submission(self)
+        if submission is None:
+            return
+        try:
+            result = self._service.run_translate_and_export(
+                RunTranslateAndExportRequest(
+                    project_id=self._state.workspace.project.project_id,
+                    document_id=self._state.workspace.document.document_id,
+                    format_id=submission.format_id,
+                    output_path=submission.output_path,
+                    use_batch=self.batch_cb.isChecked(),
+                    use_reembedding=self.reembedding_cb.isChecked(),
+                    enable_polish=True,
+                    options=submission.options,
+                )
+            )
+        except ApplicationError as exc:
+            QMessageBox.warning(self, self.tr("Translate and Export"), translate_backend_text(exc.payload.message))
+            return
+        if result.message is not None:
+            QMessageBox.information(self, self.tr("Translate and Export"), translate_backend_text(result.message.text))
+        self.accept()
+
+    def _update_start_enabled(self) -> None:
+        batch_ok = self._state.batch_available or not self.batch_cb.isChecked()
+        reembedding_ok = self._state.reembedding_available or not self.reembedding_cb.isChecked()
+        self.start_button.setEnabled(
+            self._state.can_start
+            and self.controls.can_submit(self._state)
+            and bool(self.controls.output_path())
+            and batch_ok
+            and reembedding_ok
+        )
 
 
 class _DocumentExportTab(QWidget):
@@ -658,4 +803,4 @@ class DocumentWorkspaceView(QWidget):
         self.refresh()
 
 
-__all__ = ["DocumentWorkspaceView", "WorkExportDialog"]
+__all__ = ["DocumentWorkspaceView", "TranslateAndExportDialog", "WorkExportDialog"]

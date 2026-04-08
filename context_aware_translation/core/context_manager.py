@@ -30,6 +30,10 @@ from context_aware_translation.core.translation_strategies import (
     TermMemoryUpdater,
     TermReviewer,
 )
+from context_aware_translation.documents.epub_support.inline_markers import (
+    extract_inline_markers,
+    validate_inline_marker_sanity,
+)
 from context_aware_translation.storage.repositories.term_repository import (
     BatchUpdate,
     TermRepository,
@@ -99,10 +103,19 @@ def _select_representative_chunk_texts(
         return [nonempty_chunks[0].text]
 
     last_index = len(nonempty_chunks) - 1
-    selected_positions = {
-        (sample_index * last_index) // (max_samples - 1) for sample_index in range(max_samples)
-    }
+    selected_positions = {(sample_index * last_index) // (max_samples - 1) for sample_index in range(max_samples)}
     return [nonempty_chunks[position].text for position in sorted(selected_positions)]
+
+
+def _has_balanced_inline_markers(text: str) -> bool:
+    tokens = extract_inline_markers(text)
+    if not tokens:
+        return True
+    try:
+        validate_inline_marker_sanity(tokens)
+    except ValueError:
+        return False
+    return True
 
 
 class _TermLike(Protocol):
@@ -323,7 +336,7 @@ class ContextManager:
     def add_text(
         self,
         text: str,
-        max_token_size_per_chunk: int = 1000,
+        max_token_size_per_chunk: int = 500,
         document_id: int | None = None,
     ) -> int:
         chunk_generator = line_batched_semantic_chunker(
@@ -333,12 +346,31 @@ class ContextManager:
         )
         chunk_records = []
         chunk_id = self.term_repo.get_next_chunk_id()
+        pending_chunk_text = ""
         for chunk_text, _, _ in chunk_generator:
+            pending_chunk_text += chunk_text
+            # EPUB inline markers may span semantic chunk boundaries; carry the
+            # fragment forward until the marker stream closes cleanly again.
+            if not _has_balanced_inline_markers(pending_chunk_text):
+                continue
             chunk_records.append(
                 ChunkRecord(
                     chunk_id=chunk_id,
-                    hash=compute_chunk_hash(chunk_text, document_id=document_id),
-                    text=chunk_text,
+                    hash=compute_chunk_hash(pending_chunk_text, document_id=document_id),
+                    text=pending_chunk_text,
+                    document_id=document_id,
+                    is_extracted=False,
+                    is_summarized=False,
+                )
+            )
+            chunk_id += 1
+            pending_chunk_text = ""
+        if pending_chunk_text:
+            chunk_records.append(
+                ChunkRecord(
+                    chunk_id=chunk_id,
+                    hash=compute_chunk_hash(pending_chunk_text, document_id=document_id),
+                    text=pending_chunk_text,
                     document_id=document_id,
                     is_extracted=False,
                     is_summarized=False,
@@ -535,6 +567,7 @@ class ContextManager:
     async def extract_keyed_context(
         self,
         concurrency: int = 20,
+        document_ids: list[int] | None = None,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> None:
@@ -542,7 +575,12 @@ class ContextManager:
         Extract keyed context from chunks that are not extracted yet, and save to DB.
         """
         raise_if_cancelled(cancel_check)
-        chunk_records = self.term_repo.get_chunks_to_extract()
+        if document_ids is None:
+            chunk_records = self.term_repo.get_chunks_to_extract()
+        else:
+            chunk_records = [
+                chunk for chunk in self.term_repo.list_chunks(document_ids=document_ids) if not chunk.is_extracted
+            ]
         if not chunk_records:
             return
 
@@ -703,14 +741,26 @@ class TranslationContextManager(ContextManager):
             source_language = await self.source_language_detector.detect(sample_text, cancel_check=cancel_check)
             self.term_repo.set_source_language(source_language)
 
-    async def build_occurrence_mapping(self, cancel_check: Callable[[], bool] | None = None) -> None:
+    async def build_occurrence_mapping(
+        self,
+        cancel_check: Callable[[], bool] | None = None,
+        *,
+        document_ids: list[int] | None = None,
+    ) -> None:
         """Build occurrence mapping for terms by counting occurrences in chunks.
 
         Uses pre-computed normalized_text from the database when available,
         falling back to on-the-fly normalization for legacy chunks.
         """
         raise_if_cancelled(cancel_check)
-        relevant_chunks = self.term_repo.get_chunks_to_map_occurrence()
+        if document_ids is None:
+            relevant_chunks = self.term_repo.get_chunks_to_map_occurrence()
+        else:
+            relevant_chunks = [
+                chunk
+                for chunk in self.term_repo.list_chunks(document_ids=document_ids)
+                if not chunk.is_occurrence_mapped
+            ]
         if not relevant_chunks:
             return
 
@@ -740,22 +790,42 @@ class TranslationContextManager(ContextManager):
             chunk.is_occurrence_mapped = True
         self._state_update(occurrence_updates, relevant_chunks)
 
-    async def mark_noise_terms(self, cancel_check: Callable[[], bool] | None = None) -> int:
+    def get_term_keys_for_documents(self, document_ids: list[int] | None) -> set[str]:
+        """Return term keys whose descriptions or occurrences touch the selected documents."""
+        if not document_ids:
+            return set()
+        chunk_ids = {str(chunk.chunk_id) for chunk in self.term_repo.list_chunks(document_ids=document_ids)}
+        if not chunk_ids:
+            return set()
+
+        relevant_keys: set[str] = set()
+        for record in self.term_repo.list_term_records():
+            if set(record.descriptions).intersection(chunk_ids) or set(record.occurrence).intersection(chunk_ids):
+                relevant_keys.add(record.key)
+        return relevant_keys
+
+    async def mark_noise_terms(
+        self,
+        cancel_check: Callable[[], bool] | None = None,
+        *,
+        term_keys: set[str] | None = None,
+    ) -> int:
         """
-        Auto-mark obvious noise terms as ignored and reviewed before LLM review.
+        Auto-filter obvious noise terms before LLM review.
 
         Current deterministic rules:
-        - Symbol-only term key.
+        - Symbol-only term key -> keep record, mark ignored and reviewed.
         - Term extracted from chunk text (description key is a chunk id) but has
-          zero exact occurrence matches after occurrence mapping.
+          zero exact occurrence matches after occurrence mapping -> delete record.
 
         Returns:
-            Number of terms auto-marked as ignored+reviewed.
+            Number of terms auto-filtered.
         """
         raise_if_cancelled(cancel_check)
         required_methods = (
             "get_last_noise_filtered_at",
             "list_term_records",
+            "delete_terms",
             "update_terms_bulk",
             "set_last_noise_filtered_at",
         )
@@ -764,17 +834,19 @@ class TranslationContextManager(ContextManager):
             # the minimal review API.
             return 0
 
-        last_checkpoint = self.term_repo.get_last_noise_filtered_at()
+        scoped_term_keys = set(term_keys) if term_keys is not None else None
+        last_checkpoint = None if scoped_term_keys is not None else self.term_repo.get_last_noise_filtered_at()
 
         def _is_chunk_id_key(raw_key: object) -> bool:
             return str(raw_key).lstrip("-").isdigit()
 
-        def _is_noise_record(record: TermRecord) -> bool:
-            if symbol_only(record.key):
-                return True
+        def _should_delete_record(record: TermRecord) -> bool:
             has_extracted_description = any(_is_chunk_id_key(k) for k in record.descriptions)
             has_no_exact_occurrence = len(record.occurrence) == 0
             return has_extracted_description and has_no_exact_occurrence
+
+        def _should_ignore_record(record: TermRecord) -> bool:
+            return symbol_only(record.key)
 
         all_records = self.term_repo.list_term_records()
         records_to_check = [
@@ -782,34 +854,41 @@ class TranslationContextManager(ContextManager):
             for record in all_records
             if not record.is_reviewed
             and not record.ignored
+            and (scoped_term_keys is None or record.key in scoped_term_keys)
             and (last_checkpoint is None or (record.created_at is not None and record.created_at > last_checkpoint))
         ]
         if not records_to_check:
             return 0
 
         max_created_at = last_checkpoint or 0.0
+        keys_to_delete: list[str] = []
         keys_to_mark: list[str] = []
         for record in records_to_check:
             raise_if_cancelled(cancel_check)
-            if _is_noise_record(record):
+            if _should_delete_record(record):
+                keys_to_delete.append(record.key)
+            elif _should_ignore_record(record):
                 keys_to_mark.append(record.key)
             if record.created_at:
                 max_created_at = max(max_created_at, record.created_at)
 
+        if keys_to_delete:
+            self.term_repo.delete_terms(keys_to_delete)
         if keys_to_mark:
             self.term_repo.update_terms_bulk(keys_to_mark, ignored=True, is_reviewed=True)
 
-        if max_created_at > (last_checkpoint or 0.0):
+        if scoped_term_keys is None and max_created_at > (last_checkpoint or 0.0):
             self.term_repo.set_last_noise_filtered_at(max_created_at)
 
         raise_if_cancelled(cancel_check)
-        return len(keys_to_mark)
+        return len(keys_to_delete) + len(keys_to_mark)
 
     async def review_terms(
         self,
         concurrency: int = 5,
         batch_size: int = 20,
         similarity_threshold: float = 0.7,
+        term_keys: set[str] | None = None,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> None:
@@ -822,12 +901,15 @@ class TranslationContextManager(ContextManager):
             raise ValueError("Term reviewer is not configured; provide term_reviewer to TranslationContextManager.")
 
         raise_if_cancelled(cancel_check)
-        auto_marked_count = await self.mark_noise_terms(cancel_check=cancel_check)
+        auto_marked_count = await self.mark_noise_terms(cancel_check=cancel_check, term_keys=term_keys)
         if auto_marked_count > 0:
-            logger.info("Auto-marked %s obvious noise term(s) as ignored+reviewed.", auto_marked_count)
+            logger.info("Auto-filtered %s obvious noise term(s) before review.", auto_marked_count)
 
         # Get pending review terms
         pending_terms = self.term_repo.get_terms_pending_review()
+        if term_keys is not None:
+            scoped_term_keys = set(term_keys)
+            pending_terms = [term for term in pending_terms if term.key in scoped_term_keys]
         if not pending_terms:
             logger.info("No terms pending review.")
             return
@@ -1177,6 +1259,7 @@ class TranslationContextManager(ContextManager):
         self,
         translation_name_similarity_threshold: float,
         concurrency: int,
+        term_keys: set[str] | None = None,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: ProgressCallback | None = None,
         max_terms_per_batch: int = 20,
@@ -1192,6 +1275,9 @@ class TranslationContextManager(ContextManager):
         """
         raise_if_cancelled(cancel_check)
         terms = [term for term in self.term_repo.get_terms_to_translate() if not term.ignored]
+        if term_keys is not None:
+            scoped_term_keys = set(term_keys)
+            terms = [term for term in terms if term.key in scoped_term_keys]
         if not terms:
             return
         source_language = self.term_repo.get_source_language()
@@ -1199,6 +1285,9 @@ class TranslationContextManager(ContextManager):
             raise ValueError("Source language not found in the database")
         # Load all existing terms for similarity checking
         all_terms = [term for term in self.term_repo.list_keyed_context() if not term.ignored]
+        if term_keys is not None:
+            scoped_term_keys = set(term_keys)
+            all_terms = [term for term in all_terms if term.key in scoped_term_keys or bool(term.translated_name)]
         component_list, sim_cache = self._union_find_with_filter(
             terms, all_terms, translation_name_similarity_threshold
         )
@@ -1480,7 +1569,7 @@ class TranslationContextManager(ContextManager):
 
         user_payload = {
             "术语列表": terms_json,
-            "原文": all_blocks,
+            "原文": [{"id": idx, "文本": text} for idx, text in enumerate(all_blocks)],
         }
         user_prompt = json.dumps(user_payload, ensure_ascii=False, indent=2)
         return self._estimate_tokens(user_prompt)
@@ -1620,7 +1709,7 @@ class TranslationContextManager(ContextManager):
         self,
         *,
         batch_size: int,
-        max_tokens_per_batch: int = 4000,
+        max_tokens_per_batch: int = 2000,
         document_ids: list[int] | None,
         force: bool,
         cancel_check: Callable[[], bool] | None,
@@ -1668,7 +1757,7 @@ class TranslationContextManager(ContextManager):
         self,
         concurrency: int,
         batch_size: int = 5,
-        max_tokens_per_batch: int = 4000,
+        max_tokens_per_batch: int = 2000,
         document_ids: list[int] | None = None,
         force: bool = False,
         cancel_check: Callable[[], bool] | None = None,
@@ -1823,7 +1912,7 @@ class TranslationContextManagerAdapter:
         self,
         concurrency: int,
         batch_size: int = 5,
-        max_tokens_per_batch: int = 4000,
+        max_tokens_per_batch: int = 2000,
         doc_type_by_id: dict[int, str] | None = None,
         source_ids_by_document: dict[int, list[int]] | None = None,
         force: bool = False,

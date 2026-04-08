@@ -37,8 +37,10 @@ from context_aware_translation.application.contracts.document import (
     RunDocumentTranslationRequest,
     RunImageReinsertionRequest,
     RunOCRRequest,
+    RunTranslateAndExportRequest,
     SaveOCRPageRequest,
     SaveTranslationRequest,
+    TranslateAndExportState,
     TranslationUnitActionState,
     TranslationUnitKind,
     TranslationUnitState,
@@ -58,7 +60,9 @@ from context_aware_translation.application.runtime import (
     progress_from_task,
     raise_application_error,
 )
-from context_aware_translation.documents.base import Document
+from context_aware_translation.config import effective_polish_step_config, resolve_pipeline_batch_provider
+from context_aware_translation.documents.base import Document, is_ocr_required_for_type
+from context_aware_translation.documents.epub import CHAPTER_MIME_TYPES, METADATA_PATH
 from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 from context_aware_translation.storage.repositories.task_store import TaskRecord
 from context_aware_translation.workflow.tasks.claims import ClaimMode, ResourceClaim
@@ -68,6 +72,44 @@ if TYPE_CHECKING:
     from context_aware_translation.documents.content.ocr_content import SinglePageOCRContent
 
 _IMAGE_REEMBEDDABLE_DOCUMENT_TYPES = frozenset({"pdf", "scanned_book", "manga", "epub"})
+_TRANSLATE_AND_EXPORT_OCR_PHASES = frozenset({"ocr"})
+_TRANSLATE_AND_EXPORT_TERMS_PHASES = frozenset(
+    {"extract_terms", "term_memory", "rare_filter", "review", "translate_glossary"}
+)
+_TRANSLATE_AND_EXPORT_TRANSLATION_PHASES = frozenset(
+    {
+        "translate_chunks",
+        "prepare",
+        "translation_submit",
+        "translation_poll",
+        "translation_validate",
+        "translation_fallback",
+        "polish_submit",
+        "polish_poll",
+        "polish_validate",
+        "polish_fallback",
+        "apply",
+    }
+)
+_TRANSLATE_AND_EXPORT_IMAGE_PHASES = frozenset({"reembed"})
+
+
+def _is_translate_and_export_relevant_source(document_type: str, source: dict[str, Any]) -> bool:
+    source_type = str(source.get("source_type") or "").strip().lower()
+    if source_type == "image":
+        return True
+    if source_type != "text":
+        return False
+    if document_type != "epub":
+        return True
+
+    relative_path = str(source.get("relative_path") or "").strip()
+    if relative_path == METADATA_PATH:
+        return False
+
+    mime_type = str(source.get("mime_type") or "").strip().lower()
+    lower_path = relative_path.lower()
+    return mime_type in CHAPTER_MIME_TYPES or lower_path.endswith((".xhtml", ".html", ".htm", ".svg"))
 
 
 class DocumentService(Protocol):
@@ -105,6 +147,10 @@ class DocumentService(Protocol):
 
     def export_document(self, request: RunDocumentExportRequest) -> DocumentExportResult: ...
 
+    def prepare_translate_and_export(self, project_id: str, document_id: int) -> TranslateAndExportState: ...
+
+    def run_translate_and_export(self, request: RunTranslateAndExportRequest) -> AcceptedCommand: ...
+
 
 class DefaultDocumentService:
     def __init__(self, runtime: ApplicationRuntime) -> None:
@@ -127,7 +173,13 @@ class DefaultDocumentService:
         with self._runtime.open_book_db(project_id) as dbx:
             sources = dbx.document_repo.get_document_sources_metadata(document_id)
             image_sources = [source for source in sources if source.get("source_type") == "image"]
-            active_tasks = self._get_active_ocr_tasks(project_id, document_id)
+            active_tasks = self._get_active_ocr_tasks(
+                project_id, document_id
+            ) + self._get_active_translate_and_export_tasks(
+                project_id,
+                document_id,
+                phases=_TRANSLATE_AND_EXPORT_OCR_PHASES,
+            )
             active_task = self._primary_active_task(active_tasks)
             active_source_ids = self._active_task_source_ids(active_tasks)
             default_run_current_action = (
@@ -333,7 +385,11 @@ class DefaultDocumentService:
             has_work=bool(translatable_units),
             active_task=active_task,
         )
-        supports_batch = document_type != "manga"
+        supports_batch = self._supports_batch_translation(
+            project_id,
+            document_type=document_type,
+            enable_polish=enable_polish,
+        )
         batch_allowed, batch_blocker = self._translation_run_action_state(
             project_id,
             document_id=document_id,
@@ -477,6 +533,15 @@ class DefaultDocumentService:
                     project_id=request.project_id,
                     document_id=request.document_id,
                 )
+            config = self._runtime.get_effective_config(request.project_id)
+            batch_reason = self._batch_unavailable_reason(config, enable_polish=request.enable_polish)
+            if batch_reason is not None:
+                raise_application_error(
+                    ApplicationErrorCode.BLOCKED,
+                    batch_reason,
+                    project_id=request.project_id,
+                    document_id=request.document_id,
+                )
             return self._runtime.submit_task(
                 "batch_translation",
                 request.project_id,
@@ -501,7 +566,13 @@ class DefaultDocumentService:
         workspace = self.get_workspace(project_id, document_id).model_copy(
             update={"active_tab": DocumentSection.IMAGES}
         )
-        active_tasks = self._get_active_image_reembedding_tasks(project_id, document_id)
+        active_tasks = self._get_active_image_reembedding_tasks(
+            project_id, document_id
+        ) + self._get_active_translate_and_export_tasks(
+            project_id,
+            document_id,
+            phases=_TRANSLATE_AND_EXPORT_IMAGE_PHASES,
+        )
         active_task = self._primary_active_task(active_tasks)
         active_source_ids = self._active_task_source_ids(active_tasks)
         with self._runtime.open_book_db(project_id) as dbx:
@@ -615,22 +686,333 @@ class DefaultDocumentService:
         self._runtime.invalidate_workboard(request.project_id)
         return result.model_copy(update={"document_id": request.document_id})
 
+    def prepare_translate_and_export(self, project_id: str, document_id: int) -> TranslateAndExportState:
+        from context_aware_translation.application.services._export_support import prepare_export
+
+        workspace = self.get_workspace(project_id, document_id).model_copy(
+            update={"active_tab": DocumentSection.EXPORT}
+        )
+        prepared = prepare_export(
+            self._runtime,
+            project_id=project_id,
+            document_ids=[document_id],
+            require_complete_translation=False,
+        )
+        with self._runtime.open_book_db(project_id) as dbx:
+            doc = dbx.document_repo.get_document_by_id(document_id)
+            if doc is None:
+                raise_application_error(ApplicationErrorCode.NOT_FOUND, f"Document not found: {document_id}")
+            document_type = str(doc.get("document_type") or "")
+            start_blocker = self._translate_and_export_start_blocker(
+                project_id,
+                document_id=document_id,
+                document_type=document_type,
+                document_repo=dbx.document_repo,
+            )
+        batch_blocker = self._translate_and_export_batch_blocker(
+            project_id,
+            document_id=document_id,
+            document_type=document_type,
+        )
+        reembedding_blocker = self._translate_and_export_reembedding_blocker(
+            project_id,
+            document_id=document_id,
+            document_type=document_type,
+        )
+        return TranslateAndExportState(
+            workspace=workspace,
+            can_start=start_blocker is None,
+            available_formats=prepared.available_formats,
+            default_output_path=prepared.default_output_path,
+            blocker=start_blocker,
+            supports_preserve_structure=prepared.supports_preserve_structure,
+            supports_original_image_export=prepared.supports_original_image_export,
+            supports_epub_layout_conversion=prepared.supports_epub_layout_conversion,
+            batch_available=batch_blocker is None,
+            batch_blocker=batch_blocker,
+            reembedding_available=reembedding_blocker is None,
+            reembedding_blocker=reembedding_blocker,
+        )
+
+    def run_translate_and_export(self, request: RunTranslateAndExportRequest) -> AcceptedCommand:
+        return self._runtime.submit_task(
+            "translate_and_export",
+            request.project_id,
+            document_ids=[request.document_id],
+            format_id=request.format_id,
+            output_path=request.output_path,
+            use_batch=request.use_batch,
+            use_reembedding=request.use_reembedding,
+            enable_polish=request.enable_polish,
+            options=request.options,
+        )
+
+    def _translate_and_export_start_blocker(
+        self,
+        project_id: str,
+        *,
+        document_id: int,
+        document_type: str,
+        document_repo: DocumentRepository,
+    ) -> BlockerInfo | None:
+        active_task = self._find_active_translate_and_export_task(project_id, document_id)
+        if active_task is not None:
+            return make_blocker(
+                BlockerCode.ALREADY_RUNNING_ELSEWHERE,
+                "Translate and Export is already running for this document.",
+                target_kind=NavigationTargetKind.QUEUE,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        if not self._document_is_untouched(
+            project_id,
+            document_repo,
+            document_id,
+            document_type=document_type,
+        ):
+            return make_blocker(
+                BlockerCode.NOTHING_TO_DO,
+                "Translate and Export is available only before OCR, glossary, translation, or reembedding work has started for this document.",
+                target_kind=NavigationTargetKind.WORK,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        setup_blocker = self._translate_and_export_setup_blocker(
+            project_id,
+            document_id=document_id,
+            document_type=document_type,
+            use_reembedding=False,
+        )
+        if setup_blocker is not None:
+            return setup_blocker
+        return None
+
+    def _translate_and_export_setup_blocker(
+        self,
+        project_id: str,
+        *,
+        document_id: int,
+        document_type: str,
+        use_reembedding: bool,
+    ) -> BlockerInfo | None:
+        try:
+            config = self._runtime.get_effective_config(project_id)
+        except Exception as exc:  # noqa: BLE001
+            return make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                str(exc) or "Project setup is incomplete.",
+                target_kind=NavigationTargetKind.PROJECT_SETUP,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        if not config.translation_target_language.strip():
+            return make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                "Target language is not configured for this project.",
+                target_kind=NavigationTargetKind.PROJECT_SETUP,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        if config.review_config is None:
+            return make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                "Review config not set. Please configure review settings.",
+                target_kind=NavigationTargetKind.PROJECT_SETUP,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        if is_ocr_required_for_type(document_type) and config.ocr_config is None:
+            return make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                "ocr_config is required for OCR tasks. Please configure it in your book settings.",
+                target_kind=NavigationTargetKind.PROJECT_SETUP,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        if document_type == "manga" and config.manga_translator_config is None:
+            return make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                "manga_translator_config is required to translate manga documents. Please configure it in your book settings.",
+                target_kind=NavigationTargetKind.PROJECT_SETUP,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        if use_reembedding and config.image_reembedding_config is None:
+            return make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                "image_reembedding_config is required for image reembedding. Please configure it in your book settings.",
+                target_kind=NavigationTargetKind.PROJECT_SETUP,
+                project_id=project_id,
+                document_id=document_id,
+            )
+
+        config_payload = self._runtime.get_effective_config_payload(project_id)
+        configured_connection_ids = {connection_id for connection_id, _label in self._runtime.list_connection_options()}
+        route_map = {
+            route.capability: route.connection_id for route in build_default_routes_from_config(config_payload)
+        }
+        if document_type != "manga" and self._is_missing_route(
+            route_map.get(CapabilityCode.TRANSLATION),
+            configured_connection_ids,
+        ):
+            return make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                "Translation needs a shared connection in App Setup.",
+                target_kind=NavigationTargetKind.APP_SETUP,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        if is_ocr_required_for_type(document_type) and self._is_missing_route(
+            route_map.get(CapabilityCode.IMAGE_TEXT_READING),
+            configured_connection_ids,
+        ):
+            return make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                "Image text reading needs a shared connection in App Setup.",
+                target_kind=NavigationTargetKind.APP_SETUP,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        if use_reembedding and self._is_missing_route(
+            route_map.get(CapabilityCode.IMAGE_EDITING),
+            configured_connection_ids,
+        ):
+            return make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                "Image editing needs a shared connection in App Setup.",
+                target_kind=NavigationTargetKind.APP_SETUP,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        return None
+
+    def _translate_and_export_batch_blocker(
+        self,
+        project_id: str,
+        *,
+        document_id: int,
+        document_type: str,
+    ) -> BlockerInfo | None:
+        if document_type == "manga":
+            return make_blocker(
+                BlockerCode.NOTHING_TO_DO,
+                "Async batch translation is only available for non-manga documents.",
+                target_kind=NavigationTargetKind.DOCUMENT_TRANSLATION,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        try:
+            config = self._runtime.get_effective_config(project_id)
+        except Exception as exc:  # noqa: BLE001
+            return make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                str(exc) or "Project setup is incomplete.",
+                target_kind=NavigationTargetKind.PROJECT_SETUP,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        batch_reason = self._batch_unavailable_reason(config, enable_polish=True)
+        if batch_reason is not None:
+            return make_blocker(
+                BlockerCode.NEEDS_SETUP,
+                batch_reason,
+                target_kind=NavigationTargetKind.PROJECT_SETUP,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        return None
+
+    def _translate_and_export_reembedding_blocker(
+        self,
+        project_id: str,
+        *,
+        document_id: int,
+        document_type: str,
+    ) -> BlockerInfo | None:
+        if document_type not in _IMAGE_REEMBEDDABLE_DOCUMENT_TYPES:
+            return make_blocker(
+                BlockerCode.NOTHING_TO_DO,
+                "This document type does not support image reembedding.",
+                target_kind=NavigationTargetKind.DOCUMENT_IMAGES,
+                project_id=project_id,
+                document_id=document_id,
+            )
+        return self._translate_and_export_setup_blocker(
+            project_id,
+            document_id=document_id,
+            document_type=document_type,
+            use_reembedding=True,
+        )
+
+    def _document_is_untouched(
+        self,
+        project_id: str,
+        document_repo: DocumentRepository,
+        document_id: int,
+        *,
+        document_type: str,
+    ) -> bool:
+        sources = [
+            source
+            for source in document_repo.get_document_sources_metadata(document_id)
+            if _is_translate_and_export_relevant_source(document_type, source)
+        ]
+        if any(bool(source.get("is_ocr_completed")) for source in sources if source.get("source_type") == "image"):
+            return False
+        if any(bool(source.get("is_text_added")) for source in sources):
+            return False
+        if document_repo.get_chunk_count(document_id) > 0:
+            return False
+        if document_repo.load_reembedded_images(document_id):
+            return False
+        return not self._has_any_active_document_task(project_id, document_id)
+
     def _get_active_ocr_tasks(self, project_id: str, document_id: int) -> list[TaskRecord]:
         return self._active_document_tasks(project_id, task_type="ocr", document_id=document_id)
 
     def _get_active_ocr_task(self, project_id: str, document_id: int) -> TaskRecord | None:
         return self._primary_active_task(self._get_active_ocr_tasks(project_id, document_id))
 
-    def _active_document_tasks(self, project_id: str, *, task_type: str, document_id: int) -> list[TaskRecord]:
-        records = self._runtime.task_store.list_tasks(book_id=project_id, task_type=task_type)
+    def _active_document_tasks(
+        self,
+        project_id: str,
+        *,
+        document_id: int,
+        task_type: str | None = None,
+        task_types: frozenset[str] | None = None,
+        phases: frozenset[str] | None = None,
+    ) -> list[TaskRecord]:
+        allowed_types = task_types or (frozenset({task_type}) if task_type is not None else None)
+        records = self._runtime.task_store.list_tasks(book_id=project_id, exclude_statuses=TERMINAL_TASK_STATUSES)
         relevant = [
             record
             for record in records
-            if record.status not in TERMINAL_TASK_STATUSES
+            if (allowed_types is None or record.task_type in allowed_types)
+            and (phases is None or (record.phase or "") in phases)
             and (document_ids := self._task_document_ids(record)) is not None
             and document_id in document_ids
         ]
         return sorted(relevant, key=self._task_activity_sort_key, reverse=True)
+
+    def _get_active_translate_and_export_tasks(
+        self,
+        project_id: str,
+        document_id: int,
+        *,
+        phases: frozenset[str] | None = None,
+    ) -> list[TaskRecord]:
+        return self._active_document_tasks(
+            project_id,
+            document_id=document_id,
+            task_type="translate_and_export",
+            phases=phases,
+        )
+
+    def _find_active_translate_and_export_task(self, project_id: str, document_id: int) -> TaskRecord | None:
+        return self._primary_active_task(self._get_active_translate_and_export_tasks(project_id, document_id))
+
+    def _has_any_active_document_task(self, project_id: str, document_id: int) -> bool:
+        return bool(self._active_document_tasks(project_id, document_id=document_id))
 
     @staticmethod
     def _task_activity_sort_key(record: TaskRecord) -> tuple[int, float]:
@@ -1521,6 +1903,12 @@ class DefaultDocumentService:
         sequence = int(source.get("sequence_number", 0) or 0) + 1
         return f"Image {sequence}"
 
+    @staticmethod
+    def _is_missing_route(connection_id: str | None, configured_connection_ids: set[str]) -> bool:
+        if connection_id is None:
+            return True
+        return connection_id not in configured_connection_ids
+
     def _build_manga_translation_units(
         self,
         project_id: str,
@@ -1668,6 +2056,26 @@ class DefaultDocumentService:
             )
         if batch and document_type == "manga":
             return False, None
+        if batch:
+            try:
+                config = self._runtime.get_effective_config(project_id)
+            except Exception as exc:  # noqa: BLE001
+                return False, make_blocker(
+                    BlockerCode.NEEDS_SETUP,
+                    str(exc) or "Project setup is incomplete.",
+                    target_kind=NavigationTargetKind.PROJECT_SETUP,
+                    project_id=project_id,
+                    document_id=document_id,
+                )
+            batch_reason = self._batch_unavailable_reason(config, enable_polish=enable_polish)
+            if batch_reason is not None:
+                return False, make_blocker(
+                    BlockerCode.NEEDS_SETUP,
+                    batch_reason,
+                    target_kind=NavigationTargetKind.PROJECT_SETUP,
+                    project_id=project_id,
+                    document_id=document_id,
+                )
         task_type = (
             "batch_translation" if batch else ("translation_manga" if document_type == "manga" else "translation_text")
         )
@@ -1719,6 +2127,44 @@ class DefaultDocumentService:
             project_id=project_id,
             document_id=document_id,
         )
+
+    def _batch_unavailable_reason(self, config: Any, *, enable_polish: bool) -> str | None:
+        translator_config = getattr(config, "translator_config", None)
+        polish_config = getattr(config, "polish_config", None)
+        if (
+            resolve_pipeline_batch_provider(
+                translator_config,
+                polish_config,
+                enable_polish=enable_polish,
+            )
+            is None
+        ):
+            if enable_polish:
+                return "Async batch translation requires Translator and Polish to use the same batch-capable provider."
+            return "Async batch translation requires a batch-capable Translator connection."
+
+        if getattr(config, "translator_batch_config", None) is None:
+            return "Async batch translation requires Translator batch settings in Project Setup."
+
+        effective_polish = effective_polish_step_config(translator_config, polish_config)
+        if enable_polish and effective_polish is not None and getattr(config, "polish_batch_config", None) is None:
+            return "Async batch translation requires Polish batch settings in Project Setup."
+        return None
+
+    def _supports_batch_translation(
+        self,
+        project_id: str,
+        *,
+        document_type: str,
+        enable_polish: bool,
+    ) -> bool:
+        if document_type == "manga":
+            return False
+        try:
+            config = self._runtime.get_effective_config(project_id)
+        except Exception:  # noqa: BLE001
+            return False
+        return self._batch_unavailable_reason(config, enable_polish=enable_polish) is None
 
     def _retranslate_action_state_for_chunk(
         self,
@@ -1776,7 +2222,13 @@ class DefaultDocumentService:
             "translation_manga",
             "chunk_retranslation",
             "batch_translation",
+            "translate_and_export",
         }:
+            return False
+        if (
+            record.task_type == "translate_and_export"
+            and (record.phase or "") not in _TRANSLATE_AND_EXPORT_TRANSLATION_PHASES
+        ):
             return False
         if record.document_ids_json is None:
             return record.task_type != "chunk_retranslation"

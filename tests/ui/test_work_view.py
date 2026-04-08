@@ -29,6 +29,7 @@ from context_aware_translation.application.contracts.document import (
     DocumentTranslationState,
     DocumentWorkspaceState,
     OCRPageState,
+    TranslateAndExportState,
     TranslationUnitActionState,
     TranslationUnitKind,
     TranslationUnitState,
@@ -135,6 +136,14 @@ def _make_view(*, work_state: WorkboardState):
             available_formats=[ExportOption(format_id="txt", label="TXT", is_default=True)],
             default_output_path="/tmp/04.txt",
         ),
+        translate_and_export=TranslateAndExportState(
+            workspace=_make_workspace_state(),
+            can_start=True,
+            available_formats=[ExportOption(format_id="txt", label="TXT", is_default=True)],
+            default_output_path="/tmp/04.txt",
+            batch_available=True,
+            reembedding_available=True,
+        ),
         ocr=DocumentOCRState(
             workspace=_make_workspace_state(active_tab=DocumentSection.OCR),
             pages=[
@@ -185,6 +194,28 @@ def _make_view(*, work_state: WorkboardState):
     )
     view = WorkView("proj-1", work_service, document_service, terms_service, bus)
     return view, bus, work_service, document_service, terms_service
+
+
+def _make_translate_and_export_state(
+    *,
+    can_start: bool = True,
+    blocker: BlockerInfo | None = None,
+    batch_available: bool = True,
+    batch_blocker: BlockerInfo | None = None,
+    reembedding_available: bool = True,
+    reembedding_blocker: BlockerInfo | None = None,
+) -> TranslateAndExportState:
+    return TranslateAndExportState(
+        workspace=_make_workspace_state(),
+        can_start=can_start,
+        available_formats=[ExportOption(format_id="txt", label="TXT", is_default=True)],
+        default_output_path="/tmp/04.txt",
+        blocker=blocker,
+        batch_available=batch_available,
+        batch_blocker=batch_blocker,
+        reembedding_available=reembedding_available,
+        reembedding_blocker=reembedding_blocker,
+    )
 
 
 def test_work_view_renders_workboard_from_service():
@@ -516,6 +547,58 @@ def test_work_view_reset_and_delete_selected_document():
             "delete_document_stack",
             DeleteDocumentStackRequest(project_id="proj-1", document_id=4),
         ) in work_service.calls
+    finally:
+        view.cleanup()
+
+
+def test_work_view_translate_and_export_button_uses_prepare_state():
+    action = DocumentRowAction(
+        kind=DocumentRowActionKind.OPEN_TRANSLATION,
+        label="Open Translation",
+        target=NavigationTarget(
+            kind=NavigationTargetKind.DOCUMENT_TRANSLATION,
+            project_id="proj-1",
+            document_id=4,
+        ),
+    )
+    blocker = BlockerInfo(
+        code=BlockerCode.NEEDS_SETUP,
+        message="Translate and Export is available only before work has started for this document.",
+    )
+    view, _bus, _work_service, document_service, _terms_service = _make_view(work_state=_make_workboard(action=action))
+    document_service.translate_and_export = _make_translate_and_export_state(can_start=False, blocker=blocker)
+    try:
+        view.rows_table.selectRow(0)
+        QApplication.processEvents()
+
+        assert view.translate_and_export_button.isEnabled() is False
+        assert view.translate_and_export_button.toolTip() == blocker.message
+        assert ("prepare_translate_and_export", ("proj-1", 4)) in document_service.calls
+    finally:
+        view.cleanup()
+
+
+def test_work_view_translate_and_export_button_opens_dialog_for_ready_document():
+    action = DocumentRowAction(
+        kind=DocumentRowActionKind.OPEN_TRANSLATION,
+        label="Open Translation",
+        target=NavigationTarget(
+            kind=NavigationTargetKind.DOCUMENT_TRANSLATION,
+            project_id="proj-1",
+            document_id=4,
+        ),
+    )
+    view, _bus, _work_service, document_service, _terms_service = _make_view(work_state=_make_workboard(action=action))
+    document_service.translate_and_export = _make_translate_and_export_state(can_start=True)
+    try:
+        view.rows_table.selectRow(0)
+        QApplication.processEvents()
+        with patch("context_aware_translation.ui.features.work_view.TranslateAndExportDialog") as mock_dialog_cls:
+            view.translate_and_export_button.click()
+
+        mock_dialog_cls.assert_called_once()
+        mock_dialog_cls.return_value.exec.assert_called_once()
+        assert document_service.calls.count(("prepare_translate_and_export", ("proj-1", 4))) >= 2
     finally:
         view.cleanup()
 

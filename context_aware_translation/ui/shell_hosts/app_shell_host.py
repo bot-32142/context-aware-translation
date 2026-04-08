@@ -11,6 +11,7 @@ class AppShellHost(HybridShellHost):
     """App-level shell host with QML chrome and hosted QWidget pages."""
 
     projects_requested = Signal()
+    setup_wizard_requested = Signal()
     app_settings_requested = Signal()
     queue_requested = Signal()
     close_project_requested = Signal()
@@ -62,6 +63,9 @@ class AppShellHost(HybridShellHost):
         projects_requested = getattr(root, "projectsRequested", None)
         if projects_requested is not None:
             projects_requested.connect(self.projects_requested.emit)
+        setup_wizard_requested = getattr(root, "setupWizardRequested", None)
+        if setup_wizard_requested is not None:
+            setup_wizard_requested.connect(self.setup_wizard_requested.emit)
         app_settings_requested = getattr(root, "appSettingsRequested", None)
         if app_settings_requested is not None:
             app_settings_requested.connect(self.app_settings_requested.emit)

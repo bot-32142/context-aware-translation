@@ -237,6 +237,27 @@ def test_context_manager_add_text_same_text_different_documents_not_deduped(mock
     assert {c.document_id for c in matching_chunks} == {1, 2}
 
 
+def test_context_manager_add_text_merges_unbalanced_inline_marker_chunks(
+    mock_context_manager,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    text = "prefix ⟪span:0⟫fragment⟪/span:0⟫ suffix"
+
+    def fake_chunker(*_args, **_kwargs):
+        yield ("prefix ⟪span:0⟫frag", 0, 20)
+        yield ("ment⟪/span:0⟫ suffix", 20, len(text))
+
+    monkeypatch.setattr(
+        "context_aware_translation.core.context_manager.line_batched_semantic_chunker",
+        fake_chunker,
+    )
+
+    result = mock_context_manager.add_text(text)
+
+    assert result == 0
+    assert [chunk.text for chunk in mock_context_manager.term_repo.chunks] == [text]
+
+
 def test_context_manager_add_text_empty(mock_context_manager):
     """Test adding empty text."""
     result = mock_context_manager.add_text("")

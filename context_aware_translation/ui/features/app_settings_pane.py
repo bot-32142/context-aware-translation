@@ -233,21 +233,10 @@ class AppSettingsPane(QWidget):
         selected_count = len(selected_connections)
         return [
             {
-                "action": "run_wizard",
-                "label": self.tr("Run Setup Wizard")
-                if self._state is not None and not self._state.connections
-                else self.tr("Open Setup Wizard"),
-                "enabled": True,
-                "primary": True,
-                "tooltip": self.tr(
-                    "Open the setup wizard to configure reusable connections and shared workflow profiles."
-                ),
-            },
-            {
                 "action": "add_connection",
                 "label": self.tr("Add Connection"),
                 "enabled": True,
-                "primary": False,
+                "primary": True,
                 "tooltip": self.tr("Create a reusable API connection for workflow steps."),
             },
             {
@@ -268,7 +257,6 @@ class AppSettingsPane(QWidget):
 
     def _on_action_requested(self, action_name: str) -> None:
         actions: dict[str, Callable[[], None]] = {
-            "run_wizard": self._on_run_wizard,
             "add_connection": self._on_add_connection,
             "duplicate_connection": self._on_duplicate_connection,
             "delete_connection": self._on_delete_connection,
@@ -512,6 +500,7 @@ class AppSettingsPane(QWidget):
                 connection_id=connection.connection_id,
                 label=connection.display_name,
                 default_model=connection.default_model,
+                base_url=connection.base_url,
             )
             for connection in self._state.connections
         ]

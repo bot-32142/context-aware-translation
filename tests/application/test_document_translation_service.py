@@ -39,11 +39,11 @@ def _build_configured_context(tmp_path):
     context = build_application_context(library_root=tmp_path)
     context.services.app_setup.run_setup_wizard(
         SetupWizardRequest(
-            providers=[ProviderKind.OPENAI],
+            providers=[ProviderKind.GEMINI],
             connections=[
                 ConnectionDraft(
-                    display_name="OpenAI",
-                    provider=ProviderKind.OPENAI,
+                    display_name="Gemini",
+                    provider=ProviderKind.GEMINI,
                     api_key="test-key",
                 )
             ],
@@ -181,6 +181,41 @@ def test_get_translation_builds_text_units_and_progress(tmp_path) -> None:
         assert state.progress.current == 1
         assert state.progress.total == 2
         assert state.current_unit_id == "1"
+    finally:
+        context.close()
+
+
+def test_get_translation_hides_batch_when_project_setup_is_not_batch_eligible(tmp_path) -> None:
+    _ensure_qt_app()
+    context = build_application_context(library_root=tmp_path)
+    try:
+        context.services.app_setup.run_setup_wizard(
+            SetupWizardRequest(
+                providers=[ProviderKind.OPENAI],
+                connections=[
+                    ConnectionDraft(
+                        display_name="OpenAI",
+                        provider=ProviderKind.OPENAI,
+                        api_key="test-key",
+                    )
+                ],
+            )
+        )
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Text Doc", target_language="English")
+        )
+        project_id = created.project.project_id
+        document_id = _create_text_document(context, project_id)
+
+        service = context.services.document
+        service.get_terms = MagicMock(return_value=_empty_terms(project_id))  # type: ignore[method-assign]
+        context.runtime.task_engine.has_active_claims = MagicMock(return_value=False)
+        context.runtime.task_engine.preflight = MagicMock(return_value=Decision(allowed=True))
+
+        state = service.get_translation(project_id, document_id)
+
+        assert state.supports_batch is False
+        assert state.batch_action.enabled is False
     finally:
         context.close()
 

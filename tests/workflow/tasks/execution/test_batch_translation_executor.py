@@ -40,11 +40,18 @@ def _build_executor(tmp_path) -> BatchTranslationExecutor:
     workflow = MagicMock()
     workflow.book_id = "book-1"
     workflow.config = MagicMock()
+    workflow.config.translator_config = TranslatorConfig(
+        api_key="k",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        model="gemini-2.5-flash",
+    )
+    workflow.config.polish_config = None
     workflow.config.translator_batch_config = TranslatorBatchConfig(
         provider="gemini_ai_studio",
         api_key="k",
         model="gemini-2.5-flash",
     )
+    workflow.config.polish_batch_config = None
 
     task_store = TaskStore(tmp_path / "task_store.db")
     llm_batch_store = LLMBatchStore(tmp_path / "llm_batch_cache.db")
@@ -798,6 +805,7 @@ async def test_ensure_payload_prepared_uses_batch_model_with_fixed_temperature()
     service.raise_if_local_pause = MagicMock()
     service.document_ids_for_task.return_value = None
     service.translator_config.return_value = translator_config
+    service.polish_config.return_value = translator_config
     service.batch_config.return_value = batch_config
     service._get_force.return_value = False
     progress_callback = MagicMock()
@@ -816,15 +824,15 @@ async def test_ensure_payload_prepared_uses_batch_model_with_fixed_temperature()
     )
     manager.collect_chunk_translation_inputs.assert_called_once_with(
         batch_size=0,
-        max_tokens_per_batch=4000,
+        max_tokens_per_batch=2000,
         document_ids=None,
         force=False,
         cancel_check=None,
         source_language="Japanese",
     )
-    assert payload["model"] == "batch-model"
-    assert "temperature" not in payload
-    assert payload["batch_request_kwargs"] == {"thinking_mode": "auto"}
+    assert payload["translation_model"] == "translator-model"
+    assert payload["translation_request_kwargs"] == {"temperature": 0.15}
+    assert payload["translation_batch_size"] == 100
 
 
 @pytest.mark.asyncio
@@ -866,7 +874,7 @@ async def test_execute_stage_reuses_cached_submitted_batch_without_resubmitting(
         llm_batch_store.upsert_completed(
             request_hash,
             "gemini_ai_studio",
-            '{"翻译文本":["ok"]}',
+            '{"翻译文本":[{"id":0,"文本":"ok"}]}',
             batch_name=existing_batch_name,
         )
         return BatchPollResult(status=POLL_STATUS_COMPLETED)
@@ -950,7 +958,7 @@ async def test_execute_stage_deduplicates_duplicate_request_hashes(tmp_path):
         llm_batch_store.upsert_completed(
             request_hash,
             "gemini_ai_studio",
-            '{"翻译文本":["ok"]}',
+            '{"翻译文本":[{"id":0,"文本":"ok"}]}',
             batch_name="batch/jobs/dup",
         )
         return BatchPollResult(status=POLL_STATUS_COMPLETED)
@@ -1033,7 +1041,7 @@ async def test_execute_stage_resubmits_when_cached_failed_record_was_cancelled(t
         llm_batch_store.upsert_completed(
             request_hash,
             "gemini_ai_studio",
-            '{"翻译文本":["ok"]}',
+            '{"翻译文本":[{"id":0,"文本":"ok"}]}',
             batch_name="batch/jobs/new",
         )
         return BatchPollResult(status=POLL_STATUS_COMPLETED)
@@ -1119,7 +1127,7 @@ async def test_execute_stage_submits_sequential_slices_by_batch_size(tmp_path):
             llm_batch_store.upsert_completed(
                 request_hash,
                 "gemini_ai_studio",
-                '{"翻译文本":["ok"]}',
+                '{"翻译文本":[{"id":0,"文本":"ok"}]}',
                 batch_name=str(kwargs["batch_name"]),
             )
         return BatchPollResult(status=POLL_STATUS_COMPLETED, output_file_name="files/out")
@@ -1161,7 +1169,7 @@ async def test_execute_stage_persists_final_fallback_state_before_return(tmp_pat
     llm_batch_store.upsert_completed(
         request_hash,
         "gemini_ai_studio",
-        '{"翻译文本":["raw"]}',
+        '{"翻译文本":[{"id":0,"文本":"raw"}]}',
         batch_name="batch/jobs/existing",
     )
 
@@ -1248,7 +1256,7 @@ async def test_execute_stage_validation_respects_translator_concurrency(tmp_path
         llm_batch_store.upsert_completed(
             request_hash,
             "gemini_ai_studio",
-            '{"翻译文本":["ok"]}',
+            '{"翻译文本":[{"id":0,"文本":"ok"}]}',
             batch_name="batch/jobs/validate",
         )
         items.append(

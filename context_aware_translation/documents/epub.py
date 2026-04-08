@@ -54,6 +54,7 @@ from context_aware_translation.documents.epub_support.xml_utils import (
     normalize_xml_header_for_utf8,
 )
 from context_aware_translation.documents.epub_xhtml_utils import (
+    HEADING_TAGS,
     extract_heading_texts,
     extract_text_from_xhtml,
     flatten_annotationless_ruby_in_xhtml,
@@ -392,7 +393,13 @@ class EPUBDocument(Document):
 
     @staticmethod
     def _is_original_archive_source(source: dict[str, Any]) -> bool:
-        return source.get("relative_path") == ORIGINAL_ARCHIVE_PATH
+        relative_path = str(source.get("relative_path", "") or "").strip()
+        if relative_path == ORIGINAL_ARCHIVE_PATH:
+            return True
+        return (
+            str(source.get("source_type", "") or "").strip().lower() == "asset"
+            and str(source.get("mime_type", "") or "").strip().lower() == "application/epub+zip"
+        )
 
     @staticmethod
     def _is_content_image(source: dict[str, Any]) -> bool:
@@ -1001,7 +1008,12 @@ class EPUBDocument(Document):
         return apply_nav_label_specs_to_document(content, specs, xhtml_ns=XHTML_NS)
 
     @staticmethod
-    def _apply_translated_toc_to_resources(resources: list[EpubItem], toc: list[TocEntry]) -> None:
+    def _apply_translated_toc_to_resources(
+        resources: list[EpubItem],
+        toc: list[TocEntry],
+        *,
+        document_title: str | None = None,
+    ) -> None:
         apply_translated_toc_to_resources(
             resources,
             toc,
@@ -1009,6 +1021,7 @@ class EPUBDocument(Document):
             xhtml_ns=XHTML_NS,
             epub_ns=EPUB_NS,
             ncx_ns=NCX_NS,
+            document_title=document_title,
         )
 
     @staticmethod
@@ -1356,6 +1369,79 @@ class EPUBDocument(Document):
         return synced
 
     @classmethod
+    def _build_toc_title_translation_map(
+        cls,
+        original_toc: list[TocEntry],
+        translated_toc: list[TocEntry],
+        *,
+        package_path: str,
+    ) -> dict[str, list[tuple[str, str]]]:
+        title_map: dict[str, list[tuple[str, str]]] = {}
+
+        def walk(original_entries: list[TocEntry], translated_entries: list[TocEntry]) -> None:
+            for original, translated in zip(original_entries, translated_entries, strict=True):
+                source_path = cls._resolve_toc_href_to_source_path(original.href, package_path)
+                if source_path and original.title and translated.title:
+                    title_map.setdefault(source_path, []).append((original.title, translated.title))
+                if original.children and translated.children:
+                    walk(original.children, translated.children)
+
+        walk(original_toc, translated_toc)
+        return title_map
+
+    @classmethod
+    def _sync_translated_chapter_with_toc_titles(
+        cls,
+        *,
+        original_xhtml: str,
+        translated_xhtml: str,
+        title_pairs: list[tuple[str, str]],
+    ) -> str:
+        if not title_pairs:
+            return translated_xhtml
+
+        try:
+            translated_root = DefusedET.fromstring(cls._normalize_xml_header_for_utf8(translated_xhtml).encode("utf-8"))
+        except Exception:
+            return translated_xhtml
+
+        original_headings = extract_heading_texts(original_xhtml)
+        translated_heading_elements = [
+            element for element in translated_root.iter() if cls._local_tag(element.tag) in HEADING_TAGS
+        ]
+        if not original_headings or len(original_headings) != len(translated_heading_elements):
+            return translated_xhtml
+
+        queued_titles: dict[str, list[str]] = {}
+        for original_title, translated_title in title_pairs:
+            normalized_original = cls._normalize_whitespace(original_title)
+            if not normalized_original or not translated_title:
+                continue
+            queued_titles.setdefault(normalized_original, []).append(translated_title)
+        if not queued_titles:
+            return translated_xhtml
+
+        consumed_counts: dict[str, int] = {}
+        changed = False
+        for original_heading, translated_heading in zip(original_headings, translated_heading_elements, strict=True):
+            normalized_heading = cls._normalize_whitespace(original_heading)
+            candidates = queued_titles.get(normalized_heading)
+            if not candidates:
+                continue
+
+            candidate_index = consumed_counts.get(normalized_heading, 0)
+            if candidate_index >= len(candidates):
+                candidate_index = len(candidates) - 1
+            consumed_counts[normalized_heading] = consumed_counts.get(normalized_heading, 0) + 1
+            changed = replace_element_text_preserving_slots(translated_heading, candidates[candidate_index]) or changed
+
+        if not changed:
+            return translated_xhtml
+
+        serialized = _ET.tostring(translated_root, encoding="unicode")
+        return cls._prepend_xml_header_if_needed(translated_xhtml, serialized)
+
+    @classmethod
     def _build_toc_title_maps(
         cls,
         toc_entries: list[TocEntry],
@@ -1577,7 +1663,7 @@ class EPUBDocument(Document):
                 document_id,
                 seq,
                 "asset",
-                relative_path=ORIGINAL_ARCHIVE_PATH,
+                relative_path=path.name or ORIGINAL_ARCHIVE_PATH,
                 binary_content=original_epub_bytes,
                 mime_type="application/epub+zip",
                 is_text_added=True,
@@ -2191,20 +2277,16 @@ class EPUBDocument(Document):
         if isinstance(original_toc_json, list) and original_toc_json:
             original_toc = cls._deserialize_toc(original_toc_json)
 
-        title_map: dict[str, list[tuple[str, str]]] = {}
-        if doc._translated_chapters or doc._translated_image_texts:
-            heading_map = cls._build_heading_translation_map(sources_sorted, doc._translated_chapters)
-            image_title_map = cls._build_image_title_translation_map(sources_sorted, doc._translated_image_texts)
-            title_map = cls._merge_title_translation_maps(heading_map, image_title_map)
-
         toc_to_apply = doc._translated_toc
-        if doc._translated_toc and original_toc and title_map:
-            toc_to_apply = cls._sync_toc_with_title_map(
-                doc._translated_toc,
+        chapter_title_sync_map = (
+            cls._build_toc_title_translation_map(
                 original_toc,
-                title_map,
-                package_path,
+                doc._translated_toc,
+                package_path=package_path,
             )
+            if doc._translated_toc and original_toc
+            else {}
+        )
         toc_titles_by_target, toc_titles_by_source_path = (
             cls._build_toc_title_maps(toc_to_apply, package_path=package_path)
             if toc_to_apply and package_path
@@ -2218,6 +2300,7 @@ class EPUBDocument(Document):
             visible_toc_document_paths=visible_toc_document_paths,
             toc_titles_by_target=toc_titles_by_target,
             toc_titles_by_source_path=toc_titles_by_source_path,
+            chapter_title_sync_map=chapter_title_sync_map,
             flatten_annotationless_ruby=flatten_annotationless_ruby,
             use_original_images=use_original_images,
         )
@@ -2229,6 +2312,7 @@ class EPUBDocument(Document):
                     sources_sorted=sources_sorted,
                     existing_updates=member_updates,
                     translated_toc=toc_to_apply,
+                    translated_document_title=doc._translated_metadata_title,
                 )
             )
         if doc._translated_nav_label_specs:
@@ -2281,6 +2365,7 @@ class EPUBDocument(Document):
         visible_toc_document_paths: set[str] | None = None,
         toc_titles_by_target: dict[str, str] | None = None,
         toc_titles_by_source_path: dict[str, str] | None = None,
+        chapter_title_sync_map: dict[str, list[tuple[str, str]]] | None = None,
         flatten_annotationless_ruby: bool = False,
         use_original_images: bool = False,
     ) -> dict[str, bytes]:
@@ -2288,6 +2373,7 @@ class EPUBDocument(Document):
         toc_document_paths = visible_toc_document_paths or set()
         synced_toc_titles_by_target = toc_titles_by_target or {}
         synced_toc_titles_by_source_path = toc_titles_by_source_path or {}
+        synced_chapter_titles = chapter_title_sync_map or {}
         for source in sources_sorted:
             if cls._is_metadata_source(source) or cls._is_original_archive_source(source):
                 continue
@@ -2300,6 +2386,14 @@ class EPUBDocument(Document):
 
             if source["source_type"] == "text":
                 translated = doc._translated_chapters.get(source["source_id"], source["text_content"])
+                if source["source_id"] in doc._translated_chapters:
+                    title_pairs = synced_chapter_titles.get(normalized_relative_path)
+                    if title_pairs and cls._is_chapter_source(source):
+                        translated = cls._sync_translated_chapter_with_toc_titles(
+                            original_xhtml=source["text_content"],
+                            translated_xhtml=translated,
+                            title_pairs=title_pairs,
+                        )
                 if toc_document and (synced_toc_titles_by_target or synced_toc_titles_by_source_path):
                     translated = cls._sync_visible_toc_document_with_toc_titles(
                         translated_xhtml=translated,
@@ -2349,6 +2443,7 @@ class EPUBDocument(Document):
         sources_sorted: list[dict[str, Any]],
         existing_updates: dict[str, bytes],
         translated_toc: list[TocEntry],
+        translated_document_title: str | None = None,
     ) -> dict[str, bytes]:
         toc_resources: list[EpubItem] = []
         for source in sources_sorted:
@@ -2382,7 +2477,11 @@ class EPUBDocument(Document):
                 )
             )
 
-        cls._apply_translated_toc_to_resources(toc_resources, translated_toc)
+        cls._apply_translated_toc_to_resources(
+            toc_resources,
+            translated_toc,
+            document_title=translated_document_title,
+        )
         return {resource.file_name: resource.content for resource in toc_resources}
 
     @staticmethod

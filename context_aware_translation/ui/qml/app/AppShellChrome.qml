@@ -7,6 +7,7 @@ Rectangle {
     height: 78
 
     signal projectsRequested
+    signal setupWizardRequested
     signal appSettingsRequested
     signal queueRequested
     signal closeProjectRequested
@@ -17,6 +18,7 @@ Rectangle {
     property string projectsLabel: appShell ? appShell.projects_label : "Projects"
     property string queueLabelText: appShell ? appShell.queue_label : "Queue"
     property string appSettingsLabelText: appShell ? appShell.app_settings_label : "App Settings"
+    property string setupWizardLabelText: appShell ? appShell.setup_wizard_label : "Setup Wizard"
     property string backToProjectsLabelText: appShell ? appShell.back_to_projects_label : "Back to Projects"
     property string surfaceTitle: appShell ? appShell.surface_title : root.projectsLabel
 
@@ -104,6 +106,29 @@ Rectangle {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.appSettingsRequested()
+                }
+            }
+
+            Rectangle {
+                visible: !root.hasCurrentProject
+                width: visible ? setupWizardLabel.implicitWidth + 28 : 0
+                height: 36
+                radius: 18
+                color: "#e7ddd0"
+
+                Text {
+                    id: setupWizardLabel
+                    anchors.centerIn: parent
+                    text: root.setupWizardLabelText
+                    color: "#2f251d"
+                    font.pixelSize: 13
+                    font.bold: true
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.setupWizardRequested()
                 }
             }
 

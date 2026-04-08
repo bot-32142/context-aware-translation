@@ -137,6 +137,17 @@ class _FakeAppSettingsDialogHost(QWidget):
         return result
 
 
+class _FakeSetupWizardDialog:
+    exec_calls = 0
+
+    def __init__(self, *_args, **_kwargs) -> None:
+        pass
+
+    def exec(self):
+        type(self).exec_calls += 1
+        return 0
+
+
 class _FakeProjectSettingsDialogHost(QWidget):
     finished = Signal(int)
     close_requested = Signal()
@@ -209,6 +220,7 @@ class _FakeQueueShellHost(QWidget):
 
 class _FakeAppShellHost(QWidget):
     projects_requested = Signal()
+    setup_wizard_requested = Signal()
     app_settings_requested = Signal()
     queue_requested = Signal()
     close_project_requested = Signal()
@@ -585,6 +597,20 @@ def test_main_window_routes_projects_into_project_shell():
         shell.project_settings_widget.save_completed.emit("project-1")
         assert shell.current_surface == "work"
         assert "Project setup saved" in window.statusBar().currentMessage()
+    finally:
+        window.close()
+        patch_stack.close()
+
+
+def test_main_window_opens_setup_wizard_from_home_shell():
+    window, context, patch_stack = _make_window()
+    try:
+        with patch("context_aware_translation.ui.main_window.SetupWizardDialog", _FakeSetupWizardDialog):
+            _FakeSetupWizardDialog.exec_calls = 0
+            window._app_shell.setup_wizard_requested.emit()
+
+        assert _FakeSetupWizardDialog.exec_calls == 1
+        assert any(call[0] == "get_wizard_state" for call in context.services.app_setup.calls)
     finally:
         window.close()
         patch_stack.close()

@@ -437,6 +437,7 @@ class ProjectSettingsPane(QWidget):
                 connection_id=connection.connection_id,
                 label=connection.display_name,
                 default_model=connection.default_model,
+                base_url=connection.base_url,
             )
             for connection in self._state.available_connections
         ]

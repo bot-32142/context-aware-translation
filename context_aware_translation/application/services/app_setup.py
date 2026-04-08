@@ -13,6 +13,7 @@ from context_aware_translation.application.contracts.app_setup import (
     ProviderCard,
     SaveConnectionRequest,
     SaveWorkflowProfileRequest,
+    SetupWizardMode,
     SetupWizardRequest,
     SetupWizardState,
     WorkflowProfileDetail,
@@ -115,6 +116,7 @@ class DefaultAppSetupService:
                 ),
             ],
             target_language=target_language,
+            recommendation_mode=SetupWizardMode.BALANCED,
         )
 
     def preview_setup_wizard(self, request: SetupWizardRequest) -> SetupWizardState:
@@ -137,6 +139,7 @@ class DefaultAppSetupService:
             request.connections,
             name=profile_name or "Recommended",
             target_language=target_language,
+            recommendation_mode=request.recommendation_mode,
         )
         return SetupWizardState(
             available_providers=self.get_wizard_state().available_providers,
@@ -146,6 +149,7 @@ class DefaultAppSetupService:
             recommendation=recommendation,
             profile_name=profile_name,
             target_language=target_language,
+            recommendation_mode=request.recommendation_mode,
         )
 
     def save_connection(self, request: SaveConnectionRequest) -> AppSetupState:
@@ -357,6 +361,7 @@ class DefaultAppSetupService:
         endpoint_profiles = self._runtime.book_manager.list_endpoint_profiles()
         connection_name_by_id = {profile.profile_id: connection_display_name(profile) for profile in endpoint_profiles}
         connection_model_by_id = {profile.profile_id: (profile.model or None) for profile in endpoint_profiles}
+        connection_base_url_by_id = {profile.profile_id: (profile.base_url or None) for profile in endpoint_profiles}
         return build_workflow_profile_detail(
             profile_id=profile_id,
             name=name,
@@ -364,6 +369,7 @@ class DefaultAppSetupService:
             config=config,
             connection_name_by_id=connection_name_by_id,
             connection_model_by_id=connection_model_by_id,
+            connection_base_url_by_id=connection_base_url_by_id,
             is_default=is_default,
         )
 

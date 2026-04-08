@@ -6,23 +6,32 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from context_aware_translation.config import TranslatorConfig
+from context_aware_translation.config import LLMConfig, TranslatorConfig
 from context_aware_translation.core.cancellation import OperationCancelledError, raise_if_cancelled
 from context_aware_translation.documents.epub_support.inline_markers import (
     extract_inline_markers,
     strict_inline_markers,
+    validate_inline_marker_fragment_sanity,
     validate_inline_marker_sanity,
 )
 from context_aware_translation.llm.client import LLMClient
 from context_aware_translation.llm.session_trace import get_llm_session_id, llm_session_scope
 from context_aware_translation.utils.compression_marker import COMPRESSED_LINE_SENTINEL
-from context_aware_translation.utils.llm_json_cleaner import clean_llm_response
+from context_aware_translation.utils.llm_json_cleaner import clean_llm_response, parse_llm_json
 
 logger = logging.getLogger(__name__)
 
 
 class TranslationValidationError(Exception):
     """Raised when the LLM response fails schema or coverage checks."""
+
+
+def _indexed_text_entries(texts: list[str]) -> list[dict[str, int | str]]:
+    return [{"id": idx, "文本": text} for idx, text in enumerate(texts)]
+
+
+def _render_json_payload(payload: object) -> str:
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 def _session_prefix() -> str:
@@ -54,14 +63,23 @@ def _extract_line_inline_tokens(lines: list[str]) -> list[list[str]]:
 
 def _validate_source_marker_sanity(source_tokens: list[str], *, label: str, line_no: int) -> None:
     try:
-        validate_inline_marker_sanity(source_tokens)
+        validate_inline_marker_fragment_sanity(source_tokens)
     except ValueError as exc:  # pragma: no cover - defensive guard for extractor bugs
         raise ValueError(f"{label}: source line {line_no} malformed EPUB inline markers — {exc}.") from exc
 
 
-def _validate_translated_marker_sanity(translated_tokens: list[str], *, label: str, line_no: int) -> None:
+def _validate_translated_marker_sanity(
+    translated_tokens: list[str],
+    *,
+    source_tokens: list[str],
+    label: str,
+    line_no: int,
+) -> None:
     try:
-        validate_inline_marker_sanity(translated_tokens)
+        if _source_allows_fragment_markers(source_tokens):
+            validate_inline_marker_fragment_sanity(translated_tokens)
+        else:
+            validate_inline_marker_sanity(translated_tokens)
     except ValueError as exc:
         raise ValueError(
             f"{label}: line {line_no} malformed EPUB inline markers — {exc}. "
@@ -69,17 +87,32 @@ def _validate_translated_marker_sanity(translated_tokens: list[str], *, label: s
         ) from exc
 
 
+def _source_allows_fragment_markers(tokens: list[str]) -> bool:
+    try:
+        validate_inline_marker_sanity(tokens)
+    except ValueError:
+        return True
+    return False
+
+
 def _validate_marker_sanity_across_lines(
     tokens_by_line: list[list[str]],
     *,
+    source_tokens_by_line: list[list[str]],
     label: str,
     where: str,
 ) -> None:
     merged: list[str] = []
     for tokens in tokens_by_line:
         merged.extend(tokens)
+    merged_source: list[str] = []
+    for tokens in source_tokens_by_line:
+        merged_source.extend(tokens)
     try:
-        validate_inline_marker_sanity(merged)
+        if _source_allows_fragment_markers(merged_source):
+            validate_inline_marker_fragment_sanity(merged)
+        else:
+            validate_inline_marker_sanity(merged)
     except ValueError as exc:
         raise ValueError(f"{label}: {where} malformed EPUB inline markers — {exc}.") from exc
 
@@ -134,7 +167,12 @@ def _validate_inline_marker_preservation(
             zip(source_tokens_by_line, translated_tokens_by_line, strict=True),
             start=1,
         ):
-            _validate_translated_marker_sanity(translated_tokens, label=label, line_no=idx)
+            _validate_translated_marker_sanity(
+                translated_tokens,
+                source_tokens=source_tokens,
+                label=label,
+                line_no=idx,
+            )
             _assert_strict_marker_match(
                 source_tokens,
                 translated_tokens,
@@ -149,6 +187,7 @@ def _validate_inline_marker_preservation(
     prefix_translated_tokens = translated_tokens_by_line[: prefix_end + 1]
     _validate_marker_sanity_across_lines(
         prefix_translated_tokens,
+        source_tokens_by_line=prefix_source_tokens,
         label=label,
         where=f"line-prefix (lines 1-{prefix_end + 1})",
     )
@@ -171,7 +210,12 @@ def _validate_inline_marker_preservation(
         zip(source_tokens_by_line[prefix_end + 1 :], translated_tokens_by_line[prefix_end + 1 :], strict=True),
         start=prefix_end + 2,
     ):
-        _validate_translated_marker_sanity(translated_tokens, label=label, line_no=idx)
+        _validate_translated_marker_sanity(
+            translated_tokens,
+            source_tokens=source_tokens,
+            label=label,
+            line_no=idx,
+        )
         _assert_strict_marker_match(
             source_tokens,
             translated_tokens,
@@ -296,6 +340,127 @@ def reconstruct_chunk_translations(
     return results
 
 
+def _extract_id_based_translation_blocks(
+    parsed: object,
+    *,
+    expected_count: int,
+    label: str,
+) -> list[str]:
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{label}: response must be a JSON object")
+
+    result = parsed.get("翻译文本")
+    if not isinstance(result, list):
+        raise ValueError(f"{label}: '翻译文本' must be a list of objects")
+    if len(result) != expected_count:
+        raise ValueError(f"{label}: '翻译文本' length mismatch — expected {expected_count}, got {len(result)}")
+
+    translated_blocks: list[str] = []
+    for idx, item in enumerate(result):
+        if not isinstance(item, dict):
+            raise ValueError(f"{label}: every item in '翻译文本' must be an object")
+
+        item_id = item.get("id")
+        if not isinstance(item_id, int) or isinstance(item_id, bool):
+            raise ValueError(f"{label}: item {idx} in '翻译文本' must have integer 'id'")
+        if item_id != idx:
+            raise ValueError(f"{label}: '翻译文本' id mismatch — expected {idx}, got {item_id}")
+
+        text = item.get("文本")
+        if not isinstance(text, str):
+            raise ValueError(f"{label}: item {idx} in '翻译文本' must have string '文本'")
+
+        translated_blocks.append(text)
+
+    return translated_blocks
+
+
+def _build_retry_correction_message(exc: Exception) -> str:
+    return f"错误：{exc}\n请只修正输出，不要添加任何解释。\n"
+
+
+def _build_translation_prompt_examples() -> str:
+    example_terms = [
+        {
+            "标准名称": "さくら",
+            "翻译名称": "樱",
+            "描述": "名前",
+        },
+        {
+            "标准名称": "東京オフィス",
+            "翻译名称": "东京办公室",
+            "描述": "会社の本社",
+        },
+    ]
+    example_input_1 = {
+        "术语列表": example_terms,
+        "原文": _indexed_text_entries(
+            [
+                "さくらは「Tokyo Office」で「Machine Learning」プロジェクトに取り組んでいる。",
+                "彼は「⟪RUBY:0⟫断罪飛び蹴り(パニッシュメントドロップ)⟪/RUBY:0⟫」を放った。",
+                "意",
+                "味",
+                "が",
+                "分",
+                "か",
+                "ら",
+                "な",
+                "い",
+                "彼女は「⟪RUBY:0⟫女主角(ヒロイン)⟪/RUBY:0⟫」と呼ばれる。",
+            ]
+        ),
+    }
+    example_output_1 = {
+        "翻译文本": _indexed_text_entries(
+            [
+                "樱在「Tokyo Office」从事「Machine Learning」项目。",
+                "他使出了「⟪RUBY:0⟫断罪飞踢(惩罚坠击)⟪/RUBY:0⟫」。",
+                "意",
+                "义",
+                "不",
+                "明",
+                "",
+                "",
+                "",
+                "",
+                "她被称为「女主角」。",
+            ]
+        )
+    }
+    example_input_2 = {
+        "术语列表": [],
+        "原文": _indexed_text_entries(["意", "义", "不", "明"]),
+    }
+    example_output_2 = {
+        "翻译文本": _indexed_text_entries(["意味が分からない", "", "", ""]),
+    }
+    return "\n".join(
+        [
+            "示例：",
+            "输入：",
+            _render_json_payload(example_input_1),
+            "",
+            "输出：",
+            _render_json_payload(example_output_1),
+            "",
+            "输入：",
+            _render_json_payload(example_input_2),
+            "",
+            "输出：",
+            _render_json_payload(example_output_2),
+        ]
+    )
+
+
+def _translation_result_distance(raw: str, expected_count: int) -> float:
+    try:
+        parsed, _repair_count = parse_llm_json(raw)
+    except json.JSONDecodeError:
+        return float("inf")
+    result = parsed.get("翻译文本") if isinstance(parsed, dict) else None
+    return abs(len(result) - expected_count) if isinstance(result, list) else float("inf")
+
+
 def build_translation_prompt(
     chunk_blocks: list[str],
     terms: list[tuple[str, str, str]],
@@ -313,102 +478,37 @@ def build_translation_prompt(
     Returns:
         Tuple of (system_prompt, user_prompt)
     """
-    system_prompt = f"""--角色-- 你是专业翻译, 将以下{source_language}文本翻译为{target_language}。
+    system_prompt = f"""--角色--
+你是{source_language}译{target_language}的专业翻译。
 
---规则--
-你的目标受众是拥有大学学位的{target_language}母语人士。
-{source_language}应当全部翻译。
-只翻译{source_language}：如果原文中出现其他语言的文本，应保持原样不翻译。
-保持译文与术语表的一致性。（注意，术语表的描述实质是按照文章顺序总结的前后文。如果前后矛盾，可以以后面的总结为主。）
-严禁去除重复内容。
-保留所有原始格式，包括 Markdown、换行符和特殊字符。
-如果原文中出现EPUB内联标记，请按下列规则处理：
-1) 对非样式内联标记（如 a/abbr/img 等）：⟪tag:n⟫ 与 ⟪/tag:n⟫ 必须成对保留、顺序不变，不得删除/改写。
-2) 对样式内联标记（b,big,code,del,dfn,em,i,ins,kbd,mark,q,s,samp,small,strong,sub,sup,u,var）：
-    可按语义整对保留/删除/新增，但不能只留一半。
-3) ⟪RUBY:n⟫ ... ⟪/RUBY:n⟫：可整对保留、整对删除或整对新增，不能只留一半；n 只需为数字。如果括号内为同义词/注音，删除标记和括号内的内容。
-4) ⟪BR:n⟫：可按语义需要保留或删除。
-所有标记都是结构控制符，不是可翻译内容；只翻译标记外或标记包裹的自然语言文本。
+--任务--
+判断内容背景与文本风格。
+结合术语表描述，分析人物特征与性格。
+逐元素翻译：
+a. 不翻译非{source_language}文本。
+b. 对每个 id 对应的文本分别翻译，输出时保留原 id。
+c. 结合上下文，在不造成误解、歧义或信息缺失的前提下，选择最符合文风和人物性格的译法；对无自然对应表达的内容，可适度删改。
 
+--格式与标记（必须严格遵守）--
+保留所有原始格式，包括 Markdown、换行符，以及除自然语言标点外所有必须逐字符保留的结构标记、控制符和特殊符号。
+若原文含 EPUB 内联标记，按以下规则处理：
+
+非样式标记（如 a/abbr/img 等）：⟪tag:n⟫ 与 ⟪/tag:n⟫ 必须成对保留、顺序不变，不得删除或改写。
+样式标记（b,big,code,del,dfn,em,i,ins,kbd,mark,q,s,samp,small,strong,sub,sup,u,var）：可按语义整对保留、删除或新增，但不得只保留一半。
+⟪RUBY:n⟫ 正文（内容） ⟪/RUBY:n⟫：可整对保留、删除或新增，不得只保留一半。若 RUBY 内括号中的内容为同义词、注音，或在目标语言中无直接对应的自然译法，可删除起止标记以及括号和括号内内容，但括号外正文必须保留。
+⟪BR:n⟫：可按语义需要保留或删除。
+
+所有标记均为结构控制符，不是可翻译内容；无论自然语言文本位于标记外还是被标记包裹，只翻译文本本身，不翻译标记、编号或符号。
 --数组结构约束（仅跨元素）--
-必须保持输入数组结构不变：
-1) 输出数组长度必须与输入数组长度完全相同，索引一一对应。不得增减、合并、重排任何元素。（规则4为唯一例外）
-2) 即使某些元素为空字符串或与其他元素完全相同，也必须在对应索引保留（可为空字符串）。
-3）不得去除重复元素。
-4）仅有在原文一句话被拆分成多个元素的情况下，并且不可能一一对应的情况下，允许压缩内容。若把连续多条内容压成一条：译文放在第一条，其余索引填 ""。
+输出中必须保留输入里的每一个 id，且每个 id 恰好出现一次。id 与文本一一对应，不得新增、删除、重复、修改、合并或重排任何 id；不得去除重复元素或空字符串。
+仅当原文一句话被拆成多个连续元素，且无法一一对应翻译时，才允许压缩：将译文放入第一条对应 id，其余相关 id 的 "文本" 填 ""。
 
 --输出--
-只输出一个JSON对象，且仅包含字段："翻译文本"。
-"翻译文本"必须是字符串数组，数组长度必须与输入完全一致。
+只输出一个 JSON 对象，且仅包含字段 "翻译文本"。
+"翻译文本" 中的每个元素必须包含字段 "id" 和 "文本"。
 不得输出任何额外说明、前后缀文本或代码块围栏。
 
-示例：
-输入：
-{{
-  "术语列表": [
-    {{
-      "标准名称": "さくら",
-      "翻译名称": "樱",
-      "描述": "名前"
-    }},
-    {{
-      "标准名称": "東京オフィス",
-      "翻译名称": "东京办公室",
-      "描述": "会社の本社"
-    }}
-  ],
-  "原文": [
-    "さくらは「Tokyo Office」で「Machine Learning」プロジェクトに取り組んでいる。",
-    "彼は「⟪RUBY:0⟫断罪飛び蹴り(パニッシュメントドロップ)⟪/RUBY:0⟫」を放った。",
-    "意",
-    "味",
-    "が",
-    "分",
-    "か",
-    "ら",
-    "な",
-    "い",
-    "彼女は「⟪RUBY:0⟫女主角(ヒロイン)⟪/RUBY:0⟫」と呼ばれる。"
-  ]
-}}
-
-输出：
-{{
-  "翻译文本": [
-    "樱在「Tokyo Office」从事「Machine Learning」项目。",
-    "他使出了「⟪RUBY:0⟫断罪飞踢(惩罚坠击)⟪/RUBY:0⟫」。",
-    "意",
-    "义",
-    "不",
-    "明",
-    "",
-    "",
-    "",
-    "",
-    "她被称为「女主角」。"
-  ]
-}}
-
-输入：
-{{
-  "术语列表": [],
-  "原文": [
-    "意",
-    "义",
-    "不",
-    "明"
-  ]
-}}
-
-输出：
-{{
-  "翻译文本": [
-    "意味が分からない",
-    "",
-    "",
-    ""
-  ]
-}}
+{_build_translation_prompt_examples()}
 """
 
     # Build JSON payload for user prompt with Chinese keys
@@ -421,10 +521,10 @@ def build_translation_prompt(
 
     user_payload = {
         "术语列表": terms_json,
-        "原文": chunk_blocks,
+        "原文": _indexed_text_entries(chunk_blocks),
     }
 
-    user_prompt = json.dumps(user_payload, ensure_ascii=False, indent=2)
+    user_prompt = _render_json_payload(user_payload)
 
     return system_prompt, user_prompt
 
@@ -447,44 +547,38 @@ def build_polish_prompt(
         Tuple of (system_prompt, user_prompt)
     """
     system_prompt = f"""--角色--
-    你是{target_language}母语的资深润色编辑。
+你是{target_language}母语的资深编辑。
 
-    --任务--
-    对输入JSON中的"翻译文本"数组逐元素润色；如果有未翻译的{source_language}残留，也请一并译顺。允许在单个元素内部大幅重组句法、断句、语序和节奏，并按目标语言规范统一自然语言标点。
+--任务--
+1. 识别每句话中的{source_language}残留、翻译腔，以及不规范的标点和断句。
+2. 明确每句话中不得改变的内容：不得改变事实、人物关系、称谓、术语专名、叙述视角、情绪走向、信息揭示顺序；不得新增原文没有的信息，不得擅自解释留白、补出潜台词，或把不同角色润成同一种口气。
+3. 逐元素润色：
+   a. 去除{source_language}残留，修正标点与断句。
+   b. 在遵守第2条的前提下，比较多种表达方式，选择最符合{target_language}习惯的说法。
+   c. 可在不违反第2条的前提下大胆重写。
 
-    --原则--
-    以叙事的顺畅、语气的稳定、人物声音的自然为先，让译文像真正的正文，而不是直译稿。
+--格式与标记（必须严格遵守）--
+保留所有原始格式，包括 Markdown、换行符，以及除自然语言标点外所有必须逐字符保留的结构标记、控制符和特殊符号。
+若原文含 EPUB 内联标记，按以下规则处理：
 
-    --边界--
-    不得改变事实、人物关系、称谓、术语专名、叙述视角、情绪走向、信息揭示顺序或含义边界；不要擅自解释留白、补出潜台词，或把不同角色润成同一种口气。
+非样式标记（如 a/abbr/img 等）：⟪tag:n⟫ 与 ⟪/tag:n⟫ 必须成对保留、顺序不变，不得删除、改写或移动。
+样式标记（b,big,code,del,dfn,em,i,ins,kbd,mark,q,s,samp,small,strong,sub,sup,u,var）：只允许整对保留或整对删除，不得新增，不得只保留一半，不得改变其包裹范围，也不得跨元素移动。
+⟪RUBY:n⟫ 正文（内容） ⟪/RUBY:n⟫：只允许整对保留或整对删除，不得新增，不得只保留一半；n 必须保持原数字不变。若 RUBY 内括号中的内容为同义词、注音，或在目标语言中无直接对应的自然译法，可删除起止标记以及括号和括号内内容，但括号外正文必须保留。
+⟪BR:n⟫：可按语义需要保留或删除，但不得改写其中的 n，不得跨元素移动。
 
-    --数组结构约束（仅跨元素）--
-    必须保持输入数组结构不变：
-    1) 输出数组长度必须与输入数组长度完全相同，索引一一对应。不得增减、合并、重排任何元素。
-    2) 即使某些元素为空字符串或与其他元素完全相同，也必须在对应索引保留（可为空字符串）。
+所有标记均为结构控制符，不是可润色内容；无论自然语言文本位于标记外还是被标记包裹，只润色文本本身，不改动标记、编号或符号。
 
-    --格式与标记（必须严格遵守）--
-    必须保留所有原始格式，包括 Markdown、换行符、空格数量（除非为提升可读性在元素内部做极小调整且不影响标记位置）、以及所有必须逐字符保留的结构标记。
-    自然语言标点可按目标语言规范统一；但不得因此改动任何结构标记、控制符、代码或标记位置。
-    任何形如 ⟪...⟫ 的标记都是结构控制符，不是可翻译内容：不得翻译、不得改名、不得改数字、不得拆分、不得跨元素移动；必须保持逐字符一致。
+--数组结构约束（仅跨元素）--
+输出中必须保留输入里的每一个 id，且每个 id 恰好出现一次。id 与文本一一对应，不得新增、删除、重复、修改、合并或重排任何 id。
+即使某些元素的 "文本" 为空字符串，或与其他元素完全相同，也必须保留对应 id。
 
-    若出现EPUB内联标记，按以下规则：
-    1) 非样式内联标记（如 a/abbr/img 等）：⟪tag:n⟫ 与 ⟪/tag:n⟫ 必须成对保留、顺序不变，不得删除/改写/移动。
-    2) 样式内联标记（b,big,code,del,dfn,em,i,ins,kbd,mark,q,s,samp,small,strong,sub,sup,u,var）：
-    只允许“整对保留”或“整对删除”，不得新增；不得只保留一半；不得改变其包裹范围导致标记跨越到别的元素。
-    3) ⟪RUBY:n⟫ ... ⟪/RUBY:n⟫：只允许“整对保留”或“整对删除”，不得新增，不得只留一半；n 必须保持为原来的数字；如果括号内为同义词/注音，删除标记和括号内的内容。
-    4) ⟪BR:n⟫：可按语义需要保留或删除，但不得改写其中的n，不得跨元素移动。
+--输出--
+只输出一个 JSON 对象，且仅包含字段 "翻译文本"。
+"翻译文本" 中的每个元素都必须包含字段 "id" 和 "文本"。
+不得输出任何额外说明、前后缀文本或代码块围栏。"""
 
-    --不确定处理--
-    若某处指代/关系不清，任何“为了更顺而改写”可能改变含义时：优先保持原译文或做最小改动，不得擅自补全推断。
-
-    --输出--
-    只输出一个JSON对象，且仅包含字段："翻译文本"。
-    "翻译文本"必须是字符串数组，数组长度必须与输入完全一致,不得去重！
-    不得输出任何额外说明、前后缀文本或代码块围栏。"""
-
-    user_payload = {"翻译文本": translated_blocks}
-    user_prompt = json.dumps(user_payload, ensure_ascii=False, indent=2)
+    user_payload = {"翻译文本": _indexed_text_entries(translated_blocks)}
+    user_prompt = _render_json_payload(user_payload)
 
     return system_prompt, user_prompt
 
@@ -494,13 +588,13 @@ async def validated_chat(
     expected_count: int,
     source_blocks: list[str],
     llm_client: LLMClient,
-    config: TranslatorConfig,
+    config: LLMConfig,
     cancel_check: Callable[[], bool] | None,
     max_corrections: int = 2,
     label: str = "translation",
     initial_raw: str | None = None,
 ) -> list[str]:
-    """Call the LLM and validate that '翻译文本' has exactly *expected_count* items.
+    """Call the LLM and validate that '翻译文本' covers *expected_count* id-based items.
 
     On validation failure, the response whose list length is closest to
     *expected_count* (among all attempts so far) is sent back together with an
@@ -527,23 +621,24 @@ async def validated_chat(
             )
         raw = clean_llm_response(raw)
         try:
-            parsed = json.loads(raw)
-            result = parsed.get("翻译文本")
-            if not isinstance(result, list):
-                raise ValueError(f"{label}: '翻译文本' must be a list of strings")
-            if len(result) != expected_count:
-                raise ValueError(f"{label}: '翻译文本' length mismatch — expected {expected_count}, got {len(result)}")
-            if not all(isinstance(s, str) for s in result):
-                raise ValueError(f"{label}: every item in '翻译文本' must be a string")
-            result = _validate_inline_marker_preservation(source_blocks, result, label=label)
-            return result
+            parsed, repaired_quotes = parse_llm_json(raw)
+            if repaired_quotes > 0:
+                logger.warning(
+                    "%sRecovered malformed %s JSON by escaping %s bare quote(s).",
+                    _session_prefix(),
+                    label,
+                    repaired_quotes,
+                )
+            translated_blocks = _extract_id_based_translation_blocks(
+                parsed,
+                expected_count=expected_count,
+                label=label,
+            )
+            translated_blocks = _validate_inline_marker_preservation(source_blocks, translated_blocks, label=label)
+            return translated_blocks
         except (json.JSONDecodeError, ValueError, KeyError) as exc:
             # Update best response if this one's list length is closer to expected
-            distance: float
-            try:
-                distance = abs(len(json.loads(raw).get("翻译文本", [])) - expected_count)
-            except Exception:
-                distance = float("inf")
+            distance = _translation_result_distance(raw, expected_count)
             if distance < best_distance:
                 best_distance = distance
                 best_raw = raw
@@ -563,14 +658,7 @@ async def validated_chat(
                 messages.append(
                     {
                         "role": "user",
-                        "content": (
-                            f"错误：{exc}\n"
-                            f"注意翻译时不得去除重复文本，输出要与输入原文数量一致。\n"
-                            '若把多条内容压成一条，请把译文放在第一条，其余索引填 ""。\n'
-                            "若原文包含 EPUB 严格内联标记（非样式 tag 的 ⟪tag:n⟫/⟪/tag:n⟫），"
-                            "必须在对应条目中按相同顺序原样保留这些标记；样式 tag 可按语义整对调整。\n"
-                            "若使用 ⟪RUBY:n⟫ 标记，必须与 ⟪/RUBY:n⟫ 成对且开闭一致，且 n 必须是数字。"
-                        ),
+                        "content": _build_retry_correction_message(exc),
                     }
                 )
                 continue
@@ -586,6 +674,7 @@ async def translate_chunk(
     translator_config: TranslatorConfig,
     source_language: str,
     target_language: str,
+    polish_config: LLMConfig | None = None,
     cancel_check: Callable[[], bool] | None = None,
 ) -> list[str]:
     """Translate multiple chunks with term context."""
@@ -597,13 +686,15 @@ async def translate_chunk(
         # -- Translation (with conversation-based correction) -----------------
         expected = len(prepared.all_blocks)
         attempts = translator_config.max_retries + 1
+        effective_polish_config = polish_config or translator_config
+        polish_enabled = translator_config.enable_polish and effective_polish_config is not None
         logger.debug(
             "[llm_session=%s] Translating %s chunk(s), %s block(s), attempts=%s, polish=%s",
             session_id,
             len(chunks),
             expected,
             attempts,
-            translator_config.enable_polish,
+            polish_enabled,
         )
 
         for attempt in range(attempts):
@@ -620,7 +711,7 @@ async def translate_chunk(
                 )
 
                 # -- Optional polish (standalone, no original text or terms) ---
-                if translator_config.enable_polish:
+                if polish_enabled:
                     polish_sys, polish_usr = build_polish_prompt(translated_text, target_language, source_language)
                     polish_messages: list[dict[str, str]] = [
                         {"role": "system", "content": polish_sys},
@@ -632,7 +723,7 @@ async def translate_chunk(
                             expected,
                             prepared.all_blocks,
                             llm_client,
-                            translator_config,
+                            effective_polish_config,
                             cancel_check,
                             label="polish",
                         )

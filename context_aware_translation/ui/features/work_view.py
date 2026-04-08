@@ -43,7 +43,11 @@ from context_aware_translation.application.services.document import DocumentServ
 from context_aware_translation.application.services.terms import TermsService
 from context_aware_translation.application.services.work import WorkService
 from context_aware_translation.ui.chrome_sizing import sync_qml_host_height
-from context_aware_translation.ui.features.document_workspace_view import DocumentWorkspaceView, WorkExportDialog
+from context_aware_translation.ui.features.document_workspace_view import (
+    DocumentWorkspaceView,
+    TranslateAndExportDialog,
+    WorkExportDialog,
+)
 from context_aware_translation.ui.i18n import translate_backend_text
 from context_aware_translation.ui.shell_hosts.hybrid import QmlChromeHost
 from context_aware_translation.ui.tips import create_tip_label
@@ -116,6 +120,7 @@ class WorkView(QWidget):
         self._import_message_is_error = False
         self._can_import = False
         self._remove_hard_wraps = False
+        self._selected_translate_and_export_state = None
         self.viewmodel = WorkHomeViewModel(self)
         self._event_bridge = QtApplicationEventBridge(events, parent=self)
         self._event_bridge.workboard_invalidated.connect(self._on_workboard_invalidated)
@@ -180,6 +185,11 @@ class WorkView(QWidget):
         home_layout.addWidget(self.rows_table)
 
         row_actions = QHBoxLayout()
+        self.translate_and_export_button = QPushButton(self.tr("Translate and Export"))
+        self.translate_and_export_button.setEnabled(False)
+        self.translate_and_export_button.setStyleSheet(self._TOOLBAR_BUTTON_STYLE)
+        self.translate_and_export_button.clicked.connect(self._open_selected_translate_and_export_dialog)
+        row_actions.addWidget(self.translate_and_export_button)
         self.reset_document_button = QPushButton(self.tr("Reset Document"))
         self.reset_document_button.setEnabled(False)
         self.reset_document_button.setStyleSheet(self._TOOLBAR_BUTTON_STYLE)
@@ -262,6 +272,7 @@ class WorkView(QWidget):
         )
         self.reset_document_button.setText(self.tr("Reset Document"))
         self.delete_document_button.setText(self.tr("Delete Document"))
+        self.translate_and_export_button.setText(self.tr("Translate and Export"))
         self.empty_label.setText(self.tr("No documents imported yet."))
         self.viewmodel.retranslate()
         self._sync_import_chrome_state()
@@ -504,6 +515,22 @@ class WorkView(QWidget):
         enabled = selected is not None
         self.reset_document_button.setEnabled(enabled)
         self.delete_document_button.setEnabled(enabled)
+        self.translate_and_export_button.setEnabled(False)
+        self.translate_and_export_button.setToolTip("")
+        self._selected_translate_and_export_state = None
+        if selected is None:
+            return
+        try:
+            state = self._document_service.prepare_translate_and_export(
+                self._project_id,
+                selected.document.document_id,
+            )
+        except ApplicationError:
+            return
+        self._selected_translate_and_export_state = state
+        self.translate_and_export_button.setEnabled(state.can_start)
+        if state.blocker is not None:
+            self.translate_and_export_button.setToolTip(translate_backend_text(state.blocker.message))
 
     def _reset_selected_document(self) -> None:
         selected = self._selected_row_state()
@@ -625,6 +652,24 @@ class WorkView(QWidget):
             QMessageBox.warning(self, self.tr("Export"), translate_backend_text(exc.payload.message))
             return
         dialog = WorkExportDialog(self._work_service, state, parent=self)
+        dialog.exec()
+
+    def _open_selected_translate_and_export_dialog(self) -> None:
+        selected = self._selected_row_state()
+        if selected is None:
+            return
+        try:
+            state = self._document_service.prepare_translate_and_export(
+                self._project_id,
+                selected.document.document_id,
+            )
+        except ApplicationError as exc:
+            QMessageBox.warning(self, self.tr("Translate and Export"), translate_backend_text(exc.payload.message))
+            return
+        if not state.can_start and state.blocker is not None:
+            QMessageBox.warning(self, self.tr("Translate and Export"), translate_backend_text(state.blocker.message))
+            return
+        dialog = TranslateAndExportDialog(self._document_service, state, parent=self)
         dialog.exec()
 
     def _setup_action_label(self, blocker: BlockerInfo) -> str:

@@ -303,10 +303,7 @@ async def test_translation_context_manager_detect_language_uses_strategy_object(
 async def test_translation_context_manager_detect_language_samples_across_corpus():
     tokenizer = DummyTokenizer()
     context_tree = DummyContextTree()
-    chunks = [
-        TranslationChunkRecord(chunk_id=index, hash=f"hash{index}", text=f"chunk-{index}")
-        for index in range(9)
-    ]
+    chunks = [TranslationChunkRecord(chunk_id=index, hash=f"hash{index}", text=f"chunk-{index}") for index in range(9)]
     term_repo = DummyTermRepo(source_language=None, chunks=chunks)
     detector = DetectLanguageStrategy("French")
 
@@ -865,7 +862,7 @@ async def test_translation_context_manager_adapter_forwards_default_arguments():
         doc_type_by_id={1: "text"},
     )
 
-    assert manager.calls == [((1,), 3, 2, 4000)]
+    assert manager.calls == [((1,), 3, 2, 2000)]
 
 
 # ---------------------------------------------------------------------------
@@ -1317,6 +1314,39 @@ async def test_translate_terms_later_subbatches_get_earlier_translations_as_cont
     first_batch_keys = set(recorder.calls[0]["untranslated"])
     context_from_first = {k for k in second_similar if k in first_batch_keys}
     assert len(context_from_first) > 0, "Later sub-batches should get earlier translations as context"
+
+
+@pytest.mark.asyncio
+async def test_translate_terms_scoped_run_does_not_translate_unrelated_untranslated_terms():
+    terms = [
+        _make_term("target_term"),
+        _make_term("unrelated_term"),
+        _make_term("translated_helper", translated_name="helper-translation"),
+    ]
+    term_repo = DummyTermRepo(source_language="Japanese", terms=terms)
+    recorder = RecordingGlossaryTranslatorStrategy()
+
+    manager = TranslationContextManager(
+        term_repo=term_repo,
+        context_tree=DummyContextTree(),
+        context_extractor=DummyContextExtractor(),
+        tokenizer=DummyTokenizer(),
+        source_language_detector=DetectLanguageStrategy("Japanese"),
+        glossary_translator=recorder,
+        chunk_translator=ChunkTranslatorStrategy(),
+        term_reviewer=None,
+    )
+
+    await manager.translate_terms(
+        translation_name_similarity_threshold=0.0,
+        concurrency=1,
+        term_keys={"target_term"},
+    )
+
+    translated = {key for call in recorder.calls for key in call["untranslated"]}
+    assert translated == {"target_term"}
+    assert term_repo.get_keyed_context("target_term").translated_name is not None
+    assert term_repo.get_keyed_context("unrelated_term").translated_name is None
 
 
 @pytest.mark.asyncio

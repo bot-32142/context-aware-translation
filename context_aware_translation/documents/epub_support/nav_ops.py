@@ -270,22 +270,38 @@ def sync_nav_ol_with_toc(ol_el: _ET.Element, entries: list[TocEntry], *, xhtml_n
     return changed
 
 
-def update_nav_document(content: bytes, toc: list[TocEntry], *, xhtml_ns: str, epub_ns: str) -> bytes | None:
+def update_nav_document(
+    content: bytes,
+    toc: list[TocEntry],
+    *,
+    xhtml_ns: str,
+    epub_ns: str,
+    document_title: str | None = None,
+) -> bytes | None:
     try:
         root = DefusedET.fromstring(content)
     except Exception:
         return None
 
     changed = False
+    toc_nav: _ET.Element | None = None
     for nav_el in root.iter(f"{{{xhtml_ns}}}nav"):
         epub_type = nav_el.get(f"{{{epub_ns}}}type", "") or nav_el.get("type", "")
         if "toc" not in normalize_nav_types(epub_type):
             continue
-        ol = nav_el.find(f"{{{xhtml_ns}}}ol")
-        if ol is None:
-            continue
-        changed = sync_nav_ol_with_toc(ol, toc, xhtml_ns=xhtml_ns) or changed
+        toc_nav = nav_el
         break
+
+    if toc_nav is None:
+        return None
+
+    title_el = root.find(f"{{{xhtml_ns}}}head/{{{xhtml_ns}}}title")
+    if title_el is not None and document_title:
+        changed = replace_element_text_preserving_slots(title_el, document_title) or changed
+
+    ol = toc_nav.find(f"{{{xhtml_ns}}}ol")
+    if ol is not None:
+        changed = sync_nav_ol_with_toc(ol, toc, xhtml_ns=xhtml_ns) or changed
 
     if not changed:
         return None
@@ -305,17 +321,30 @@ def sync_ncx_navpoints(parent: _ET.Element, entries: list[TocEntry], *, ncx_ns: 
     return changed
 
 
-def update_ncx_document(content: bytes, toc: list[TocEntry], *, ncx_ns: str) -> bytes | None:
+def update_ncx_document(
+    content: bytes,
+    toc: list[TocEntry],
+    *,
+    ncx_ns: str,
+    document_title: str | None = None,
+) -> bytes | None:
     try:
         root = DefusedET.fromstring(content)
     except Exception:
         return None
 
+    changed = False
+    title_el = root.find(f"{{{ncx_ns}}}docTitle/{{{ncx_ns}}}text")
+    if title_el is not None and document_title:
+        changed = replace_element_text_preserving_slots(title_el, document_title) or changed
+
     nav_map = root.find(f"{{{ncx_ns}}}navMap")
     if nav_map is None:
-        return None
+        if not changed:
+            return None
+        return bytes(_ET.tostring(root, encoding="utf-8", xml_declaration=True))
 
-    changed = sync_ncx_navpoints(nav_map, toc, ncx_ns=ncx_ns)
+    changed = sync_ncx_navpoints(nav_map, toc, ncx_ns=ncx_ns) or changed
     if not changed:
         return None
     return bytes(_ET.tostring(root, encoding="utf-8", xml_declaration=True))
@@ -329,15 +358,27 @@ def apply_translated_toc_to_resources(
     xhtml_ns: str,
     epub_ns: str,
     ncx_ns: str,
+    document_title: str | None = None,
 ) -> None:
     """Update nav/ncx resource payloads so translated TOC titles are reflected in output."""
     for item in resources:
         media_type = item.media_type.strip().lower()
         if media_type in chapter_mime_types:
-            updated = update_nav_document(item.content, toc, xhtml_ns=xhtml_ns, epub_ns=epub_ns)
+            updated = update_nav_document(
+                item.content,
+                toc,
+                xhtml_ns=xhtml_ns,
+                epub_ns=epub_ns,
+                document_title=document_title,
+            )
             if updated is not None:
                 item.content = updated
         elif media_type == "application/x-dtbncx+xml":
-            updated = update_ncx_document(item.content, toc, ncx_ns=ncx_ns)
+            updated = update_ncx_document(
+                item.content,
+                toc,
+                ncx_ns=ncx_ns,
+                document_title=document_title,
+            )
             if updated is not None:
                 item.content = updated

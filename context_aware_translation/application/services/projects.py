@@ -17,6 +17,10 @@ from context_aware_translation.application.runtime import (
     raise_application_error,
 )
 from context_aware_translation.storage.models.book import BookStatus
+from context_aware_translation.ui.constants import (
+    display_target_language_name,
+    storage_target_language_name,
+)
 
 
 class ProjectsService(Protocol):
@@ -50,7 +54,10 @@ class DefaultProjectsService:
             WorkflowProfileOption(
                 profile_id=profile.profile_id,
                 name=profile.name,
-                target_language=str(profile.config.get("translation_target_language") or "English"),
+                target_language=display_target_language_name(
+                    str(profile.config.get("translation_target_language") or "English")
+                )
+                or "English",
                 is_default=profile.is_default,
             )
             for profile in self._runtime.book_manager.list_profiles()
@@ -67,15 +74,19 @@ class DefaultProjectsService:
                     workflow_profile_id=request.workflow_profile_id,
                 )
 
-        requested_target_language = request.target_language.strip() if request.target_language is not None else None
+        requested_target_language = storage_target_language_name(request.target_language)
         profile_for_defaults = requested_profile or self._runtime.get_default_profile()
+        default_target_language = None
+        if profile_for_defaults is not None:
+            default_target_language = storage_target_language_name(
+                str(profile_for_defaults.config.get("translation_target_language") or "")
+            )
 
         try:
             if (
                 requested_target_language
-                and profile_for_defaults is not None
-                and requested_target_language
-                != str(profile_for_defaults.config.get("translation_target_language") or "").strip()
+                and default_target_language is not None
+                and requested_target_language != default_target_language
             ):
                 custom_config = dict(profile_for_defaults.config)
                 custom_config["translation_target_language"] = requested_target_language
@@ -117,7 +128,9 @@ class DefaultProjectsService:
         if request.target_language is not None:
             book = self._runtime.get_book(request.project_id)
             config = self._runtime.get_effective_config_payload(request.project_id)
-            config["translation_target_language"] = request.target_language
+            config["translation_target_language"] = (
+                storage_target_language_name(request.target_language) or request.target_language
+            )
             if book.profile_id is not None:
                 config["_ui_source_profile_id"] = book.profile_id
             self._runtime.book_manager.set_book_custom_config(request.project_id, config)

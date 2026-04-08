@@ -19,6 +19,8 @@ from context_aware_translation.documents.base import (
 from context_aware_translation.workflow.ops import export_ops
 from context_aware_translation.workflow.session import WorkflowSession
 
+_INTERNAL_DOCUMENT_LABEL_PATHS = frozenset({"__epub_metadata__.json", "__epub_original__.epub"})
+
 
 @dataclass(frozen=True)
 class PreparedExport:
@@ -34,7 +36,30 @@ class PreparedExport:
     incomplete_translation_message: str | None = None
 
 
-def prepare_export(runtime: ApplicationRuntime, *, project_id: str, document_ids: list[int]) -> PreparedExport:
+def _is_internal_document_label_path(relative_path: str) -> bool:
+    return relative_path.strip().lower() in _INTERNAL_DOCUMENT_LABEL_PATHS
+
+
+def _preferred_source_for_label(sources: list[dict]) -> dict | None:
+    if not sources:
+        return None
+    return min(
+        sources,
+        key=lambda source: (
+            1 if _is_internal_document_label_path(str(source.get("relative_path") or "")) else 0,
+            int(source.get("sequence_number", 0) or 0),
+            int(source.get("source_id", 0) or 0),
+        ),
+    )
+
+
+def prepare_export(
+    runtime: ApplicationRuntime,
+    *,
+    project_id: str,
+    document_ids: list[int],
+    require_complete_translation: bool = True,
+) -> PreparedExport:
     if not document_ids:
         raise_application_error(ApplicationErrorCode.VALIDATION, "At least one document must be selected for export.")
 
@@ -72,18 +97,19 @@ def prepare_export(runtime: ApplicationRuntime, *, project_id: str, document_ids
         )
 
     incomplete = False
-    for document_id in document_ids:
-        status = statuses.get(int(document_id))
-        if status is None:
-            raise_application_error(
-                ApplicationErrorCode.NOT_FOUND,
-                f"Export status missing for document {int(document_id)}.",
-            )
-        total_chunks = int(status.get("total_chunks", 0) or 0)
-        translated_chunks = int(status.get("chunks_translated", 0) or 0)
-        if total_chunks <= 0 or translated_chunks < total_chunks:
-            incomplete = True
-            break
+    if require_complete_translation:
+        for document_id in document_ids:
+            status = statuses.get(int(document_id))
+            if status is None:
+                raise_application_error(
+                    ApplicationErrorCode.NOT_FOUND,
+                    f"Export status missing for document {int(document_id)}.",
+                )
+            total_chunks = int(status.get("total_chunks", 0) or 0)
+            translated_chunks = int(status.get("chunks_translated", 0) or 0)
+            if total_chunks <= 0 or translated_chunks < total_chunks:
+                incomplete = True
+                break
 
     document_labels = [
         _document_label(int(doc["document_id"]), sources_by_doc.get(int(doc["document_id"]), [])) for doc in docs
@@ -220,11 +246,12 @@ def run_export(
 
 
 def _document_label(document_id: int, sources: list[dict]) -> str:
-    if sources:
-        relative_path = str(sources[0].get("relative_path") or "").strip()
+    source = _preferred_source_for_label(sources)
+    if source is not None:
+        relative_path = str(source.get("relative_path") or "").strip()
         if relative_path:
             return Path(relative_path).name
-        sequence_number = int(sources[0].get("sequence_number", 1) or 1)
+        sequence_number = int(source.get("sequence_number", 1) or 1)
         return f"Document {document_id} ({sequence_number})"
     return f"Document {document_id}"
 

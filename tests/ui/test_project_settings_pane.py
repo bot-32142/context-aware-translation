@@ -334,7 +334,7 @@ def test_project_settings_pane_preserves_custom_draft_across_profile_switches():
         view.cleanup()
 
 
-def test_project_settings_pane_blocks_invalid_custom_batch_route_save():
+def test_project_settings_pane_saves_derived_custom_batch_route():
     from context_aware_translation.ui.features.project_settings_pane import ProjectSettingsPane
 
     base_state = _make_state(project_specific=True)
@@ -346,16 +346,18 @@ def test_project_settings_pane_blocks_invalid_custom_batch_route_save():
                     "routes": [
                         *base_state.project_profile.routes,
                         WorkflowStepRoute(
+                            step_id=WorkflowStepId.POLISH,
+                            step_label="Polish",
+                            connection_id="conn-gemini",
+                            connection_label="Gemini Shared",
+                            model="gemini-3-flash-preview",
+                        ),
+                        WorkflowStepRoute(
                             step_id=WorkflowStepId.TRANSLATOR_BATCH,
                             step_label="Translator batch",
-                            connection_id=None,
-                            connection_label="Gemini AI Studio",
-                            model="",
                             step_config={
-                                "provider": "gemini_ai_studio",
-                                "api_key": "secret",
-                                "batch_size": 100,
-                                "thinking_mode": "auto",
+                                "translator_batch_size": 100,
+                                "polish_batch_size": 140,
                             },
                         ),
                     ]
@@ -370,9 +372,15 @@ def test_project_settings_pane_blocks_invalid_custom_batch_route_save():
         assert view.viewmodel.show_custom_profile is True
         view._save()
 
-        assert service.calls == [("get_state", "proj-1")]
-        assert view.viewmodel.message_text == "Translator batch requires a model when enabled."
-        assert view.viewmodel.message_kind == "error"
+        save_calls = [call for call in service.calls if call[0] == "save"]
+        assert len(save_calls) == 1
+        request = save_calls[0][1]
+        assert request.project_profile is not None
+        payload_route = next(
+            route for route in request.project_profile.routes if route.step_id is WorkflowStepId.TRANSLATOR_BATCH
+        )
+        assert payload_route.step_config == {"translator_batch_size": 100, "polish_batch_size": 140}
+        assert view.viewmodel.message_kind != "error"
     finally:
         view.cleanup()
 

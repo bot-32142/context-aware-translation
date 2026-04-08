@@ -147,6 +147,32 @@ def _resolve_thinking_config(*, model: str, thinking_mode: str) -> tuple[dict[st
     return None, f"Unknown thinking mode '{thinking_mode}'. Falling back to auto."
 
 
+def _resolve_reasoning_effort_config(*, model: str, reasoning_effort: str) -> tuple[dict[str, Any] | None, str | None]:
+    effort = reasoning_effort.strip().lower()
+    if effort in {"", "auto"}:
+        return None, None
+    return _resolve_thinking_config(model=model, thinking_mode="off" if effort == "none" else effort)
+
+
+def _extract_explicit_google_thinking_config(extra_body: Any) -> dict[str, Any] | None:
+    if not isinstance(extra_body, dict):
+        return None
+    google_payload = extra_body.get("google")
+    if not isinstance(google_payload, dict):
+        return None
+    thinking_config = google_payload.get("thinking_config")
+    if not isinstance(thinking_config, dict):
+        return None
+    resolved: dict[str, Any] = {}
+    thinking_budget = thinking_config.get("thinking_budget")
+    if isinstance(thinking_budget, int):
+        resolved["thinking_budget"] = thinking_budget
+    include_thoughts = thinking_config.get("include_thoughts")
+    if isinstance(include_thoughts, bool):
+        resolved["include_thoughts"] = include_thoughts
+    return resolved or None
+
+
 def _extract_response_text(response: Any) -> str:
     text = response.get(_RESP_TEXT)
     if isinstance(text, str) and text:
@@ -274,13 +300,17 @@ class GeminiBatchJobGateway(BatchJobGateway):
         if str(batch_config.provider or "").lower() != _PROVIDER:
             raise ValueError(f"Unsupported batch provider for Gemini gateway: {batch_config.provider}")
 
-        cache_key = hashlib.sha256(batch_config.api_key.encode()).hexdigest()
+        api_key = str(batch_config.api_key or "").strip()
+        if not api_key:
+            raise ValueError("Gemini batch gateway requires a non-empty API key.")
+
+        cache_key = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
         cached = self._client_cache.get(cache_key)
         if cached is not None:
             return cached
 
         client_kwargs: dict[str, Any] = {
-            "api_key": batch_config.api_key,
+            "api_key": api_key,
             "http_options": {"timeout": int(_GEMINI_HTTP_TIMEOUT_SECONDS * 1000)},
         }
 
@@ -339,7 +369,7 @@ class GeminiBatchJobGateway(BatchJobGateway):
         if not contents:
             raise ValueError("Gemini batch request requires at least one non-system message.")
 
-        config_kwargs: dict[str, Any] = {"temperature": 0.0}
+        config_kwargs: dict[str, Any] = {"temperature": float(request_kwargs.pop("temperature", 0.0) or 0.0)}
         if system_parts:
             config_kwargs["system_instruction"] = "\n\n".join(system_parts)
 
@@ -347,8 +377,18 @@ class GeminiBatchJobGateway(BatchJobGateway):
         if isinstance(response_format, dict) and response_format.get("type") == "json_object":
             config_kwargs["response_mime_type"] = "application/json"
 
+        explicit_google_thinking = _extract_explicit_google_thinking_config(request_kwargs.pop("extra_body", None))
+        reasoning_effort = str(request_kwargs.pop("reasoning_effort", "") or "").strip().lower()
         thinking_mode = str(request_kwargs.pop("thinking_mode", "auto") or "auto")
-        thinking_config, thinking_warning = _resolve_thinking_config(model=model, thinking_mode=thinking_mode)
+        thinking_config = explicit_google_thinking
+        thinking_warning: str | None = None
+        if thinking_config is None and reasoning_effort:
+            thinking_config, thinking_warning = _resolve_reasoning_effort_config(
+                model=model,
+                reasoning_effort=reasoning_effort,
+            )
+        if thinking_config is None and not reasoning_effort:
+            thinking_config, thinking_warning = _resolve_thinking_config(model=model, thinking_mode=thinking_mode)
         if thinking_config is not None:
             config_kwargs["thinking_config"] = thinking_config
         if thinking_warning:

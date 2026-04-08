@@ -177,15 +177,24 @@ def _serialized_write(*, auto_commit_param: str | None = "auto_commit") -> Calla
                 auto_commit = bool(bound.arguments.get(auto_commit_param, True))
 
             acquired = self._acquire_write_lock(hold_until_transaction_end=not auto_commit)
+            total_changes_before = self.conn.total_changes
             try:
-                return func(self, *args, **kwargs)
+                result = func(self, *args, **kwargs)
             except Exception:
                 if acquired and not auto_commit:
                     with contextlib.suppress(Exception):
                         if self.conn.in_transaction:
                             self.conn.rollback()
+                    self._has_pending_write = False
                     self._release_transaction_write_lock()
                 raise
+            else:
+                if self.conn.total_changes != total_changes_before:
+                    if auto_commit and not self.conn.in_transaction:
+                        self._has_committed_write = True
+                    else:
+                        self._has_pending_write = True
+                return result
             finally:
                 if auto_commit and self._holds_write_lock and not self.conn.in_transaction:
                     self._release_transaction_write_lock()
@@ -209,6 +218,8 @@ class SQLiteBookDB:
         self.conn.row_factory = sqlite3.Row
         self._write_lock = get_sqlite_file_lock(self.db_path)
         self._holds_write_lock = False
+        self._has_committed_write = False
+        self._has_pending_write = False
         self._configure_connection()
         self._init_schema()
 
@@ -216,6 +227,7 @@ class SQLiteBookDB:
         self.conn.execute("PRAGMA foreign_keys = ON;")
         self.conn.execute("PRAGMA journal_mode = WAL;")
         self.conn.execute("PRAGMA synchronous = FULL;")
+        self.conn.execute("PRAGMA busy_timeout = 30000;")
 
     def _migrate_schema(self, from_version: int) -> None:
         cur = self.conn.cursor()
@@ -360,14 +372,24 @@ class SQLiteBookDB:
     def commit(self) -> None:
         try:
             self.conn.commit()
+            if self._has_pending_write:
+                self._has_committed_write = True
+                self._has_pending_write = False
         finally:
             self._release_transaction_write_lock()
 
     def rollback(self) -> None:
         try:
             self.conn.rollback()
+            self._has_pending_write = False
         finally:
             self._release_transaction_write_lock()
+
+    def _checkpoint_on_close(self) -> None:
+        if not self._has_committed_write:
+            return
+        self.conn.execute("PRAGMA wal_checkpoint(PASSIVE);")
+        self._has_committed_write = False
 
     @_serialized_write()
     def upsert_terms(self, terms: Iterable[TermRecord], auto_commit: bool = True) -> None:
@@ -1031,7 +1053,7 @@ class SQLiteBookDB:
             if self.conn.in_transaction or self._holds_write_lock:
                 self.rollback()
         with contextlib.suppress(Exception):
-            self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            self._checkpoint_on_close()
         self.conn.close()
 
     def _row_to_term(self, row: sqlite3.Row) -> TermRecord:
@@ -1186,7 +1208,8 @@ class SQLiteBookDB:
         - chunks_extracted: Number of chunks with is_extracted=1
         - chunks_mapped: Number of chunks with is_occurrence_mapped=1
         - chunks_translated: Number of chunks with is_translated=1
-        - first_source_relative_path, first_source_sequence_number: lightweight label hints for the document
+        - first_source_relative_path, first_source_sequence_number: best-effort label hints
+          that skip internal EPUB bookkeeping files when possible
         """
         rows = self.conn.execute(
             """
@@ -1237,13 +1260,22 @@ class SQLiteBookDB:
                     ds.relative_path as first_source_relative_path,
                     ds.sequence_number as first_source_sequence_number
                 FROM document_sources ds
-                INNER JOIN (
-                    SELECT document_id, MIN(sequence_number) as first_source_sequence_number
-                    FROM document_sources
-                    GROUP BY document_id
-                ) first_ds
-                    ON ds.document_id = first_ds.document_id
-                    AND ds.sequence_number = first_ds.first_source_sequence_number
+                WHERE ds.source_id = (
+                    SELECT candidate.source_id
+                    FROM document_sources candidate
+                    WHERE candidate.document_id = ds.document_id
+                    ORDER BY
+                        CASE
+                            WHEN LOWER(COALESCE(candidate.relative_path, '')) IN (
+                                '__epub_metadata__.json',
+                                '__epub_original__.epub'
+                            ) THEN 1
+                            ELSE 0
+                        END,
+                        candidate.sequence_number,
+                        candidate.source_id
+                    LIMIT 1
+                )
             ) first_src ON d.document_id = first_src.document_id
             ORDER BY d.document_id
             """

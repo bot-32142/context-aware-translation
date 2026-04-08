@@ -216,22 +216,23 @@ class TestResolveWithProfile:
             api_key="k",
             model="gemini-2.5-flash",
             batch_size=321,
-            thinking_mode="high",
         )
 
         payload = translator_batch.to_dict()
         restored = TranslatorBatchConfig.from_dict(payload)
 
-        assert restored.provider == "gemini_ai_studio"
-        assert restored.api_key == "k"
-        assert restored.model == "gemini-2.5-flash"
+        assert payload == {"batch_size": 321}
+        assert restored.provider is None
+        assert restored.api_key is None
+        assert restored.model is None
         assert restored.batch_size == 321
-        assert restored.thinking_mode == "high"
 
     def test_translator_config_strip_epub_ruby_defaults_true(self):
         restored = TranslatorConfig.from_dict({})
         assert restored.strip_epub_ruby is True
         assert restored.to_dict()["strip_epub_ruby"] is True
+        assert restored.max_tokens_per_llm_call == 2000
+        assert restored.chunk_size == 500
 
     def test_translator_config_strip_epub_ruby_round_trips_false(self):
         restored = TranslatorConfig.from_dict({"strip_epub_ruby": False})
@@ -553,11 +554,7 @@ class TestPersistedPayloadValidation:
             "translator_config": {"endpoint_profile": "shared"},
             "glossary_config": {"endpoint_profile": "shared"},
             "translator_batch_config": {
-                "provider": "gemini_ai_studio",
-                "api_key": "k",
-                "model": "gemini-2.5-flash",
                 "batch_size": 500,
-                "thinking_mode": "auto",
             },
         }
 

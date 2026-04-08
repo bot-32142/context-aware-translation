@@ -27,7 +27,7 @@ from context_aware_translation.application.contracts.projects import (
 )
 from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.application.services.projects import ProjectsService
-from context_aware_translation.ui.constants import LANGUAGES
+from context_aware_translation.ui.constants import LANGUAGES, display_target_language_name
 from context_aware_translation.ui.i18n import qarg, translate_backend_text
 from context_aware_translation.ui.tips import create_tip_label
 from context_aware_translation.ui.widgets.hybrid_controls import apply_hybrid_control_theme, set_button_tone
@@ -87,10 +87,11 @@ class _ProjectDialog(QDialog):
                 continue
             seen_languages.add(display_name)
             self.target_language_combo.addItem(display_name)
-        if target_language:
-            index = self.target_language_combo.findText(target_language, Qt.MatchFlag.MatchFixedString)
+        display_target_language = display_target_language_name(target_language) if target_language else None
+        if display_target_language:
+            index = self.target_language_combo.findText(display_target_language, Qt.MatchFlag.MatchFixedString)
             if index < 0:
-                self.target_language_combo.addItem(target_language)
+                self.target_language_combo.addItem(display_target_language)
                 index = self.target_language_combo.count() - 1
             self.target_language_combo.setCurrentIndex(index)
         else:
@@ -135,9 +136,10 @@ class _ProjectDialog(QDialog):
         profile = self._workflow_profiles_by_id.get(profile_id)
         if profile is None:
             return
-        target_index = self.target_language_combo.findText(profile.target_language, Qt.MatchFlag.MatchFixedString)
+        display_target_language = display_target_language_name(profile.target_language) or profile.target_language
+        target_index = self.target_language_combo.findText(display_target_language, Qt.MatchFlag.MatchFixedString)
         if target_index < 0:
-            self.target_language_combo.addItem(profile.target_language)
+            self.target_language_combo.addItem(display_target_language)
             target_index = self.target_language_combo.count() - 1
         self.target_language_combo.setCurrentIndex(target_index)
 
@@ -239,7 +241,7 @@ class LibraryView(QWidget):
         for summary in items:
             row = [
                 QStandardItem(summary.project.name),
-                QStandardItem(summary.target_language or ""),
+                QStandardItem(display_target_language_name(summary.target_language) or summary.target_language or ""),
                 QStandardItem(summary.progress_summary or ""),
                 QStandardItem(self._format_timestamp(summary.modified_at)),
             ]

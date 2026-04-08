@@ -207,3 +207,29 @@ class RunDocumentExportRequest(ContractModel):
 
 class DocumentExportResult(ExportResult):
     document_id: int
+
+
+class TranslateAndExportState(ContractModel):
+    workspace: DocumentWorkspaceState
+    can_start: bool
+    available_formats: list[ExportOption] = Field(default_factory=list)
+    default_output_path: str | None = None
+    blocker: BlockerInfo | None = None
+    supports_preserve_structure: bool = False
+    supports_original_image_export: bool = False
+    supports_epub_layout_conversion: bool = False
+    batch_available: bool = False
+    batch_blocker: BlockerInfo | None = None
+    reembedding_available: bool = False
+    reembedding_blocker: BlockerInfo | None = None
+
+
+class RunTranslateAndExportRequest(ContractModel):
+    project_id: str
+    document_id: int
+    format_id: str
+    output_path: str
+    use_batch: bool = False
+    use_reembedding: bool = False
+    enable_polish: bool = True
+    options: dict[str, str | int | float | bool | None] = Field(default_factory=dict)

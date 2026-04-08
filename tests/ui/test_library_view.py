@@ -202,6 +202,17 @@ def test_project_dialog_uses_dropdown_for_target_language() -> None:
         QApplication.processEvents()
 
 
+def test_project_dialog_maps_internal_target_language_to_display_label() -> None:
+    dialog = _ProjectDialog(title="Edit Project", target_language="英语")
+    try:
+        assert dialog.target_language_combo.currentText() == "English"
+        assert dialog.target_language == "English"
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        QApplication.processEvents()
+
+
 def test_project_dialog_exposes_workflow_profile_selection() -> None:
     dialog = _ProjectDialog(
         title="New Project",
@@ -229,6 +240,27 @@ def test_project_dialog_exposes_workflow_profile_selection() -> None:
 
         assert dialog.workflow_profile_id == "profile-ja"
         assert dialog.target_language == "Japanese"
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        QApplication.processEvents()
+
+
+def test_project_dialog_maps_internal_profile_language_to_display_label() -> None:
+    dialog = _ProjectDialog(
+        title="New Project",
+        workflow_profiles=[
+            WorkflowProfileOption(
+                profile_id="profile-default",
+                name="Default Profile",
+                target_language="英语",
+                is_default=True,
+            ),
+        ],
+    )
+    try:
+        assert dialog.target_language_combo.currentText() == "English"
+        assert dialog.target_language == "English"
     finally:
         dialog.close()
         dialog.deleteLater()

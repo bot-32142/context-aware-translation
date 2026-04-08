@@ -9,6 +9,7 @@ from context_aware_translation.documents.epub_support.inline_markers import (
     is_inline_marker_token,
     ruby_pair_count,
     strict_inline_markers,
+    validate_inline_marker_fragment_sanity,
     validate_inline_marker_sanity,
 )
 
@@ -53,6 +54,16 @@ def test_validate_inline_marker_sanity_rejects_unclosed_ruby() -> None:
 def test_validate_inline_marker_sanity_rejects_unopened_ruby_close() -> None:
     with pytest.raises(ValueError, match="mismatched ruby marker"):
         validate_inline_marker_sanity(["/RUBY:0"])
+
+
+def test_validate_inline_marker_fragment_sanity_accepts_edge_fragments() -> None:
+    validate_inline_marker_fragment_sanity(["span:8", "i:8/0"])
+    validate_inline_marker_fragment_sanity(["/i:8/0", "/span:8", "BR:9", "span:10", "i:10/0"])
+
+
+def test_validate_inline_marker_fragment_sanity_rejects_invalid_interior_nesting() -> None:
+    with pytest.raises(ValueError, match="mismatched strict marker"):
+        validate_inline_marker_fragment_sanity(["span:0", "/a:0"])
 
 
 def test_ruby_pair_count_counts_open_markers() -> None:

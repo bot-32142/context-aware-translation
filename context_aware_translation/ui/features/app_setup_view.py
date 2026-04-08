@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import QT_TRANSLATE_NOOP, QCoreApplication, Qt, QTimer
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QRadioButton,
     QScrollArea,
     QSizePolicy,
     QSpinBox,
@@ -36,13 +38,15 @@ from context_aware_translation.application.contracts.app_setup import (
     ConnectionTestResult,
     ProviderCard,
     SaveConnectionRequest,
+    SetupWizardMode,
     SetupWizardRequest,
     SetupWizardState,
     WorkflowStepId,
+    default_connection_concurrency,
 )
 from context_aware_translation.application.contracts.common import CapabilityCode, ProviderKind, UserMessageSeverity
 from context_aware_translation.application.services.app_setup import AppSetupService
-from context_aware_translation.ui.constants import LANGUAGES
+from context_aware_translation.ui.constants import LANGUAGES, display_target_language_name
 from context_aware_translation.ui.features.workflow_profile_editor import workflow_step_label_from_text
 from context_aware_translation.ui.json_utils import parse_json_object_text
 from context_aware_translation.ui.tips import create_tip_label
@@ -53,10 +57,10 @@ from context_aware_translation.ui.widgets.table_support import (
 )
 
 _PROVIDER_DEFAULTS: dict[ProviderKind, tuple[str, str]] = {
-    ProviderKind.GEMINI: ("https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-3.1-flash"),
-    ProviderKind.OPENAI: ("https://api.openai.com/v1", "gpt-4.1-mini"),
+    ProviderKind.GEMINI: ("https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-3.1-pro"),
+    ProviderKind.OPENAI: ("https://api.openai.com/v1", "gpt-5.4"),
     ProviderKind.DEEPSEEK: ("https://api.deepseek.com", "deepseek-chat"),
-    ProviderKind.ANTHROPIC: ("https://api.anthropic.com/v1", "claude-3-5-sonnet-latest"),
+    ProviderKind.ANTHROPIC: ("https://api.anthropic.com/v1", "claude-opus-4-6"),
     ProviderKind.OPENAI_COMPATIBLE: ("", ""),
 }
 
@@ -83,6 +87,7 @@ _NEW_PROFILE_ROUTE_SPECS: tuple[tuple[WorkflowStepId, str], ...] = (
     (WorkflowStepId.SUMMARIZER, "Summarizer"),
     (WorkflowStepId.GLOSSARY_TRANSLATOR, "Glossary translator"),
     (WorkflowStepId.TRANSLATOR, "Translator"),
+    (WorkflowStepId.POLISH, "Polish"),
     (WorkflowStepId.REVIEWER, "Reviewer"),
     (WorkflowStepId.OCR, "OCR"),
     (WorkflowStepId.IMAGE_REEMBEDDING, "Image reembedding"),
@@ -150,6 +155,7 @@ _CONNECTION_TOKEN_LIMIT_FIELDS = (
 class ConnectionDraftForm(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._auto_concurrency_default: int | None = None
         self._init_ui()
         self._on_provider_changed(0)
 
@@ -283,6 +289,7 @@ class ConnectionDraftForm(QWidget):
         self.timeout_spin.setValue(draft.timeout)
         self.retries_spin.setValue(draft.max_retries)
         self.concurrency_spin.setValue(draft.concurrency)
+        self._auto_concurrency_default = default_connection_concurrency(draft.provider)
         self.total_limit_checkbox.setChecked(draft.token_limit is not None)
         if draft.token_limit is not None:
             self.total_limit_spin.setValue(draft.token_limit)
@@ -344,8 +351,12 @@ class ConnectionDraftForm(QWidget):
     def _on_provider_changed(self, _index: int) -> None:
         provider = self.current_provider()
         display_name, base_url, default_model = _provider_defaults(provider)
+        provider_concurrency = default_connection_concurrency(provider)
         self.base_url_edit.setText(base_url or "")
         self.default_model_edit.setText(default_model or "")
+        if self._auto_concurrency_default is None or self.concurrency_spin.value() == self._auto_concurrency_default:
+            self.concurrency_spin.setValue(provider_concurrency)
+        self._auto_concurrency_default = provider_concurrency
         if (
             not self.display_name_edit.text().strip()
             or self.display_name_edit.text().strip() in _PROVIDER_LABELS.values()
@@ -582,6 +593,11 @@ class SetupWizardDialog(QDialog):
         self._provider_inputs: dict[ProviderKind, tuple[QCheckBox, QLineEdit]] = {}
         self._profile_name_edit: QLineEdit | None = None
         self._target_language_combo: QSearchableComboBox | None = None
+        self._mode_button_group: QButtonGroup | None = None
+        self._quality_mode_radio: QRadioButton | None = None
+        self._balanced_mode_radio: QRadioButton | None = None
+        self._budget_mode_radio: QRadioButton | None = None
+        self._review_rebuild_pending = False
 
     def _translate_provider_helper_text(self, text: str | None) -> str:
         if not text:
@@ -602,6 +618,10 @@ class SetupWizardDialog(QDialog):
         self._clear_page_layout()
         self._profile_name_edit = None
         self._target_language_combo = None
+        self._mode_button_group = None
+        self._quality_mode_radio = None
+        self._balanced_mode_radio = None
+        self._budget_mode_radio = None
 
         if self._page_index == 0:
             self.step_title.setText(self.tr("Choose providers"))
@@ -651,18 +671,51 @@ class SetupWizardDialog(QDialog):
                     continue
                 seen_languages.add(display_name)
                 self._target_language_combo.addItem(display_name)
-            target_language = preview.target_language or (
-                preview.recommendation.target_language
-                if preview.recommendation is not None
-                else _DEFAULT_SETUP_WIZARD_TARGET_LANGUAGE
+            target_language = (
+                display_target_language_name(preview.target_language)
+                or display_target_language_name(
+                    preview.recommendation.target_language if preview.recommendation is not None else None
+                )
+                or _DEFAULT_SETUP_WIZARD_TARGET_LANGUAGE
             )
             index = self._target_language_combo.findText(target_language)
             if index >= 0:
                 self._target_language_combo.setCurrentIndex(index)
             else:
                 self._target_language_combo.setEditText(target_language)
+            mode_row = QWidget()
+            mode_row_layout = QHBoxLayout(mode_row)
+            mode_row_layout.setContentsMargins(0, 0, 0, 0)
+            mode_row_layout.setSpacing(12)
+            self._mode_button_group = QButtonGroup(mode_row)
+            self._quality_mode_radio = QRadioButton(self.tr("Quality"))
+            self._balanced_mode_radio = QRadioButton(self.tr("Balanced"))
+            self._budget_mode_radio = QRadioButton(self.tr("Budget"))
+            self._mode_button_group.addButton(self._quality_mode_radio)
+            self._mode_button_group.addButton(self._balanced_mode_radio)
+            self._mode_button_group.addButton(self._budget_mode_radio)
+            self._quality_mode_radio.toggled.connect(
+                lambda checked: checked and self._on_recommendation_mode_changed(SetupWizardMode.QUALITY)
+            )
+            self._balanced_mode_radio.toggled.connect(
+                lambda checked: checked and self._on_recommendation_mode_changed(SetupWizardMode.BALANCED)
+            )
+            self._budget_mode_radio.toggled.connect(
+                lambda checked: checked and self._on_recommendation_mode_changed(SetupWizardMode.BUDGET)
+            )
+            mode_row_layout.addWidget(self._quality_mode_radio)
+            mode_row_layout.addWidget(self._balanced_mode_radio)
+            mode_row_layout.addWidget(self._budget_mode_radio)
+            mode_row_layout.addStretch(1)
+            if self._wizard_state.recommendation_mode is SetupWizardMode.BUDGET:
+                self._budget_mode_radio.setChecked(True)
+            elif self._wizard_state.recommendation_mode is SetupWizardMode.BALANCED:
+                self._balanced_mode_radio.setChecked(True)
+            else:
+                self._quality_mode_radio.setChecked(True)
             profile_name_layout.addRow(self.tr("Profile name"), self._profile_name_edit)
             profile_name_layout.addRow(self.tr("Target language"), self._target_language_combo)
+            profile_name_layout.addRow(self.tr("Workflow mode"), mode_row)
             self.page_layout.addWidget(profile_name_group)
             profile_group = QGroupBox(self.tr("Recommended workflow profile"))
             profile_layout = QVBoxLayout(profile_group)
@@ -715,7 +768,7 @@ class SetupWizardDialog(QDialog):
             temperature=0.0,
             timeout=60,
             max_retries=3,
-            concurrency=5,
+            concurrency=default_connection_concurrency(provider),
         )
 
     def _persist_drafts(self) -> None:
@@ -736,6 +789,12 @@ class SetupWizardDialog(QDialog):
             updates["target_language"] = (
                 self._target_language_combo.currentText().strip() or _DEFAULT_SETUP_WIZARD_TARGET_LANGUAGE
             )
+        if self._budget_mode_radio is not None and self._budget_mode_radio.isChecked():
+            updates["recommendation_mode"] = SetupWizardMode.BUDGET
+        elif self._balanced_mode_radio is not None and self._balanced_mode_radio.isChecked():
+            updates["recommendation_mode"] = SetupWizardMode.BALANCED
+        elif self._quality_mode_radio is not None and self._quality_mode_radio.isChecked():
+            updates["recommendation_mode"] = SetupWizardMode.QUALITY
         if updates:
             self._wizard_state = self._wizard_state.model_copy(update=updates)
 
@@ -748,6 +807,7 @@ class SetupWizardDialog(QDialog):
             connections=list(self._wizard_state.drafts),
             profile_name=self._wizard_state.profile_name,
             target_language=self._wizard_state.target_language,
+            recommendation_mode=self._wizard_state.recommendation_mode,
         )
 
     def _go_back(self) -> None:
@@ -775,6 +835,9 @@ class SetupWizardDialog(QDialog):
                         self.tr("API key is required for every selected provider."),
                     )
                     return
+            # The provider-page widgets are about to be destroyed; keep only the
+            # persisted wizard state once we transition into review.
+            self._provider_inputs = {}
             self._preview_state = None
         self._page_index = min(self._page_index + 1, 1)
         self._build_page()
@@ -805,16 +868,33 @@ class SetupWizardDialog(QDialog):
         self._service.run_setup_wizard(request)
         self.accept()
 
+    def _on_recommendation_mode_changed(self, mode: SetupWizardMode) -> None:
+        if self._wizard_state.recommendation_mode is mode:
+            return
+        self._persist_review_inputs()
+        self._wizard_state = self._wizard_state.model_copy(update={"recommendation_mode": mode})
+        self._preview_state = None
+        if self._review_rebuild_pending:
+            return
+        self._review_rebuild_pending = True
+        QTimer.singleShot(0, self._rebuild_review_page_after_mode_change)
+
+    def _rebuild_review_page_after_mode_change(self) -> None:
+        self._review_rebuild_pending = False
+        if self._page_index != 1:
+            return
+        self._build_page()
+
     def _ensure_preview_state(self) -> None:
         if self._preview_state is not None:
             return
-        self._persist_drafts()
         self._preview_state = self._service.preview_setup_wizard(
             SetupWizardRequest(
                 providers=list(self._wizard_state.selected_providers),
                 connections=list(self._wizard_state.drafts),
                 profile_name=self._wizard_state.profile_name,
                 target_language=self._wizard_state.target_language,
+                recommendation_mode=self._wizard_state.recommendation_mode,
             )
         )
 

@@ -10,7 +10,7 @@ from context_aware_translation.storage.schema.book_db import TermRecord
 
 
 @pytest.mark.asyncio
-async def test_mark_noise_terms_auto_marks_extracted_zero_occurrence_terms() -> None:
+async def test_mark_noise_terms_deletes_zero_occurrence_terms_and_marks_symbol_noise() -> None:
     term_repo = MagicMock()
     term_repo.get_last_noise_filtered_at.return_value = None
     term_repo.list_term_records.return_value = [
@@ -53,7 +53,8 @@ async def test_mark_noise_terms_auto_marks_extracted_zero_occurrence_terms() -> 
     count = await TranslationContextManager.mark_noise_terms(manager)
 
     assert count == 2
-    term_repo.update_terms_bulk.assert_called_once_with(["noise_term", "!!!"], ignored=True, is_reviewed=True)
+    term_repo.delete_terms.assert_called_once_with(["noise_term"])
+    term_repo.update_terms_bulk.assert_called_once_with(["!!!"], ignored=True, is_reviewed=True)
     term_repo.set_last_noise_filtered_at.assert_called_once_with(40.0)
 
 
@@ -61,8 +62,9 @@ async def test_mark_noise_terms_auto_marks_extracted_zero_occurrence_terms() -> 
 async def test_review_terms_runs_noise_filter_before_loading_pending_terms() -> None:
     events: list[str] = []
 
-    async def _mark_noise_terms(*, cancel_check=None) -> int:  # noqa: ANN001
+    async def _mark_noise_terms(*, cancel_check=None, term_keys=None) -> int:  # noqa: ANN001
         _ = cancel_check
+        _ = term_keys
         events.append("noise")
         return 1
 
@@ -79,3 +81,19 @@ async def test_review_terms_runs_noise_filter_before_loading_pending_terms() -> 
 
     assert events == ["noise", "pending"]
     manager.mark_noise_terms.assert_awaited_once()
+
+
+def test_get_term_keys_for_documents_only_returns_terms_linked_to_selected_chunks() -> None:
+    term_repo = MagicMock()
+    term_repo.list_chunks.return_value = [SimpleNamespace(chunk_id=12), SimpleNamespace(chunk_id=13)]
+    term_repo.list_term_records.return_value = [
+        TermRecord(key="selected", descriptions={"12": "desc"}, occurrence={}, votes=1, total_api_calls=1),
+        TermRecord(key="occurs-here", descriptions={"99": "desc"}, occurrence={"13": 2}, votes=1, total_api_calls=1),
+        TermRecord(key="other-doc", descriptions={"44": "desc"}, occurrence={"44": 1}, votes=1, total_api_calls=1),
+    ]
+
+    manager = SimpleNamespace(term_repo=term_repo)
+
+    result = TranslationContextManager.get_term_keys_for_documents(manager, [7])
+
+    assert result == {"selected", "occurs-here"}
