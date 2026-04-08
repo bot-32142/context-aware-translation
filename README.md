@@ -84,7 +84,9 @@ Open `Terms`, then use `Import Terms` if you already have a terminology list you
 
 ## Demo EPUBs
 
-These two sample EPUBs were generated with `Translate and Export` directly from the French Project Gutenberg EPUB for [The Count of Monte Cristo, Tome I](https://www.gutenberg.org/ebooks/17989).
+These two sample EPUBs were generated with `Translate and Export` directly from the French Project Gutenberg EPUB for [The Count of Monte Cristo, Tome I](https://www.gutenberg.org/ebooks/17989), using `DeepSeek`.
+
+Quality can be dramatically better with `Gemini` or `GPT`, but the cost is also significantly higher.
 
 - [The Count of Monte Cristo.epub](demo/The Count of Monte Cristo.epub) - English output. Cost: under `$2.5`.
 - [基督山伯爵.epub](demo/基督山伯爵.epub) - Simplified Chinese output. Cost: under `$2.5`.
