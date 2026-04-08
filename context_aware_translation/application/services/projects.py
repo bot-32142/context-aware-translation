@@ -128,7 +128,9 @@ class DefaultProjectsService:
         if request.target_language is not None:
             book = self._runtime.get_book(request.project_id)
             config = self._runtime.get_effective_config_payload(request.project_id)
-            config["translation_target_language"] = storage_target_language_name(request.target_language) or request.target_language
+            config["translation_target_language"] = (
+                storage_target_language_name(request.target_language) or request.target_language
+            )
             if book.profile_id is not None:
                 config["_ui_source_profile_id"] = book.profile_id
             self._runtime.book_manager.set_book_custom_config(request.project_id, config)

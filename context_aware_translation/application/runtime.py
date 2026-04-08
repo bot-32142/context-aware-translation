@@ -864,7 +864,9 @@ def build_workflow_profile_detail(
             polish_route = route
         routes.append(route)
 
-    target_language = display_target_language_name(str(config.get("translation_target_language") or "English")) or "English"
+    target_language = (
+        display_target_language_name(str(config.get("translation_target_language") or "English")) or "English"
+    )
     return WorkflowProfileDetail(
         profile_id=profile_id,
         name=name,
@@ -882,7 +884,9 @@ def build_workflow_profile_payload(
     source_profile_id: str | None = None,
 ) -> dict[str, Any]:
     payload = dict(base_config or {})
-    payload["translation_target_language"] = storage_target_language_name(profile.target_language) or profile.target_language
+    payload["translation_target_language"] = (
+        storage_target_language_name(profile.target_language) or profile.target_language
+    )
     if source_profile_id:
         payload[_UI_SOURCE_PROFILE_ID_KEY] = source_profile_id
     else:

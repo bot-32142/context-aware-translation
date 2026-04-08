@@ -671,9 +671,13 @@ class SetupWizardDialog(QDialog):
                     continue
                 seen_languages.add(display_name)
                 self._target_language_combo.addItem(display_name)
-            target_language = display_target_language_name(preview.target_language) or display_target_language_name(
-                preview.recommendation.target_language if preview.recommendation is not None else None
-            ) or _DEFAULT_SETUP_WIZARD_TARGET_LANGUAGE
+            target_language = (
+                display_target_language_name(preview.target_language)
+                or display_target_language_name(
+                    preview.recommendation.target_language if preview.recommendation is not None else None
+                )
+                or _DEFAULT_SETUP_WIZARD_TARGET_LANGUAGE
+            )
             index = self._target_language_combo.findText(target_language)
             if index >= 0:
                 self._target_language_combo.setCurrentIndex(index)

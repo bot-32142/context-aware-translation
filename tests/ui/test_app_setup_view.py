@@ -516,7 +516,9 @@ def test_setup_wizard_dialog_displays_internal_target_language_labels():
         recommendation=_profile(profile_id="recommended", name="Recommended"),
         target_language="英语",
     )
-    service = FakeAppSetupService(state=_make_state(needs_wizard=True), wizard_state=wizard_state, preview_state=preview_state)
+    service = FakeAppSetupService(
+        state=_make_state(needs_wizard=True), wizard_state=wizard_state, preview_state=preview_state
+    )
     dialog = SetupWizardDialog(service, wizard_state)
 
     _provider_checkbox(dialog, ProviderKind.GEMINI).setChecked(True)

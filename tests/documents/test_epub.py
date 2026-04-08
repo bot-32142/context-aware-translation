@@ -1828,11 +1828,7 @@ class TestExport:
         doc = EPUBDocument(repo, doc_row["document_id"])
         source_lines = doc.get_text().splitlines()
         translations = [
-            "Libro Traducido"
-            if line == "Original Book Name"
-            else "Capitulo Uno"
-            if line == "Chapter 1"
-            else line
+            "Libro Traducido" if line == "Original Book Name" else "Capitulo Uno" if line == "Chapter 1" else line
             for line in source_lines
         ]
         consumed = await doc.set_text(translations)

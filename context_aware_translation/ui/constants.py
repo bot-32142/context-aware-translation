@@ -90,6 +90,7 @@ def storage_target_language_name(value: str | None) -> str | None:
         return None
     return _STORAGE_LANGUAGE_BY_KEY.get(_normalize_language_label(cleaned), cleaned)
 
+
 # Default window dimensions
 DEFAULT_WINDOW_WIDTH: Final[int] = 1120
 DEFAULT_WINDOW_HEIGHT: Final[int] = 760

@@ -2,7 +2,7 @@
 
 # Context-Aware Translation (CAT)
 
-CAT is a desktop app for translating long novels, books, PDFs, scanned documents, and manga while keeping names, terms, and context consistent.
+CAT is a fully automatic desktop translation app for long novels, books, PDFs, scanned documents, and manga. It aims to preserve source formatting while keeping terminology and translation style consistent across the whole work.
 
 ## Who CAT Is For
 
@@ -14,8 +14,8 @@ CAT is a desktop app for translating long novels, books, PDFs, scanned documents
 ## Why CAT
 
 - Builds a glossary from your source material
-- Carries context forward across chapters and pages
-- Lets you review OCR and terms before export
+- Carries context forward across chapters and pages, with useful summaries injected alongside glossary context
+- Preserves original formatting for text-native files
 - Handles text, EPUB, PDF, scanned pages, and manga in one app
 
 ## Install
@@ -37,74 +37,65 @@ Current desktop builds are unsigned, so the first launch may show an OS security
 - Run `CAT-UI.exe`
 - If Windows SmartScreen warns that the app is unrecognized, click `More info` -> `Run anyway`
 
-## Initial Setup
+<details>
+<summary><strong>Setup</strong></summary>
 
-### 1. Open App Settings and start the setup wizard
+### 1. Open the projects screen and click `Setup Wizard`
 
-![Initial setup screen](docs/screenshots/EN/InitialSetup.png)
+This is the home screen for projects. Use `Setup Wizard` for the quickest first-time setup.
 
-### 2. Run setup wizard
+![Projects overview](docs/screenshots/EN/latest_projects_overview.png)
 
-![Setup wizard screen](docs/screenshots/EN/Wizard.png)
+### 2. Choose providers and paste API keys
 
-### 3. Choose providers and add API keys
+The wizard collects the providers it needs up front. For most users, `DeepSeek` + `Gemini` is the most practical starting point.
 
-![API setup screen](docs/screenshots/EN/APISetup.png)
+![Setup wizard provider selection](docs/screenshots/EN/latest_setup_wizard_provider_selection.png)
 
-### 4. Choose the target language
+### 3. Review the workflow profile
 
-![Language selection screen](docs/screenshots/EN/Language.png)
+The review step shows which connection and model CAT will use for each workflow step.
 
-## One-Shot Translation
+![Workflow profile review](docs/screenshots/EN/latest_setup_wizard_workflow_profile_review.png)
 
-> Warning: One-shot translation is currently tested only with the recommended workflow profiles using DeepSeek or Gemini models.
+`Quality` spends more for better reasoning and can get very, very expensive unless you are using only `DeepSeek`. `Balanced` is the safest default. `Budget` is the cheapest option when you want to minimize cost.
 
-### 1. Create a new project
+</details>
 
-![New project screen](docs/screenshots/EN/NewProject.png)
+## Translation
 
-### 2. Import files in reading order
+### 1. Create a project
 
-![Import screen](docs/screenshots/EN/Import.png)
+Pick a project name, target language, and workflow profile.
 
-### 3. Open `Translate and Export`
+![New project dialog](docs/screenshots/EN/latest_new_project_dialog.png)
 
-Use the `Translate and Export` button beside `Reset Document` and `Delete Document`, then choose the translation mode, `Use reembedding`, and your export options.
+### 2. Open the project work page
 
-### 4. Run the one-shot task
+Import files in reading order so terminology and context stay consistent across the whole book, then click `Translate and Export` to start. Double-click a file if you want to inspect each step manually or retouch images.
 
-CAT will run OCR when needed, build and process the glossary, translate the document, optionally reembed images, and then export the result.
+![Project work page](docs/screenshots/EN/latest_project_work_overview.png)
 
-## Translate With Review
+### 3. Optional: import existing term translations
 
-### 1. Create a new project
+Open `Terms`, then use `Import Terms` if you already have a terminology list you want CAT to reuse. A simple JSON object like `{"original": "translated"}` is enough.
 
-![New project screen](docs/screenshots/EN/NewProject.png)
+![Terms overview](docs/screenshots/EN/latest_terms_overview.png)
 
-### 2. Import files in reading order
+## Demo EPUBs
 
-![Import screen](docs/screenshots/EN/Import.png)
+These two sample EPUBs were generated with `Translate and Export` directly from the French Project Gutenberg EPUB for [The Count of Monte Cristo, Tome I](https://www.gutenberg.org/ebooks/17989).
 
-### 3. Build, filter, review, and translate terms
-
-![Terms screen](docs/screenshots/EN/Terms.png)
-
-### 4. Run translation
-
-![Translate screen](docs/screenshots/EN/Translate.png)
-
-### 5. Export the result
-
-![Export screen](docs/screenshots/EN/Export.png)
+- [The Count of Monte Cristo.epub](demo/The Count of Monte Cristo.epub) - English output. Cost: under `$2.5`.
+- [基督山伯爵.epub](demo/基督山伯爵.epub) - Simplified Chinese output. Cost: under `$2.5`.
 
 ## What To Know Before Using CAT
 
-- The setup wizard is currently tested mainly with `DeepSeek` + `Gemini`.
-- Other providers and models may work, but I do not have access to most of them, so they are not tested here. Expect to configure connections manually and tune settings yourself.
-- Image editing is very expensive.
-- OCR is best-effort, especially on dense or messy layouts. Review before export.
+- The setup wizard path is mainly tested with `DeepSeek` + `Gemini`. `Claude` and `GPT` should also work well, but I do not recommend going below `DeepSeek`-class models.
+- Image editing is expensive, and hallucinations are still common.
+- OCR does not preserve original layout for PDFs and scanned books. It rebuilds from content instead. Manga is the exception.
 - Import in reading order if you want the glossary and context to build correctly.
-- CAT is still under active development, so expect rough edges.
+- Samples are still limited because testing across formats is expensive. Bug reports are very welcome.
 
 ## Supported Formats
 
