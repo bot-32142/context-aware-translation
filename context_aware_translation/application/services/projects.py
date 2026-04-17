@@ -84,7 +84,8 @@ class DefaultProjectsService:
 
         try:
             if (
-                requested_target_language
+                profile_for_defaults is not None
+                and requested_target_language
                 and default_target_language is not None
                 and requested_target_language != default_target_language
             ):
