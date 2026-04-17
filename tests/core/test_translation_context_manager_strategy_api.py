@@ -813,6 +813,7 @@ async def test_translation_context_manager_review_terms_raises_on_batch_error():
         glossary_translator=GlossaryTranslatorStrategy(),
         chunk_translator=ChunkTranslatorStrategy(),
         term_reviewer=FailingTermReviewerStrategy(),
+        target_language="Chinese",
     )
 
     with pytest.raises(RuntimeError, match="review failed"):
@@ -1122,6 +1123,17 @@ class RecordingTermReviewerStrategy:
         self.review_batch = AsyncMock(side_effect=review_batch)
 
 
+class TargetLanguageRecordingTermReviewerStrategy:
+    def __init__(self) -> None:
+        self.target_languages: list[str] = []
+
+        async def review_batch(terms, _source_language, target_language, **_kwargs):
+            self.target_languages.append(target_language)
+            return {"keep": [t.key for t in terms], "ignore": []}
+
+        self.review_batch = AsyncMock(side_effect=review_batch)
+
+
 @pytest.mark.asyncio
 async def test_review_terms_groups_similar_terms_in_same_batch():
     """Similar terms should be grouped in the same review batch."""
@@ -1144,6 +1156,7 @@ async def test_review_terms_groups_similar_terms_in_same_batch():
         glossary_translator=GlossaryTranslatorStrategy(),
         chunk_translator=ChunkTranslatorStrategy(),
         term_reviewer=recorder,
+        target_language="Chinese",
     )
 
     await manager.review_terms(concurrency=1, batch_size=3, similarity_threshold=0.7)
@@ -1176,6 +1189,7 @@ async def test_review_terms_all_terms_covered_with_similarity_batching():
         glossary_translator=GlossaryTranslatorStrategy(),
         chunk_translator=ChunkTranslatorStrategy(),
         term_reviewer=recorder,
+        target_language="Chinese",
     )
 
     await manager.review_terms(concurrency=5, batch_size=10, similarity_threshold=0.7)
@@ -1184,6 +1198,29 @@ async def test_review_terms_all_terms_covered_with_similarity_batching():
     assert all_reviewed == {t.key for t in pending}
     for call in recorder.calls:
         assert len(call) <= 10
+
+
+@pytest.mark.asyncio
+async def test_review_terms_passes_target_language_to_term_reviewer():
+    pending = [_make_term_record("term_001")]
+    term_repo = DummyTermRepo(source_language="English", pending_terms=pending)
+    recorder = TargetLanguageRecordingTermReviewerStrategy()
+
+    manager = TranslationContextManager(
+        term_repo=term_repo,
+        context_tree=DummyContextTree(),
+        context_extractor=DummyContextExtractor(),
+        tokenizer=DummyTokenizer(),
+        source_language_detector=DetectLanguageStrategy("English"),
+        glossary_translator=GlossaryTranslatorStrategy(),
+        chunk_translator=ChunkTranslatorStrategy(),
+        term_reviewer=recorder,
+        target_language="Chinese",
+    )
+
+    await manager.review_terms(concurrency=1, batch_size=1)
+
+    assert recorder.target_languages == ["Chinese"]
 
 
 class RecordingGlossaryTranslatorStrategy:

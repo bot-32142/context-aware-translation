@@ -691,6 +691,7 @@ class TranslationContextManager(ContextManager):
         owns_context_tree: bool = True,
         term_memory_updater: TermMemoryUpdater | None = None,
         max_term_description_length: int = 1200,
+        target_language: str | None = None,
     ) -> None:
         """
         Initialize the TranslationContextManager.
@@ -705,6 +706,7 @@ class TranslationContextManager(ContextManager):
         self.glossary_translator: GlossaryTranslationStrategy = glossary_translator
         self.chunk_translator: ChunkTranslationStrategy = chunk_translator
         self.term_reviewer: TermReviewer | None = term_reviewer
+        self.target_language: str | None = target_language
         term_memory_builder = TermMemoryBuilder(term_memory_updater) if term_memory_updater is not None else None
         super().__init__(
             context_extractor,
@@ -928,6 +930,9 @@ class TranslationContextManager(ContextManager):
         source_language = self.term_repo.get_source_language()
         if not source_language:
             raise ValueError("Source language not found in the database")
+        target_language = self.target_language
+        if not target_language:
+            raise ValueError("Target language not configured for term review")
 
         semaphore = asyncio.Semaphore(concurrency)
 
@@ -958,6 +963,7 @@ class TranslationContextManager(ContextManager):
                     result = await term_reviewer.review_batch(
                         batch,
                         source_language,
+                        target_language=target_language,
                         cancel_check=cancel_check,
                     )
 
