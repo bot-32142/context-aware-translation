@@ -43,11 +43,12 @@ Criteria for 'ignore' (Invalid Terms):
 4.  **Verbs/Adjectives**: Unless they are specific coined terms or jargon.
 5.  **Redundant Phrases**: If a term is merely a longer phrase containing another valid term in this list without adding specific meaning (e.g., "cast Fireball" when "Fireball" is present), ignore the phrase.
 
-Criteria for 'keep' (Valid Terms):
+Criteria for 'keep':
 1.  **Proper Nouns**: Names of people, places, organizations.
 2.  **Specific Terminology**: Jargon, magical items, sci-fi concepts, skills, titles.
 3.  **Consistent Entities**: Terms that appear to be significant objects or concepts based on descriptions.
-4.  **Can't decide**: Any term that is too ambiguious to decide whether it should be ignored.
+4.  **Common terms**: Some common words could be translated into multiple different words in the target language, and the choice depends on the context. If the term is a common word but has multiple possible translations, it may be worth keeping to ensure consistent translation across the book.
+5.  **Can't decide**: Any term that is too ambiguious to decide whether it should be ignored.
 
 Output Format:
 Return a JSON object with two keys: "keep" and "ignore".
