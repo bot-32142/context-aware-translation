@@ -25,7 +25,7 @@ async def test_review_batch_mock():
     client.chat.return_value = '{"keep": ["Term1", "Term3"], "ignore": ["Term2"]}'
 
     # Execute
-    result = await review_batch(terms, client, config, "English")
+    result = await review_batch(terms, client, config, "English", "Chinese")
 
     # Verify
     assert "Term1" in result["keep"]
@@ -52,7 +52,7 @@ async def test_review_batch_missing_keys():
 
     # Execute - should raise after all retries fail
     with pytest.raises(RuntimeError, match="All review attempts failed"):
-        await review_batch(terms, client, config, "English")
+        await review_batch(terms, client, config, "English", "Chinese")
 
     # Verify retried 3 times
     assert client.chat.call_count == 3
@@ -85,7 +85,7 @@ async def test_review_batch_retry_success():
     ]
 
     # Execute
-    result = await review_batch(terms, client, config, "English")
+    result = await review_batch(terms, client, config, "English", "Chinese")
 
     # Verify success result
     assert "Term1" in result["keep"]
@@ -119,7 +119,7 @@ async def test_review_batch_error():
 
     # Execute - should raise after all retries fail
     with pytest.raises(RuntimeError, match="All review attempts failed"):
-        await review_batch(terms, client, config, "English")
+        await review_batch(terms, client, config, "English", "Chinese")
 
     # Verify fresh retry: all calls should have 2 messages (API errors = fresh start)
     for call in client.chat.call_args_list:
@@ -143,7 +143,7 @@ async def test_review_batch_cjk_variant_keys():
     # LLM returns simplified variants instead of traditional
     client.chat.return_value = '{"keep": ["种族", "HP"], "ignore": ["强化"]}'
 
-    result = await review_batch(terms, client, config, "日本語")
+    result = await review_batch(terms, client, config, "日本語", "简体中文")
 
     # Keys should be remapped back to expected (traditional) keys
     assert "種族" in result["keep"]
@@ -153,3 +153,20 @@ async def test_review_batch_cjk_variant_keys():
     assert len(result["ignore"]) == 1
     # Should succeed on first attempt (no retries needed)
     assert client.chat.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_review_batch_includes_target_language_in_system_prompt():
+    config = ReviewConfig(api_key="fake", base_url="fake", model="fake-model")
+    client = MagicMock(spec=LLMClient)
+    client.chat = AsyncMock(return_value='{"keep": ["Term1"], "ignore": []}')
+
+    terms = [
+        TermRecord(key="Term1", descriptions={"1": "Desc1"}, occurrence={"1": 5}, votes=1, total_api_calls=1),
+    ]
+
+    await review_batch(terms, client, config, "English", target_language="Chinese")
+
+    system_prompt = client.chat.call_args_list[0][0][0][0]["content"]
+    assert "Project target language: Chinese." in system_prompt
+    assert "consistent translation into Chinese" in system_prompt

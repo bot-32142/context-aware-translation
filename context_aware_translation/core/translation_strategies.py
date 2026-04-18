@@ -178,6 +178,7 @@ class TermReviewer(Protocol):
         self,
         terms: list[TermRecord],
         source_language: str,
+        target_language: str,
         cancel_check: Callable[[], bool] | None = None,
     ) -> dict[str, list[str]]:
         """

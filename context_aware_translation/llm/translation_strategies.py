@@ -201,6 +201,7 @@ class LLMTermReviewer:
         self,
         terms: list[TermRecord],
         source_language: str,
+        target_language: str,
         cancel_check: Callable[[], bool] | None = None,
     ) -> dict[str, list[str]]:
         return await review_batch(
@@ -208,6 +209,7 @@ class LLMTermReviewer:
             self.llm_client,
             self.review_config,
             source_language,
+            target_language=target_language,
             cancel_check=cancel_check,
         )
 

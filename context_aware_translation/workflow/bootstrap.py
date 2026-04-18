@@ -72,6 +72,7 @@ def _build_manager(
         term_reviewer=term_reviewer,
         term_memory_updater=term_memory_updater,
         max_term_description_length=runtime_config.summarizor_config.max_term_description_length,
+        target_language=runtime_config.translation_target_language,
     )
     manager = TranslationContextManagerAdapter(base_manager)
 

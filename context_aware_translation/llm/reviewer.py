@@ -23,6 +23,7 @@ async def review_batch(
     llm_client: LLMClient,
     config: ReviewConfig,
     source_language: str,
+    target_language: str,
     cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, list[str]]:
     """
@@ -33,8 +34,11 @@ async def review_batch(
         return {"keep": [], "ignore": []}
 
     with llm_session_scope() as session_id:
-        system_prompt = """You are a Terminology Editor for a translation project.
+        system_prompt = f"""You are a Terminology Editor for a translation project.
 Your task is to review a list of extracted terms and identify which ones should be kept for the glossary and which should be ignored (noise).
+
+Project target language: {target_language}.
+When judging borderline common or ambiguous terms, consider whether consistent translation into {target_language} would benefit from keeping the term in the glossary.
 
 Criteria for 'ignore' (Invalid Terms):
 1.  **Common Words/Phrases**: Ordinary words that are not specific terminology (e.g., "suddenly", "next day", "beautiful"). Note that some common words is actually important terminology in certain contexts, so use judgment based on descriptions.
@@ -52,10 +56,10 @@ Criteria for 'keep':
 
 Output Format:
 Return a JSON object with two keys: "keep" and "ignore".
-{
+{{
   "keep": ["term1", "term3"],
   "ignore": ["term2"]
-}
+}}
 Ensure EVERY input term is categorized into exactly one of these lists.
 """
 
