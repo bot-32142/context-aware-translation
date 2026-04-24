@@ -22,6 +22,8 @@ from context_aware_translation.application.errors import ApplicationError
 from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 from context_aware_translation.storage.schema.book_db import TermRecord
 
+_DEEPSEEK_THINKING_KWARGS = {"extra_body": {"thinking": {"type": "enabled"}}}
+
 
 def _ensure_qt_app() -> QApplication:
     app = QApplication.instance()
@@ -292,7 +294,7 @@ def test_app_setup_preview_exposes_recommended_profile(tmp_path: Path) -> None:
                         provider=ProviderKind.DEEPSEEK,
                         api_key="secret",
                         base_url="https://api.deepseek.com",
-                        default_model="deepseek-chat",
+                        default_model="deepseek-v4-pro",
                     ),
                 ],
                 target_language="Japanese",
@@ -329,16 +331,16 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
         assert "recommended-Gemini 2.5 Pro" in connection_names
         assert "recommended-Gemini 3.1 Pro" in connection_names
         assert "recommended-Gemini 3 Pro Image Preview" in connection_names
-        assert "recommended-DeepSeek Chat" in connection_names
-        assert "recommended-DeepSeek Reasoner" in connection_names
+        assert "recommended-DeepSeek V4 Flash" in connection_names
+        assert "recommended-DeepSeek V4 Pro" in connection_names
         assert (
-            next(profile for profile in endpoint_profiles if profile.name == "recommended-DeepSeek Chat").concurrency
+            next(
+                profile for profile in endpoint_profiles if profile.name == "recommended-DeepSeek V4 Flash"
+            ).concurrency
             == 15
         )
         assert (
-            next(
-                profile for profile in endpoint_profiles if profile.name == "recommended-DeepSeek Reasoner"
-            ).concurrency
+            next(profile for profile in endpoint_profiles if profile.name == "recommended-DeepSeek V4 Pro").concurrency
             == 15
         )
 
@@ -349,13 +351,16 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
         assert any(profile.name == "Team Default" for profile in detail.shared_profiles)
         assert created_profile.is_default is True
         assert created_profile.config["translation_target_language"] == "Japanese"
-        assert created_profile.config["glossary_config"]["kwargs"] == {"reasoning_effort": "low"}
-        assert created_profile.config["translator_config"]["model"] == "gemini-3.1-pro"
-        assert created_profile.config["translator_config"]["max_tokens_per_llm_call"] == 3000
+        assert created_profile.config["glossary_config"]["model"] == "deepseek-v4-pro"
+        assert created_profile.config["glossary_config"]["kwargs"] == _DEEPSEEK_THINKING_KWARGS
+        assert created_profile.config["translator_config"]["model"] == "deepseek-v4-pro"
+        assert created_profile.config["translator_config"]["max_tokens_per_llm_call"] == 3500
         assert created_profile.config["translator_config"]["chunk_size"] == 1000
-        assert created_profile.config["translator_config"]["kwargs"] == {"reasoning_effort": "none"}
-        assert created_profile.config["polish_config"]["model"] == "gemini-3.1-pro"
-        assert created_profile.config["polish_config"]["kwargs"] == {"reasoning_effort": "medium"}
+        assert created_profile.config["translator_config"]["kwargs"] == _DEEPSEEK_THINKING_KWARGS
+        assert created_profile.config["polish_config"]["model"] == "deepseek-v4-pro"
+        assert created_profile.config["polish_config"]["kwargs"] == _DEEPSEEK_THINKING_KWARGS
+        assert created_profile.config["review_config"]["model"] == "deepseek-v4-pro"
+        assert created_profile.config["review_config"]["kwargs"] == _DEEPSEEK_THINKING_KWARGS
         assert created_profile.config["ocr_config"]["kwargs"] == {"reasoning_effort": "none"}
         assert created_profile.config["image_reembedding_config"] == {
             "endpoint_profile": next(
@@ -368,14 +373,14 @@ def test_setup_wizard_creates_curated_connections_and_named_profile(tmp_path: Pa
         }
         assert created_profile.config["manga_translator_config"]["model"] == "gemini-2.5-pro"
         assert created_profile.config["manga_translator_config"]["kwargs"] == {"reasoning_effort": "none"}
-        assert created_profile.config["translator_batch_config"]["batch_size"] == 100
-        assert created_profile.config["polish_batch_config"]["batch_size"] == 100
+        assert "translator_batch_config" not in created_profile.config
+        assert "polish_batch_config" not in created_profile.config
         assert (
             next(profile for profile in endpoint_profiles if profile.name == "recommended-Gemini 3.1 Pro").api_key
             == "gkey"
         )
         assert (
-            next(profile for profile in endpoint_profiles if profile.name == "recommended-DeepSeek Chat").api_key
+            next(profile for profile in endpoint_profiles if profile.name == "recommended-DeepSeek V4 Flash").api_key
             == "dkey"
         )
         assert (
@@ -454,9 +459,9 @@ def test_setup_wizard_rerun_updates_existing_managed_connections_and_profile(tmp
         assert rerun_connections["recommended-Gemini 2.5 Pro"].api_key == "gkey-2"
         assert rerun_connections["recommended-Gemini 2.5 Pro"].description == "Updated wizard settings"
         assert rerun_connections["recommended-Gemini 2.5 Pro"].token_limit == 2000
-        assert rerun_connections["recommended-DeepSeek Chat"].api_key == "dkey-2"
-        assert rerun_connections["recommended-DeepSeek Chat"].description == "Updated wizard settings"
-        assert rerun_connections["recommended-DeepSeek Chat"].token_limit == 2000
+        assert rerun_connections["recommended-DeepSeek V4 Flash"].api_key == "dkey-2"
+        assert rerun_connections["recommended-DeepSeek V4 Flash"].description == "Updated wizard settings"
+        assert rerun_connections["recommended-DeepSeek V4 Flash"].token_limit == 2000
 
         matching_profiles = [
             profile for profile in context.runtime.book_manager.list_profiles() if profile.name == "Team Default"

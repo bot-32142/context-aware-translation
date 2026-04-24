@@ -10,7 +10,11 @@ import pytest
 from context_aware_translation.core.context_manager import TranslationContextManager, TranslationContextManagerAdapter
 from context_aware_translation.core.models import Term
 from context_aware_translation.core.term_memory import TermMemoryVersion
-from context_aware_translation.storage.schema.book_db import TermRecord, TranslationChunkRecord
+from context_aware_translation.storage.schema.book_db import (
+    LocalChunkSummaryRecord,
+    TermRecord,
+    TranslationChunkRecord,
+)
 
 
 class DummyTokenizer:
@@ -53,6 +57,7 @@ class DummyTermRepo:
         self.chunks = chunks or []
         self._pending_terms = pending_terms or []
         self._term_memory_versions: dict[str, list[TermMemoryVersion]] = {}
+        self._local_chunk_summaries: dict[tuple[int, int], LocalChunkSummaryRecord] = {}
 
     def get_source_language(self) -> str | None:
         return self._source_language
@@ -60,8 +65,17 @@ class DummyTermRepo:
     def set_source_language(self, source_language: str) -> None:
         self._source_language = source_language
 
-    def list_chunks(self) -> list[TranslationChunkRecord]:
-        return list(self.chunks)
+    def list_chunks(
+        self,
+        document_id: int | None = None,
+        document_ids: list[int] | None = None,
+    ) -> list[TranslationChunkRecord]:
+        chunks = self.chunks
+        if document_ids is not None:
+            chunks = [chunk for chunk in chunks if chunk.document_id in document_ids]
+        elif document_id is not None:
+            chunks = [chunk for chunk in chunks if chunk.document_id == document_id]
+        return list(chunks)
 
     def get_terms_to_translate(self) -> list[Term]:
         return list(self._terms.values())
@@ -123,6 +137,35 @@ class DummyTermRepo:
             latest[term] = sorted(versions, key=lambda version: version.effective_start_chunk)[-1]
         return latest
 
+    def upsert_local_chunk_summary(self, record: LocalChunkSummaryRecord) -> None:
+        self._local_chunk_summaries[(record.document_id, record.chunk_id)] = record
+
+    def get_local_chunk_summary(
+        self,
+        document_id: int,
+        chunk_id: int,
+        *,
+        source_hash: str | None = None,
+    ) -> LocalChunkSummaryRecord | None:
+        record = self._local_chunk_summaries.get((document_id, chunk_id))
+        if record is None:
+            return None
+        if source_hash is not None and record.source_hash != source_hash:
+            return None
+        return record
+
+    def list_local_chunk_summaries_before(
+        self,
+        document_id: int,
+        before_chunk: int,
+    ) -> list[LocalChunkSummaryRecord]:
+        records = [
+            record
+            for record in self._local_chunk_summaries.values()
+            if record.document_id == document_id and record.chunk_id < before_chunk and record.summary_text
+        ]
+        return sorted(records, key=lambda record: record.chunk_id)
+
 
 class DetectLanguageStrategy:
     def __init__(self, language: str) -> None:
@@ -160,11 +203,44 @@ class CapturingChunkTranslatorStrategy:
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
 
-        async def translate(texts, terms, _source_language, **_kwargs):
-            self.calls.append({"texts": list(texts), "terms": list(terms)})
+        async def translate(texts, terms, _source_language, **kwargs):
+            self.calls.append(
+                {
+                    "texts": list(texts),
+                    "terms": list(terms),
+                    "local_context": kwargs.get("local_context", ""),
+                }
+            )
             return [f"translated-{text}" for text in texts]
 
         self.translate = AsyncMock(side_effect=translate)
+
+
+class CapturingLocalChunkSummarizer:
+    def __init__(self, summary_text: str = "Alice rejected Bob's proposal.") -> None:
+        self.summary_text = summary_text
+        self.calls: list[dict[str, object]] = []
+
+    async def summarize(
+        self,
+        *,
+        chunk_text: str,
+        source_language: str,
+        cancel_check=None,
+    ) -> str:
+        del cancel_check
+        self.calls.append(
+            {
+                "chunk_text": chunk_text,
+                "source_language": source_language,
+            }
+        )
+        return self.summary_text
+
+
+class FailingLocalChunkSummarizer:
+    async def summarize(self, **_kwargs) -> str:
+        raise ValueError("bad chunk summary JSON")
 
 
 class PartiallyFailingChunkTranslatorStrategy:
@@ -429,6 +505,226 @@ async def test_translation_context_manager_translate_chunks_uses_chunk_strategy_
 
     chunk_strategy.translate.assert_awaited()
     assert term_repo.chunks[0].translation == "translated-term1 is here"
+
+
+@pytest.mark.asyncio
+async def test_translate_chunks_builds_past_only_prior_chunk_summaries():
+    tokenizer = DummyTokenizer()
+    prior_chunk = TranslationChunkRecord(
+        chunk_id=0,
+        hash="hash0",
+        text="Alice rejected Bob's proposal.",
+        document_id=7,
+        is_translated=True,
+        translation="translated prior",
+    )
+    current_chunk = TranslationChunkRecord(
+        chunk_id=1,
+        hash="hash1",
+        text="そうだな",
+        document_id=7,
+    )
+    future_chunk = TranslationChunkRecord(
+        chunk_id=2,
+        hash="hash2",
+        text="Future reveal that should not be visible.",
+        document_id=7,
+        is_translated=True,
+        translation="translated future",
+    )
+    term_repo = DummyTermRepo(
+        source_language="Japanese",
+        chunks=[prior_chunk, current_chunk, future_chunk],
+    )
+    chunk_strategy = CapturingChunkTranslatorStrategy()
+    local_summarizer = CapturingLocalChunkSummarizer()
+
+    manager = TranslationContextManager(
+        term_repo=term_repo,
+        context_tree=DummyContextTree(),
+        context_extractor=DummyContextExtractor(),
+        tokenizer=tokenizer,
+        source_language_detector=DetectLanguageStrategy("Japanese"),
+        glossary_translator=GlossaryTranslatorStrategy(),
+        chunk_translator=chunk_strategy,
+        local_chunk_summarizer=local_summarizer,
+        target_language="English",
+        dynamic_context_max_prompt_tokens=1000,
+    )
+
+    await manager.translate_chunks(concurrency=1, batch_size=1, document_ids=[7])
+
+    assert local_summarizer.calls == [
+        {
+            "chunk_text": "Alice rejected Bob's proposal.",
+            "source_language": "Japanese",
+        }
+    ]
+    assert chunk_strategy.calls[0]["texts"] == ["そうだな"]
+    assert chunk_strategy.calls[0]["local_context"] == "Alice rejected Bob's proposal."
+
+
+@pytest.mark.asyncio
+async def test_translate_chunks_uses_empty_context_when_prior_chunk_summary_fails():
+    tokenizer = DummyTokenizer()
+    prior_chunk = TranslationChunkRecord(
+        chunk_id=0,
+        hash="hash0",
+        text="Alice rejected Bob's proposal.",
+        document_id=7,
+        is_translated=True,
+        translation="translated prior",
+    )
+    current_chunk = TranslationChunkRecord(chunk_id=1, hash="hash1", text="そうだな", document_id=7)
+    term_repo = DummyTermRepo(source_language="Japanese", chunks=[prior_chunk, current_chunk])
+    chunk_strategy = CapturingChunkTranslatorStrategy()
+
+    manager = TranslationContextManager(
+        term_repo=term_repo,
+        context_tree=DummyContextTree(),
+        context_extractor=DummyContextExtractor(),
+        tokenizer=tokenizer,
+        source_language_detector=DetectLanguageStrategy("Japanese"),
+        glossary_translator=GlossaryTranslatorStrategy(),
+        chunk_translator=chunk_strategy,
+        local_chunk_summarizer=FailingLocalChunkSummarizer(),
+        target_language="English",
+    )
+
+    await manager.translate_chunks(concurrency=1, batch_size=1, document_ids=[7])
+
+    assert chunk_strategy.calls[0]["local_context"] == ""
+
+
+def test_build_batch_request_payload_skips_stale_local_chunk_summary_hash():
+    prior_chunk = TranslationChunkRecord(
+        chunk_id=0,
+        hash="hash0",
+        text="Alice rejected Bob's proposal.",
+        document_id=7,
+        is_translated=True,
+    )
+    current_chunk = TranslationChunkRecord(chunk_id=1, hash="hash1", text="そうだな", document_id=7)
+    term_repo = DummyTermRepo(source_language="Japanese", chunks=[prior_chunk, current_chunk])
+    term_repo.upsert_local_chunk_summary(
+        LocalChunkSummaryRecord(
+            document_id=7,
+            chunk_id=0,
+            summary_text="Alice rejected Bob's proposal.",
+            source_hash="stale",
+        )
+    )
+    manager = TranslationContextManager(
+        term_repo=term_repo,
+        context_tree=DummyContextTree(),
+        context_extractor=DummyContextExtractor(),
+        tokenizer=DummyTokenizer(),
+        source_language_detector=DetectLanguageStrategy("Japanese"),
+        glossary_translator=GlossaryTranslatorStrategy(),
+        chunk_translator=ChunkTranslatorStrategy(),
+        local_chunk_summarizer=CapturingLocalChunkSummarizer(),
+        target_language="English",
+    )
+
+    request = manager.build_batch_request_payload([current_chunk], [], source_language="Japanese")
+
+    assert request.local_context == ""
+
+
+def test_build_batch_request_payload_enforces_local_context_token_budget():
+    chunks = [
+        TranslationChunkRecord(chunk_id=0, hash="h0", text="short", document_id=7, is_translated=True),
+        TranslationChunkRecord(chunk_id=1, hash="h1", text="too long", document_id=7, is_translated=True),
+        TranslationChunkRecord(chunk_id=2, hash="h2", text="そうだな", document_id=7),
+    ]
+    term_repo = DummyTermRepo(source_language="Japanese", chunks=chunks)
+    manager = TranslationContextManager(
+        term_repo=term_repo,
+        context_tree=DummyContextTree(),
+        context_extractor=DummyContextExtractor(),
+        tokenizer=DummyTokenizer(),
+        source_language_detector=DetectLanguageStrategy("Japanese"),
+        glossary_translator=GlossaryTranslatorStrategy(),
+        chunk_translator=ChunkTranslatorStrategy(),
+        local_chunk_summarizer=CapturingLocalChunkSummarizer(),
+        target_language="English",
+        dynamic_context_max_prompt_tokens=5,
+    )
+    term_repo.upsert_local_chunk_summary(
+        LocalChunkSummaryRecord(
+            document_id=7,
+            chunk_id=0,
+            summary_text="short",
+            source_hash=manager._local_chunk_summary_hash(
+                chunk=chunks[0],
+                source_language="Japanese",
+                target_language="English",
+            ),
+        )
+    )
+    term_repo.upsert_local_chunk_summary(
+        LocalChunkSummaryRecord(
+            document_id=7,
+            chunk_id=1,
+            summary_text="this summary is over budget",
+            source_hash=manager._local_chunk_summary_hash(
+                chunk=chunks[1],
+                source_language="Japanese",
+                target_language="English",
+            ),
+        )
+    )
+
+    request = manager.build_batch_request_payload([chunks[2]], [], source_language="Japanese")
+
+    assert request.local_context == "short"
+
+
+def test_collect_chunk_translation_inputs_does_not_double_count_stored_local_context():
+    prior_chunk = TranslationChunkRecord(chunk_id=0, hash="h0", text="prior", document_id=7, is_translated=True)
+    chunks = [
+        prior_chunk,
+        TranslationChunkRecord(chunk_id=1, hash="h1", text="a", document_id=7),
+        TranslationChunkRecord(chunk_id=2, hash="h2", text="b", document_id=7),
+    ]
+    term_repo = DummyTermRepo(source_language="Japanese", chunks=chunks)
+    manager = TranslationContextManager(
+        term_repo=term_repo,
+        context_tree=DummyContextTree(),
+        context_extractor=DummyContextExtractor(),
+        tokenizer=DummyTokenizer(),
+        source_language_detector=DetectLanguageStrategy("Japanese"),
+        glossary_translator=GlossaryTranslatorStrategy(),
+        chunk_translator=ChunkTranslatorStrategy(),
+        local_chunk_summarizer=CapturingLocalChunkSummarizer(),
+        target_language="English",
+        dynamic_context_max_prompt_tokens=10,
+    )
+    term_repo.upsert_local_chunk_summary(
+        LocalChunkSummaryRecord(
+            document_id=7,
+            chunk_id=0,
+            summary_text="1234567890",
+            source_hash=manager._local_chunk_summary_hash(
+                chunk=prior_chunk,
+                source_language="Japanese",
+                target_language="English",
+            ),
+        )
+    )
+    no_context_tokens = manager._estimate_translation_request_tokens(["a", "b"], [])
+
+    inputs = manager.collect_chunk_translation_inputs(
+        batch_size=0,
+        max_tokens_per_batch=no_context_tokens + manager.dynamic_context_max_prompt_tokens,
+        document_ids=[7],
+        force=False,
+        cancel_check=None,
+        source_language="Japanese",
+    )
+
+    assert inputs is not None
+    assert [[chunk.chunk_id for chunk in batch] for batch in inputs.batches] == [[1, 2]]
 
 
 @pytest.mark.asyncio

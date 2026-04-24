@@ -10,6 +10,7 @@ from context_aware_translation.llm.client import LLMClient
 from context_aware_translation.llm.translation_strategies import (
     LLMChunkTranslator,
     LLMGlossaryTranslator,
+    LLMLocalChunkSummarizer,
     LLMMangaPageTranslator,
     LLMSourceLanguageDetector,
     LLMTermMemoryUpdater,
@@ -61,6 +62,10 @@ def _build_manager(
         runtime_config.summarizor_config,
         llm_client,
     )
+    local_chunk_summarizer = LLMLocalChunkSummarizer(
+        runtime_config.summarizor_config,
+        llm_client,
+    )
 
     base_manager = TranslationContextManager(
         term_repo,
@@ -73,6 +78,9 @@ def _build_manager(
         term_memory_updater=term_memory_updater,
         max_term_description_length=runtime_config.summarizor_config.max_term_description_length,
         target_language=runtime_config.translation_target_language,
+        local_chunk_summarizer=local_chunk_summarizer,
+        dynamic_context_enabled=translator_config.dynamic_context_enabled,
+        dynamic_context_max_prompt_tokens=translator_config.dynamic_context_max_prompt_tokens,
     )
     manager = TranslationContextManagerAdapter(base_manager)
 

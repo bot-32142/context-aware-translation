@@ -59,7 +59,7 @@ from context_aware_translation.ui.widgets.table_support import (
 _PROVIDER_DEFAULTS: dict[ProviderKind, tuple[str, str]] = {
     ProviderKind.GEMINI: ("https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-3.1-pro"),
     ProviderKind.OPENAI: ("https://api.openai.com/v1", "gpt-5.4"),
-    ProviderKind.DEEPSEEK: ("https://api.deepseek.com", "deepseek-chat"),
+    ProviderKind.DEEPSEEK: ("https://api.deepseek.com", "deepseek-v4-pro"),
     ProviderKind.ANTHROPIC: ("https://api.anthropic.com/v1", "claude-opus-4-6"),
     ProviderKind.OPENAI_COMPATIBLE: ("", ""),
 }

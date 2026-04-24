@@ -118,7 +118,7 @@ def _wizard_reasoning_kwargs(
     step_id: WorkflowStepId,
     selected: ConnectionDraft | None,
     recommendation_mode: SetupWizardMode,
-) -> dict[str, str] | None:
+) -> dict[str, Any] | None:
     if selected is None:
         return None
     reasoning_effort = _wizard_reasoning_effort(step_id, selected.provider, recommendation_mode)
@@ -133,9 +133,20 @@ def _wizard_reasoning_kwargs(
     return {"reasoning_effort": reasoning_effort}
 
 
+def _wizard_deepseek_thinking_kwargs(selected: ConnectionDraft | None) -> dict[str, Any] | None:
+    if selected is None or selected.provider is not ProviderKind.DEEPSEEK:
+        return None
+    model = (selected.default_model or "").strip().lower()
+    if not model.startswith("deepseek-v4-"):
+        return None
+    return {"extra_body": {"thinking": {"type": "enabled"}}}
+
+
 def _wizard_translator_limits(selected: ConnectionDraft | None) -> dict[str, int]:
     if selected is None:
         return {}
+    if selected.provider is ProviderKind.DEEPSEEK:
+        return {"max_tokens_per_llm_call": 3500, "chunk_size": 1000}
     if selected.provider in {ProviderKind.OPENAI, ProviderKind.ANTHROPIC}:
         return {"max_tokens_per_llm_call": 4000, "chunk_size": 1000}
     if selected.provider is ProviderKind.GEMINI:
@@ -250,15 +261,15 @@ _WIZARD_MODEL_CATALOG: dict[ProviderKind, tuple[WizardModelTemplate, ...]] = {
     ProviderKind.DEEPSEEK: (
         WizardModelTemplate(
             ProviderKind.DEEPSEEK,
-            "DeepSeek Chat",
-            "deepseek-chat",
+            "DeepSeek V4 Flash",
+            "deepseek-v4-flash",
             "https://api.deepseek.com",
             concurrency=default_connection_concurrency(ProviderKind.DEEPSEEK),
         ),
         WizardModelTemplate(
             ProviderKind.DEEPSEEK,
-            "DeepSeek Reasoner",
-            "deepseek-reasoner",
+            "DeepSeek V4 Pro",
+            "deepseek-v4-pro",
             "https://api.deepseek.com",
             timeout=300,
             concurrency=default_connection_concurrency(ProviderKind.DEEPSEEK),
@@ -287,28 +298,22 @@ _WIZARD_MODEL_CATALOG: dict[ProviderKind, tuple[WizardModelTemplate, ...]] = {
 
 _STEP_RECOMMENDATION_ORDER: dict[WorkflowStepId, tuple[StepModelPreference, ...]] = {
     WorkflowStepId.EXTRACTOR: (
-        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-reasoner"),
+        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-v4-flash"),
         StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash-lite"),
         StepModelPreference(ProviderKind.OPENAI, "o4-mini"),
         StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-haiku-latest"),
     ),
     WorkflowStepId.SUMMARIZER: (
-        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-chat"),
+        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-v4-flash"),
         StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash-lite"),
         StepModelPreference(ProviderKind.OPENAI, "gpt-4.1-nano"),
         StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-haiku-latest"),
     ),
-    WorkflowStepId.GLOSSARY_TRANSLATOR: (
-        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash"),
-        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-chat"),
-        StepModelPreference(ProviderKind.OPENAI, "gpt-4.1-mini"),
-        StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-haiku-latest"),
-    ),
     WorkflowStepId.REVIEWER: (
+        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-v4-pro"),
         StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-pro"),
         StepModelPreference(ProviderKind.OPENAI, "o4-mini"),
         StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-sonnet-latest"),
-        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-reasoner"),
     ),
     WorkflowStepId.OCR: (
         StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-flash"),
@@ -327,29 +332,33 @@ _STEP_RECOMMENDATION_ORDER: dict[WorkflowStepId, tuple[StepModelPreference, ...]
 }
 
 
-def _translator_recommendations(recommendation_mode: SetupWizardMode) -> tuple[StepModelPreference, ...]:
-    if recommendation_mode is SetupWizardMode.QUALITY:
-        return (
-            StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-pro"),
-            StepModelPreference(ProviderKind.OPENAI, "gpt-5.4"),
-            StepModelPreference(ProviderKind.ANTHROPIC, "claude-opus-4-6"),
-            StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-reasoner"),
-        )
+def _glossary_translator_recommendations(recommendation_mode: SetupWizardMode) -> tuple[StepModelPreference, ...]:
+    deepseek_model = "deepseek-v4-flash" if recommendation_mode is SetupWizardMode.BUDGET else "deepseek-v4-pro"
     return (
+        StepModelPreference(ProviderKind.DEEPSEEK, deepseek_model),
+        StepModelPreference(ProviderKind.GEMINI, "gemini-2.5-flash"),
+        StepModelPreference(ProviderKind.OPENAI, "gpt-4.1-mini"),
+        StepModelPreference(ProviderKind.ANTHROPIC, "claude-3-5-haiku-latest"),
+    )
+
+
+def _translator_recommendations(recommendation_mode: SetupWizardMode) -> tuple[StepModelPreference, ...]:
+    deepseek_model = "deepseek-v4-flash" if recommendation_mode is SetupWizardMode.BUDGET else "deepseek-v4-pro"
+    return (
+        StepModelPreference(ProviderKind.DEEPSEEK, deepseek_model),
         StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-pro"),
         StepModelPreference(ProviderKind.OPENAI, "gpt-5.4"),
         StepModelPreference(ProviderKind.ANTHROPIC, "claude-opus-4-6"),
-        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-chat"),
     )
 
 
 def _polish_recommendations(recommendation_mode: SetupWizardMode) -> tuple[StepModelPreference, ...]:
-    del recommendation_mode
+    deepseek_model = "deepseek-v4-flash" if recommendation_mode is SetupWizardMode.BUDGET else "deepseek-v4-pro"
     return (
+        StepModelPreference(ProviderKind.DEEPSEEK, deepseek_model),
         StepModelPreference(ProviderKind.GEMINI, "gemini-3.1-pro"),
         StepModelPreference(ProviderKind.OPENAI, "gpt-5.4"),
         StepModelPreference(ProviderKind.ANTHROPIC, "claude-opus-4-6"),
-        StepModelPreference(ProviderKind.DEEPSEEK, "deepseek-reasoner"),
     )
 
 
@@ -965,6 +974,8 @@ def _recommendations_for_step(
     step_id: WorkflowStepId,
     recommendation_mode: SetupWizardMode,
 ) -> tuple[StepModelPreference, ...]:
+    if step_id is WorkflowStepId.GLOSSARY_TRANSLATOR:
+        return _glossary_translator_recommendations(recommendation_mode)
     if step_id is WorkflowStepId.TRANSLATOR:
         return _translator_recommendations(recommendation_mode)
     if step_id is WorkflowStepId.POLISH:
@@ -990,13 +1001,19 @@ def _recommended_step_route(
             break
 
     step_config: dict[str, Any] = {}
+    llm_kwargs: dict[str, Any] = {}
+    deepseek_thinking_kwargs = _wizard_deepseek_thinking_kwargs(selected)
     reasoning_kwargs = _wizard_reasoning_kwargs(step_id, selected, recommendation_mode)
     if step_id is WorkflowStepId.EXTRACTOR:
         step_config["max_gleaning"] = 1
     if step_id is WorkflowStepId.TRANSLATOR:
         step_config.update(_wizard_translator_limits(selected))
+    if deepseek_thinking_kwargs is not None:
+        llm_kwargs.update(deepseek_thinking_kwargs)
     if reasoning_kwargs is not None:
-        step_config["kwargs"] = reasoning_kwargs
+        llm_kwargs.update(reasoning_kwargs)
+    if llm_kwargs:
+        step_config["kwargs"] = llm_kwargs
     if step_id is WorkflowStepId.IMAGE_REEMBEDDING and selected is not None:
         if selected.provider is ProviderKind.GEMINI:
             step_config["backend"] = "gemini"

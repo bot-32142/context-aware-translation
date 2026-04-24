@@ -143,6 +143,34 @@ def _validate_update_response(data: dict) -> tuple[bool, str]:
     return True, summary.strip()
 
 
+def _build_local_chunk_summary_system_prompt(source_language: str) -> str:
+    return f"""\
+---角色---
+你为正文翻译系统写“前文微摘要”。
+
+---任务---
+阅读一个片段，并用 {source_language} 写一句很短的事实摘要。
+
+---规则---
+1) 只写这个片段中明确发生或明确表达的事。
+2) 优先保留会帮助后续翻译的事实：谁对谁说了什么、谁做了什么、请求/拒绝/回答、交付物、当前位置变化。
+3) 不写人物履历、世界观设定、文学分析、猜测、未来信息。
+4) 不翻译整段原文，不复述无意义寒暄；没有有用信息时 summary 为空字符串。
+
+---输出格式---
+严格输出 JSON：
+{"summary":"..."}
+"""
+
+
+def _validate_local_chunk_summary_response(data: dict) -> str:
+    summary = data.get("summary", "")
+    if not isinstance(summary, str):
+        raise TranslationValidationError("summary must be a string")
+    compact = " ".join(summary.strip().split())
+    return compact
+
+
 async def summarize_descriptions(
     descriptions: list[str],
     summarizor_config: SummarizorConfig,
@@ -259,4 +287,66 @@ async def update_term_summary(
         raise TranslationValidationError(
             f"[llm_session={session_id}] Failed to obtain valid term-memory update after "
             f"{attempts} attempts: {last_error}"
+        )
+
+
+async def summarize_local_chunk(
+    *,
+    chunk_text: str,
+    source_language: str,
+    summarizor_config: SummarizorConfig,
+    llm_client: LLMClient,
+    cancel_check: Callable[[], bool] | None = None,
+) -> str:
+    if not chunk_text.strip():
+        return ""
+
+    with llm_session_scope() as session_id:
+        system_prompt = _build_local_chunk_summary_system_prompt(source_language)
+
+        attempts = summarizor_config.max_retries + 1
+        last_error: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                raise_if_cancelled(cancel_check)
+                response = await llm_client.chat(
+                    [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": chunk_text},
+                    ],
+                    summarizor_config,
+                    response_format={"type": "json_object"},
+                    cancel_check=cancel_check,
+                )
+                response = clean_llm_response(response)
+                parsed = json.loads(response)
+                if not isinstance(parsed, dict):
+                    raise TranslationValidationError("local chunk summary response must be a JSON object")
+                return _validate_local_chunk_summary_response(parsed)
+            except (json.JSONDecodeError, TranslationValidationError) as e:
+                last_error = e
+                logger.warning(
+                    "[llm_session=%s] Validation error during local chunk summary (attempt %s/%s): %s",
+                    session_id,
+                    attempt + 1,
+                    attempts,
+                    e,
+                )
+                continue
+            except Exception as e:
+                if isinstance(e, OperationCancelledError):
+                    raise
+                last_error = e
+                logger.warning(
+                    "[llm_session=%s] Unexpected error during local chunk summary (attempt %s/%s): %s",
+                    session_id,
+                    attempt + 1,
+                    attempts,
+                    e,
+                )
+                continue
+
+        raise TranslationValidationError(
+            f"[llm_session={session_id}] Failed to obtain valid local chunk summary after {attempts} attempts: "
+            f"{last_error}"
         )

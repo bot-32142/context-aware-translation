@@ -17,7 +17,11 @@ from context_aware_translation.llm.glossary_translator import translate_glossary
 from context_aware_translation.llm.language_detector import detect_source_language
 from context_aware_translation.llm.manga_translator import translate_manga_pages
 from context_aware_translation.llm.reviewer import review_batch
-from context_aware_translation.llm.summarizor import summarize_descriptions, update_term_summary
+from context_aware_translation.llm.summarizor import (
+    summarize_descriptions,
+    summarize_local_chunk,
+    update_term_summary,
+)
 from context_aware_translation.llm.translator import translate_chunk
 
 if TYPE_CHECKING:
@@ -108,6 +112,7 @@ class LLMChunkTranslator:
         terms: list[tuple[str, str, str]],
         source_language: str,
         cancel_check: Callable[[], bool] | None = None,
+        local_context: str = "",
     ) -> list[str]:
         return await translate_chunk(
             chunks,
@@ -118,6 +123,7 @@ class LLMChunkTranslator:
             self.target_language,
             polish_config=self.polish_config,
             cancel_check=cancel_check,
+            local_context=local_context,
         )
 
 
@@ -179,6 +185,34 @@ class LLMTermMemoryUpdater:
             new_descriptions,
             self.summarizor_config,
             self.llm_client,
+            cancel_check=cancel_check,
+        )
+
+
+@final
+class LLMLocalChunkSummarizer:
+    """Local per-chunk micro-summary builder backed by the summarizer LLM."""
+
+    def __init__(
+        self,
+        summarizor_config: SummarizorConfig,
+        llm_client: LLMClient,
+    ) -> None:
+        self.summarizor_config: SummarizorConfig = summarizor_config
+        self.llm_client: LLMClient = llm_client
+
+    async def summarize(
+        self,
+        *,
+        chunk_text: str,
+        source_language: str,
+        cancel_check: Callable[[], bool] | None = None,
+    ) -> str:
+        return await summarize_local_chunk(
+            chunk_text=chunk_text,
+            source_language=source_language,
+            summarizor_config=self.summarizor_config,
+            llm_client=self.llm_client,
             cancel_check=cancel_check,
         )
 

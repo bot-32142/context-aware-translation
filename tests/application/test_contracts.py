@@ -63,6 +63,8 @@ from context_aware_translation.application.runtime import (
 )
 from context_aware_translation.storage.models.endpoint_profile import EndpointProfile
 
+_DEEPSEEK_THINKING_KWARGS = {"extra_body": {"thinking": {"type": "enabled"}}}
+
 
 def _profile(*, profile_id: str, name: str, kind: WorkflowProfileKind) -> WorkflowProfileDetail:
     return WorkflowProfileDetail(
@@ -257,20 +259,25 @@ def test_recommended_workflow_profile_uses_ranked_step_rules() -> None:
     )
 
     route_map = {route.step_id: route for route in detail.routes}
-    assert route_map[WorkflowStepId.EXTRACTOR].model == "deepseek-reasoner"
-    assert route_map[WorkflowStepId.EXTRACTOR].step_config == {"max_gleaning": 1}
-    assert route_map[WorkflowStepId.SUMMARIZER].model == "deepseek-chat"
-    assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].model == "gemini-2.5-flash"
-    assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "low"}
-    assert route_map[WorkflowStepId.TRANSLATOR].model == "gemini-3.1-pro"
-    assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "high"}
-    assert route_map[WorkflowStepId.TRANSLATOR].step_config["max_tokens_per_llm_call"] == 3000
+    assert route_map[WorkflowStepId.EXTRACTOR].model == "deepseek-v4-flash"
+    assert route_map[WorkflowStepId.EXTRACTOR].step_config == {
+        "max_gleaning": 1,
+        "kwargs": _DEEPSEEK_THINKING_KWARGS,
+    }
+    assert route_map[WorkflowStepId.SUMMARIZER].model == "deepseek-v4-flash"
+    assert route_map[WorkflowStepId.SUMMARIZER].step_config["kwargs"] == _DEEPSEEK_THINKING_KWARGS
+    assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].model == "deepseek-v4-pro"
+    assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].step_config["kwargs"] == _DEEPSEEK_THINKING_KWARGS
+    assert route_map[WorkflowStepId.TRANSLATOR].model == "deepseek-v4-pro"
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config["kwargs"] == _DEEPSEEK_THINKING_KWARGS
+    assert route_map[WorkflowStepId.TRANSLATOR].step_config["max_tokens_per_llm_call"] == 3500
     assert route_map[WorkflowStepId.TRANSLATOR].step_config["chunk_size"] == 1000
-    assert route_map[WorkflowStepId.POLISH].model == "gemini-3.1-pro"
-    assert route_map[WorkflowStepId.POLISH].connection_id == "recommended-Gemini 3.1 Pro"
-    assert route_map[WorkflowStepId.POLISH].connection_label == "Gemini 3.1 Pro"
-    assert route_map[WorkflowStepId.POLISH].step_config["kwargs"] == {"reasoning_effort": "high"}
-    assert route_map[WorkflowStepId.REVIEWER].model == "gemini-2.5-pro"
+    assert route_map[WorkflowStepId.POLISH].model == "deepseek-v4-pro"
+    assert route_map[WorkflowStepId.POLISH].connection_id == "recommended-DeepSeek V4 Pro"
+    assert route_map[WorkflowStepId.POLISH].connection_label == "DeepSeek V4 Pro"
+    assert route_map[WorkflowStepId.POLISH].step_config["kwargs"] == _DEEPSEEK_THINKING_KWARGS
+    assert route_map[WorkflowStepId.REVIEWER].model == "deepseek-v4-pro"
+    assert route_map[WorkflowStepId.REVIEWER].step_config["kwargs"] == _DEEPSEEK_THINKING_KWARGS
     assert route_map[WorkflowStepId.OCR].model == "gemini-3.1-flash"
     assert route_map[WorkflowStepId.OCR].step_config["kwargs"] == {"reasoning_effort": "none"}
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].model == "gemini-3-pro-image-preview"
@@ -278,12 +285,7 @@ def test_recommended_workflow_profile_uses_ranked_step_rules() -> None:
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].step_config == {"backend": "gemini"}
     assert route_map[WorkflowStepId.MANGA_TRANSLATOR].model == "gemini-3.1-pro"
     assert route_map[WorkflowStepId.MANGA_TRANSLATOR].step_config["kwargs"] == {"reasoning_effort": "high"}
-    assert route_map[WorkflowStepId.TRANSLATOR_BATCH].connection_label == "Gemini AI Studio"
-    assert route_map[WorkflowStepId.TRANSLATOR_BATCH].model is None
-    assert route_map[WorkflowStepId.TRANSLATOR_BATCH].step_config == {
-        "translator_batch_size": 100,
-        "polish_batch_size": 100,
-    }
+    assert WorkflowStepId.TRANSLATOR_BATCH not in route_map
 
 
 def test_connection_draft_defaults_deepseek_concurrency() -> None:
@@ -314,19 +316,34 @@ def test_recommended_workflow_profile_skips_unsupported_openai_ocr_reasoning_non
     assert route_map[WorkflowStepId.IMAGE_REEMBEDDING].step_config == {"backend": "openai"}
 
 
-def test_recommended_workflow_profile_uses_deepseek_reasoner_for_translator() -> None:
-    detail = recommended_workflow_profile_from_drafts(
-        [ConnectionDraft(display_name="DeepSeek", provider=ProviderKind.DEEPSEEK, api_key="dkey")],
-        name="Wizard Profile",
-        target_language="English",
-        recommendation_mode=SetupWizardMode.QUALITY,
-    )
+def test_recommended_workflow_profile_uses_deepseek_v4_mode_rules() -> None:
+    for recommendation_mode, expected_primary_model in (
+        (SetupWizardMode.QUALITY, "deepseek-v4-pro"),
+        (SetupWizardMode.BALANCED, "deepseek-v4-pro"),
+        (SetupWizardMode.BUDGET, "deepseek-v4-flash"),
+    ):
+        detail = recommended_workflow_profile_from_drafts(
+            [ConnectionDraft(display_name="DeepSeek", provider=ProviderKind.DEEPSEEK, api_key="dkey")],
+            name="Wizard Profile",
+            target_language="English",
+            recommendation_mode=recommendation_mode,
+        )
 
-    route_map = {route.step_id: route for route in detail.routes}
-    assert route_map[WorkflowStepId.TRANSLATOR].model == "deepseek-reasoner"
-    assert route_map[WorkflowStepId.TRANSLATOR].step_config == {}
-    assert route_map[WorkflowStepId.POLISH].model == "deepseek-reasoner"
-    assert route_map[WorkflowStepId.POLISH].step_config == {}
+        route_map = {route.step_id: route for route in detail.routes}
+        assert route_map[WorkflowStepId.EXTRACTOR].model == "deepseek-v4-flash"
+        assert route_map[WorkflowStepId.SUMMARIZER].model == "deepseek-v4-flash"
+        assert route_map[WorkflowStepId.GLOSSARY_TRANSLATOR].model == expected_primary_model
+        assert route_map[WorkflowStepId.TRANSLATOR].model == expected_primary_model
+        assert route_map[WorkflowStepId.TRANSLATOR].step_config == {
+            "max_tokens_per_llm_call": 3500,
+            "chunk_size": 1000,
+            "kwargs": _DEEPSEEK_THINKING_KWARGS,
+        }
+        assert route_map[WorkflowStepId.POLISH].model == expected_primary_model
+        assert route_map[WorkflowStepId.POLISH].step_config == {"kwargs": _DEEPSEEK_THINKING_KWARGS}
+        assert route_map[WorkflowStepId.REVIEWER].model == "deepseek-v4-pro"
+        for route in route_map.values():
+            assert route.step_config.get("kwargs", {}).get("reasoning_effort") is None
 
 
 def test_recommended_workflow_profile_uses_budget_translator_rules() -> None:

@@ -406,7 +406,12 @@ async def test_retranslate_chunk_forwards_progress_and_reports_single_chunk_comp
     manager.detect_language = AsyncMock()
     manager.build_context_tree.side_effect = _build_context_tree
     manager.term_repo.list_keyed_context.return_value = [term]
-    manager.build_batch_request_payload.return_value = (["source text"], ["term"])
+    manager.build_local_chunk_summaries_for_batches = AsyncMock()
+    manager.build_batch_request_payload.return_value = SimpleNamespace(
+        texts=["source text"],
+        terms=["term"],
+        local_context="",
+    )
     manager.chunk_translator.translate = AsyncMock(return_value=["translated"])
 
     db = MagicMock()
@@ -445,6 +450,7 @@ async def test_retranslate_chunk_forwards_progress_and_reports_single_chunk_comp
         ["term"],
         "Japanese",
         cancel_check=None,
+        local_context="",
     )
 
 

@@ -9,6 +9,7 @@ from context_aware_translation.core.models import KeyedContext, Term
 from context_aware_translation.core.term_memory import TermMemoryVersion
 from context_aware_translation.storage.schema.book_db import (
     ChunkRecord,
+    LocalChunkSummaryRecord,
     SQLiteBookDB,
     TermRecord,
     TermRowUpdate,
@@ -40,7 +41,9 @@ class StorageManager(Protocol):
 
     def get_chunks_to_extract(self) -> Sequence[ChunkRecord]: ...
 
-    def list_chunks(self, document_id: int | None = None) -> Sequence[ChunkRecord]: ...
+    def list_chunks(
+        self, document_id: int | None = None, document_ids: list[int] | None = None
+    ) -> Sequence[ChunkRecord]: ...
 
     def list_chunks_grouped_by_document(self) -> dict[int, Sequence[ChunkRecord]]: ...
 
@@ -394,3 +397,35 @@ class TermRepository:
 
     def list_latest_term_memory_versions(self) -> dict[str, TermMemoryVersion]:
         return self.keyed_context_db.list_latest_term_memory_versions()
+
+    def upsert_local_chunk_summary(self, record: LocalChunkSummaryRecord) -> None:
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("StorageManager is closed")
+            self.keyed_context_db.upsert_local_chunk_summary(record)
+
+    def get_local_chunk_summary(
+        self,
+        document_id: int,
+        chunk_id: int,
+        *,
+        source_hash: str | None = None,
+    ) -> LocalChunkSummaryRecord | None:
+        return self.keyed_context_db.get_local_chunk_summary(
+            document_id,
+            chunk_id,
+            source_hash=source_hash,
+        )
+
+    def list_local_chunk_summaries_before(
+        self,
+        document_id: int,
+        before_chunk: int,
+    ) -> list[LocalChunkSummaryRecord]:
+        return self.keyed_context_db.list_local_chunk_summaries_before(document_id, before_chunk)
+
+    def prune_local_chunk_summaries_from(self, cutoff_chunk_id: int) -> int:
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("StorageManager is closed")
+            return self.keyed_context_db.prune_local_chunk_summaries_from(cutoff_chunk_id)

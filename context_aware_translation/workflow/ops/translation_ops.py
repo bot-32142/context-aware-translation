@@ -104,10 +104,21 @@ async def retranslate_chunk(
         raise ValueError("Source language not found in the database")
 
     all_terms = [term for term in workflow.manager.term_repo.list_keyed_context() if not term.ignored]
-    _, batch_terms = workflow.manager.build_batch_request_payload(
+    await workflow.manager.build_local_chunk_summaries_for_batches(
+        [[chunk]],
+        source_language=source_language,
+        concurrency=1,
+        cancel_check=cancel_check,
+    )
+
+    request = workflow.manager.build_batch_request_payload(
         [chunk],
         all_terms,
+        source_language=source_language,
     )
+    batch_texts = request.texts
+    batch_terms = request.terms
+    local_context = request.local_context
 
     bootstrap_ops.check_cancel(cancel_check)
     if progress_callback is not None:
@@ -121,7 +132,11 @@ async def retranslate_chunk(
         )
 
     translated_texts = await workflow.manager.chunk_translator.translate(
-        [chunk.text], batch_terms, source_language, cancel_check=cancel_check
+        batch_texts,
+        batch_terms,
+        source_language,
+        cancel_check=cancel_check,
+        local_context=local_context,
     )
 
     new_translation: str = translated_texts[0]

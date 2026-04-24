@@ -22,6 +22,7 @@ import pytest
 from context_aware_translation.core.term_memory import TermMemoryVersion
 from context_aware_translation.storage.schema.book_db import (
     ChunkRecord,
+    LocalChunkSummaryRecord,
     SQLiteBookDB,
     TermRecord,
     TranslationChunkRecord,
@@ -140,7 +141,35 @@ def test_term_db_init(temp_db: SQLiteBookDB):
     meta = temp_db.conn.execute("SELECT schema_version FROM meta").fetchone()
     assert meta is not None
     assert meta["schema_version"] == temp_db.schema_version
-    assert temp_db.schema_version == 6
+    assert temp_db.schema_version == 8
+
+
+def test_local_chunk_summary_upsert_lookup_and_prune(temp_db: SQLiteBookDB):
+    document_id = temp_db.insert_document("text")
+    record = LocalChunkSummaryRecord(
+        document_id=document_id,
+        chunk_id=2,
+        summary_text="Alice rejected Bob's proposal.",
+        source_hash="hash-a",
+        created_at=1.0,
+    )
+
+    temp_db.upsert_local_chunk_summary(record)
+
+    fetched = temp_db.get_local_chunk_summary(
+        document_id,
+        2,
+        source_hash="hash-a",
+    )
+    assert fetched == record
+    assert temp_db.get_local_chunk_summary(document_id, 2, source_hash="stale") is None
+
+    recent = temp_db.list_local_chunk_summaries_before(document_id, 3)
+    assert recent == [record]
+
+    assert temp_db.prune_local_chunk_summaries_from(4) == 0
+    assert temp_db.prune_local_chunk_summaries_from(2) == 1
+    assert temp_db.list_local_chunk_summaries_before(document_id, 3) == []
 
 
 def test_write_lock_serializes_writers_across_connections(tmp_path: Path) -> None:
@@ -380,7 +409,7 @@ def test_migrate_schema_v4_to_v6_adds_term_type_and_votes_backfill(tmp_path: Pat
     try:
         meta = db.conn.execute("SELECT schema_version FROM meta").fetchone()
         assert meta is not None
-        assert meta["schema_version"] == 6
+        assert meta["schema_version"] == 8
 
         row = db.conn.execute(
             "SELECT term_type, term_type_votes_json FROM terms WHERE key = ?",
@@ -452,7 +481,7 @@ def test_migrate_schema_v5_to_v6_adds_term_type_votes_without_touching_type(tmp_
     try:
         meta = db.conn.execute("SELECT schema_version FROM meta").fetchone()
         assert meta is not None
-        assert meta["schema_version"] == 6
+        assert meta["schema_version"] == 8
 
         row = db.conn.execute(
             "SELECT term_type, term_type_votes_json FROM terms WHERE key = ?",

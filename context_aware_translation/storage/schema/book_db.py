@@ -78,6 +78,17 @@ class TranslationChunkRecord(ChunkRecord):
     normalized_text: str = ""
 
 
+@dataclass(frozen=True)
+class LocalChunkSummaryRecord:
+    """One short factual prior-context summary for a source chunk."""
+
+    document_id: int
+    chunk_id: int
+    summary_text: str
+    source_hash: str
+    created_at: float | None = None
+
+
 CREATE_META = """
 CREATE TABLE IF NOT EXISTS meta (
     schema_version INTEGER NOT NULL,
@@ -132,6 +143,17 @@ CREATE TABLE IF NOT EXISTS term_memory_versions (
     source_count INTEGER NOT NULL,
     created_at REAL NOT NULL,
     PRIMARY KEY (term, effective_start_chunk)
+);
+"""
+
+CREATE_LOCAL_CHUNK_SUMMARIES = """
+CREATE TABLE IF NOT EXISTS local_chunk_summaries (
+    document_id INTEGER NOT NULL REFERENCES document(document_id) ON DELETE CASCADE,
+    chunk_id INTEGER NOT NULL,
+    summary_text TEXT NOT NULL,
+    source_hash TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    PRIMARY KEY (document_id, chunk_id)
 );
 """
 
@@ -213,7 +235,7 @@ class SQLiteBookDB:
 
     def __init__(self, sqlite_path: Path) -> None:
         self.db_path = Path(sqlite_path)
-        self.schema_version = 6
+        self.schema_version = 8
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
         self._write_lock = get_sqlite_file_lock(self.db_path)
@@ -294,6 +316,8 @@ class SQLiteBookDB:
                         "UPDATE terms SET term_type_votes_json = ? WHERE key = ?",
                         (json.dumps(type_votes, ensure_ascii=False), row["key"]),
                     )
+        if from_version < 8:
+            cur.execute(CREATE_LOCAL_CHUNK_SUMMARIES)
         cur.execute(
             "UPDATE meta SET schema_version = ?, updated_at = ?",
             (self.schema_version, time.time()),
@@ -306,10 +330,15 @@ class SQLiteBookDB:
         cur.execute(CREATE_TERMS)
         cur.execute(CREATE_CHUNKS)
         cur.execute(CREATE_TERM_MEMORY_VERSIONS)
+        cur.execute(CREATE_LOCAL_CHUNK_SUMMARIES)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON chunks(document_id);")
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_term_memory_versions_term_effective "
             "ON term_memory_versions(term, effective_start_chunk);"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_local_chunk_summaries_lookup "
+            "ON local_chunk_summaries(document_id, chunk_id);"
         )
         cur.execute(CREATE_DOCUMENT)
         cur.execute(CREATE_DOCUMENT_SOURCES)
@@ -797,6 +826,100 @@ class SQLiteBookDB:
         return {row["term"]: self._row_to_term_memory_version(row) for row in rows}
 
     @_serialized_write()
+    def upsert_local_chunk_summary(
+        self,
+        record: LocalChunkSummaryRecord,
+        auto_commit: bool = True,
+    ) -> None:
+        """Persist one local micro-summary for a source chunk."""
+        created_at = record.created_at or time.time()
+        self.conn.execute(
+            """
+            INSERT INTO local_chunk_summaries(
+                document_id,
+                chunk_id,
+                summary_text,
+                source_hash,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(document_id, chunk_id)
+            DO UPDATE SET
+                summary_text = excluded.summary_text,
+                source_hash = excluded.source_hash,
+                created_at = excluded.created_at
+            """,
+            (
+                record.document_id,
+                record.chunk_id,
+                record.summary_text,
+                record.source_hash,
+                created_at,
+            ),
+        )
+        if auto_commit:
+            self.conn.commit()
+
+    def get_local_chunk_summary(
+        self,
+        document_id: int,
+        chunk_id: int,
+        *,
+        source_hash: str | None = None,
+    ) -> LocalChunkSummaryRecord | None:
+        """Return the stored micro-summary for an exact source chunk."""
+        query = """
+            SELECT * FROM local_chunk_summaries
+            WHERE document_id = ?
+              AND chunk_id = ?
+        """
+        params: list[object] = [document_id, chunk_id]
+        if source_hash is not None:
+            query += " AND source_hash = ?"
+            params.append(source_hash)
+        row = self.conn.execute(query, params).fetchone()
+        if row is None:
+            return None
+        return self._row_to_local_chunk_summary(row)
+
+    def list_local_chunk_summaries_before(
+        self,
+        document_id: int,
+        before_chunk: int,
+    ) -> list[LocalChunkSummaryRecord]:
+        """Return recent source-chunk summaries before a chunk, in chunk order."""
+        rows = self.conn.execute(
+            """
+            SELECT * FROM local_chunk_summaries
+            WHERE document_id = ?
+              AND chunk_id < ?
+              AND summary_text != ''
+            ORDER BY chunk_id ASC
+            """,
+            (document_id, before_chunk),
+        ).fetchall()
+        return [self._row_to_local_chunk_summary(row) for row in rows]
+
+    @_serialized_write()
+    def prune_local_chunk_summaries_from(self, cutoff_chunk_id: int, auto_commit: bool = True) -> int:
+        cursor = self.conn.execute(
+            """
+            DELETE FROM local_chunk_summaries
+            WHERE chunk_id >= ?
+            """,
+            (cutoff_chunk_id,),
+        )
+        if auto_commit:
+            self.conn.commit()
+        return cursor.rowcount
+
+    @_serialized_write()
+    def delete_all_local_chunk_summaries(self, auto_commit: bool = True) -> None:
+        self.conn.execute("DELETE FROM local_chunk_summaries")
+        if auto_commit:
+            self.conn.commit()
+
+    @_serialized_write()
     def prune_term_memory_from(self, cutoff_chunk_id: int, auto_commit: bool = True) -> int:
         cursor = self.conn.execute(
             "DELETE FROM term_memory_versions WHERE effective_start_chunk >= ? OR latest_evidence_chunk >= ?",
@@ -1100,6 +1223,16 @@ class SQLiteBookDB:
             summary_text=row["summary_text"],
             kind=row["kind"],
             source_count=row["source_count"],
+            created_at=row["created_at"],
+        )
+
+    @staticmethod
+    def _row_to_local_chunk_summary(row: sqlite3.Row) -> LocalChunkSummaryRecord:
+        return LocalChunkSummaryRecord(
+            document_id=row["document_id"],
+            chunk_id=row["chunk_id"],
+            summary_text=row["summary_text"],
+            source_hash=row["source_hash"],
             created_at=row["created_at"],
         )
 
@@ -1586,6 +1719,7 @@ class SQLiteBookDB:
             )
             if min_chunk_id is not None:
                 self.prune_term_memory_from(min_chunk_id, auto_commit=False)
+                self.prune_local_chunk_summaries_from(min_chunk_id, auto_commit=False)
 
                 def keep_remaining_chunk(idx: int) -> bool:
                     return idx not in deleted_chunk_ids
@@ -1656,6 +1790,7 @@ class SQLiteBookDB:
         pruned_count = 0
         deleted_count = 0
         self.prune_term_memory_from(cutoff_chunk_id, auto_commit=False)
+        self.prune_local_chunk_summaries_from(cutoff_chunk_id, auto_commit=False)
 
         def keep_chunk(idx: int) -> bool:
             return idx < cutoff_chunk_id

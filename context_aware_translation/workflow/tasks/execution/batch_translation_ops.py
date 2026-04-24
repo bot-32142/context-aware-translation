@@ -430,17 +430,26 @@ async def ensure_payload_prepared(
             "polish": new_payload_stage(),
         }
 
+    await service.workflow.manager.build_local_chunk_summaries_for_batches(
+        inputs.batches,
+        source_language=inputs.source_language,
+        concurrency=translator_config.concurrency,
+        cancel_check=cancel_check,
+    )
+
     items: list[dict[str, Any]] = []
     for index, batch in enumerate(inputs.batches):
-        batch_texts, batch_terms = service.workflow.manager.build_batch_request_payload(
+        request = service.workflow.manager.build_batch_request_payload(
             batch,
             inputs.all_terms,
+            source_language=inputs.source_language,
         )
         prepared = prepare_chunk_translation(
-            batch_texts,
-            batch_terms,
+            request.texts,
+            request.terms,
             inputs.source_language,
             service.workflow.config.translation_target_language,
+            local_context=request.local_context,
         )
         items.append(
             {

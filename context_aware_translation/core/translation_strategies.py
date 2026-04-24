@@ -50,6 +50,7 @@ class ChunkTranslationStrategy(Protocol):
         terms: list[tuple[str, str, str]],
         source_language: str,
         cancel_check: Callable[[], bool] | None = None,
+        local_context: str = "",
     ) -> list[str]:
         """
         Translate chunks into target language with glossary terms.
@@ -87,6 +88,20 @@ class TermMemoryUpdater(Protocol):
         cancel_check: Callable[[], bool] | None = None,
     ) -> tuple[bool, str]:
         """Return whether the summary changes and the resulting summary text."""
+        ...
+
+
+class LocalChunkSummarizer(Protocol):
+    """Protocol for building short factual summaries of individual source chunks."""
+
+    async def summarize(
+        self,
+        *,
+        chunk_text: str,
+        source_language: str,
+        cancel_check: Callable[[], bool] | None = None,
+    ) -> str:
+        """Return one micro-summary for later batches to use as prior context."""
         ...
 
 
