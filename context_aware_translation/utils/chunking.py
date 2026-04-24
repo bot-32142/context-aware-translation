@@ -34,6 +34,8 @@ DEFAULT_TOKENIZER = "deepseek-v3"
 API_TO_TOKENIZER_MAP: dict[str, str] = {
     "deepseek-reasoner": DEFAULT_TOKENIZER,
     "deepseek-chat": DEFAULT_TOKENIZER,
+    "deepseek-v4-flash": DEFAULT_TOKENIZER,
+    "deepseek-v4-pro": DEFAULT_TOKENIZER,
     "deepseek-coder": DEFAULT_TOKENIZER,
     "deepseek-ai/DeepSeek-V3.2": DEFAULT_TOKENIZER,
     # Add more mappings as needed

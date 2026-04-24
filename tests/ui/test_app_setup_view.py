@@ -300,7 +300,7 @@ def test_connection_draft_form_prefills_curated_defaults_for_supported_providers
 
     _select_provider(ProviderKind.DEEPSEEK)
     assert form.base_url_edit.text() == "https://api.deepseek.com"
-    assert form.default_model_edit.text() == "deepseek-chat"
+    assert form.default_model_edit.text() == "deepseek-v4-pro"
     assert form.concurrency_spin.value() == 15
 
     _select_provider(ProviderKind.ANTHROPIC)

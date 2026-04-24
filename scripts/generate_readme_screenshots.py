@@ -149,35 +149,35 @@ def _recommended_profile() -> WorkflowProfileDetail:
             step_label="Extractor",
             connection_id="conn-deepseek",
             connection_label="DeepSeek",
-            model="deepseek-chat",
+            model="deepseek-v4-flash",
         ),
         WorkflowStepRoute(
             step_id=WorkflowStepId.SUMMARIZER,
             step_label="Summarizer",
             connection_id="conn-deepseek",
             connection_label="DeepSeek",
-            model="deepseek-chat",
+            model="deepseek-v4-flash",
         ),
         WorkflowStepRoute(
             step_id=WorkflowStepId.TRANSLATOR,
             step_label="Translator",
             connection_id="conn-deepseek",
             connection_label="DeepSeek",
-            model="deepseek-reasoner",
+            model="deepseek-v4-pro",
         ),
         WorkflowStepRoute(
             step_id=WorkflowStepId.POLISH,
             step_label="Polish",
             connection_id="conn-deepseek",
             connection_label="DeepSeek",
-            model="deepseek-chat",
+            model="deepseek-v4-pro",
         ),
         WorkflowStepRoute(
             step_id=WorkflowStepId.REVIEWER,
             step_label="Reviewer",
             connection_id="conn-deepseek",
             connection_label="DeepSeek",
-            model="deepseek-reasoner",
+            model="deepseek-v4-pro",
         ),
         WorkflowStepRoute(
             step_id=WorkflowStepId.OCR,
@@ -232,7 +232,7 @@ def _app_setup_state() -> AppSetupState:
                 display_name="DeepSeek",
                 provider=ProviderKind.DEEPSEEK,
                 base_url="https://api.deepseek.com",
-                model="deepseek-chat",
+                model="deepseek-v4-pro",
                 concurrency=15,
             ),
             _connection_summary(
@@ -282,7 +282,7 @@ def _wizard_service() -> FakeAppSetupService:
                 provider=ProviderKind.DEEPSEEK,
                 api_key="demo-deepseek-key",
                 base_url="https://api.deepseek.com",
-                default_model="deepseek-chat",
+                default_model="deepseek-v4-pro",
             ),
             ConnectionDraft(
                 display_name="Gemini",
@@ -546,13 +546,18 @@ def _document_service() -> FakeDocumentService:
     )
     return FakeDocumentService(
         workspace=_document_workspace_state(DocumentSection.TRANSLATION),
-        ocr=DocumentOCRState(workspace=_document_workspace_state(DocumentSection.OCR), pages=[OCRPageState(
-            source_id=201,
-            page_number=1,
-            total_pages=1,
-            status=SurfaceStatus.DONE,
-            extracted_text="Sample OCR page",
-        )]),
+        ocr=DocumentOCRState(
+            workspace=_document_workspace_state(DocumentSection.OCR),
+            pages=[
+                OCRPageState(
+                    source_id=201,
+                    page_number=1,
+                    total_pages=1,
+                    status=SurfaceStatus.DONE,
+                    extracted_text="Sample OCR page",
+                )
+            ],
+        ),
         ocr_page_images={201: None},
         translation=translation_state,
         images=DocumentImagesState(workspace=_document_workspace_state(DocumentSection.IMAGES), assets=[]),
@@ -671,7 +676,9 @@ def generate() -> None:
         FakeTermsService(project_state=_terms_state(), document_state=_terms_state()),
         bus,
     )
-    work_view._inspect_import_paths([str(SAMPLE_SOURCE_PATH if SAMPLE_SOURCE_PATH.exists() else Path("~/workspace2/pg17989-images-3.epub"))])
+    work_view._inspect_import_paths(
+        [str(SAMPLE_SOURCE_PATH if SAMPLE_SOURCE_PATH.exists() else Path("~/workspace2/pg17989-images-3.epub"))]
+    )
     work_view.rows_table.selectRow(1)
     _save_widget(work_view, SCREENSHOT_DIR / "Import.png", width=1320, height=600)
     work_view.cleanup()
@@ -710,7 +717,11 @@ def generate() -> None:
 
     export_dialog = WorkExportDialog(
         FakeWorkService(
-            state_by_project={"proj-monte-cristo": WorkboardState(project=ProjectRef(project_id="proj-monte-cristo", name="The Count of Monte Cristo"))}
+            state_by_project={
+                "proj-monte-cristo": WorkboardState(
+                    project=ProjectRef(project_id="proj-monte-cristo", name="The Count of Monte Cristo")
+                )
+            }
         ),
         _export_state(),
     )
