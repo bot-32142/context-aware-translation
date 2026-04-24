@@ -143,16 +143,16 @@ def _validate_update_response(data: dict) -> tuple[bool, str]:
     return True, summary.strip()
 
 
-def _build_local_chunk_summary_system_prompt() -> str:
-    return """\
+def _build_local_chunk_summary_system_prompt(source_language: str) -> str:
+    return f"""\
 ---角色---
 你为正文翻译系统写“前文微摘要”。
 
 ---任务---
-只阅读一个 source_chunk，并用 target_language 写一句很短的事实摘要。
+阅读一个片段，并用 {source_language} 写一句很短的事实摘要。
 
 ---规则---
-1) 只写这个 chunk 中明确发生或明确表达的事。
+1) 只写这个片段中明确发生或明确表达的事。
 2) 优先保留会帮助后续翻译的事实：谁对谁说了什么、谁做了什么、请求/拒绝/回答、交付物、当前位置变化。
 3) 不写人物履历、世界观设定、文学分析、猜测、未来信息。
 4) 不翻译整段原文，不复述无意义寒暄；没有有用信息时 summary 为空字符串。
@@ -161,24 +161,6 @@ def _build_local_chunk_summary_system_prompt() -> str:
 严格输出 JSON：
 {"summary":"..."}
 """
-
-
-def _build_local_chunk_summary_user_payload(
-    *,
-    chunk_id: int,
-    chunk_text: str,
-    source_language: str,
-    target_language: str,
-) -> str:
-    payload = {
-        "source_language": source_language,
-        "target_language": target_language,
-        "source_chunk": {
-            "chunk": chunk_id,
-            "text": chunk_text,
-        },
-    }
-    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 def _validate_local_chunk_summary_response(data: dict) -> str:
@@ -310,10 +292,8 @@ async def update_term_summary(
 
 async def summarize_local_chunk(
     *,
-    chunk_id: int,
     chunk_text: str,
     source_language: str,
-    target_language: str,
     summarizor_config: SummarizorConfig,
     llm_client: LLMClient,
     cancel_check: Callable[[], bool] | None = None,
@@ -322,13 +302,7 @@ async def summarize_local_chunk(
         return ""
 
     with llm_session_scope() as session_id:
-        system_prompt = _build_local_chunk_summary_system_prompt()
-        user_payload = _build_local_chunk_summary_user_payload(
-            chunk_id=chunk_id,
-            chunk_text=chunk_text,
-            source_language=source_language,
-            target_language=target_language,
-        )
+        system_prompt = _build_local_chunk_summary_system_prompt(source_language)
 
         attempts = summarizor_config.max_retries + 1
         last_error: Exception | None = None
@@ -338,7 +312,7 @@ async def summarize_local_chunk(
                 response = await llm_client.chat(
                     [
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_payload},
+                        {"role": "user", "content": chunk_text},
                     ],
                     summarizor_config,
                     response_format={"type": "json_object"},

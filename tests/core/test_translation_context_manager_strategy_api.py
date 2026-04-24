@@ -224,19 +224,15 @@ class CapturingLocalChunkSummarizer:
     async def summarize(
         self,
         *,
-        chunk_id: int,
         chunk_text: str,
         source_language: str,
-        target_language: str,
         cancel_check=None,
     ) -> str:
         del cancel_check
         self.calls.append(
             {
-                "chunk_id": chunk_id,
                 "chunk_text": chunk_text,
                 "source_language": source_language,
-                "target_language": target_language,
             }
         )
         return self.summary_text
@@ -560,10 +556,8 @@ async def test_translate_chunks_builds_past_only_prior_chunk_summaries():
 
     assert local_summarizer.calls == [
         {
-            "chunk_id": 0,
             "chunk_text": "Alice rejected Bob's proposal.",
             "source_language": "Japanese",
-            "target_language": "English",
         }
     ]
     assert chunk_strategy.calls[0]["texts"] == ["そうだな"]

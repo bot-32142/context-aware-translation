@@ -1912,10 +1912,8 @@ class TranslationContextManager(ContextManager):
                 async with semaphore:
                     raise_if_cancelled(cancel_check)
                     summary_text = await self.local_chunk_summarizer.summarize(
-                        chunk_id=chunk.chunk_id,
                         chunk_text=chunk.text,
                         source_language=source_language,
-                        target_language=target_language,
                         cancel_check=cancel_check,
                     )
                     raise_if_cancelled(cancel_check)

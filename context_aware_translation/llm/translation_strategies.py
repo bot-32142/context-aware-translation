@@ -204,17 +204,13 @@ class LLMLocalChunkSummarizer:
     async def summarize(
         self,
         *,
-        chunk_id: int,
         chunk_text: str,
         source_language: str,
-        target_language: str,
         cancel_check: Callable[[], bool] | None = None,
     ) -> str:
         return await summarize_local_chunk(
-            chunk_id=chunk_id,
             chunk_text=chunk_text,
             source_language=source_language,
-            target_language=target_language,
             summarizor_config=self.summarizor_config,
             llm_client=self.llm_client,
             cancel_check=cancel_check,

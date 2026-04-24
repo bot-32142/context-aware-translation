@@ -97,10 +97,8 @@ class LocalChunkSummarizer(Protocol):
     async def summarize(
         self,
         *,
-        chunk_id: int,
         chunk_text: str,
         source_language: str,
-        target_language: str,
         cancel_check: Callable[[], bool] | None = None,
     ) -> str:
         """Return one micro-summary for later batches to use as prior context."""
