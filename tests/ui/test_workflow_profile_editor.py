@@ -507,19 +507,26 @@ def test_step_advanced_config_dialog_updates_translator_ruby_flag():
             "strip_epub_ruby": False,
             "max_tokens_per_llm_call": 4000,
             "chunk_size": 1000,
+            "dynamic_context_enabled": False,
+            "dynamic_context_max_prompt_tokens": 250,
         },
     )
 
     dialog = StepAdvancedConfigDialog(route)
     assert dialog.strip_epub_ruby_check.isChecked() is False
+    assert dialog.dynamic_context_enabled_check.isChecked() is False
     dialog.strip_epub_ruby_check.setChecked(True)
+    dialog.dynamic_context_enabled_check.setChecked(True)
     dialog.max_tokens_spin.setValue(5000)
     dialog.chunk_size_spin.setValue(1200)
+    dialog.dynamic_context_max_prompt_tokens_spin.setValue(600)
 
     updated = dialog.route()
     assert updated.step_config["strip_epub_ruby"] is True
     assert updated.step_config["max_tokens_per_llm_call"] == 5000
     assert updated.step_config["chunk_size"] == 1200
+    assert updated.step_config["dynamic_context_enabled"] is True
+    assert updated.step_config["dynamic_context_max_prompt_tokens"] == 600
 
 
 def test_step_advanced_config_dialog_uses_translator_default_limits():
@@ -537,8 +544,12 @@ def test_step_advanced_config_dialog_uses_translator_default_limits():
 
     assert dialog.max_tokens_spin.value() == 2000
     assert dialog.chunk_size_spin.value() == 500
+    assert dialog.dynamic_context_enabled_check.isChecked() is True
+    assert dialog.dynamic_context_max_prompt_tokens_spin.value() == 300
     assert dialog.route().step_config["max_tokens_per_llm_call"] == 2000
     assert dialog.route().step_config["chunk_size"] == 500
+    assert dialog.route().step_config["dynamic_context_enabled"] is True
+    assert dialog.route().step_config["dynamic_context_max_prompt_tokens"] == 300
 
 
 def test_step_advanced_config_dialog_uses_extractor_default_gleaning():

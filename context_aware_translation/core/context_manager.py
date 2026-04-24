@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import threading
@@ -11,7 +12,7 @@ from typing import Any, Protocol, TypeVar
 
 from transformers import PreTrainedTokenizer
 
-from context_aware_translation.core.cancellation import raise_if_cancelled
+from context_aware_translation.core.cancellation import OperationCancelledError, raise_if_cancelled
 from context_aware_translation.core.context_extractor import ContextExtractor
 from context_aware_translation.core.models import (
     KeyedContext,
@@ -26,6 +27,7 @@ from context_aware_translation.core.translation_strategies import (
     ChunkTranslationStrategy,
     DocumentTypeHandler,
     GlossaryTranslationStrategy,
+    LocalChunkSummarizer,
     SourceLanguageDetector,
     TermMemoryUpdater,
     TermReviewer,
@@ -40,6 +42,7 @@ from context_aware_translation.storage.repositories.term_repository import (
 )
 from context_aware_translation.storage.schema.book_db import (
     ChunkRecord,
+    LocalChunkSummaryRecord,
     TermRecord,
     TranslationChunkRecord,
 )
@@ -136,6 +139,13 @@ class ChunkTranslationInputs:
 
 
 @dataclass(frozen=True)
+class BatchTranslationRequest:
+    texts: list[str]
+    terms: list[tuple[str, str, str]]
+    local_context: str = ""
+
+
+@dataclass(frozen=True)
 class _LegacyContextTreeAdapter:
     context_tree: Any | None
 
@@ -159,6 +169,9 @@ class ContextManager:
         term_memory_builder: TermMemoryBuilder | None = None,
         max_term_description_length: int = 1200,
         owns_context_tree: bool = True,
+        local_chunk_summarizer: LocalChunkSummarizer | None = None,
+        dynamic_context_enabled: bool = True,
+        dynamic_context_max_prompt_tokens: int = 300,
     ) -> None:
         # Initialize storage manager
         self.term_repo: TermRepository = term_repo
@@ -170,6 +183,9 @@ class ContextManager:
         self.term_memory_builder = term_memory_builder
         self.max_term_description_length = max(0, int(max_term_description_length))
         self._owns_context_tree = owns_context_tree
+        self.local_chunk_summarizer = local_chunk_summarizer
+        self.dynamic_context_enabled = bool(dynamic_context_enabled)
+        self.dynamic_context_max_prompt_tokens = max(0, int(dynamic_context_max_prompt_tokens))
 
     @property
     def context_tree(self) -> Any | None:
@@ -692,6 +708,9 @@ class TranslationContextManager(ContextManager):
         term_memory_updater: TermMemoryUpdater | None = None,
         max_term_description_length: int = 1200,
         target_language: str | None = None,
+        local_chunk_summarizer: LocalChunkSummarizer | None = None,
+        dynamic_context_enabled: bool = True,
+        dynamic_context_max_prompt_tokens: int = 300,
     ) -> None:
         """
         Initialize the TranslationContextManager.
@@ -716,6 +735,9 @@ class TranslationContextManager(ContextManager):
             term_memory_builder=term_memory_builder,
             max_term_description_length=max_term_description_length,
             owns_context_tree=owns_context_tree,
+            local_chunk_summarizer=local_chunk_summarizer,
+            dynamic_context_enabled=dynamic_context_enabled,
+            dynamic_context_max_prompt_tokens=dynamic_context_max_prompt_tokens,
         )
 
     async def detect_language(self, cancel_check: Callable[[], bool] | None = None) -> None:
@@ -1526,8 +1548,9 @@ class TranslationContextManager(ContextManager):
         batches: list[list[TranslationChunkRecord]] = []
         current_batch: list[TranslationChunkRecord] = []
         for chunk in chunks:
+            same_document = not current_batch or chunk.document_id == current_batch[-1].document_id
             if not current_batch or (
-                len(current_batch) < batch_size and chunk.chunk_id == current_batch[-1].chunk_id + 1
+                same_document and len(current_batch) < batch_size and chunk.chunk_id == current_batch[-1].chunk_id + 1
             ):
                 current_batch.append(chunk)
             else:
@@ -1553,6 +1576,7 @@ class TranslationContextManager(ContextManager):
         self,
         batch_texts: list[str],
         batch_terms: list[tuple[str, str, str]],
+        local_context: str = "",
     ) -> int:
         """Estimate translation request tokens from user payload only.
 
@@ -1577,6 +1601,8 @@ class TranslationContextManager(ContextManager):
             "术语列表": terms_json,
             "原文": [{"id": idx, "文本": text} for idx, text in enumerate(all_blocks)],
         }
+        if local_context.strip():
+            user_payload["近期前文摘要"] = local_context.strip()
         user_prompt = json.dumps(user_payload, ensure_ascii=False, indent=2)
         return self._estimate_tokens(user_prompt)
 
@@ -1604,10 +1630,9 @@ class TranslationContextManager(ContextManager):
             end: int,
         ) -> int:
             candidate = group[start:end]
-            batch_texts, batch_terms = self.build_batch_request_payload(
-                candidate,
-                all_terms,
-            )
+            batch_texts = [chunk.text for chunk in candidate]
+            max_chunk_id = max(chunk.chunk_id for chunk in candidate)
+            batch_terms = self._build_batch_terms(all_terms, candidate, max_chunk_id)
             return self._estimate_translation_request_tokens(batch_texts, batch_terms)
 
         def _find_best_end(
@@ -1711,6 +1736,215 @@ class TranslationContextManager(ContextManager):
         ]
         return _dedup_batch_terms(raw)
 
+    def _local_context_available(self) -> bool:
+        return (
+            self.dynamic_context_enabled
+            and self.local_chunk_summarizer is not None
+            and bool(getattr(self, "target_language", None))
+            and self.dynamic_context_max_prompt_tokens > 0
+        )
+
+    def _dynamic_context_budgeted_token_limit(self, max_tokens_per_batch: int) -> int:
+        if not self._local_context_available():
+            return max_tokens_per_batch
+        return max(1, max_tokens_per_batch - self.dynamic_context_max_prompt_tokens)
+
+    def _select_prior_chunks_for_local_summary_context(
+        self,
+        *,
+        document_chunks: list[TranslationChunkRecord],
+        batch_start: int,
+    ) -> list[TranslationChunkRecord]:
+        candidates = [chunk for chunk in document_chunks if chunk.chunk_id < batch_start and chunk.text.strip()]
+        return candidates
+
+    @staticmethod
+    def _batch_effective_range(batch: list[TranslationChunkRecord]) -> tuple[int, int]:
+        chunk_ids = [chunk.chunk_id for chunk in batch]
+        return min(chunk_ids), max(chunk_ids)
+
+    @staticmethod
+    def _batch_document_id(batch: list[TranslationChunkRecord]) -> int | None:
+        document_ids = {chunk.document_id for chunk in batch}
+        if len(document_ids) != 1:
+            return None
+        document_id = next(iter(document_ids))
+        return int(document_id) if document_id is not None else None
+
+    def _local_chunk_summary_hash(
+        self,
+        *,
+        chunk: TranslationChunkRecord,
+        source_language: str,
+        target_language: str,
+    ) -> str:
+        payload = {
+            "version": 2,
+            "chunk": chunk.chunk_id,
+            "chunk_hash": chunk.hash,
+            "source_language": source_language,
+            "target_language": target_language,
+        }
+        raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def _get_stored_local_chunk_summary(
+        self,
+        chunk: TranslationChunkRecord,
+        *,
+        source_hash: str | None = None,
+    ) -> LocalChunkSummaryRecord | None:
+        if chunk.document_id is None:
+            return None
+        return self.term_repo.get_local_chunk_summary(int(chunk.document_id), chunk.chunk_id, source_hash=source_hash)
+
+    def _format_local_chunk_summaries_for_prompt(self, records: list[LocalChunkSummaryRecord]) -> str:
+        budget = self.dynamic_context_max_prompt_tokens
+        if not records or budget <= 0:
+            return ""
+        selected_reversed: list[str] = []
+        total_tokens = 0
+        for record in reversed(records):
+            summary = record.summary_text.strip()
+            if not summary:
+                continue
+            line = summary
+            line_tokens = max(1, self._estimate_tokens(line))
+            if line_tokens > budget:
+                continue
+            if total_tokens + line_tokens > budget:
+                break
+            selected_reversed.append(line)
+            total_tokens += line_tokens
+        return "\n".join(reversed(selected_reversed))
+
+    def _get_local_context_for_batch(
+        self,
+        batch: list[TranslationChunkRecord],
+        *,
+        source_language: str | None = None,
+    ) -> str:
+        if not self._local_context_available():
+            return ""
+        document_id = self._batch_document_id(batch)
+        if document_id is None:
+            return ""
+        start, _ = self._batch_effective_range(batch)
+        records = self.term_repo.list_local_chunk_summaries_before(document_id, start)
+        if not records:
+            return ""
+        resolved_source_language = source_language or self.term_repo.get_source_language()
+        target_language = str(getattr(self, "target_language", "") or "")
+        if not resolved_source_language or not target_language:
+            return ""
+        chunks_by_id = {
+            chunk.chunk_id: chunk
+            for chunk in self.term_repo.list_chunks(document_id=document_id)
+            if chunk.document_id == document_id and chunk.chunk_id < start
+        }
+        records = [
+            record
+            for record in records
+            if (chunk := chunks_by_id.get(record.chunk_id)) is not None
+            and record.source_hash
+            == self._local_chunk_summary_hash(
+                chunk=chunk,
+                source_language=resolved_source_language,
+                target_language=target_language,
+            )
+        ]
+        return self._format_local_chunk_summaries_for_prompt(records)
+
+    async def build_local_chunk_summaries_for_batches(
+        self,
+        batches: list[list[TranslationChunkRecord]],
+        *,
+        source_language: str,
+        concurrency: int = 5,
+        cancel_check: Callable[[], bool] | None = None,
+    ) -> None:
+        if not self._local_context_available() or not batches:
+            return
+
+        document_ids = sorted(
+            {document_id for batch in batches if (document_id := self._batch_document_id(batch)) is not None}
+        )
+        if not document_ids:
+            return
+
+        chunks_by_document: dict[int, list[TranslationChunkRecord]] = {}
+        for chunk in sorted(self.term_repo.list_chunks(document_ids=document_ids), key=lambda c: c.chunk_id):
+            if chunk.document_id is not None:
+                chunks_by_document.setdefault(int(chunk.document_id), []).append(chunk)
+
+        target_language = str(getattr(self, "target_language", "") or "")
+
+        required_chunks: dict[tuple[int, int], TranslationChunkRecord] = {}
+        for batch in sorted(batches, key=lambda b: self._batch_effective_range(b)[0]):
+            raise_if_cancelled(cancel_check)
+            document_id = self._batch_document_id(batch)
+            if document_id is None:
+                continue
+            start, _ = self._batch_effective_range(batch)
+            prior_chunks = self._select_prior_chunks_for_local_summary_context(
+                document_chunks=chunks_by_document.get(document_id, []),
+                batch_start=start,
+            )
+            for chunk in prior_chunks:
+                required_chunks[(document_id, chunk.chunk_id)] = chunk
+
+        semaphore = asyncio.Semaphore(max(1, concurrency))
+
+        async def process_chunk(chunk: TranslationChunkRecord) -> None:
+            raise_if_cancelled(cancel_check)
+            if chunk.document_id is None:
+                return
+            source_hash = self._local_chunk_summary_hash(
+                chunk=chunk,
+                source_language=source_language,
+                target_language=target_language,
+            )
+            if self._get_stored_local_chunk_summary(chunk, source_hash=source_hash) is not None:
+                return
+
+            try:
+                assert self.local_chunk_summarizer is not None
+                async with semaphore:
+                    raise_if_cancelled(cancel_check)
+                    summary_text = await self.local_chunk_summarizer.summarize(
+                        chunk_id=chunk.chunk_id,
+                        chunk_text=chunk.text,
+                        source_language=source_language,
+                        target_language=target_language,
+                        cancel_check=cancel_check,
+                    )
+                    raise_if_cancelled(cancel_check)
+                    self.term_repo.upsert_local_chunk_summary(
+                        LocalChunkSummaryRecord(
+                            document_id=int(chunk.document_id),
+                            chunk_id=chunk.chunk_id,
+                            summary_text=summary_text.strip(),
+                            source_hash=source_hash,
+                        )
+                    )
+            except OperationCancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Local chunk summary failed for chunk %s; using empty context for dependent batches: %s",
+                    chunk.chunk_id,
+                    exc,
+                )
+
+        results = await asyncio.gather(
+            *(process_chunk(chunk) for chunk in sorted(required_chunks.values(), key=lambda c: c.chunk_id)),
+            return_exceptions=True,
+        )
+        raise_if_cancelled(cancel_check)
+        for result in results:
+            if isinstance(result, OperationCancelledError):
+                raise result
+
     def collect_chunk_translation_inputs(
         self,
         *,
@@ -1736,10 +1970,11 @@ class TranslationContextManager(ContextManager):
 
         all_terms = [term for term in self.term_repo.list_keyed_context() if not term.ignored]
         max_chunks_per_batch = batch_size if batch_size > 0 else None
+        request_token_budget = self._dynamic_context_budgeted_token_limit(max_tokens_per_batch)
         batches = self._group_batches_by_token_budget(
             untranslated_chunks,
             all_terms,
-            max_tokens_per_batch=max_tokens_per_batch,
+            max_tokens_per_batch=request_token_budget,
             max_chunks_per_batch=max_chunks_per_batch,
         )
         return ChunkTranslationInputs(
@@ -1752,12 +1987,19 @@ class TranslationContextManager(ContextManager):
         self,
         batch: list[TranslationChunkRecord],
         all_terms: list[Term],
-    ) -> tuple[list[str], list[tuple[str, str, str]]]:
+        *,
+        source_language: str | None = None,
+    ) -> BatchTranslationRequest:
         """Build request chunk-text and glossary payload for one translation batch."""
         batch_texts = [chunk.text for chunk in batch]
         max_chunk_id = max(chunk.chunk_id for chunk in batch)
         batch_terms = self._build_batch_terms(all_terms, batch, max_chunk_id)
-        return batch_texts, batch_terms
+        local_context = self._get_local_context_for_batch(batch, source_language=source_language)
+        return BatchTranslationRequest(
+            texts=batch_texts,
+            terms=batch_terms,
+            local_context=local_context,
+        )
 
     async def translate_chunks(
         self,
@@ -1792,6 +2034,12 @@ class TranslationContextManager(ContextManager):
         all_terms = inputs.all_terms
         semaphore = asyncio.Semaphore(concurrency)
         batches = inputs.batches
+        await self.build_local_chunk_summaries_for_batches(
+            batches,
+            source_language=source_language,
+            concurrency=concurrency,
+            cancel_check=cancel_check,
+        )
         total = len(batches)
         completed = 0
         progress_lock = asyncio.Lock()
@@ -1814,13 +2062,18 @@ class TranslationContextManager(ContextManager):
                 raise_if_cancelled(cancel_check)
                 async with semaphore:
                     raise_if_cancelled(cancel_check)
-                    batch_texts, batch_terms = self.build_batch_request_payload(
+                    request = self.build_batch_request_payload(
                         batch,
                         all_terms,
+                        source_language=source_language,
                     )
 
                     translated_texts = await self.chunk_translator.translate(
-                        batch_texts, batch_terms, source_language, cancel_check=cancel_check
+                        request.texts,
+                        request.terms,
+                        source_language,
+                        cancel_check=cancel_check,
+                        local_context=request.local_context,
                     )
                     for chunk, translation in zip(batch, translated_texts, strict=True):
                         chunk.translation = translation

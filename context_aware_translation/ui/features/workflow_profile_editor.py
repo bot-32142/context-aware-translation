@@ -262,6 +262,20 @@ class StepAdvancedConfigDialog(QDialog):
                 5000,
                 500,
             ),
+            _CheckFieldSpec(
+                "dynamic_context_enabled_check",
+                QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Enable dynamic context"),
+                "dynamic_context_enabled",
+                True,
+            ),
+            _SpinFieldSpec(
+                "dynamic_context_max_prompt_tokens_spin",
+                QT_TRANSLATE_NOOP("StepAdvancedConfigDialog", "Dynamic context token budget"),
+                "dynamic_context_max_prompt_tokens",
+                0,
+                10000,
+                300,
+            ),
         ),
         WorkflowStepId.OCR: (
             _SpinFieldSpec(

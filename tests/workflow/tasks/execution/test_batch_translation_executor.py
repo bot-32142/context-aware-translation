@@ -12,7 +12,8 @@ from context_aware_translation.config import TranslatorBatchConfig, TranslatorCo
 from context_aware_translation.core.cancellation import OperationCancelledError
 from context_aware_translation.llm.batch_jobs.base import POLL_STATUS_COMPLETED, BatchPollResult, BatchSubmitResult
 from context_aware_translation.storage.repositories.llm_batch_store import LLMBatchStore
-from context_aware_translation.storage.repositories.task_store import TaskStore
+from context_aware_translation.storage.repositories.task_store import TaskRecord, TaskStore
+from context_aware_translation.storage.schema.book_db import TranslationChunkRecord
 from context_aware_translation.workflow.tasks.execution.batch_translation_executor import (
     BatchTranslationExecutor,
     prepare_payload_for_rerun,
@@ -758,8 +759,6 @@ async def test_run_task_marks_failed_on_non_transient_error(tmp_path):
 
 @pytest.mark.asyncio
 async def test_ensure_payload_prepared_uses_batch_model_with_fixed_temperature():
-    from context_aware_translation.storage.repositories.task_store import TaskRecord
-
     task = TaskRecord(
         task_id="task-1",
         book_id="book-1",
@@ -833,6 +832,73 @@ async def test_ensure_payload_prepared_uses_batch_model_with_fixed_temperature()
     assert payload["translation_model"] == "translator-model"
     assert payload["translation_request_kwargs"] == {"temperature": 0.15}
     assert payload["translation_batch_size"] == 100
+
+
+@pytest.mark.asyncio
+async def test_ensure_payload_prepared_includes_prior_chunk_summaries_in_translation_messages():
+    task = TaskRecord(
+        task_id="task-1",
+        book_id="book-1",
+        task_type="batch_translation",
+        status=STATUS_QUEUED,
+        phase=PHASE_PREPARE,
+        payload_json="{}",
+        document_ids_json=None,
+        config_snapshot_json=None,
+        cancel_requested=False,
+        total_items=0,
+        completed_items=0,
+        failed_items=0,
+        last_error=None,
+        created_at=0.0,
+        updated_at=0.0,
+    )
+    translator_config = TranslatorConfig(model="translator-model", temperature=0.0)
+    batch_config = TranslatorBatchConfig(provider="gemini_ai_studio", model="batch-model", api_key="k")
+    chunk = TranslationChunkRecord(chunk_id=3, hash="h3", text="そうだな", document_id=9)
+    batches = [[chunk]]
+
+    manager = MagicMock()
+    manager.term_repo.get_source_language.return_value = "Japanese"
+    manager.collect_chunk_translation_inputs.return_value = SimpleNamespace(
+        source_language="Japanese",
+        all_terms=[],
+        batches=batches,
+    )
+    manager.build_local_chunk_summaries_for_batches = AsyncMock()
+    manager.build_batch_request_payload.return_value = SimpleNamespace(
+        texts=["そうだな"],
+        terms=[],
+        local_context="Alice refused Bob's request.",
+    )
+
+    workflow = MagicMock()
+    workflow.resolve_preflight_document_ids.return_value = None
+    workflow.prepare_llm_prerequisites = AsyncMock()
+    workflow.check_cancel = MagicMock()
+    workflow.manager = manager
+    workflow.config = SimpleNamespace(translation_target_language="English")
+
+    service = MagicMock()
+    service.workflow = workflow
+    service.raise_if_local_pause = MagicMock()
+    service.document_ids_for_task.return_value = None
+    service.translator_config.return_value = translator_config
+    service.polish_config.return_value = translator_config
+    service.batch_config.return_value = batch_config
+    service._get_force.return_value = False
+
+    payload = await ensure_payload_prepared(service, task, {}, cancel_check=None)
+
+    manager.build_local_chunk_summaries_for_batches.assert_awaited_once_with(
+        batches,
+        source_language="Japanese",
+        concurrency=translator_config.concurrency,
+        cancel_check=None,
+    )
+    messages = payload["items"][0]["translation"]["messages"]
+    user_payload = json.loads(messages[1]["content"])
+    assert user_payload["近期前文摘要"] == "Alice refused Bob's request."
 
 
 @pytest.mark.asyncio

@@ -117,6 +117,40 @@ async def test_translate_chunk_uses_block_lists_and_reconstructs(temp_config: Co
 
 
 @pytest.mark.asyncio
+async def test_translate_chunk_injects_local_context_only_into_translation(temp_config: Config):
+    chunks = ["そうだな"]
+    terms = [_make_term()]
+    assert temp_config.translator_config is not None
+    temp_config.translator_config.enable_polish = True
+
+    llm_client = MagicMock(spec=LLMClient)
+    llm_client.chat = AsyncMock(
+        side_effect=[
+            _translation_response(["You're right."]),
+            _translation_response(["You're right."]),
+        ]
+    )
+
+    await translate_chunk(
+        chunks=chunks,
+        terms=terms,
+        llm_client=llm_client,
+        translator_config=temp_config.translator_config,
+        source_language="日语",
+        target_language=temp_config.translation_target_language,
+        local_context="Alice refused Bob's request.",
+    )
+
+    translation_messages = llm_client.chat.call_args_list[0][0][0]
+    translation_payload = json.loads(translation_messages[1]["content"])
+    assert translation_payload["近期前文摘要"] == "Alice refused Bob's request."
+
+    polish_messages = llm_client.chat.call_args_list[1][0][0]
+    polish_payload = json.loads(polish_messages[1]["content"])
+    assert "近期前文摘要" not in polish_payload
+
+
+@pytest.mark.asyncio
 async def test_translate_chunk_retries_when_inline_markers_are_removed(temp_config: Config):
     chunks = ["This is ⟪a:0⟫link⟪/a:0⟫ text"]
     terms = [_make_term()]

@@ -217,6 +217,8 @@ class TranslatorConfig(LLMConfig):
     num_of_chunks_per_llm_call: int = 3
     max_tokens_per_llm_call: int = 2000
     chunk_size: int = 500  # Max token size per chunk for text processing
+    dynamic_context_enabled: bool = True
+    dynamic_context_max_prompt_tokens: int = 300
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary for JSON storage."""
@@ -228,6 +230,8 @@ class TranslatorConfig(LLMConfig):
                 "num_of_chunks_per_llm_call": self.num_of_chunks_per_llm_call,
                 "max_tokens_per_llm_call": self.max_tokens_per_llm_call,
                 "chunk_size": self.chunk_size,
+                "dynamic_context_enabled": self.dynamic_context_enabled,
+                "dynamic_context_max_prompt_tokens": self.dynamic_context_max_prompt_tokens,
             }
         )
         return base
@@ -252,6 +256,8 @@ class TranslatorConfig(LLMConfig):
             num_of_chunks_per_llm_call=data.get("num_of_chunks_per_llm_call", 3),
             max_tokens_per_llm_call=data.get("max_tokens_per_llm_call", 2000),
             chunk_size=data.get("chunk_size", 500),
+            dynamic_context_enabled=data.get("dynamic_context_enabled", True),
+            dynamic_context_max_prompt_tokens=data.get("dynamic_context_max_prompt_tokens", 300),
         )
 
 
