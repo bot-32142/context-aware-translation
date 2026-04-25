@@ -2,13 +2,14 @@
 
 # Context-Aware Translation (CAT)
 
-CAT is a fully automatic desktop translation app for long novels, books, PDFs, scanned documents, and manga. It aims to preserve source formatting while keeping terminology and translation style consistent across the whole work.
+CAT is a fully automatic desktop translation app for long novels, books, PDFs, scanned documents, manga, and subtitles. It aims to preserve source formatting while keeping terminology and translation style consistent across the whole work.
 
 ## Who CAT Is For
 
 - Novel, web novel, and light novel translation
 - Long books and documents that need consistent naming and terminology
 - Scanned books, PDFs, and manga that need OCR before translation
+- Subtitle files that need timing-preserving translation
 - People who want a desktop workflow instead of managing prompts by hand
 
 ## Why CAT
@@ -16,7 +17,7 @@ CAT is a fully automatic desktop translation app for long novels, books, PDFs, s
 - Builds a glossary from your source material
 - Carries context forward across chapters and pages, with useful summaries injected alongside glossary context
 - Preserves original formatting for text-native files
-- Handles text, EPUB, PDF, scanned pages, and manga in one app
+- Handles text, EPUB, PDF, scanned pages, manga, and subtitles in one app
 
 ## Install
 
@@ -108,3 +109,4 @@ Quality can be dramatically better with `Gemini` or `GPT`, but the cost is also 
 | Scanned book | image files or folders | `epub`, `md` | Yes |
 | Manga | `.cbz`, image folders | `cbz` | Yes |
 | EPUB | `.epub` | `epub`, `md`, `docx`, `html` | No, but image OCR is supported |
+| Subtitle | `.srt`, `.vtt`, `.ass`, `.ssa` | `srt`, `vtt`, `ass`, `ssa` | No |
