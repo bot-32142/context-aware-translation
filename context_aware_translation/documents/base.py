@@ -269,9 +269,10 @@ def get_document_classes() -> list[type[Document]]:
     from context_aware_translation.documents.manga import MangaDocument
     from context_aware_translation.documents.pdf import PDFDocument
     from context_aware_translation.documents.scanned_book import ScannedBookDocument
+    from context_aware_translation.documents.subtitle import SubtitleDocument
     from context_aware_translation.documents.text import TextDocument
 
-    return [TextDocument, PDFDocument, ScannedBookDocument, MangaDocument, EPUBDocument]
+    return [TextDocument, SubtitleDocument, PDFDocument, ScannedBookDocument, MangaDocument, EPUBDocument]
 
 
 def is_ocr_required_for_type(document_type: str) -> bool:
