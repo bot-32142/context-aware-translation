@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import io
 import tempfile
 from pathlib import Path
@@ -9,7 +10,7 @@ from PIL import Image
 
 from context_aware_translation.config import Config
 from context_aware_translation.core.cancellation import OperationCancelledError
-from context_aware_translation.workflow.ops import export_ops, import_ops
+from context_aware_translation.workflow.ops import bootstrap_ops, export_ops, import_ops
 from context_aware_translation.workflow.session import WorkflowSession
 
 # Minimal valid 1x1 white PNG (passes epubcheck validation)
@@ -100,6 +101,41 @@ class TestImportPath:
                 assert len(sources) == 1
                 assert sources[0]["source_type"] == "text"
                 assert sources[0]["text_content"] == "Hello, World!"
+        finally:
+            file_path.unlink()
+
+    def test_import_single_subtitle_file(self, import_test_config: Config):
+        subtitle_text = """1
+00:00:01,000 --> 00:00:02,000
+Hello
+world
+
+2
+00:00:03,000 --> 00:00:04,000
+Yes.
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".srt", delete=False) as f:
+            f.write(subtitle_text)
+            f.flush()
+            file_path = Path(f.name)
+
+        try:
+            with WorkflowSession(import_test_config) as translator:
+                result = _import_path(translator, file_path)
+
+                assert result["imported"] == 1
+                assert result["skipped"] == 0
+
+                db = translator.document_repo
+                doc = db.get_document_row()
+                assert doc is not None
+                assert doc["document_type"] == "subtitle"
+
+                sources = db.get_document_sources(doc["document_id"])
+                assert len(sources) == 1
+                assert sources[0]["source_type"] == "text"
+                assert sources[0]["relative_path"] == file_path.name
+                assert sources[0]["text_content"] == subtitle_text
         finally:
             file_path.unlink()
 
@@ -324,6 +360,28 @@ class TestImportPath:
         finally:
             file_path.unlink()
 
+    def test_subtitle_processing_uses_grouped_line_stream_chunks(self, import_test_config: Config):
+        subtitle_text = "\n\n".join(
+            [f"{index}\n00:00:{index:02d},000 --> 00:00:{index + 1:02d},000\nLine {index}" for index in range(1, 7)]
+        )
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".srt", delete=False) as f:
+            f.write(subtitle_text)
+            f.flush()
+            file_path = Path(f.name)
+
+        try:
+            with WorkflowSession(import_test_config) as translator:
+                result = _import_path(translator, file_path)
+                document_id = int(result["document_id"])
+
+                asyncio.run(bootstrap_ops.process_document(translator, [document_id]))
+
+                chunks = translator.manager.term_repo.list_chunks(document_id=document_id)
+                assert len(chunks) == 1
+                assert chunks[0].text == "Line 1\n\nLine 2\n\nLine 3\n\nLine 4\n\nLine 5\n\nLine 6"
+        finally:
+            file_path.unlink()
+
     def test_import_text_folder_tracks_line_positions(self, import_test_config: Config):
         with tempfile.TemporaryDirectory() as tmpdir:
             folder = Path(tmpdir)
@@ -458,6 +516,45 @@ class TestImportEpub:
 
 
 class TestExportPreserveStructure:
+    async def test_export_subtitle_file(self, import_test_config: Config):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_file = Path(tmpdir) / "episode.srt"
+            output_file = Path(tmpdir) / "translated.srt"
+            input_file.write_text(
+                """1
+00:00:01,000 --> 00:00:02,500
+Hello
+world
+
+2
+00:00:03,000 --> 00:00:04,000
+Yes.
+""",
+                encoding="utf-8",
+            )
+
+            with WorkflowSession(import_test_config) as translator:
+                result = _import_path(translator, input_file)
+                document_id = int(result["document_id"])
+                await bootstrap_ops.process_document(translator, [document_id])
+
+                chunks = translator.manager.term_repo.list_chunks(document_id=document_id)
+                assert len(chunks) == 1
+                chunks[0].is_translated = True
+                chunks[0].translation = "Bonjour\nmonde\n\nOui."
+                from context_aware_translation.storage.repositories.term_repository import (
+                    BatchUpdate,
+                )
+
+                translator.manager.term_repo.apply_batch(BatchUpdate(keyed_context=[], chunk_records=chunks))
+
+                await _export(translator, output_file, "srt", document_ids=[document_id])
+
+            exported = output_file.read_text(encoding="utf-8")
+            assert "00:00:01,000 --> 00:00:02,500" in exported
+            assert "Bonjour\nmonde" in exported
+            assert "Oui." in exported
+
     async def test_export_text_file(self, import_test_config: Config):
         with tempfile.TemporaryDirectory() as tmpdir:
             input_folder = Path(tmpdir) / "input"

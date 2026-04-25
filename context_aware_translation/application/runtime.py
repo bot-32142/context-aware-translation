@@ -1113,6 +1113,7 @@ def map_document_type_code(document_type: str | None) -> DocumentTypeCode:
         "text": DocumentTypeCode.TEXT,
         "pdf": DocumentTypeCode.PDF,
         "epub": DocumentTypeCode.EPUB,
+        "subtitle": DocumentTypeCode.SUBTITLE,
         "scanned_book": DocumentTypeCode.SCANNED_BOOK,
         "manga": DocumentTypeCode.MANGA,
     }

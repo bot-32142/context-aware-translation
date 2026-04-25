@@ -86,15 +86,19 @@ def prepare_export(
             "Selected documents cannot be exported together for this document type.",
         )
 
-    available_formats = [
-        ExportOption(format_id=fmt, label=fmt.upper(), is_default=(idx == 0))
-        for idx, fmt in enumerate(get_supported_formats_for_type(document_type))
+    document_labels = [
+        _document_label(int(doc["document_id"]), sources_by_doc.get(int(doc["document_id"]), [])) for doc in docs
     ]
-    if not available_formats:
+    format_ids = list(get_supported_formats_for_type(document_type))
+    if not format_ids:
         raise_application_error(
             ApplicationErrorCode.UNSUPPORTED,
             f"No export formats are available for document type '{document_type}'.",
         )
+    default_format = _preferred_default_format(document_type, format_ids, document_labels)
+    available_formats = [
+        ExportOption(format_id=fmt, label=fmt.upper(), is_default=(fmt == default_format)) for fmt in format_ids
+    ]
 
     incomplete = False
     if require_complete_translation:
@@ -111,13 +115,6 @@ def prepare_export(
                 incomplete = True
                 break
 
-    document_labels = [
-        _document_label(int(doc["document_id"]), sources_by_doc.get(int(doc["document_id"]), [])) for doc in docs
-    ]
-    default_format = next(
-        (option.format_id for option in available_formats if option.is_default),
-        available_formats[0].format_id,
-    )
     default_output_path = _default_output_path(
         runtime=runtime,
         project_id=project_id,
@@ -254,6 +251,14 @@ def _document_label(document_id: int, sources: list[dict]) -> str:
         sequence_number = int(source.get("sequence_number", 1) or 1)
         return f"Document {document_id} ({sequence_number})"
     return f"Document {document_id}"
+
+
+def _preferred_default_format(document_type: str, format_ids: list[str], document_labels: list[str]) -> str:
+    if document_type == "subtitle" and len(document_labels) == 1:
+        source_extension = Path(document_labels[0]).suffix.lower().lstrip(".")
+        if source_extension in format_ids:
+            return source_extension
+    return format_ids[0]
 
 
 def _default_output_path(

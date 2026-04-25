@@ -10,7 +10,11 @@ from context_aware_translation.application.contracts.app_setup import Connection
 from context_aware_translation.application.contracts.common import ProviderKind
 from context_aware_translation.application.contracts.document import RunDocumentExportRequest
 from context_aware_translation.application.contracts.projects import CreateProjectRequest
-from context_aware_translation.application.contracts.work import PrepareExportRequest, RunExportRequest
+from context_aware_translation.application.contracts.work import (
+    InspectImportPathsRequest,
+    PrepareExportRequest,
+    RunExportRequest,
+)
 from context_aware_translation.storage.schema.book_db import TranslationChunkRecord
 
 
@@ -99,6 +103,43 @@ def _insert_epub_document(
                 TranslationChunkRecord(
                     chunk_id=chunk_id,
                     hash=f"epub-hash-{chunk_id}",
+                    text="hello world",
+                    normalized_text="hello world",
+                    document_id=document_id,
+                    is_extracted=True,
+                    is_occurrence_mapped=True,
+                    is_translated=translated,
+                    translation="hello world translated" if translated else None,
+                )
+            ]
+        )
+    return document_id
+
+
+def _insert_subtitle_document(
+    context,
+    project_id: str,
+    *,
+    chunk_id: int,
+    translated: bool,
+    label: str,
+) -> int:
+    with context.runtime.open_book_db(project_id) as dbx:
+        document_id = dbx.document_repo.insert_document("subtitle")
+        dbx.document_repo.insert_document_source(
+            document_id,
+            0,
+            "text",
+            relative_path=label,
+            text_content=("1\n00:00:01,000 --> 00:00:02,000\nhello world\n"),
+            is_text_added=True,
+            is_ocr_completed=True,
+        )
+        dbx.db.upsert_chunks(
+            [
+                TranslationChunkRecord(
+                    chunk_id=chunk_id,
+                    hash=f"subtitle-hash-{chunk_id}",
                     text="hello world",
                     normalized_text="hello world",
                     document_id=document_id,
@@ -210,6 +251,58 @@ def test_prepare_export_marks_epub_layout_conversion_support(tmp_path: Path) -> 
         assert state.supports_original_image_export is True
         assert state.supports_epub_layout_conversion is True
         assert state.available_formats[0].format_id == "epub"
+    finally:
+        context.close()
+
+
+def test_prepare_export_defaults_subtitle_to_imported_extension(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Subtitle Export Test", target_language="English")
+        )
+        project_id = created.project.project_id
+        document_id = _insert_subtitle_document(
+            context,
+            project_id,
+            chunk_id=30,
+            translated=True,
+            label="episode.ass",
+        )
+
+        state = context.services.work.prepare_export(
+            PrepareExportRequest(project_id=project_id, document_ids=[document_id])
+        )
+
+        assert state.document_labels == ["episode.ass"]
+        assert [option.format_id for option in state.available_formats] == ["srt", "vtt", "ass", "ssa"]
+        assert next(option.format_id for option in state.available_formats if option.is_default) == "ass"
+        assert Path(state.default_output_path).name == "episode.ass"
+        assert state.supports_preserve_structure is True
+        assert state.supports_original_image_export is False
+    finally:
+        context.close()
+
+
+def test_import_inspection_labels_subtitle_type(tmp_path: Path) -> None:
+    _ensure_qt_app()
+    context = _build_configured_context(tmp_path)
+    try:
+        created = context.services.projects.create_project(
+            CreateProjectRequest(name="Subtitle Import Test", target_language="English")
+        )
+        subtitle_path = tmp_path / "episode.srt"
+        subtitle_path.write_text(
+            "1\n00:00:01,000 --> 00:00:02,000\nhello world\n",
+            encoding="utf-8",
+        )
+
+        state = context.services.work.inspect_import_paths(
+            InspectImportPathsRequest(project_id=created.project.project_id, paths=[str(subtitle_path)])
+        )
+
+        assert [(option.document_type, option.label) for option in state.available_types] == [("subtitle", "Subtitle")]
     finally:
         context.close()
 

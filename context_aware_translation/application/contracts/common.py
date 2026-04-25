@@ -87,6 +87,7 @@ class DocumentTypeCode(StrEnum):
     TEXT = "text"
     PDF = "pdf"
     EPUB = "epub"
+    SUBTITLE = "subtitle"
     SCANNED_BOOK = "scanned_book"
     MANGA = "manga"
     OTHER = "other"

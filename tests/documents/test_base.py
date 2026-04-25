@@ -142,6 +142,22 @@ def test_document_load_dispatches_to_pdf_document():
     assert result.repo is mock_repo
 
 
+def test_document_load_dispatches_to_subtitle_document():
+    from context_aware_translation.documents.subtitle import SubtitleDocument
+
+    mock_repo = MagicMock()
+    mock_repo.get_document_row.return_value = {
+        "document_type": "subtitle",
+        "document_id": 4,
+    }
+
+    result = Document.load(mock_repo)
+
+    assert isinstance(result, SubtitleDocument)
+    assert result.document_id == 4
+    assert result.repo is mock_repo
+
+
 def test_document_load_dispatches_to_scanned_book_document():
     from context_aware_translation.documents.scanned_book import ScannedBookDocument
 
@@ -164,8 +180,8 @@ def test_document_classes_registry():
 
     classes = get_document_classes()
 
-    # Verify 5 classes returned (text, pdf, scanned_book, manga, epub)
-    assert len(classes) == 5
+    # Verify 6 classes returned (text, subtitle, pdf, scanned_book, manga, epub)
+    assert len(classes) == 6
 
     # Verify all have can_import and do_import methods
     for cls in classes:
