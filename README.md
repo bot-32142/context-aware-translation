@@ -9,7 +9,6 @@ CAT is a fully automatic desktop translation app for long novels, books, PDFs, s
 - Novel, web novel, and light novel translation
 - Long books and documents that need consistent naming and terminology
 - Scanned books, PDFs, and manga that need OCR before translation
-- Subtitle files that need timing-preserving translation
 - People who want a desktop workflow instead of managing prompts by hand
 
 ## Why CAT
