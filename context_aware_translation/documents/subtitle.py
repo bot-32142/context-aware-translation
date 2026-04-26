@@ -11,7 +11,7 @@ from context_aware_translation.core.cancellation import raise_if_cancelled
 from context_aware_translation.core.progress import ProgressCallback
 from context_aware_translation.documents.base import Document
 from context_aware_translation.documents.epub_support.inline_markers import MERGED_TOKEN_CLOSE, MERGED_TOKEN_OPEN
-from context_aware_translation.utils.compression_marker import decode_compressed_lines
+from context_aware_translation.utils.compression_marker import decode_compressed_line, decode_compressed_lines
 
 if TYPE_CHECKING:
     from context_aware_translation.config import ImageReembeddingConfig
@@ -204,25 +204,42 @@ class SubtitleDocument(Document):
 
     def _replace_event_text(self, subs: Any, source_format: str) -> None:
         assert self._translated_lines is not None
-        translated_lines = decode_compressed_lines(self._translated_lines)
+        translated_lines = list(self._translated_lines)
         cursor = 0
 
         events = _translatable_events(subs)
         for index, event in enumerate(events):
             source_lines, tag_map = _event_text_to_stream_lines_with_tags(event.text, source_format)
             line_count = len(source_lines)
-            event_lines = translated_lines[cursor : cursor + line_count]
+            event_raw_lines = translated_lines[cursor : cursor + line_count]
+            event_lines = decode_compressed_lines(event_raw_lines)
             if len(event_lines) < line_count:
                 raise ValueError(
                     "Translated subtitle line count is shorter than the source subtitle line stream "
                     f"for document {self.document_id}."
                 )
             cursor += line_count
+
+            if index + 1 < len(events):
+                # A translation/polish block may contain embedded newlines even
+                # when the original cue line did not. Keep those extra physical
+                # lines with the current timed event until the preserved blank
+                # event separator. Compressed placeholders are non-empty sentinels
+                # here, so they remain cue lines rather than being mistaken for
+                # separators.
+                while cursor < len(translated_lines) and translated_lines[cursor]:
+                    event_lines.append(decode_compressed_line(translated_lines[cursor]))
+                    cursor += 1
+                if cursor < len(translated_lines) and not translated_lines[cursor]:
+                    cursor += 1
+            else:
+                while cursor < len(translated_lines):
+                    if translated_lines[cursor]:
+                        event_lines.append(decode_compressed_line(translated_lines[cursor]))
+                    cursor += 1
+
             event_lines = [_restore_ass_override_tags(line, tag_map) for line in event_lines]
             event.text = _stream_lines_to_event_text(event_lines)
-
-            if index + 1 < len(events) and cursor < len(translated_lines) and not translated_lines[cursor]:
-                cursor += 1
 
         extra_lines = [line for line in translated_lines[cursor:] if line]
         if extra_lines:
