@@ -847,7 +847,7 @@ class DefaultDocumentService:
             )
 
         config_payload = self._runtime.get_effective_config_payload(project_id)
-        configured_connection_ids = {connection_id for connection_id, _label in self._runtime.list_connection_options()}
+        configured_connection_ids = self._runtime.configured_connection_ids(config_payload)
         route_map = {
             route.capability: route.connection_id for route in build_default_routes_from_config(config_payload)
         }
@@ -1856,7 +1856,7 @@ class DefaultDocumentService:
                 target_kind=NavigationTargetKind.PROJECT_SETUP,
                 project_id=project_id,
             )
-        configured_connection_ids = {connection_id for connection_id, _label in self._runtime.list_connection_options()}
+        configured_connection_ids = self._runtime.configured_connection_ids(config)
         route_map = {route.capability: route.connection_id for route in build_default_routes_from_config(config)}
         image_edit_route = route_map.get(CapabilityCode.IMAGE_EDITING)
         if image_edit_route is None or image_edit_route not in configured_connection_ids:

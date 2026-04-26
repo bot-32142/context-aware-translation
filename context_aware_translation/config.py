@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field, fields
@@ -51,6 +52,7 @@ class EndpointProfile:
 
     name: str  # Unique identifier for the profile
     api_key: str | None = None
+    api_key_env: str | None = None
     base_url: str | None = None
     api_version: str | None = None
     timeout: float = 120.0
@@ -65,6 +67,7 @@ class EndpointProfile:
         return {
             "name": self.name,
             "api_key": self.api_key,
+            "api_key_env": self.api_key_env,
             "base_url": self.base_url,
             "api_version": self.api_version,
             "timeout": self.timeout,
@@ -109,8 +112,7 @@ class LLMConfig:
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary for JSON storage."""
-        return {
-            "api_key": self.api_key,
+        payload = {
             "base_url": self.base_url,
             "api_version": self.api_version,
             "timeout": self.timeout,
@@ -121,6 +123,9 @@ class LLMConfig:
             "endpoint_profile": self.endpoint_profile,
             "kwargs": self.kwargs,
         }
+        if self.api_key is not None and (self.endpoint_profile is None or "api_key" in self._explicit_fields):
+            payload["api_key"] = self.api_key
+        return payload
 
     @classmethod
     def from_dict(cls: type[T], data: dict[str, Any]) -> T:
@@ -641,12 +646,19 @@ def _resolve_with_profile(
         raise ValueError(f"Endpoint profile not found: {config.endpoint_profile}")
 
     profile = profiles[config.endpoint_profile]
+    api_key = config.api_key if config.api_key is not None else profile.api_key
+    if not api_key and profile.api_key_env:
+        api_key = os.environ.get(profile.api_key_env)
+        if not api_key:
+            raise ValueError(
+                f"Environment variable {profile.api_key_env!r} is required by endpoint profile {profile.name!r}"
+            )
 
     explicit_fields = config._explicit_fields if hasattr(config, "_explicit_fields") else set()
 
     # Create new LLMConfig with profile as base, config values override.
     return LLMConfig(
-        api_key=config.api_key if config.api_key is not None else profile.api_key,
+        api_key=api_key,
         base_url=config.base_url if config.base_url is not None else profile.base_url,
         api_version=config.api_version if config.api_version is not None else profile.api_version,
         timeout=config.timeout if "timeout" in explicit_fields else profile.timeout,
@@ -820,7 +832,9 @@ class Config:
         # Parse endpoint profiles
         endpoint_profiles: dict[str, EndpointProfile] = {}
         for name, profile_data in data.get("endpoint_profiles", {}).items():
-            endpoint_profiles[name] = EndpointProfile.from_dict(profile_data)
+            endpoint_payload = dict(profile_data)
+            endpoint_payload.setdefault("name", name)
+            endpoint_profiles[name] = EndpointProfile.from_dict(endpoint_payload)
 
         # Parse step configs
         extractor_config = None
@@ -913,8 +927,8 @@ class Config:
 
         # Validate endpoint profiles have required fields
         for name, profile in self.endpoint_profiles.items():
-            if not profile.api_key:
-                errors.append(f"Endpoint profile '{name}' is missing api_key")
+            if not profile.api_key and not profile.api_key_env:
+                errors.append(f"Endpoint profile '{name}' is missing api_key or api_key_env")
             if not profile.base_url:
                 errors.append(f"Endpoint profile '{name}' is missing base_url")
 
@@ -1070,9 +1084,11 @@ class Config:
 
         # First, load any embedded endpoint profiles from config_dict
         for profile_name, profile_data in endpoint_profiles_dict.items():
+            profile_payload = dict(profile_data)
+            profile_payload.pop("name", None)
             endpoint_profiles[profile_name] = EndpointProfile(
                 name=profile_name,
-                **profile_data,
+                **profile_payload,
             )
 
         # Then, resolve any endpoint profile IDs referenced in step configs
@@ -1240,9 +1256,11 @@ def load_config_from_yaml(
     endpoint_profiles_data = data.pop("endpoint_profiles", {})
     endpoint_profiles: dict[str, EndpointProfile] = {}
     for profile_name, profile_data in endpoint_profiles_data.items():
+        profile_payload = dict(profile_data)
+        profile_payload.pop("name", None)
         endpoint_profiles[profile_name] = EndpointProfile(
             name=profile_name,
-            **profile_data,
+            **profile_payload,
         )
 
     # Remove command-line-only and hardcoded fields if present (with warning)

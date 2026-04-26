@@ -1,5 +1,6 @@
 """Unit tests for endpoint profile system."""
 
+import json
 import tempfile
 from pathlib import Path
 
@@ -100,6 +101,39 @@ class TestResolveWithProfile:
 
         assert result.api_key == "prod-key"  # From profile
         assert result.model == "custom-model"  # Override
+
+    def test_profile_api_key_env_resolves_from_environment(self, monkeypatch):
+        """Profile api_key_env is resolved only when configs are materialized."""
+        monkeypatch.setenv("CAT_TEST_ENDPOINT_KEY", "env-secret")
+        profiles = {
+            "prod": EndpointProfile(
+                name="prod",
+                api_key_env="CAT_TEST_ENDPOINT_KEY",
+                base_url="https://prod.api",
+                model="prod-model",
+            )
+        }
+        config = LLMConfig(endpoint_profile="prod")
+
+        result = _resolve_with_profile(config, profiles)
+
+        assert result.api_key == "env-secret"
+
+    def test_profile_api_key_env_missing_raises_error(self, monkeypatch):
+        """Missing api_key_env references fail before LLM clients run."""
+        monkeypatch.delenv("CAT_TEST_ENDPOINT_KEY", raising=False)
+        profiles = {
+            "prod": EndpointProfile(
+                name="prod",
+                api_key_env="CAT_TEST_ENDPOINT_KEY",
+                base_url="https://prod.api",
+                model="prod-model",
+            )
+        }
+        config = LLMConfig(endpoint_profile="prod")
+
+        with pytest.raises(ValueError, match="CAT_TEST_ENDPOINT_KEY"):
+            _resolve_with_profile(config, profiles)
 
     def test_missing_profile_raises_error(self):
         """Referencing non-existent profile raises ValueError."""
@@ -268,6 +302,36 @@ class TestConfigWithProfiles:
 
             assert config.extractor_config.api_key == "test-key"
             assert config.extractor_config.model == "test-model"
+
+    def test_api_key_env_snapshot_keeps_reference_not_secret(self, monkeypatch):
+        """Config snapshots retain env var references without storing resolved keys."""
+        monkeypatch.setenv("CAT_TEST_ENDPOINT_KEY", "env-secret")
+        profiles = {
+            "test": EndpointProfile(
+                name="test",
+                api_key_env="CAT_TEST_ENDPOINT_KEY",
+                base_url="https://test.api",
+                model="test-model",
+            )
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Config(
+                translation_target_language="Chinese",
+                output_dir=tmpdir,
+                endpoint_profiles=profiles,
+                extractor_config=ExtractorConfig(endpoint_profile="test"),
+                summarizor_config=SummarizorConfig(endpoint_profile="test"),
+                translator_config=TranslatorConfig(endpoint_profile="test"),
+                glossary_config=GlossaryTranslationConfig(endpoint_profile="test"),
+                review_config=ReviewConfig(endpoint_profile="test"),
+            )
+
+            snapshot = config.to_dict()
+
+        assert config.extractor_config.api_key == "env-secret"
+        assert snapshot["endpoint_profiles"]["test"]["api_key_env"] == "CAT_TEST_ENDPOINT_KEY"
+        assert "env-secret" not in json.dumps(snapshot)
 
     def test_step_configs_with_same_profile(self):
         """Multiple step configs can share the same profile."""
