@@ -91,6 +91,27 @@ Quality can be dramatically better with `Gemini` or `GPT`, but the cost is also 
 - [The Count of Monte Cristo.epub](demo/The Count of Monte Cristo.epub) - English output. Cost: under `$2.5`.
 - [基督山伯爵.epub](demo/基督山伯爵.epub) - Simplified Chinese output. Cost: under `$2.5`.
 
+## CLI
+
+CAT also includes a small CLI for config-driven one-shot translation and basic book management. From a source checkout, use `uv run cat-cli`; from an installed package, use `cat-cli`.
+
+```bash
+cat-cli config path
+cat-cli config init
+cat-cli config validate
+
+cat-cli run ./book.epub --output ./translated/book.epub
+cat-cli run ./chapter.txt --output ./translated/chapter.txt --json
+
+cat-cli books list
+cat-cli books show BOOK_ID
+cat-cli books delete BOOK_ID --yes
+```
+
+The CLI resolves config from `--config`, then `CAT_CONFIG`, then the nearest `cat.yaml`/`.cat.yaml` walking upward, then the platform default shown by `cat-cli config path`. The config mirrors the setup UI: `connections` define provider endpoints and `workflow_profiles` route each translation step. Prefer `api_key_env` so API keys stay in environment variables instead of config files or task snapshots.
+
+A commented starting point is available at [docs/examples/cat-cli.yaml](docs/examples/cat-cli.yaml).
+
 ## What To Know Before Using CAT
 
 - The setup wizard path is mainly tested with `DeepSeek` + `Gemini`. `Claude` and `GPT` should also work well, but I do not recommend going below `DeepSeek`-class models.

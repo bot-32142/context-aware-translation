@@ -436,6 +436,13 @@ class ApplicationRuntime:
     def list_connection_options(self) -> list[tuple[str, str]]:
         return [(profile.profile_id, profile.name) for profile in self.book_manager.list_endpoint_profiles()]
 
+    def configured_connection_ids(self, config_payload: dict[str, Any]) -> set[str]:
+        connection_ids = {connection_id for connection_id, _label in self.list_connection_options()}
+        embedded_profiles = config_payload.get("endpoint_profiles")
+        if isinstance(embedded_profiles, dict):
+            connection_ids.update(str(connection_id) for connection_id in embedded_profiles)
+        return connection_ids
+
     def submit_task(self, task_type: str, project_id: str, **params: object) -> AcceptedCommand:
         decision = self.task_engine.preflight(task_type, project_id, params, TaskAction.RUN)
         if not decision.allowed:

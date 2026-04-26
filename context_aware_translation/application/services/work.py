@@ -274,7 +274,7 @@ class DefaultWorkService:
                 project_id=project_id,
             )
 
-        configured_connection_ids = {connection_id for connection_id, _label in self._runtime.list_connection_options()}
+        configured_connection_ids = self._runtime.configured_connection_ids(config)
         route_map = {route.capability: route.connection_id for route in build_default_routes_from_config(config)}
         if self._is_missing_route(route_map.get(CapabilityCode.TRANSLATION), configured_connection_ids):
             return make_blocker(

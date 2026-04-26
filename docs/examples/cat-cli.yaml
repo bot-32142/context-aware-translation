@@ -1,0 +1,162 @@
+# Context-Aware Translation CLI config example.
+#
+# This file is intentionally verbose. It is meant to be a single AI-readable
+# reference for generating CAT CLI configs, close to what the Setup Wizard
+# creates for a Balanced, DeepSeek-only workflow profile.
+#
+# cat-cli resolves config in this order:
+# 1. --config PATH
+# 2. CAT_CONFIG
+# 3. nearest cat.yaml, cat.yml, .cat.yaml, or .cat.yml walking upward from cwd
+# 4. the platform default shown by `cat-cli config path`
+#
+# The schema mirrors the app setup UI:
+# - connections.* is close to ConnectionDraft
+# - workflow_profiles.* is close to WorkflowProfileDetail
+# - workflow_profiles.*.routes[] is close to WorkflowStepRoute
+
+version: 1
+
+# The workflow profile key under workflow_profiles to use for new CLI books.
+default_workflow_profile: balanced_deepseek
+
+connections:
+  # Balanced DeepSeek profile uses Flash for cheaper, lower-latency context work.
+  deepseek_flash:
+    # Human-readable name. The mapping key, deepseek_flash, is what routes use as connection_id.
+    display_name: DeepSeek V4 Flash
+
+    # Supported values include: deepseek, gemini, openai, anthropic, openai_compatible.
+    provider: deepseek
+
+    # Prefer api_key_env so secrets stay out of config files, book configs, and task snapshots.
+    # The environment variable must be present when running `cat-cli config validate` or `cat-cli run`.
+    api_key_env: DEEPSEEK_API_KEY
+
+    # api_key is accepted for private/local configs, but do not set both api_key and api_key_env.
+    # api_key: sk-...
+
+    base_url: https://api.deepseek.com
+    default_model: deepseek-v4-flash
+
+    # These defaults match the Setup Wizard template for DeepSeek V4 Flash.
+    temperature: 0
+    timeout: 180
+    max_retries: 3
+    concurrency: 15
+
+  # Balanced DeepSeek profile uses Pro for quality-sensitive generation/review work.
+  deepseek_pro:
+    display_name: DeepSeek V4 Pro
+    provider: deepseek
+    api_key_env: DEEPSEEK_API_KEY
+    base_url: https://api.deepseek.com
+    default_model: deepseek-v4-pro
+
+    # These defaults match the Setup Wizard template for DeepSeek V4 Pro.
+    temperature: 0
+    timeout: 300
+    max_retries: 3
+    concurrency: 15
+
+workflow_profiles:
+  balanced_deepseek:
+    profile_id: balanced_deepseek
+    name: Balanced DeepSeek
+    kind: shared
+
+    # The language CAT should translate into for books created from this profile.
+    target_language: English
+
+    routes:
+      # Extractor builds initial term candidates from source text.
+      # Balanced DeepSeek uses V4 Flash here because extraction is high-volume and
+      # benefits from speed/cost efficiency more than maximum prose quality.
+      - step_id: extractor
+        step_label: Extractor
+        connection_id: deepseek_flash
+        model: deepseek-v4-flash
+        step_config:
+          # Number of extra glossary-extraction passes. The wizard default is 1.
+          max_gleaning: 1
+
+          # The Setup Wizard enables DeepSeek V4 thinking for selected DeepSeek V4 routes.
+          kwargs:
+            extra_body:
+              thinking:
+                type: enabled
+
+      # Summarizer condenses term/context information used later by translation.
+      # Balanced DeepSeek uses V4 Flash because the output is short support context,
+      # not the final translated prose.
+      - step_id: summarizer
+        step_label: Summarizer
+        connection_id: deepseek_flash
+        model: deepseek-v4-flash
+        step_config:
+          kwargs:
+            extra_body:
+              thinking:
+                type: enabled
+
+      # Glossary translator turns source terms into target-language terms.
+      # Balanced DeepSeek uses V4 Pro because glossary mistakes propagate through
+      # the whole book, so quality matters more than the small extra cost here.
+      - step_id: glossary_translator
+        step_label: Glossary translator
+        connection_id: deepseek_pro
+        model: deepseek-v4-pro
+        step_config:
+          kwargs:
+            extra_body:
+              thinking:
+                type: enabled
+
+      # Translator performs the main chunk translation.
+      # Balanced DeepSeek uses V4 Pro for better style, consistency, and reasoning.
+      - step_id: translator
+        step_label: Translator
+        connection_id: deepseek_pro
+        model: deepseek-v4-pro
+        step_config:
+          # DeepSeek wizard defaults for text translation chunking.
+          chunk_size: 1000
+          max_tokens_per_llm_call: 3500
+
+          # EPUB only: strip ruby annotation markup before translation.
+          strip_epub_ruby: true
+
+          kwargs:
+            extra_body:
+              thinking:
+                type: enabled
+
+      # Polish improves readability and style after the main translation pass.
+      # Balanced DeepSeek uses V4 Pro because this step edits final user-visible prose.
+      - step_id: polish
+        step_label: Polish
+        connection_id: deepseek_pro
+        model: deepseek-v4-pro
+        step_config:
+          kwargs:
+            extra_body:
+              thinking:
+                type: enabled
+
+      # Reviewer checks quality and catches issues after translation/polish.
+      # Balanced DeepSeek uses V4 Pro because review is reasoning-heavy and should
+      # prefer precision over speed.
+      - step_id: reviewer
+        step_label: Reviewer
+        connection_id: deepseek_pro
+        model: deepseek-v4-pro
+        step_config:
+          kwargs:
+            extra_body:
+              thinking:
+                type: enabled
+
+      # DeepSeek-only Balanced does not include OCR, image reembedding, or manga
+      # image translation routes because those need vision/image-capable providers.
+      # Add Gemini/OpenAI routes for these steps if the book needs scanned PDF,
+      # scanned-book, manga, or image text handling.

@@ -380,8 +380,9 @@ class BookManager:
             ValueError: If specified profile_id doesn't exist
             Exception: If creation fails (triggers rollback)
         """
-        # Enforce: at least one profile must exist
-        if not self.registry.has_any_profile():
+        # Enforce profiles only for profile-backed books. CLI/custom-config books
+        # already carry a complete workflow config in book_config.
+        if custom_config is None and not self.registry.has_any_profile():
             raise ValueError("Open App Setup and create a workflow profile before importing books")
 
         # Determine config source
