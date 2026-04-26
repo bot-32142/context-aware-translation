@@ -8,6 +8,7 @@ import pysubs2
 from context_aware_translation.documents.subtitle import SubtitleDocument
 from context_aware_translation.storage.repositories.document_repository import DocumentRepository
 from context_aware_translation.storage.schema.book_db import SQLiteBookDB
+from context_aware_translation.utils.compression_marker import COMPRESSED_LINE_SENTINEL
 
 SRT_SOURCE = """1
 00:00:01,000 --> 00:00:02,500
@@ -202,6 +203,36 @@ Yes.
     subs = pysubs2.load(str(output_path), format_="srt")
     assert [event.start for event in subs.events] == [1000, 3000]
     assert [event.text for event in subs.events] == ["是。", "对。"]
+
+
+def test_export_keeps_embedded_newlines_with_current_event(tmp_path: Path) -> None:
+    source = """1
+00:00:01,000 --> 00:00:02,000
+Hello.
+
+2
+00:00:03,000 --> 00:00:04,000
+Yes.
+"""
+    _repo, document, _source_path = _import_source(tmp_path, "wrapped.srt", source)
+
+    asyncio.run(document.set_text(["Bonjour.", "Encore.", "", "Oui."]))
+    output_path = tmp_path / "translated.srt"
+    SubtitleDocument.export_merged([document], "srt", output_path)
+
+    subs = pysubs2.load(str(output_path), format_="srt")
+    assert [event.text for event in subs.events] == ["Bonjour.\\NEncore.", "Oui."]
+
+
+def test_export_keeps_compressed_placeholder_with_expanded_event(tmp_path: Path) -> None:
+    _repo, document, _source_path = _import_source(tmp_path, "sample.srt", SRT_SOURCE)
+
+    asyncio.run(document.set_text(["Bonjour.", "Encore.", COMPRESSED_LINE_SENTINEL, "", "Oui."]))
+    output_path = tmp_path / "translated.srt"
+    SubtitleDocument.export_merged([document], "srt", output_path)
+
+    subs = pysubs2.load(str(output_path), format_="srt")
+    assert [event.text for event in subs.events] == ["Bonjour.\\NEncore.", "Oui."]
 
 
 def test_ass_export_preserves_leading_blank_display_line_after_separator(tmp_path: Path) -> None:
