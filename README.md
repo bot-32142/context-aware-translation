@@ -102,13 +102,14 @@ cat-cli config validate
 
 cat-cli run ./book.epub --output ./translated/book.epub
 cat-cli run ./chapter.txt --output ./translated/chapter.txt --json
+cat-cli run ./episode.srt --output ./translated/episode.srt --no-polish
 
 cat-cli books list
 cat-cli books show BOOK_ID
 cat-cli books delete BOOK_ID --yes
 ```
 
-The CLI resolves config from `--config`, then `CAT_CONFIG`, then the nearest `cat.yaml`/`.cat.yaml` walking upward, then the platform default shown by `cat-cli config path`. The config mirrors the setup UI: `connections` define provider endpoints and `workflow_profiles` route each translation step. Prefer `api_key_env` so API keys stay in environment variables instead of config files or task snapshots.
+The CLI resolves config from `--config`, then `CAT_CONFIG`, then the nearest `cat.yaml`/`.cat.yaml` walking upward, then the platform default shown by `cat-cli config path`. The config mirrors the setup UI: `connections` define provider endpoints and `workflow_profiles` route each translation step. Prefer `api_key_env` so API keys stay in environment variables instead of config files or task snapshots. Use `--no-polish` when a one-shot run should skip the polish pass, which can be useful for timing-sensitive subtitle output.
 
 A commented starting point is available at [docs/examples/cat-cli.yaml](docs/examples/cat-cli.yaml).
 

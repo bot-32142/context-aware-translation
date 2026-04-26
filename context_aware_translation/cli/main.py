@@ -89,6 +89,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--book-name")
     run_parser.add_argument("--type", dest="document_type")
     run_parser.add_argument("--format", dest="format_id")
+    run_parser.add_argument("--no-polish", action="store_true")
 
     books_parser = subparsers.add_parser("books", parents=[common])
     books_subparsers = books_parser.add_subparsers(dest="books_command", required=True)
@@ -206,7 +207,7 @@ def run_one_shot(args: argparse.Namespace) -> dict[str, Any]:
                 output_path=str(output_path),
                 use_batch=False,
                 use_reembedding=False,
-                enable_polish=True,
+                enable_polish=not bool(getattr(args, "no_polish", False)),
             )
         )
         task_id = accepted.queue_item_id or accepted.command_id
