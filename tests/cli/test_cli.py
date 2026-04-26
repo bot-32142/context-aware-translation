@@ -253,6 +253,42 @@ def test_run_creates_book_imports_document_and_waits(
     assert payload["data"]["output_path"] == str(output_path.resolve())
 
 
+def test_run_no_polish_submits_translate_and_export_without_polish(
+    tmp_path: Path,
+    monkeypatch: Any,
+    capsys: Any,
+) -> None:
+    monkeypatch.setenv("CAT_TEST_API_KEY", "test-key")
+    config_path = _write_config(tmp_path)
+    captured_requests: list[Any] = []
+
+    def _capture_request(self: DefaultDocumentService, request: Any) -> AcceptedCommand:
+        captured_requests.append(request)
+        return _fake_run_translate_and_export(self, request)
+
+    monkeypatch.setattr(DefaultDocumentService, "run_translate_and_export", _capture_request)
+
+    exit_code = run(
+        [
+            "--library-root",
+            str(tmp_path / "library"),
+            "--config",
+            str(config_path),
+            "--json",
+            "run",
+            _text_input(tmp_path),
+            "--output",
+            str(tmp_path / "translated.txt"),
+            "--no-polish",
+        ]
+    )
+
+    assert exit_code == 0
+    assert _json_stdout(capsys)["ok"] is True
+    assert len(captured_requests) == 1
+    assert captured_requests[0].enable_polish is False
+
+
 def test_run_with_book_id_reuses_existing_book(tmp_path: Path, monkeypatch: Any, capsys: Any) -> None:
     monkeypatch.setenv("CAT_TEST_API_KEY", "test-key")
     config_path = _write_config(tmp_path)
